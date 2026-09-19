@@ -8319,21 +8319,23 @@ const csSol = $("#cs-sol");
 let pxShown = "SOL";
 try { const t = localStorage.getItem("exe_cstrip_token"); if (PX_TOKENS.includes(t)) pxShown = t; } catch (e) {}
 const pxQuote = pair => pxLast && pxLast.prices && pxLast.prices[pair] && pxLast.prices[pair].spot > 0 ? pxLast.prices[pair] : null;
-// four significant figures; three or more zeros after the point fold into a
-// small sunk count, the way Jupiter writes a price: 0.00003717 is 0.0₄3717
-// (PUMP in SOL), 0.0001745 is 0.0₃1745 (SKR in SOL). The parts of the
-// figure — the count a <sub> for the page (dom), Unicode subscript digits
-// for a tooltip or a toast
-function pxFig(v, dom) {
+// four significant figures; a run of zeros after the point (from `from` of
+// them) folds into a small sunk count, the way Jupiter writes a price:
+// 0.00003717 is 0.0₄3717 (PUMP in SOL). The parts of the figure — the count
+// a <sub> for the page (dom), Unicode subscript digits for a tooltip or a
+// toast
+function pxFig(v, dom, from = 3) {
   const [m, e] = v.toExponential(3).split("e");
-  if (e > -4) return [v.toPrecision(4)];
+  if (-e - 1 < from) return [v.toPrecision(4)];
   const n = String(-e - 1);
   return ["0.0", dom ? el("sub", { class: "px-z" }, n) : n.replace(/\d/g, d => "₀₁₂₃₄₅₆₇₈₉"[d]), m.replace(".", "")];
 }
 // dollars to the cent above a dollar, four significant figures below it
-// (PUMP trades in tenths of a cent); a price in SOL is always four figures
+// (PUMP trades in tenths of a cent); a price in SOL is always four figures,
+// and folds from two zeros so the menu's column lines up — 0.0₄3717,
+// 0.0₂2404 (MET), 0.0₃1745 (SKR), figure under figure
 const pxUSD = (v, dom) => v >= 1 ? ["$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })] : ["$", ...pxFig(v, dom)];
-const pxSOL = (v, dom) => [...pxFig(v, dom), " SOL"];
+const pxSOL = (v, dom) => [...pxFig(v, dom, 2), " SOL"];
 const pxWhen = () => pxLast && pxLast.checked_at ? new Date(pxLast.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 // the menu's head and the tooltip's last line: checking, down, or the time
 const pxHead = () => !pxLast ? "Solana: checking…"
