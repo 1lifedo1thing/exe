@@ -506,8 +506,16 @@ body.mobile #cstrip { z-index: 5; }
   letter-spacing: -1px; color: #000; padding-bottom: 6px; }
 .abt-info { position: relative; padding: 9px 12px 8px; line-height: 16px; }
 .abt-info b { margin-right: 4px; }
-.abt-link { position: absolute; right: 12px; bottom: 8px; color: var(--black); text-decoration: none; }
+/* the link sits in the corner of the last memory line, where OS 9 keeps its
+   copyright; its "Source:" label is the phone's, which makes a row of it */
+.abt-src { position: absolute; right: 12px; bottom: 8px; }
+.abt-src b { display: none; }
+.abt-link { color: var(--black); text-decoration: none; }
 .abt-link:hover { text-decoration: underline; }
+.abt-addr { white-space: nowrap; }
+/* the 11px label must not stretch the 16px line: at a fractional baseline
+   offset its own 16px box would push the line to 17 */
+.abt-addr .muted { line-height: 1; }
 .abt-sep { height: 2px; border-top: 1px solid #aaa; border-bottom: 1px solid var(--black); box-sizing: border-box; }
 .abt-list { background: #eee; height: 112px; overflow-y: scroll; padding: 3px 0; }
 .abt-row { display: grid; grid-template-columns: 16px 1fr 64px 184px; align-items: center; gap: 10px;
@@ -1221,10 +1229,18 @@ body.mobile #desktop #win-about { inset: auto !important; height: auto !importan
 body.mobile #desktop #win-about .win-frame { display: block; }
 body.mobile .abt-row { grid-template-columns: 16px 1fr 56px 34%; }
 body.mobile .abt-mark { font-size: 52px; }
-/* the box is too narrow for the link to share the last memory line — an
-   iPhone falls through the font stack to wide Verdana — so it leaves its
-   corner and takes a line of its own, still flush right */
-body.mobile .abt-link { position: static; display: block; width: fit-content; margin-left: auto; }
+/* the box is too narrow for the corner link to share the last memory line,
+   or for both addresses to share theirs — an iPhone falls through the font
+   stack to wide Verdana. So every line is a label and a value that wraps
+   under itself, the addresses stack one whole pair to a line, and the link
+   is a row like the rest, drawn as a link because a phone has no hover */
+body.mobile #about-lines > div, body.mobile .abt-src { display: flex; }
+body.mobile .abt-info b { flex: none; }
+body.mobile .abt-addr { display: block; }
+body.mobile .abt-dot { display: none; }
+body.mobile .abt-src { position: static; }
+body.mobile .abt-src b { display: block; }
+body.mobile .abt-link { color: var(--hl); text-decoration: underline; }
 /* same rule for list headers: the #666 top row would stack a second dark
    line under the frame's black border, the #333/#444 bottom shadow rows
    would stack one onto the black bar line above the first list row, and
@@ -1683,7 +1699,7 @@ body.mobile th.sorted {
         </div></div>
         <div class="abt-info">
           <div id="about-lines"></div>
-          <a class="abt-link" href="https://github.com/livid/exe" target="_blank" rel="noopener">github.com/livid/exe</a>
+          <div class="abt-src"><b>Source:</b><a class="abt-link" href="https://github.com/livid/exe" target="_blank" rel="noopener">github.com/livid/exe</a></div>
         </div>
         <div class="abt-sep"></div>
         <div class="abt-list vflush" id="about-rows"></div>
@@ -2840,9 +2856,10 @@ function renderAbout() {
   // the LAN and Tailscale IPs, middot-separated; each is click-to-copy
   const addrs = el("span", {});
   const addIP = (label, ip) => {
-    if (addrs.childNodes.length) addrs.append(" · ");
-    addrs.append(el("span", { class: "muted" }, label + " "),
-      el("span", { class: "ip-copy", title: "Click to copy", onclick: () => copyIP(ip) }, ip));
+    if (addrs.childNodes.length) addrs.append(el("span", { class: "abt-dot" }, " · "));
+    // a label never parts from its address; a phone gives each pair a line
+    addrs.append(el("span", { class: "abt-addr" }, el("span", { class: "muted" }, label + " "),
+      el("span", { class: "ip-copy", title: "Click to copy", onclick: () => copyIP(ip) }, ip)));
   };
   if (h.lan_ip) addIP("LAN", h.lan_ip);
   if (h.tailscale_ip) addIP("Tailscale", h.tailscale_ip);
