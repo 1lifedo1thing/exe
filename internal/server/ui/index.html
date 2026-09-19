@@ -1221,6 +1221,10 @@ body.mobile #desktop #win-about { inset: auto !important; height: auto !importan
 body.mobile #desktop #win-about .win-frame { display: block; }
 body.mobile .abt-row { grid-template-columns: 16px 1fr 56px 34%; }
 body.mobile .abt-mark { font-size: 52px; }
+/* the box is too narrow for the link to share the last memory line — an
+   iPhone falls through the font stack to wide Verdana — so it leaves its
+   corner and takes a line of its own, still flush right */
+body.mobile .abt-link { position: static; display: block; width: fit-content; margin-left: auto; }
 /* same rule for list headers: the #666 top row would stack a second dark
    line under the frame's black border, the #333/#444 bottom shadow rows
    would stack one onto the black bar line above the first list row, and
