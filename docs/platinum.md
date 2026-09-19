@@ -176,8 +176,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   `#808080` outer bottom/right L, a 16px icon at x2 y3, the solid 4x8 menu
   triangle 3px from the right edge), the 18px tab. A standard tile is 30px;
   a wide module (`.cs-mod.wide`, the price ticker and the agent usage
-  meter, as OS 9's battery gauge was wider) keeps the frame and bevel around a longer face and shows its
-  11px figure right-aligned in a slot of fixed width. A module's menu is a
+  meter, as OS 9's battery gauge was wider) keeps the frame and bevel
+  around a longer face and shows its 11px figure right-aligned in a slot
+  of fixed width. Size that slot to the widest figure it can show and no
+  wider — a gap ahead of the figure reads as a tile that is too wide. The
+  font stack ends in whatever the system has, so measure the widest
+  string in the running font before the first paint (`auFit`: string +
+  2px, plus 34px of frame, icon and triangle) rather than fixing a pixel
+  width tuned on one machine. A module's menu is a
   contextual menu whose left edge sits on the tile's separator and whose
   bottom line runs two rows into the strip; its current choice wears OS
   9's dot (`mark` on the item), not a check mark: the real module menu
