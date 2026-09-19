@@ -59,6 +59,12 @@ func TestClaudeUsageScan(t *testing.T) {
 		t.Fatalf("week = %+v, want %+v", wk, want)
 	}
 
+	days := u.daily(now)
+	if len(days) != agentUsageDays || days[6].Day != "2026-09-19" || days[6].tokenCount != td ||
+		days[5].Day != "2026-09-18" || days[5].Total != 1050 || days[0].Day != "2026-09-13" || days[0].Requests != 0 {
+		t.Fatalf("daily = %+v", days)
+	}
+
 	half := claudeLogLine("msg_4", today, 5, 0, 0, 5)
 	appendFile(t, a, half[:40])
 	u.scan([]string{root}, now)

@@ -95,8 +95,9 @@ pick the agent the tile wears from its menu, and **Show Plan Limit** puts
 the fullest of that agent's usage windows there instead (`46% wk`). The
 menu lists both agents with today's tokens and their five-hour and weekly
 windows; each agent's submenu splits today and the last seven days into
-tokens sent fresh, read back from the prompt cache and written, and says
-when each window resets. The daemon counts from the CLIs' own logs —
+tokens sent fresh, read back from the prompt cache and written, draws the
+week as a column a day — a figure on the busiest day and on today, every
+day's own split in its tooltip — and says when each window resets. The daemon counts from the CLIs' own logs —
 Claude Code's transcripts, Codex's rollouts — so every session on the
 machine is in, not only the ones opened from this desktop
 (`GET /v1/agents/usage`). Claude Code's windows are as fresh as its last

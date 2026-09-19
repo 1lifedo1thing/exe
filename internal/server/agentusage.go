@@ -100,7 +100,14 @@ type agentUsage struct {
 	LimitReached bool          `json:"limit_reached,omitempty"`
 	Today        tokenCount    `json:"today"`
 	Week         tokenCount    `json:"week"`
+	Daily        []dayCount    `json:"daily,omitempty"`     // the week's days, oldest first, today last
 	LastUsed     int64         `json:"last_used,omitempty"` // ms, the newest request counted
+}
+
+// dayCount is one local day of the week's count, for the module's chart.
+type dayCount struct {
+	Day string `json:"day"` // 2006-01-02
+	tokenCount
 }
 
 // usageLogs is the running count over one agent's logs.
@@ -373,6 +380,19 @@ func (u *usageLogs) totals(now time.Time) (today, week tokenCount) {
 	return
 }
 
+// daily lays the week out day by day, a day without requests as zeros.
+func (u *usageLogs) daily(now time.Time) []dayCount {
+	out := make([]dayCount, 0, agentUsageDays)
+	for at := usageSince(now); len(out) < agentUsageDays; at = at.AddDate(0, 0, 1) {
+		d := dayCount{Day: at.Format("2006-01-02")}
+		if t := u.days[d.Day]; t != nil {
+			d.tokenCount = *t
+		}
+		out = append(out, d)
+	}
+	return out
+}
+
 func windowName(seconds int64) string {
 	switch seconds {
 	case 5 * 3600:
@@ -571,6 +591,7 @@ func (s *Server) handleAgentUsage(w http.ResponseWriter, r *http.Request) {
 		au := agentUsage{ID: id, Title: a.title, Installed: agentPath(a) != ""}
 		if logs := st.logs[id]; logs != nil && !st.scanning {
 			au.Today, au.Week = logs.totals(now)
+			au.Daily = logs.daily(now)
 			if !logs.last.IsZero() {
 				au.LastUsed = logs.last.UnixMilli()
 			}

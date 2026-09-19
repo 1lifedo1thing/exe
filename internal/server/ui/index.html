@@ -147,6 +147,16 @@ body.mobile #clock { padding: 0 10px; }
 .au-row .n { width: 76px; }
 .au-row .t { width: 52px; text-align: right; }
 .au-row .w { width: 112px; }
+/* an agent's week as columns in its submenu: 16px bars in the agent's colour
+   on one baseline (a border on the plot's own box), a figure on the peak's
+   cap and on today's, the day under each; every column's title has its split */
+.au-chart { display: inline-block; vertical-align: top; margin: 4px 0 1px; }
+.au-chart .plot { display: flex; align-items: flex-end; height: 72px; border-bottom: 1px solid #888; }
+.au-chart .col { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 36px; height: 100%; }
+.au-chart .v { font-size: 11px; line-height: 13px; margin-bottom: 1px; color: #000; font-variant-numeric: tabular-nums; }
+.au-chart .bar { display: block; box-sizing: border-box; width: 16px; border: 1px solid #000; border-bottom: 0; }
+.au-chart .days { display: flex; }
+.au-chart .d { width: 36px; text-align: center; font-size: 11px; line-height: 15px; }
 /* a panel whose items carry small icons — the desk menu's Windows list, the
    way OS 9's Application menu shows each running program beside its small
    icon: every row leaves the 16px column so labels line up whether or not
@@ -8453,8 +8463,9 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) pxRe
 // the chosen agent's icon beside its tokens today — or, by the menu's
 // choice, the fullest of its plan's usage windows — and a menu with both
 // agents, each with a submenu that splits the tokens (sent fresh, read back
-// from the prompt cache, written) for today and the last seven days and
-// says where the five-hour and weekly windows stand and when they reset.
+// from the prompt cache, written) for today and the last seven days, draws
+// the week as a column a day, and says where the five-hour and weekly
+// windows stand and when they reset.
 // The daemon does the counting from the CLIs' own logs (/v1/agents/usage,
 // agentusage.go); its first scan after a restart takes a moment, and until
 // it lands the answer says so and the tile asks again. An agent shows once
@@ -8492,8 +8503,10 @@ function auWhen(sec) {
 const auWindowsLine = a => auLive(a).map(w => auWinShort(w) + " " + auPct(w)).join(" · ");
 const auWindowLine = (a, w) => auWinLong(w) + ": " + (w.rolled ? "reset " + auWhen(w.resets_at) + ", nothing heard since"
   : auPct(w) + " used" + (a.limit_reached && w.used_pct >= 100 ? " — limit reached" : "") + (w.resets_at ? ", resets " + auWhen(w.resets_at) : ""));
-const auSplit = (what, t) => what + ": " + auTok(t.total) + " — " + auTok(t.input) + " in, " + auTok(t.cached) + " cached, " + auTok(t.output) + " out, "
-  + t.requests.toLocaleString("en-US") + " request" + (t.requests === 1 ? "" : "s");
+// the menu's lines leave the request count to the chart's titles: with it a
+// line ran wider than a phone
+const auSplit = (what, t, reqs) => what + ": " + auTok(t.total) + " — " + auTok(t.input) + " in, " + auTok(t.cached) + " cached, " + auTok(t.output) + " out"
+  + (reqs ? ", " + t.requests.toLocaleString("en-US") + " request" + (t.requests === 1 ? "" : "s") : "");
 const auHead = () => !auLast ? "Agent usage: checking…" : auLast.scanning ? "Agent usage: reading the logs…"
   : !auAgents().length ? "Agent usage: nothing to show yet"
   : "Agent usage on this host, " + new Date(auLast.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -8531,11 +8544,35 @@ function auRow(a) {
     el("span", { class: "t" }, auTok(a.today.total)),
     el("span", { class: "w" }, auWindowsLine(a)));
 }
+// the week as columns, oldest day first and today last. The tallest day
+// fills the plot; a figure sits on its cap and on today's — the rest are in
+// each column's title, so the chart stays clean. The bar wears the agent's
+// colour, the figures the menu's black.
+const AU_BAR = { claude: "#D97757", codex: "#6666be" }, AU_BAR_MAX = 56;
+function auChart(a) {
+  const days = a.daily || [], peak = Math.max(...days.map(d => d.total), 0);
+  const name = d => new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "short" });
+  return el("span", { class: "au-chart" },
+    el("span", { class: "plot" }, ...days.map((d, i) => {
+      const last = i === days.length - 1, col = el("span", { class: "col" });
+      col.title = auSplit(last ? "Today" : new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" }), d, true);
+      if (d.total > 0 && (last || d.total === peak)) col.append(el("span", { class: "v" }, auTok(d.total)));
+      if (d.total > 0) {
+        const bar = el("span", { class: "bar" });
+        bar.style.height = Math.max(2, Math.round(d.total / peak * AU_BAR_MAX)) + "px";
+        bar.style.background = AU_BAR[a.id] || "#888";
+        col.append(bar);
+      }
+      return col;
+    })),
+    el("span", { class: "days" }, ...days.map((d, i) => el("span", { class: "d" }, i === days.length - 1 ? "Today" : name(d)))));
+}
 function auDetails(a) {
   const items = [
     { label: auSplit("Today", a.today), dis: true },
     { label: auSplit("7 days", a.week), dis: true },
   ];
+  if ((a.daily || []).some(d => d.total > 0)) items.push({ label: auChart(a), dis: true });
   if ((a.windows || []).length) {
     items.push("-", ...a.windows.map(w => ({ label: auWindowLine(a, w), dis: true })));
     // Claude Code's windows are as old as its last reply in an exe window
