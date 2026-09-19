@@ -302,6 +302,7 @@ body.showall #rail { visibility: hidden; }
    than its neighbours) keeps the same frame and bevel around a longer
    face: the face and bevel take their widths from the tile */
 .cs-mod.wide { width: 96px; }
+/* the agent usage meter sets its own width from its figure (auFit) */
 .cs-mod > .f { display: block; height: 21px; position: relative; background: #c0c0c0;
   border-right: 1px solid #808080; border-bottom: 1px solid #808080; }
 .cs-mod .b { display: block; height: 20px; position: relative; }
@@ -8459,8 +8460,9 @@ setInterval(() => { if (!document.hidden) pxRefresh(false); }, 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) pxRefresh(false); });
 
 // ---- Control Strip: agent usage ----
-// What Claude Code and Codex have used on this host: a wide module wearing
-// the chosen agent's icon beside its tokens today — or, by the menu's
+// What Claude Code and Codex have used on this host: a wide module, fitted
+// to its figure (auFit), wearing the chosen agent's icon beside its tokens
+// today — or, by the menu's
 // choice, the fullest of its plan's usage windows — and a menu with both
 // agents, each with a submenu that splits the tokens (sent fresh, read back
 // from the prompt cache, written) for today and the last seven days, draws
@@ -8485,10 +8487,29 @@ const auAgents = () => ((auLast && auLast.agents) || []).filter(a => a.working);
 // the agent on the tile: the chosen one while it works, else the other
 const auAgent = () => auAgents().find(a => a.id === auShown) || auAgents()[0] || null;
 // 842, 12.3K, 189.1M, 1.24B
+// — never more than five characters: a figure that rounds up to a thousand
+// of its unit moves to the next one (999,600 is 1.0M, not 1000K)
 function auTok(n) {
   if (!(n >= 1000)) return String(n || 0);
-  for (const [div, unit] of [[1e9, "B"], [1e6, "M"], [1e3, "K"]])
-    if (n >= div) { const v = n / div; return (v >= 100 ? v.toFixed(0) : v >= 10 || unit !== "B" ? v.toFixed(1) : v.toFixed(2)) + unit; }
+  for (const [div, unit] of [[1e3, "K"], [1e6, "M"], [1e9, "B"]]) {
+    const v = n / div, s = v >= 99.95 ? v.toFixed(0) : unit === "B" && v < 9.995 ? v.toFixed(2) : v.toFixed(1);
+    if (+s < 1000 || unit === "B") return s + unit;
+  }
+}
+// The tile is as wide as its figure needs and no wider: the slot is measured
+// once per figure kind from the widest string that kind can show, in the
+// font this machine really draws (the stack ends in whatever the system
+// has, and Verdana's digits are a fifth wider than Geneva's) — so the width
+// is final from the first paint, before any figure arrives, and a figure
+// never clips or leaves a gap ahead of it. 34px of the tile are not slot:
+// the frame, the icon and its gap, the triangle.
+const AU_WIDEST = { tokens: "99.9M", limit: "100% wk" };
+function auFit() {
+  const probe = el("span", { style: "position:absolute;visibility:hidden;white-space:nowrap;font-size:11px;font-variant-numeric:tabular-nums" }, AU_WIDEST[auFigure]);
+  document.body.append(probe);
+  const w = Math.ceil(probe.getBoundingClientRect().width);
+  probe.remove();
+  if (w) csAI.style.width = w + 2 + 34 + "px";
 }
 const auWinShort = w => w.name === "five_hour" ? "5h" : w.name === "seven_day" ? "wk" : Math.round(w.seconds / 3600) + "h";
 const auWinLong = w => w.name === "five_hour" ? "5-hour window" : w.name === "seven_day" ? "Weekly window" : Math.round(w.seconds / 3600) + "-hour window";
@@ -8585,6 +8606,7 @@ function auDetails(a) {
 function auSetFigure(f) {
   auFigure = f;
   try { localStorage.setItem("exe_cstrip_agent_figure", f); } catch (e) {}
+  auFit();
   auStripPaint();
 }
 function auStripMenu() {
@@ -8614,6 +8636,7 @@ function auStripMenu() {
 }
 csAI.addEventListener("click", auStripMenu);
 csAI.addEventListener("contextmenu", e => { e.preventDefault(); auStripMenu(); });
+auFit();
 auStripPaint();
 auRefresh(false);
 setInterval(() => { if (!document.hidden) auRefresh(false); }, 60000);
