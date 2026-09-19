@@ -140,6 +140,10 @@ body.mobile #clock { padding: 0 10px; }
 .px-row .u { width: 66px; }
 .px-row .c { width: 44px; }
 .px-row .k { width: 128px; text-align: left; }
+/* the count of a price's folded zeros (pxFig): a small figure sunk below
+   the baseline, which leaves the line's height alone */
+.px-z { position: relative; top: 3px; font-size: 9px; line-height: 0; vertical-align: baseline; }
+#cs-sol .px-z { font-size: 8px; }
 /* the agent usage module's rows: the agent, its tokens today, and where its
    plan's windows stand */
 .au-row { display: inline-flex; gap: 12px; font-variant-numeric: tabular-nums; }
@@ -8315,10 +8319,20 @@ const csSol = $("#cs-sol");
 let pxShown = "SOL";
 try { const t = localStorage.getItem("exe_cstrip_token"); if (PX_TOKENS.includes(t)) pxShown = t; } catch (e) {}
 const pxQuote = pair => pxLast && pxLast.prices && pxLast.prices[pair] && pxLast.prices[pair].spot > 0 ? pxLast.prices[pair] : null;
+// four significant figures; four or more zeros after the point fold into a
+// small sunk count, the way Jupiter writes a price: 0.00003717 is 0.0₄3717
+// (PUMP in SOL). The parts of the figure — the count a <sub> for the page
+// (dom), Unicode subscript digits for a tooltip or a toast
+function pxFig(v, dom) {
+  const [m, e] = v.toExponential(3).split("e");
+  if (e > -5) return [v.toPrecision(4)];
+  const n = String(-e - 1);
+  return ["0.0", dom ? el("sub", { class: "px-z" }, n) : n.replace(/\d/g, d => "₀₁₂₃₄₅₆₇₈₉"[d]), m.replace(".", "")];
+}
 // dollars to the cent above a dollar, four significant figures below it
 // (PUMP trades in tenths of a cent); a price in SOL is always four figures
-const pxUSD = v => "$" + (v >= 1 ? v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : v.toPrecision(4));
-const pxSOL = v => v.toPrecision(4) + " SOL";
+const pxUSD = (v, dom) => v >= 1 ? ["$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })] : ["$", ...pxFig(v, dom)];
+const pxSOL = (v, dom) => [...pxFig(v, dom), " SOL"];
 const pxWhen = () => pxLast && pxLast.checked_at ? new Date(pxLast.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 // the menu's head and the tooltip's last line: checking, down, or the time
 const pxHead = () => !pxLast ? "Solana: checking…"
@@ -8339,12 +8353,12 @@ function pxLine(tok) {
   const q = pxQuote(tok + "-USD");
   if (!q) return tok + " —";
   const c = pxChange(q.spot, q.open), k = tok !== "SOL" && pxQuote(tok + "-SOL");
-  return tok + " " + pxUSD(q.spot) + (c ? " (" + c + ")" : "") + (k ? " = " + pxSOL(k.spot) : "");
+  return tok + " " + pxUSD(q.spot).join("") + (c ? " (" + c + ")" : "") + (k ? " = " + pxSOL(k.spot).join("") : "");
 }
 function pxStripPaint() {
   $("#cs-sol .cs-ico").innerHTML = iconCurrent(PX_ICON[pxShown]);
   const q = pxQuote(pxShown + "-USD");
-  $("#cs-sol .cs-txt").textContent = q ? pxUSD(q.spot) : "—";
+  $("#cs-sol .cs-txt").replaceChildren(...(q ? pxUSD(q.spot, true) : ["—"]));
   csSol.title = pxLast ? PX_TOKENS.map(pxLine).join("\n") + "\n" + pxHead() : "Solana prices — checking…";
 }
 async function pxRefresh(force) {
@@ -8424,9 +8438,9 @@ function pxRow(tok) {
   const q = pxQuote(tok + "-USD"), k = tok !== "SOL" ? pxQuote(tok + "-SOL") : null, kc = k ? pxCrossChange(tok) : "";
   return el("span", { class: "px-row" },
     el("span", { class: "s" }, tok),
-    el("span", { class: "u" }, q ? pxUSD(q.spot) : "—"),
+    el("span", { class: "u" }, ...(q ? pxUSD(q.spot, true) : ["—"])),
     el("span", { class: "c" }, q ? pxChange(q.spot, q.open) : ""),
-    el("span", { class: "k" }, k ? pxSOL(k.spot) + (kc ? " (" + kc + ")" : "") : ""));
+    el("span", { class: "k" }, ...(k ? [...pxSOL(k.spot, true), kc ? " (" + kc + ")" : ""] : [])));
 }
 function pxStripMenu() {
   if (Date.now() - csMenuClosedAt < 300) return; // the click that just closed it
