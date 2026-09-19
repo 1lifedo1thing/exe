@@ -89,7 +89,20 @@ rarely does — SOL 2.5% / 6%, PUMP 5% / 12%, MET 6% / 15%, SKR 8% / 25% —
 never more than four times per token in 24 hours; a move that qualifies
 while the four are spent is counted into the next one. **Recent Moves**
 lists the last ones, **Send a Test Notification** checks the road, and the
-menu item again turns it off. The tab at the right hides the strip down to
+menu item again turns it off. Next to it, the **agent usage meter** shows
+how many tokens Claude Code or Codex has used on this machine today —
+pick the agent the tile wears from its menu, and **Show Plan Limit** puts
+the fullest of that agent's usage windows there instead (`46% wk`). The
+menu lists both agents with today's tokens and their five-hour and weekly
+windows; each agent's submenu splits today and the last seven days into
+tokens sent fresh, read back from the prompt cache and written, and says
+when each window resets. The daemon counts from the CLIs' own logs —
+Claude Code's transcripts, Codex's rollouts — so every session on the
+machine is in, not only the ones opened from this desktop
+(`GET /v1/agents/usage`). Claude Code's windows are as fresh as its last
+reply in a Claude Code window here; Codex's are read live on the ChatGPT
+sign-in. An agent appears once it is installed and has left figures; with
+neither, the tile stays away. The tab at the right hides the strip down to
 the tab alone.
 
 With notifications on, the daemon also watches the sky over the first city

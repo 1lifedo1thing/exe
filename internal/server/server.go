@@ -91,6 +91,10 @@ type Server struct {
 	tsAt  time.Time
 	tsRes map[string]any
 
+	// The Control Strip's agent usage module: the running token counts
+	// over Claude Code's and Codex's logs (agentusage.go).
+	agentUsage agentUsageState
+
 	// Price alerts (alerts.go) and rain alerts (rain.go): the samplers'
 	// state, and Web Push (webpush.go): the VAPID key pair and the
 	// subscription file.
@@ -206,6 +210,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/apps/{app}/data/{path...}", s.handleAppDataGet)
 	mux.HandleFunc("PUT /v1/apps/{app}/data/{path...}", s.handleAppDataPut)
 	mux.HandleFunc("DELETE /v1/apps/{app}/data/{path...}", s.handleAppDataDelete)
+	mux.HandleFunc("GET /v1/agents/usage", s.handleAgentUsage)
 	mux.HandleFunc("GET /v1/agents/{app}/sessions", s.handleAgentSessionsList)
 	mux.HandleFunc("POST /v1/agents/{app}/sessions", s.handleAgentSessionCreate)
 	mux.HandleFunc("POST /v1/agents/{app}/sessions/{name}/prompt", s.handleAgentSessionPrompt)

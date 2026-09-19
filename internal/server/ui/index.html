@@ -140,6 +140,13 @@ body.mobile #clock { padding: 0 10px; }
 .px-row .u { width: 66px; }
 .px-row .c { width: 44px; }
 .px-row .k { width: 128px; text-align: left; }
+/* the agent usage module's rows: the agent, its tokens today, and where its
+   plan's windows stand */
+.au-row { display: inline-flex; gap: 12px; font-variant-numeric: tabular-nums; }
+.au-row span { display: inline-block; }
+.au-row .n { width: 76px; }
+.au-row .t { width: 52px; text-align: right; }
+.au-row .w { width: 112px; }
 /* a panel whose items carry small icons — the desk menu's Windows list, the
    way OS 9's Application menu shows each running program beside its small
    icon: every row leaves the 16px column so labels line up whether or not
@@ -1279,6 +1286,7 @@ body.mobile th.sorted {
         <div class="cs-mod" id="cs-cf" title="Cloudflare status — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
         <div class="cs-mod" id="cs-ts" title="Tailscale — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
         <div class="cs-mod wide" id="cs-sol" title="Solana prices — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><span class="cs-txt">—</span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
+        <div class="cs-mod wide" id="cs-ai" title="Agent usage — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><span class="cs-txt">—</span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
       </div>
       <div class="cs-well cs-r" title="Control Strip — scroll"><svg width="8" height="10" viewBox="0 0 8 10" shape-rendering="crispEdges"><path fill="#555" d="M4 0h1v1H4zM3 1h2v1H3zM2 2h1v1H2zM4 2h4v1H4zM1 3h1v1H1zM7 3h1v1H7zM0 4h1v1H0zM7 4h1v1H7zM0 5h1v1H0zM7 5h1v1H7zM1 6h1v1H1zM7 6h1v1H7zM2 7h1v1H2zM4 7h4v1H4zM3 8h2v1H3zM4 9h1v1H4z"/><path fill="#ddd" d="M3 2h1v1H3zM2 3h5v1H2zM1 4h6v1H1zM1 5h6v1H1zM2 6h5v1H2zM3 7h1v1H3z"/></svg></div>
     </div>
@@ -3063,6 +3071,19 @@ let SKR_ICON = coinIcon("#14b8a6", "#8ee8dc", "#0b7a6e", // the Seeker phone, sc
   `<path fill="#000" d="M5 3h6v10H5z"/>
   <path fill="#fff" d="M6 5h4v6H6z"/>`);
 let pxLast = null; // the last Coinbase answer, for the same reason
+// the Control Strip's agent usage module: the two agents' desktop Macs at the
+// strip's own 16 grid, the screen mark redrawn to fit — Claude Code's orange
+// burst, Codex's white ring. agentMini builds the Mac around the mark
+const agentMini = mark => `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <rect x="2.5" y="0.5" width="11" height="12" fill="#DAD5CA" stroke="#000"/>
+  <rect x="4.5" y="2.5" width="7" height="6" fill="#000" stroke="#000"/>
+  ${mark}
+  <rect x="6" y="10" width="4" height="1" fill="#55524B"/>
+  <rect x="4.5" y="12.5" width="7" height="2" fill="#C8C3B8" stroke="#000"/>
+</svg>`;
+let CLAUDE_MINI_ICON = agentMini(`<path fill="#D97757" d="M5 3h1v1H5zM7 3h2v1H7zM10 3h1v1H10zM6 4h4v1H6zM5 5h6v1H5zM6 6h4v1H6zM5 7h1v1H5zM7 7h2v1H7zM10 7h1v1H10z"/>`);
+let CODEX_MINI_ICON = agentMini(`<path fill="#FFFFFF" d="M6 3h4v1H6zM5 4h1v3H5zM10 4h1v3H10zM6 7h4v1H6z"/>`);
+let auLast = null; // the last /v1/agents/usage answer, for the same reason
 let MINI_CHAT_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
   <rect x="1.5" y="2.5" width="13" height="8" fill="#DAD5CA" stroke="#000"/>
   <path d="M4.5 10.5 v3 l3 -3 z" fill="#DAD5CA" stroke="#000"/>
@@ -3928,6 +3949,9 @@ const ICON_DEFS = [
   { key: "pump", label: "PUMP coin", size: 16, get: () => PUMP_ICON, set: s => PUMP_ICON = s },
   { key: "meteora", label: "MET coin", size: 16, get: () => MET_ICON, set: s => MET_ICON = s },
   { key: "seeker", label: "SKR coin", size: 16, get: () => SKR_ICON, set: s => SKR_ICON = s },
+  { key: "claude-mini", label: "Claude Code (mini)", size: 16, get: () => CLAUDE_MINI_ICON, set: s => CLAUDE_MINI_ICON = s,
+    note: "the Control Strip's usage meter wears the chosen agent's Mac" },
+  { key: "codex-mini", label: "Codex (mini)", size: 16, get: () => CODEX_MINI_ICON, set: s => CODEX_MINI_ICON = s },
   // the menubar Mac is the 32-grid art shown at 15px — edited at 32, the
   // custom SVG gets its display size re-stamped on the way into the DOM
   { key: "apple", label: "Apple Menu", size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
@@ -3973,6 +3997,7 @@ function applyIconOverrides(ovs, custom) {
   cfStripPaint();
   tsStripPaint();
   pxStripPaint();
+  auStripPaint();
   tickClock();
   $("#about-icon").innerHTML = macIcon("running", 48);
   document.querySelectorAll(".finder-window").forEach(w => { if (!w.hidden) loadFinder(w); });
@@ -8207,8 +8232,8 @@ async function cfHeartbeat(force) {
 }
 
 // ---- Control Strip ----
-// Three modules: the Cloudflare heartbeat, then the Tailscale panel and the
-// Solana price ticker below.
+// Four modules: the Cloudflare heartbeat, then the Tailscale panel, the
+// Solana price ticker and the agent usage meter below.
 // The heartbeat's lamp is the icon's reserved greens repainted per status;
 // a module's menu pops up from its tile the way an OS 9 module's does; the
 // tab hides the strip down to the tab alone, remembered per browser the way
@@ -8422,6 +8447,140 @@ pxRefresh(false);
 pxPushInit();
 setInterval(() => { if (!document.hidden) pxRefresh(false); }, 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) pxRefresh(false); });
+
+// ---- Control Strip: agent usage ----
+// What Claude Code and Codex have used on this host: a wide module wearing
+// the chosen agent's icon beside its tokens today — or, by the menu's
+// choice, the fullest of its plan's usage windows — and a menu with both
+// agents, each with a submenu that splits the tokens (sent fresh, read back
+// from the prompt cache, written) for today and the last seven days and
+// says where the five-hour and weekly windows stand and when they reset.
+// The daemon does the counting from the CLIs' own logs (/v1/agents/usage,
+// agentusage.go); its first scan after a restart takes a moment, and until
+// it lands the answer says so and the tile asks again. An agent shows once
+// it is installed and has left figures; with neither, the tile is hidden —
+// remembered per browser, like the Tailscale one, so the strip has its
+// final width from the first paint.
+const csAI = $("#cs-ai");
+const AU_AGENTS = ["claude", "codex"];
+const AU_ICON = { claude: "claude-mini", codex: "codex-mini" }; // ICON_DEFS keys
+let auShown = "claude", auFigure = "tokens", auSeen = "1", auRetry = 0;
+try {
+  const a = localStorage.getItem("exe_cstrip_agent"); if (AU_AGENTS.includes(a)) auShown = a;
+  if (localStorage.getItem("exe_cstrip_agent_figure") === "limit") auFigure = "limit";
+  auSeen = localStorage.getItem("exe_cstrip_ai") || "1";
+} catch (e) {}
+const auAgents = () => ((auLast && auLast.agents) || []).filter(a => a.working);
+// the agent on the tile: the chosen one while it works, else the other
+const auAgent = () => auAgents().find(a => a.id === auShown) || auAgents()[0] || null;
+// 842, 12.3K, 189.1M, 1.24B
+function auTok(n) {
+  if (!(n >= 1000)) return String(n || 0);
+  for (const [div, unit] of [[1e9, "B"], [1e6, "M"], [1e3, "K"]])
+    if (n >= div) { const v = n / div; return (v >= 100 ? v.toFixed(0) : v >= 10 || unit !== "B" ? v.toFixed(1) : v.toFixed(2)) + unit; }
+}
+const auWinShort = w => w.name === "five_hour" ? "5h" : w.name === "seven_day" ? "wk" : Math.round(w.seconds / 3600) + "h";
+const auWinLong = w => w.name === "five_hour" ? "5-hour window" : w.name === "seven_day" ? "Weekly window" : Math.round(w.seconds / 3600) + "-hour window";
+const auPct = w => Math.round(w.used_pct) + "%";
+// a window whose reset has passed says nothing about the one running now
+const auLive = a => (a.windows || []).filter(w => !w.rolled);
+const auFullest = a => auLive(a).reduce((m, w) => !m || w.used_pct > m.used_pct ? w : m, null);
+function auWhen(sec) {
+  const d = new Date(sec * 1000), t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString() ? t : d.toLocaleDateString([], { weekday: "short" }) + " " + t;
+}
+const auWindowsLine = a => auLive(a).map(w => auWinShort(w) + " " + auPct(w)).join(" · ");
+const auWindowLine = (a, w) => auWinLong(w) + ": " + (w.rolled ? "reset " + auWhen(w.resets_at) + ", nothing heard since"
+  : auPct(w) + " used" + (a.limit_reached && w.used_pct >= 100 ? " — limit reached" : "") + (w.resets_at ? ", resets " + auWhen(w.resets_at) : ""));
+const auSplit = (what, t) => what + ": " + auTok(t.total) + " — " + auTok(t.input) + " in, " + auTok(t.cached) + " cached, " + auTok(t.output) + " out, "
+  + t.requests.toLocaleString("en-US") + " request" + (t.requests === 1 ? "" : "s");
+const auHead = () => !auLast ? "Agent usage: checking…" : auLast.scanning ? "Agent usage: reading the logs…"
+  : !auAgents().length ? "Agent usage: nothing to show yet"
+  : "Agent usage on this host, " + new Date(auLast.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+function auStripPaint() {
+  const any = auLast ? auLast.agents.some(a => a.installed) : auSeen === "1";
+  csAI.hidden = !any;
+  const a = auAgent();
+  $("#cs-ai .cs-ico").innerHTML = iconCurrent(AU_ICON[a ? a.id : auShown]);
+  let txt = "—";
+  if (a && !auLast.scanning) {
+    const w = auFullest(a);
+    txt = auFigure === "limit" ? (w ? auPct(w) + " " + auWinShort(w) : "—") : auTok(a.today.total);
+  }
+  $("#cs-ai .cs-txt").textContent = txt;
+  const lines = [auHead()];
+  for (const g of auAgents()) {
+    lines.push(g.title + ": " + auTok(g.today.total) + " tokens today, " + auTok(g.week.total) + " in 7 days");
+    for (const w of g.windows || []) lines.push("  " + auWindowLine(g, w));
+  }
+  csAI.title = lines.join("\n");
+}
+async function auRefresh(force) {
+  try {
+    auLast = await j("/v1/agents/usage" + (force ? "?force=1" : ""));
+    try { localStorage.setItem("exe_cstrip_ai", auLast.agents.some(a => a.installed) ? "1" : "0"); } catch (e) {}
+    auStripPaint();
+    // the daemon's first scan is still running: ask again shortly
+    clearTimeout(auRetry);
+    if (auLast.scanning) auRetry = setTimeout(() => auRefresh(false), 3000);
+  } catch (e) { /* keep the last figures */ }
+}
+function auRow(a) {
+  return el("span", { class: "au-row" },
+    el("span", { class: "n" }, a.title),
+    el("span", { class: "t" }, auTok(a.today.total)),
+    el("span", { class: "w" }, auWindowsLine(a)));
+}
+function auDetails(a) {
+  const items = [
+    { label: auSplit("Today", a.today), dis: true },
+    { label: auSplit("7 days", a.week), dis: true },
+  ];
+  if ((a.windows || []).length) {
+    items.push("-", ...a.windows.map(w => ({ label: auWindowLine(a, w), dis: true })));
+    // Claude Code's windows are as old as its last reply in an exe window
+    if (Date.now() - a.windows_at > 10 * 60000)
+      items.push({ label: "as of " + auWhen(a.windows_at / 1000), dis: true });
+  }
+  if (a.plan) items.push("-", { label: "Plan: " + a.plan, dis: true });
+  return items;
+}
+function auSetFigure(f) {
+  auFigure = f;
+  try { localStorage.setItem("exe_cstrip_agent_figure", f); } catch (e) {}
+  auStripPaint();
+}
+function auStripMenu() {
+  if (Date.now() - csMenuClosedAt < 300) return; // the click that just closed it
+  const working = auAgents(), shown = auAgent();
+  const idle = ((auLast && auLast.agents) || []).filter(a => a.installed && !a.working);
+  showCtxMenu(0, 0, [
+    { label: auHead(), dis: true },
+    ...(working.length ? ["-", ...working.map(a => ({ label: auRow(a), icon: iconCurrent(AU_ICON[a.id]), mark: a === shown, act: () => {
+      auShown = a.id;
+      try { localStorage.setItem("exe_cstrip_agent", a.id); } catch (e) {}
+      auStripPaint();
+    } }))] : []),
+    ...idle.map(a => ({ label: a.title + ": installed, no usage on record", dis: true })),
+    ...(working.length ? ["-", ...working.map(a => ({ label: a.title, items: auDetails(a) }))] : []),
+    "-",
+    { label: "Show Tokens Today", mark: auFigure === "tokens", act: () => auSetFigure("tokens") },
+    { label: "Show Plan Limit", mark: auFigure === "limit", act: () => auSetFigure("limit") },
+    "-",
+    { label: "Update Now", act: () => auRefresh(true).then(() => {
+      const a = auAgent();
+      toast(a ? a.title + ": " + auTok(a.today.total) + " tokens today" + (auWindowsLine(a) ? " · " + auWindowsLine(a) : "") : "No agent usage to show.");
+    }) },
+  ], () => { csAI.classList.remove("down"); csMenuClosedAt = Date.now(); });
+  csAI.classList.add("down");
+  csMenuAt(csAI);
+}
+csAI.addEventListener("click", auStripMenu);
+csAI.addEventListener("contextmenu", e => { e.preventDefault(); auStripMenu(); });
+auStripPaint();
+auRefresh(false);
+setInterval(() => { if (!document.hidden) auRefresh(false); }, 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) auRefresh(false); });
 
 // ---- Control Strip: Tailscale ----
 // The tailnet module, shown only on a machine with the tailscale CLI: an
