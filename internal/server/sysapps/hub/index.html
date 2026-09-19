@@ -2629,11 +2629,15 @@ window.addEventListener("blur", hideMenu);
 // the pencil proofreads — and is remembered; when the post is sent every
 // remembered "@Name" goes out as "@" and the profile's id (withIds), the
 // one thing about a person that never changes, and every reader looks
-// the name up again. A name typed in full and left with a space counts
-// as a pick when just one offered profile has it; any other "@name" is
-// words. The arrows walk the list, Return or Tab picks, Escape puts it
-// away until another "@", a press picks; a Return that ends an input
-// method's composition is left alone. The list never takes the focus,
+// the name up again. Only a row the writer chose is remembered: the id
+// that is signed is one they saw, beside its picture, and picked. A name
+// typed by hand is words however well it matches — a list is an answer
+// still on its way or one for a shorter word, so reading it at a
+// keystroke made the same typing sign an id or not by the network's
+// timing, and one match in a page of six is no proof a name is one
+// person's (Codex's catch, 2026-09-19). The arrows walk the list, Return
+// or Tab picks, Escape puts it away until another "@", a press picks; a
+// Return that ends an input method's composition is left alone. The list never takes the focus,
 // and it hangs from the "@" itself, found in the pencil's mirror, which
 // wraps and scrolls as the field does. The hub's public composer carries
 // the same functions (exe-hub web.html): change both.
@@ -2692,13 +2696,8 @@ function atRender() {
   atPlace();
 }
 async function atLook() {
-  const now = atQuery(), was = at, hits = atHits;
-  if (!now) {
-    // a name typed out and left: a pick, when one profile alone has it
-    if (was && was.q && /\s$/.test(textEl.value.slice(0, textEl.selectionStart))) {
-      const same = hits.filter(h => h.name.toLowerCase() === was.q.toLowerCase());
-      if (same.length === 1 && textEl.value.slice(was.from + 1, was.from + 1 + was.q.length) === was.q) picked.set(was.q, same[0].id);
-    }
+  const now = atQuery();
+  if (!now) { // the caret has left the word: a name typed out and left is words, whatever the list showed
     atShut = -1;
     return atClose();
   }

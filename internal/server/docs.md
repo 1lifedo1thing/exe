@@ -504,9 +504,11 @@ written. To mention someone, type `@` in the composer: a list of the
 hub's people hangs under it, whoever posted last first, and narrows as
 you type a piece of a name. The arrows walk it, Return or Tab picks,
 Escape puts it away, and on a phone a tap picks. The field shows `@Name`
-while you write; the id goes in when the post is sent. A name typed out
-in full counts when only one person has it; any other `@name` typed by
-hand stays plain words. The hub's public pages have the same list.
+while you write; the id goes in when the post is sent. Only a row you
+chose becomes a mention: an `@name` typed by hand stays plain words,
+however well it matches, since names on a hub are not unique and the
+row's picture and id are how you know who you are naming. The hub's
+public pages have the same list.
 **Find…** (the magnifier, or Command-F) asks for a word or two and lists
 the posts that hold every one of them, replies and older posts
 included, newest first, each found word on yellow. A word matches
