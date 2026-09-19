@@ -80,9 +80,9 @@ Tailscale's operator user, so no sudo. Beside it, the **Solana ticker**
 shows a token's coin and its dollar
 price: SOL, or PUMP, MET or SKR — pick the one the tile wears from its menu.
 The menu lists them all with their day change, and the ecosystem tokens
-with their price in SOL as well — four or more zeros after the point fold
-into a small sunk count, so PUMP's 0.00003717 SOL reads 0.0₄3717 SOL; the
-figures are Coinbase's public spot
+with their price in SOL as well — three or more zeros after the point fold
+into a small sunk count, so PUMP's 0.00003717 SOL reads 0.0₄3717 SOL and
+SKR's 0.0001745 SOL reads 0.0₃1745 SOL; the figures are Coinbase's public spot
 prices, fetched once a minute by the daemon and shared by every desktop on
 the node. **Notify Me of Big Moves** in that menu turns on push
 notifications for this device (on a phone, the app added to the Home
