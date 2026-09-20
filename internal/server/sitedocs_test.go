@@ -235,7 +235,7 @@ func TestDocsBreadcrumb(t *testing.T) {
 			t.Errorf("%s does not end its trail with its own name", c.path)
 		}
 		// the trail is in the toolbar, and only there
-		i, j := strings.Index(body, `class="strip tools"`), strings.Index(body, `class="statusbar"`)
+		i, j := strings.Index(body, `class="strip tools"`), strings.Index(body, `class="strip foot"`)
 		if k := strings.Index(body, `class="crumbs"`); k < i || k > j {
 			t.Errorf("%s puts the trail outside the toolbar", c.path)
 		}
@@ -247,5 +247,31 @@ func TestDocsBreadcrumb(t *testing.T) {
 	_, chapter := getDoc(t, h, "/docs/using/apps")
 	if n := strings.Count(chapter[strings.Index(chapter, `class="crumbs"`):strings.Index(chapter, "</nav>")], "<a href"); n != 3 {
 		t.Errorf("a chapter's trail has %d links, want exe, Docs and Using exe", n)
+	}
+}
+
+// The window is held between two strips of one height: the toolbar and
+// the foot. The foot says who is reading, with a person before the
+// count, and carries the way on as a push button.
+func TestDocsFoot(t *testing.T) {
+	h := SiteHandler(nil)
+	_, body := getDoc(t, h, "/docs/config")
+	for _, want := range []string{
+		`<div class="strip foot">`,
+		`<a class="btn" href="/docs/using">Next<span class="t">: Using exe</span></a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the foot has no %s", want)
+		}
+	}
+	// the last page in the order has nowhere to go on to
+	_, last := getDoc(t, h, "/docs/using/"+manualChapters[len(manualChapters)-1].Slug)
+	if strings.Contains(last, `>Next<`) {
+		t.Error("the last page offers a next one")
+	}
+	// the person is drawn, not spelt, and only where there is a count
+	_, idx := getDoc(t, h, "/docs/")
+	if strings.Contains(idx, `class="who"`) {
+		t.Error("a page with nobody reading it still draws the reader")
 	}
 }

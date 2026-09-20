@@ -16,6 +16,8 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+
+	stats "github.com/livid/exe-stats"
 )
 
 //go:embed site/docs/*.md
@@ -175,7 +177,11 @@ try {
     <div class="body doc">
 {{.Body}}{{with .Items}}<ul class="toc">{{range .}}<li><a href="{{.URL}}">{{.Title}}</a>{{with .Blurb}}<span>{{.}}</span>{{end}}</li>{{end}}</ul>{{end}}
     </div>
-    <div class="statusbar"><span>{{if .Online}}<a href="/stats">{{.Online}} online</a>{{end}}</span><span>{{with .Next}}Next: <a href="{{.URL}}">{{.Title}}</a>{{end}}</span></div>
+    <div class="strip foot">
+      <span>{{if .Online}}<a class="here" href="/stats" title="Who is reading the site now"><svg class="who" viewBox="0 0 7 8" width="7" height="8" aria-hidden="true"><path class="k" d="M2 0h3v3H2zM1 4h5v1H1zM0 5h7v3H0z"/></svg>{{.Online}} online</a>{{end}}</span>
+      <span class="fill"></span>
+      {{with .Next}}<a class="btn" href="{{.URL}}">Next<span class="t">: {{.Title}}</span></a>{{end}}
+    </div>
   </div>
 </div>
 
@@ -218,7 +224,7 @@ try {
 // siteDocsHandler serves the documentation: the index, a page, the
 // manual's front, and a chapter of the manual. Which one it is comes
 // from the path, so the routes and this switch stay in step.
-func siteDocsHandler(an interface{ Online() int }) http.HandlerFunc {
+func siteDocsHandler(an *stats.Stats) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var p siteDocPage
 		rest := strings.TrimPrefix(r.URL.Path, "/docs/")
@@ -291,9 +297,7 @@ detail; the <a href="/">homepage</a> is the short version and the
 			}
 		}
 		p.Build = siteBuild
-		if an != nil {
-			p.Online = an.Online()
-		}
+		p.Online = siteOnline(an, r, "docs")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("X-Content-Type-Options", "nosniff")

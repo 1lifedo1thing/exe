@@ -102,9 +102,25 @@ body.docs .doc a { color: var(--link); }
    two choices are at its right and are shown only where they do
    something (html.js, set by the head script) — from the first paint, so
    nothing appears late or moves. */
-.tools { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
-  border-bottom: 1px solid #262626; background: #ddd; color: #333;
+.strip { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+  background: #ddd; color: #333; font-size: 11px;
   box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; }
+.strip.tools { border-bottom: 1px solid #262626; }
+/* the foot is the same strip as the toolbar, to the pixel, with its seam
+   along the top instead: the window is held between two of them */
+.strip.foot { border-top: 1px solid #262626; }
+.strip .fill { flex: 1 1 auto; min-width: 8px; }
+/* who is reading, before the count: a person on the same pixel grid as
+   the chevron, in the strip's own ink */
+.strip .who { display: block; flex: none; width: 7px; height: 8px; color: #333;
+  shape-rendering: crispEdges; }
+.strip .who .k { fill: currentColor; }
+.strip .here { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+.strip .here:hover { text-decoration: underline; }
+/* the way on is a push button, so it is pressable rather than a word in
+   a line of text; on a phone the name goes and "Next" stays */
+.strip.foot .btn { font-family: inherit; }
+@media (max-width: 480px) { .strip.foot .btn .t { display: none; } }
 .tools .prefs { display: none; align-items: center; gap: 8px; flex: none; }
 html.js .tools .prefs { display: flex; }
 /* the trail: where this page sits, in one line. It gives way before the

@@ -108,6 +108,21 @@ func SiteStats(stateDir string) *stats.Stats {
 	return an // the caller starts Run
 }
 
+// siteOnline is how many are reading the site: the visitors with a page
+// in the last five minutes, and the person being served this request,
+// whose visit is counted a moment after it. A crawler belongs to no
+// human number and is told what the number really is.
+func siteOnline(an *stats.Stats, r *http.Request, kind string) int {
+	if an == nil {
+		return 0
+	}
+	n := an.Online()
+	if _, _, _, bot := stats.Classify(r.UserAgent()); !bot && n < 1 && an.Wanted(r, kind) {
+		n = 1
+	}
+	return n
+}
+
 // siteLabel names a path in the stats: the homepage as itself and a
 // documentation page by its title, so the report reads as the site does.
 func siteLabel(path string) string {
@@ -237,17 +252,10 @@ func sitePage(w http.ResponseWriter, r *http.Request, an *stats.Stats) {
 		// is never told that nobody is here. A crawler is counted as a
 		// crawl and belongs to no human number, so it is told what the
 		// number really is, as is a curl that counts for nothing.
-		online := 0
-		if an != nil {
-			online = an.Online()
-			if _, _, _, bot := stats.Classify(r.UserAgent()); !bot && online < 1 && an.Wanted(r, "home") {
-				online = 1
-			}
-		}
 		if err := sitePageTmpl.Execute(w, struct {
 			Online int
 			Build  string
-		}{online, siteBuild}); err != nil {
+		}{siteOnline(an, r, "home"), siteBuild}); err != nil {
 			log.Printf("site: %v", err)
 		}
 	}
