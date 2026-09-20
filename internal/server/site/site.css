@@ -36,7 +36,7 @@ code { font: 11px/1.45 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
    shape, so nothing moves when the image arrives */
 .shot { display: block; margin: 12px 0; border: 1px solid #262626; background: #ccf;
   box-shadow: -1px -1px 0 #999, 1px 1px 0 #fff; }
-.shot img { display: block; width: 100%; height: auto; aspect-ratio: 2088 / 1522; }
+.shot img { display: block; width: 100%; height: auto; }
 /* the button row: its own row under the text, 12px from the frame's
    edges and between buttons, the default rightmost */
 .btnrow { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding: 8px 12px 12px; }

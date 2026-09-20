@@ -6,7 +6,7 @@ any VM port to a real HTTPS subdomain through your Cloudflare Tunnel. macOS
 uses Virtualization.framework; Linux uses KVM through Firecracker; Windows
 uses QEMU on the Windows Hypervisor Platform.
 
-![The web UI — a Mac OS 9 Platinum desktop: sortable VM list and an SSH terminal into a VM](internal/server/site/screenshot.png)
+![The web UI — a Mac OS 9 Platinum desktop with Codex, Claude Code, the virtual machine list, and btop running in a VM](internal/server/site/screenshot.png)
 
 ```
 phone/laptop ──► exe API (bind to Tailscale IP)
