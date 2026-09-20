@@ -284,7 +284,7 @@ func TestDocsContents(t *testing.T) {
 	h := SiteHandler(nil)
 	_, body := getDoc(t, h, "/docs/using/the-hub")
 	for _, want := range []string{
-		`<a class="btn toc" href="/docs/" title="Contents"`, // a link first, a modal with script
+		`<a class="btn dir" href="/docs/" title="Contents"`, // a link first, a modal with script
 		`<svg class="ix" viewBox="0 0 11 10"`,               // the icon is drawn, not spelt
 		`<dialog class="tocbox"`,
 		`box.showModal()`,
@@ -311,7 +311,7 @@ func TestDocsContents(t *testing.T) {
 	}
 	// the button sits before the way on
 	foot := body[strings.Index(body, `<div class="strip foot">`):]
-	if i, j := strings.Index(foot, `class="btn toc"`), strings.Index(foot, `>Next<`); i < 0 || j < 0 || i > j {
+	if i, j := strings.Index(foot, `class="btn dir"`), strings.Index(foot, `>Next<`); i < 0 || j < 0 || i > j {
 		t.Error("the contents button does not come before the way on")
 	}
 }

@@ -185,7 +185,7 @@ try {
     <div class="strip foot">
       <span>{{if .Online}}<a class="here" href="/stats" title="Who is reading the site now"><svg class="who" viewBox="0 0 7 8" width="7" height="8" aria-hidden="true"><path class="k" d="M2 0h3v3H2zM1 4h5v1H1zM0 5h7v3H0z"/></svg>{{.Online}} online</a>{{end}}</span>
       <span class="fill"></span>
-      <a class="btn toc" href="/docs/" title="Contents" aria-label="Contents"><svg class="ix" viewBox="0 0 11 10" width="11" height="10" aria-hidden="true"><path class="k" d="M0 0h2v2H0zM4 0h7v2H4zM0 4h2v2H0zM4 4h7v2H4zM0 8h2v2H0zM4 8h7v2H4z"/></svg></a>
+      <a class="btn dir" href="/docs/" title="Contents" aria-label="Contents"><svg class="ix" viewBox="0 0 11 10" width="11" height="10" aria-hidden="true"><path class="k" d="M0 0h2v2H0zM4 0h7v2H4zM0 4h2v2H0zM4 4h7v2H4zM0 8h2v2H0zM4 8h7v2H4z"/></svg></a>
       {{with .Next}}<a class="btn" href="{{.URL}}">Next<span class="t">: {{.Title}}</span></a>{{end}}
     </div>
   </div>
@@ -229,7 +229,7 @@ try {
   }
   var smaller = document.getElementById("smaller"), bigger = document.getElementById("bigger"),
       light = document.getElementById("light"), dark_ = document.getElementById("dark"),
-      toc = document.querySelector(".btn.toc"), box = document.querySelector(".tocbox");
+      toc = document.querySelector(".btn.dir"), box = document.querySelector(".tocbox");
   // the contents: a modal over the page being read, so nothing is lost
   // by looking. Without this the same button is a link to the index,
   // which is the same list on a page of its own.
