@@ -153,7 +153,12 @@ body.mobile #clock { padding: 0 10px; }
 .au-row span { display: inline-block; }
 .au-row .n { width: 76px; }
 .au-row .t { width: 52px; text-align: right; }
-.au-row .w { width: 112px; }
+/* the windows stand in columns, so one agent's week sits under the other's:
+   every cell is as wide as the widest string its column holds in any row
+   (data-w, a ghost of no height), and a window an agent lacks stays blank */
+.au-row .w { white-space: pre; }
+.au-row .w span::before { content: attr(data-w); display: block; box-sizing: border-box; height: 0; visibility: hidden; }
+.au-row .w .p { text-align: right; }
 /* an agent's week as columns in its submenu: 16px bars in the agent's colour
    on one baseline (a border on the plot's own box), a figure on the peak's
    cap and on today's, the day under each; every column's title has its split */
@@ -8691,11 +8696,28 @@ async function auRefresh(force) {
     if (auLast.scanning) auRetry = setTimeout(() => auRefresh(false), 3000);
   } catch (e) { /* keep the last figures */ }
 }
-function auRow(a) {
+// the windows the rows share, shortest first, each with its widest figure
+function auCols(agents) {
+  const cols = [];
+  for (const a of agents) for (const w of auLive(a)) {
+    const k = auWinShort(w), c = cols.find(c => c.k === k);
+    if (!c) cols.push({ k, seconds: w.seconds, wide: auPct(w) });
+    else if (auPct(w).length > c.wide.length) c.wide = auPct(w);
+  }
+  return cols.sort((x, y) => x.seconds - y.seconds);
+}
+function auRow(a, cols) {
+  const cell = (cls, wide, text) => el("span", { class: cls, "data-w": wide }, text);
+  let said = false;
   return el("span", { class: "au-row" },
     el("span", { class: "n" }, a.title),
     el("span", { class: "t" }, auTok(a.today.total)),
-    el("span", { class: "w" }, auWindowsLine(a)));
+    el("span", { class: "w" }, ...cols.flatMap((c, i) => {
+      const w = auLive(a).find(w => auWinShort(w) === c.k), dot = w && said;
+      if (w) said = true;
+      return [...(i ? [cell("d", " · ", dot ? " · " : "")] : []),
+        cell("l", c.k + " ", w ? c.k + " " : ""), cell("p", c.wide, w ? auPct(w) : "")];
+    })));
 }
 // the week as columns, oldest day first and today last. The tallest day
 // fills the plot; a figure sits on its cap and on today's — the rest are in
@@ -8743,11 +8765,11 @@ function auSetFigure(f) {
 }
 function auStripMenu() {
   if (Date.now() - csMenuClosedAt < 300) return; // the click that just closed it
-  const working = auAgents(), shown = auAgent();
+  const working = auAgents(), shown = auAgent(), cols = auCols(working);
   const idle = ((auLast && auLast.agents) || []).filter(a => a.installed && !a.working);
   showCtxMenu(0, 0, [
     { label: auHead(), dis: true },
-    ...(working.length ? ["-", ...working.map(a => ({ label: auRow(a), icon: iconCurrent(AU_ICON[a.id]), mark: a === shown, act: () => {
+    ...(working.length ? ["-", ...working.map(a => ({ label: auRow(a, cols), icon: iconCurrent(AU_ICON[a.id]), mark: a === shown, act: () => {
       auShown = a.id;
       try { localStorage.setItem("exe_cstrip_agent", a.id); } catch (e) {}
       auStripPaint();
