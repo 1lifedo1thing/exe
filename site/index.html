@@ -73,6 +73,10 @@ code { font: 11px/1.45 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
    itself so the page never does */
 .term { margin: 0; padding: 8px 10px; overflow-x: auto; background: #000; color: #fff; cursor: text;
   font: 11px/1.5 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+/* in the Quick Start's steps a terminal is a sunken field among the text */
+.steps { padding-bottom: 8px; }
+.steps h2:first-child { margin-top: 0; }
+.steps .term { margin: 8px 0; border: 1px solid #262626; box-shadow: -1px -1px 0 #999, 1px 1px 0 #fff; }
 .term .c { color: #999; }
 .term .p { color: #6c6; }
 .foot { max-width: 720px; margin: 0 auto; text-align: center; font-size: 11px; color: #333; }
@@ -124,14 +128,33 @@ code { font: 11px/1.45 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
 <div class="window">
   <div class="titlebar"><div class="tbox"></div><div class="stripe"></div><div class="title">Quick Start</div><div class="stripe"></div></div>
   <div class="frame">
-<pre class="term"><span class="p">$</span> make build        <span class="c"># Windows: go build -o exe.exe ./cmd/exe</span>
+    <div class="body steps">
+      <h2>1. Open the desktop</h2>
+      <p>Needs Go 1.25 or newer.</p>
+<pre class="term"><span class="p">$</span> git clone https://github.com/livid/exe.git
+<span class="p">$</span> cd exe
+<span class="p">$</span> make build        <span class="c"># Windows: go build -o exe.exe ./cmd/exe</span>
 <span class="p">$</span> ./exe init        <span class="c"># writes ~/.exe/config.json</span>
-<span class="p">$</span> ./exe serve       <span class="c"># the daemon, and the desktop at http://127.0.0.1:7777</span>
+<span class="p">$</span> ./exe serve       <span class="c"># the daemon; it keeps this terminal</span></pre>
+      <p>Open <code>http://127.0.0.1:7777</code>: the desktop is the first thing that
+      works, and it needs nothing else. A Linux machine without KVM or Firecracker
+      still gets it, with the apps, the Terminal and the Hub, and an empty VM list;
+      see <a href="https://github.com/livid/exe#running-without-vms-a-nas-a-container" target="_blank" rel="noopener">Running without VMs</a>.</p>
 
-<span class="p">$</span> ./exe create demo
+      <h2>2. A VM, from a second terminal</h2>
+      <p><code>serve</code> has the first. Linux and Windows have requirements of their own
+      (<a href="https://github.com/livid/exe#linux-requirements" target="_blank" rel="noopener">Linux</a>, <a href="https://github.com/livid/exe#windows-requirements" target="_blank" rel="noopener">Windows</a>);
+      <code>exe code</code> talks to the Ollama named in the
+      <a href="https://github.com/livid/exe#configuration-execonfigjson" target="_blank" rel="noopener">configuration</a>.</p>
+<pre class="term"><span class="p">$</span> ./exe create demo   <span class="c"># Debian 13; the first one downloads a 3 GB image</span>
 <span class="p">$</span> ./exe ssh demo
-<span class="p">$</span> ./exe code demo "build me a guestbook app on port 8000"
-<span class="p">$</span> ./exe expose demo -port 8000 -sub guestbook   <span class="c"># https://guestbook.your.domain</span></pre>
+<span class="p">$</span> ./exe code demo "build me a guestbook app on port 8000"</pre>
+
+      <h2>3. A public URL</h2>
+      <p>Needs a Cloudflare tunnel and a token, set up once:
+      <a href="https://github.com/livid/exe#cloudflare-setup-one-time" target="_blank" rel="noopener">Cloudflare setup</a>.</p>
+<pre class="term"><span class="p">$</span> ./exe expose demo -port 8000 -sub guestbook   <span class="c"># https://guestbook.your.domain</span></pre>
+    </div>
     <div class="statusbar"><span>The rest is in the README</span></div>
   </div>
 </div>

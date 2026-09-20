@@ -22,20 +22,41 @@ phone/laptop ──► exe API (bind to Tailscale IP)
 
 ## Quick start
 
+**1. Open the desktop.** Needs Go 1.25 or newer.
+
 ```sh
+git clone https://github.com/livid/exe.git
+cd exe
 make build        # also builds exe-net-helper on Linux
                   # Windows: go build -o exe.exe ./cmd/exe
 ./exe init        # writes ~/.exe/config.json
-./exe serve       # run the daemon
+./exe serve       # run the daemon; it keeps this terminal
+```
 
+Open http://127.0.0.1:7777: the desktop is the first thing that works, and it
+needs nothing else. A Linux machine without KVM or Firecracker still gets
+it, with the apps, the Terminal and the Hub, and an empty VM list; see
+[Running without VMs](#running-without-vms-a-nas-a-container).
+
+**2. A VM, from a second terminal** (`serve` has the first). Linux and Windows
+have [requirements](#linux-requirements) of [their own](#windows-requirements);
+`exe code` talks to the Ollama named in the [configuration](#configuration-execonfigjson).
+
+```sh
 ./exe create demo               # clone Debian 13, boot, cloud-init, SSH ready
 ./exe ssh demo                  # log in (key in ~/.exe/ssh/)
 ./exe code demo "build me a guestbook app on port 8000"
-./exe expose demo -port 8000 -sub guestbook   # -> https://guestbook.<domain>
 ```
 
 The first `create` downloads the Debian 13 `genericcloud` raw image (~3 GB) once
 into `~/.exe/images/`. Linux also downloads the configured direct-boot kernel.
+
+**3. A public URL.** Needs a Cloudflare tunnel and a token, set up once:
+[Cloudflare setup](#cloudflare-setup-one-time).
+
+```sh
+./exe expose demo -port 8000 -sub guestbook   # -> https://guestbook.<domain>
+```
 
 ### Linux requirements
 
