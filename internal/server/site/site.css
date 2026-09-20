@@ -114,7 +114,16 @@ html.js .tools .prefs { display: flex; }
 .tools .crumbs .crumb { display: inline-flex; align-items: baseline; gap: 5px; flex: none; }
 .tools .crumbs a { color: #333399; text-decoration: none; }
 .tools .crumbs a:hover { text-decoration: underline; }
-.tools .crumbs .sep { color: #777; }
+/* the step between two names is a chevron, drawn as the desktop draws a
+   glyph: pixels on a grid, crisp at whole ratios; between 1 and 2 a
+   fractional scale would drop a row of the diagonal, so it is smoothed
+   there instead */
+.tools .crumbs .sep { display: block; flex: none; align-self: center; margin: 0 1px;
+  width: 4px; height: 7px; color: #777; shape-rendering: crispEdges; }
+.tools .crumbs .sep .k { fill: currentColor; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  .tools .crumbs .sep { shape-rendering: geometricPrecision; }
+}
 /* this page's own name is the last thing to give way: it shortens with
    an ellipsis, and where even that is too narrow the steps above it go
    before it does, nearest first */

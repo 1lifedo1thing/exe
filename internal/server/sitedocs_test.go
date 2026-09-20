@@ -215,15 +215,24 @@ func TestSiteBuildStamp(t *testing.T) {
 // so it is there whether or not the script runs.
 func TestDocsBreadcrumb(t *testing.T) {
 	h := SiteHandler(nil)
+	chev := `<svg class="sep" viewBox="0 0 4 7"`
+	step := func(url, name string) string {
+		return `<span class="crumb"><a href="` + url + `">` + name + `</a>` + chev
+	}
 	for _, c := range []struct{ path, want string }{
-		{"/docs/", `<span class="crumb"><a href="/">exe</a><span class="sep">&middot;</span></span><b>Docs</b>`},
-		{"/docs/config", `<span class="crumb"><a href="/">exe</a><span class="sep">&middot;</span></span><span class="crumb"><a href="/docs/">Docs</a><span class="sep">&middot;</span></span><b>Configuration</b>`},
-		{"/docs/using", `<span class="crumb"><a href="/docs/">Docs</a><span class="sep">&middot;</span></span><b>Using exe</b>`},
-		{"/docs/using/the-hub", `<span class="crumb"><a href="/docs/using">Using exe</a><span class="sep">&middot;</span></span><b>The Hub</b>`},
+		{"/docs/", step("/", "exe")},
+		{"/docs/config", step("/docs/", "Docs")},
+		{"/docs/using", step("/docs/", "Docs")},
+		{"/docs/using/the-hub", step("/docs/using", "Using exe")},
 	} {
 		_, body := getDoc(t, h, c.path)
 		if !strings.Contains(body, c.want) {
 			t.Errorf("%s does not say where it sits:\nwant %s", c.path, c.want)
+		}
+		if !strings.Contains(body, "<b>"+map[string]string{
+			"/docs/": "Docs", "/docs/config": "Configuration",
+			"/docs/using": "Using exe", "/docs/using/the-hub": "The Hub"}[c.path]+"</b>") {
+			t.Errorf("%s does not end its trail with its own name", c.path)
 		}
 		// the trail is in the toolbar, and only there
 		i, j := strings.Index(body, `class="strip tools"`), strings.Index(body, `class="statusbar"`)
