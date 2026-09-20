@@ -2152,6 +2152,7 @@ async function api(path, opts = {}) {
     delete opts.json;
   }
   const r = await fetch(path, opts);
+  buildSeen(r.headers.get("X-Exe-Build"));
   if (!r.ok) {
     let m = "HTTP " + r.status;
     try { const j = await r.json(); if (j.error) m = j.error; } catch (e) {}
@@ -2160,6 +2161,84 @@ async function api(path, opts = {}) {
   return r;
 }
 const j = (p, o) => api(p, o).then(r => r.json());
+
+// ---- a new build reloads the desktop ----
+// The daemon stamps this page with the build it shipped in (the /ui/ files
+// and the system apps, hashed), names its build on every response and opens
+// the layout stream with it. After a deploy the two differ and the desktop
+// reloads itself — but never out from under the user: not within three
+// seconds of a key or a click, not while a menu or a dialog is up, and not
+// while unsaved work is anywhere on the desk. That is text typed into a
+// field and still in it — in an app's frame too, and in a closed window
+// (closeWin only hides it, so its draft would survive a reopen but not a
+// reload) — an editor window marked dirty, or unsaved Icon Editor pixels.
+// While work holds it, the Apple menu offers Reload for Update. A tab
+// nobody is looking at reloads at once, so it is fresh when they return.
+const UI_BUILD = "__EXE_BUILD__";
+let buildMine = UI_BUILD.startsWith("__") ? "" : UI_BUILD; // unstamped (served off disk in a test): adopt the daemon's
+let buildNew = "", buildTimer = 0, buildTold = false, buildInputAt = 0;
+const buildTyped = new Set();
+function buildNote(e) {
+  if (e.type === "pointermove" && !e.buttons) return; // only a drag counts
+  buildInputAt = performance.now();
+  if (e.type !== "input") return;
+  const t = e.target;
+  // a terminal's helper textarea is a keyboard sink, never a draft, and the
+  // desk's own editors keep a dirty flag that knows about Save
+  if (t && (t.tagName === "TEXTAREA" || t.isContentEditable) && !t.matches(".xterm-helper-textarea, .ed-text")) buildTyped.add(t);
+}
+function buildWatch(doc) {
+  for (const t of ["keydown", "pointerdown", "pointerup", "pointermove", "input"]) doc.addEventListener(t, buildNote, true);
+}
+buildWatch(document);
+// app windows are same-origin frames, so their keys and drafts count too; a
+// sandboxed page window refuses, and has nothing to lose
+document.addEventListener("load", e => {
+  if (e.target.tagName !== "IFRAME") return;
+  try { if (e.target.contentDocument) buildWatch(e.target.contentDocument); } catch (err) {}
+}, true);
+function buildDraft() {
+  for (const t of buildTyped) {
+    if (!t.isConnected || !t.ownerDocument.defaultView) { buildTyped.delete(t); continue; }
+    if ((t.tagName === "TEXTAREA" ? t.value : t.textContent).trim()) return true;
+  }
+  if (document.querySelector(".window[data-dirty]")) return true; // a text or menu editor with unsaved edits
+  return [...document.querySelectorAll(".icx-window")].some(w => w._icx && w._icx.dirty);
+}
+function buildBusy() {
+  if (buildDraft()) return "draft";
+  if (document.hidden) return "";
+  if (performance.now() - buildInputAt < 3000) return "input";
+  if (openMenuEl || document.querySelector(".overlay:not([hidden])")) return "modal";
+  return "";
+}
+function buildTry() {
+  if (!buildNew) { clearInterval(buildTimer); buildTimer = 0; return; }
+  const why = buildBusy();
+  if (why) {
+    if (why === "draft" && !buildTold) { buildTold = true; toast("exe was updated — unsaved work is holding the reload (Apple menu: Reload for Update)"); }
+    return;
+  }
+  buildReload();
+}
+function buildReload() {
+  try { sessionStorage.setItem("exe_build_tried", buildNew); } catch (e) {}
+  location.reload();
+}
+function buildSeen(id) {
+  if (!id) return;
+  if (!buildMine) buildMine = id;
+  if (id === buildMine) { buildNew = ""; return; } // (back to) the build this page is
+  if (id === buildNew) return;
+  // a reload that came back as the same stale page (a cache in between)
+  // must not spin: one try per build
+  let tried = "";
+  try { tried = sessionStorage.getItem("exe_build_tried") || ""; } catch (e) {}
+  if (tried === id) return;
+  buildNew = id; buildTold = false;
+  if (!buildTimer) buildTimer = setInterval(buildTry, 1000);
+  buildTry();
+}
 
 // ---- window manager ----
 // Windows stack from 10 up and the Control Strip floats at 1000, above them
@@ -2711,14 +2790,20 @@ function winSaveLive() {
   winSave();
 }
 
-let winES = null;
+let winES = null, winEST = 0;
 function winSubscribe() {
   if (winES) winES.close();
+  clearTimeout(winEST);
   const tok = tokenInput.value ? "?token=" + encodeURIComponent(tokenInput.value) : "";
   winES = new EventSource("/v1/ui/events" + tok);
+  // a dropped stream reconnects by itself, but an HTTP error ends it for
+  // good — and a proxy in front (Tailscale Serve) answers 502 while the
+  // daemon restarts. Reopen it, or a restart leaves this browser deaf
+  winES.onerror = () => { if (winES.readyState === 2) winEST = setTimeout(winSubscribe, 3000); };
   winES.onmessage = e => {
     let ev;
     try { ev = JSON.parse(e.data); } catch (err) { return; }
+    buildSeen(ev.build);
     const stale = (ev.rev || 0) <= winRev;
     winRev = Math.max(winRev, ev.rev || 0);
     if (ev.client === WIN_CLIENT || stale || !ev.state) return;
@@ -2812,7 +2897,10 @@ document.querySelectorAll(".dd-item").forEach(it => {
 const CHECK_MARK = `<svg width="10" height="8" viewBox="0 0 10 8" shape-rendering="crispEdges"><path d="M9 0h1v2H9zM8 1h1v2H8zM7 2h1v2H7zM6 3h1v2H6zM5 4h1v2H5zM4 5h1v2H4zM3 6h1v2H3zM0 3h1v2H0zM1 4h1v2H1zM2 5h1v2H2z"/></svg>`;
 function appleMenuFill() {
   const dd = $("#dd-apple");
-  dd.querySelectorAll(".dd-win").forEach(n => n.remove());
+  dd.querySelectorAll(".dd-win, .dd-build").forEach(n => n.remove());
+  // a new build held back by unsaved work: the user can take it now
+  if (buildNew) dd.querySelector('[data-act="about"]').after(
+    el("div", { class: "dd-item dd-build", onclick: () => { menuClose(); buildReload(); } }, "Reload for Update"));
   const wins = openWindows().filter(w => w.id !== "win-about")
     .sort((a, b) => winLabel(a).localeCompare(winLabel(b)));
   dd.classList.toggle("icons", wins.length > 0);
@@ -9034,11 +9122,14 @@ $("#join-go").onclick = async () => {
 // When the sync engine lands a peer's change on disk, the daemon announces
 // it over SSE; forward it into the matching app's iframe so an open window
 // reloads/merges instead of clobbering the synced-in doc with stale memory.
-let appES = null;
+let appES = null, appEST = 0;
 function appDataSubscribe() {
   if (appES) appES.close();
+  clearTimeout(appEST);
   const tok = tokenInput.value ? "?token=" + encodeURIComponent(tokenInput.value) : "";
   appES = new EventSource("/v1/apps/events" + tok);
+  // reopen after an HTTP error, as winSubscribe does
+  appES.onerror = () => { if (appES.readyState === 2) appEST = setTimeout(appDataSubscribe, 3000); };
   appES.onmessage = e => {
     let ev;
     try { ev = JSON.parse(e.data); } catch (err) { return; }

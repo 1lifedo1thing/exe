@@ -92,6 +92,43 @@ var uiBuild, uiETags = func() (string, map[string]string) {
 // uiSW is the service worker with the UI build stamped in.
 var uiSW = bytes.ReplaceAll(uiSWSrc, []byte("__EXE_BUILD__"), []byte(uiBuild))
 
+// deskBuild names everything the desktop runs out of the binary: the /ui/
+// files and the system apps. The page carries it (stamped into index.html),
+// every response repeats it in X-Exe-Build and the layout stream opens with
+// it, so a desktop left open across a deploy hears a build that is not its
+// own and reloads itself. Daemon-only changes leave it alone: the page in
+// the browser is still the page the binary ships.
+var deskBuild = func() string {
+	h := sha256.New()
+	io.WriteString(h, uiBuild+"\n")
+	err := fs.WalkDir(sysAppsFS, "sysapps", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := sysAppsFS.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(h, "%s %x\n", p, sha256.Sum256(b))
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(h.Sum(nil))[:12]
+}()
+
+// uiIndex is the desktop page with its build stamped in.
+var uiIndex = bytes.ReplaceAll(uiHTML, []byte("__EXE_BUILD__"), []byte(deskBuild))
+
+// buildHeader says on every response which desktop build this daemon ships.
+func buildHeader(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Exe-Build", deskBuild)
+		next.ServeHTTP(w, r)
+	})
+}
+
 // uiStatic serves the vendored UI assets (xterm.js etc.) at /ui/.
 var uiStatic = func() http.Handler {
 	sub, err := fs.Sub(uiFS, "ui")
@@ -124,11 +161,13 @@ func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
 	}
 	// the UI ships embedded in the binary and changes with every deploy;
 	// no-cache makes a plain reload always revalidate to the new build, and
-	// the ETag lets that revalidation come back as a 304
+	// the ETag lets that revalidation come back as a 304. The page is stamped
+	// with deskBuild, so that is its tag: a system app changing changes the
+	// page's bytes too
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("ETag", uiETags["index.html"])
-	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(uiHTML))
+	w.Header().Set("ETag", `"`+deskBuild+`"`)
+	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(uiIndex))
 }
 
 // handleServiceWorker serves the desktop's service worker from the root so

@@ -61,6 +61,31 @@ func TestUIFilesRevalidate(t *testing.T) {
 	if len(uiBuild) != 12 {
 		t.Errorf("build stamp %q", uiBuild)
 	}
+	// the desktop page carries the build it was served from, and every
+	// response names the build the daemon ships, so an open page can tell
+	// when it has gone stale
+	if len(deskBuild) != 12 {
+		t.Errorf("desk build stamp %q", deskBuild)
+	}
+	index := get("/", "").Body.String()
+	if strings.Contains(index, "__EXE_BUILD__") || !strings.Contains(index, `const UI_BUILD = "`+deskBuild+`"`) {
+		t.Errorf("index is not stamped with the build %q", deskBuild)
+	}
+	for _, p := range []string{"/", "/healthz", "/v1/ui/state"} {
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, httptest.NewRequest("GET", p, nil))
+		if got := rec.Header().Get("X-Exe-Build"); got != deskBuild {
+			t.Errorf("%s: X-Exe-Build %q, want %q", p, got, deskBuild)
+		}
+	}
+	state := httptest.NewRecorder()
+	s.Handler().ServeHTTP(state, httptest.NewRequest("GET", "/v1/ui/state", nil))
+	s.ui.mu.Lock()
+	ev := string(s.ui.eventLocked(""))
+	s.ui.mu.Unlock()
+	if !strings.Contains(ev, `"build":"`+deskBuild+`"`) {
+		t.Errorf("layout event does not name the build: %s", ev)
+	}
 	if rec := get("/ui/sw.js", ""); rec.Code != http.StatusNotFound {
 		t.Errorf("unstamped worker reachable at /ui/sw.js: %d", rec.Code)
 	}

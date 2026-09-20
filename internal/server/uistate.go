@@ -54,7 +54,9 @@ func (u *uiState) eventLocked(client string) []byte {
 	if data == nil {
 		data = json.RawMessage("null")
 	}
-	ev, _ := json.Marshal(map[string]any{"rev": u.rev, "client": client, "state": data})
+	// build rides along so a desktop reconnecting after a deploy learns at
+	// once that the daemon ships a newer page than the one it is running
+	ev, _ := json.Marshal(map[string]any{"rev": u.rev, "client": client, "state": data, "build": deskBuild})
 	return ev
 }
 

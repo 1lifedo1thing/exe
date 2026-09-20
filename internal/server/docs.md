@@ -35,6 +35,16 @@ memory bar per running VM shows its allotment, scaled so the largest fills
 the column, with exe's own footprint as the first row. It refreshes every
 few seconds while open.
 
+**Updates arrive by themselves.** When the daemon restarts with a new
+desktop or new system apps, an open desktop notices and reloads — a few
+seconds after the daemon is back, at once in a tab you are not looking at.
+It waits while you are typing or clicking, while a menu or dialog is up, and
+for as long as there is unsaved work: text typed into a field and still
+there (in a closed window too), an editor with unsaved changes, unsaved
+Icon Editor pixels. While work holds it, the Apple menu shows **Reload for
+Update** to take the update anyway. A restart that changes nothing the
+browser runs leaves your windows alone.
+
 Right-click the desktop (long-press on a phone) for the **desktop menu**: a
 NeXT-style menu that pops up at the pointer and reaches everything — New
 VM, a terminal, the Workspace, every VM (each with its own submenu: Open,

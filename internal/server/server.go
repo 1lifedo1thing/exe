@@ -284,7 +284,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /ui/", uiStatic)
 	mux.HandleFunc("GET /sw.js", handleServiceWorker)
 	mux.HandleFunc("GET /", s.handleUI)
-	return s.auth(mux)
+	return buildHeader(s.auth(mux))
 }
 
 // auth guards the API; the static UI page itself is public (it holds no
