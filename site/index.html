@@ -41,6 +41,8 @@ a { color: #333399; }
   border-top: 1px solid #262626; background: #ddd; font-size: 11px; color: #333;
   box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; white-space: nowrap; overflow: hidden; }
 .statusbar span { overflow: hidden; text-overflow: ellipsis; }
+/* a link on a status line, as the hub's pages have it */
+.statusbar a { font-weight: bold; text-decoration: none; cursor: default; }
 .btn { display: inline-block; min-width: 58px; height: 20px; padding: 2px 13px;
   background: #ddd; color: #262626; text-decoration: none; text-align: center; cursor: default;
   font-size: 12px; line-height: 14px; font-weight: bold; white-space: nowrap;
@@ -74,10 +76,9 @@ code { font: 11px/1.45 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
    page never scrolls sideways */
 .term { margin: 0; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; background: #000; color: #fff; cursor: text;
   font: 11px/1.5 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
-/* the instructions are the terminal's comments; a word in one that leads
-   to the README is underlined, in the comment's own grey */
+/* the instructions are the terminal's comments: a title line over each
+   step, a remark after a command */
 .term .c { color: #999; }
-.term a { color: inherit; cursor: default; }
 /* a remark after a command goes to the next line whole when the terminal
    is too narrow for both, rather than leaving its # behind */
 .term .t { display: inline-block; max-width: 100%; vertical-align: top; }
@@ -131,23 +132,21 @@ code { font: 11px/1.45 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
 <div class="window">
   <div class="titlebar"><div class="tbox"></div><div class="stripe"></div><div class="title">Quick Start</div><div class="stripe"></div></div>
   <div class="frame">
-<pre class="term"><span class="c"># 1. Open the desktop. Needs Go 1.25 or newer.</span>
+<pre class="term"><span class="c"># Open the desktop</span>
 <span class="p">$</span> git clone https://github.com/livid/exe.git
 <span class="p">$</span> cd exe
 <span class="p">$</span> make build        <span class="c t"># Windows: go build -o exe.exe ./cmd/exe</span>
 <span class="p">$</span> ./exe init        <span class="c t"># writes ~/.exe/config.json</span>
-<span class="p">$</span> ./exe serve       <span class="c t"># the daemon; it keeps this terminal</span>
-<span class="c"># Now open http://127.0.0.1:7777: the desktop, and it needs nothing else.</span>
-<span class="c"># A Linux machine without KVM still gets it; see <a href="https://github.com/livid/exe#running-without-vms-a-nas-a-container" target="_blank" rel="noopener">Running without VMs</a>.</span>
+<span class="p">$</span> ./exe serve       <span class="c t"># stays running; the desktop is at http://127.0.0.1:7777</span>
 
-<span class="c"># 2. A VM, from a second terminal. Requirements of their own: <a href="https://github.com/livid/exe#linux-requirements" target="_blank" rel="noopener">Linux</a>, <a href="https://github.com/livid/exe#windows-requirements" target="_blank" rel="noopener">Windows</a>.</span>
+<span class="c"># A VM, from a second terminal</span>
 <span class="p">$</span> ./exe create demo   <span class="c t"># Debian 13; the first one downloads a 3 GB image</span>
 <span class="p">$</span> ./exe ssh demo
-<span class="p">$</span> ./exe code demo "build me a guestbook app on port 8000"   <span class="c t"># needs Ollama: <a href="https://github.com/livid/exe#configuration-execonfigjson" target="_blank" rel="noopener">configuration</a></span>
+<span class="p">$</span> ./exe code demo "build me a guestbook app on port 8000"
 
-<span class="c"># 3. A public URL. Needs a Cloudflare tunnel, set up once: <a href="https://github.com/livid/exe#cloudflare-setup-one-time" target="_blank" rel="noopener">Cloudflare setup</a>.</span>
+<span class="c"># A public URL</span>
 <span class="p">$</span> ./exe expose demo -port 8000 -sub guestbook   <span class="c t"># https://guestbook.your.domain</span></pre>
-    <div class="statusbar"><span>The rest is in the README</span></div>
+    <div class="statusbar"><span>The rest is in the <a href="https://github.com/livid/exe#readme" target="_blank" rel="noopener">README</a></span></div>
   </div>
 </div>
 
