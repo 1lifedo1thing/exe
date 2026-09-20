@@ -7,6 +7,10 @@ through your Cloudflare Tunnel. This desktop is its control panel — and
 everything you see here can also be driven from a terminal or by an agent
 over HTTP and SSH.
 
+On the [documentation website](https://exe.v2core.com/docs/), the toolbar's
+joined sun and moon buttons choose light or dark paper. The pressed segment
+shows the current choice, which this browser remembers between visits.
+
 ## The desktop
 
 The menu bar works like the classic Mac it resembles:

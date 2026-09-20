@@ -160,6 +160,19 @@ html.js .tools .prefs { display: flex; }
 @media (max-width: 480px) { .tools .lbl { display: none; } }
 .tools .btn { min-width: 0; padding: 2px 10px; font-family: inherit; }
 .tools .btn.sz { min-width: 28px; padding: 2px 6px; font-size: 13px; line-height: 12px; }
+/* the paper choices share one edge, with rounded corners only at the
+   two ends; their glyphs use the button's ink in either state */
+.tools .theme { display: inline-flex; flex: none; }
+.tools .theme .btn { display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; padding: 0; border-radius: 0; }
+.tools .theme .btn:first-child { border-radius: 3px 0 0 3px; }
+.tools .theme .btn:last-child { border-left: 0; border-radius: 0 3px 3px 0; }
+.tools .theme .btn:focus-visible { position: relative; z-index: 1;
+  outline: 2px solid #9999fe; outline-offset: 1px; }
+.tools .theme svg { display: block; flex: none; fill: currentColor; shape-rendering: crispEdges; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  .tools .theme svg { shape-rendering: geometricPrecision; }
+}
 /* the mode in force wears the pressed look, as a held-down button does */
 .tools .btn.on { background: #666; color: #fff;
   box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888, inset 2px 2px 0 #555, inset -2px -2px 0 #777; }

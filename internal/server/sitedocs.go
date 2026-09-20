@@ -175,8 +175,10 @@ try {
         <span class="lbl">Text</span>
         <button class="btn sz" id="smaller" title="Smaller text" aria-label="Smaller text">&minus;</button>
         <button class="btn sz" id="bigger" title="Larger text" aria-label="Larger text">+</button>
-        <button class="btn" id="light" title="Light paper" aria-pressed="true">Light</button>
-        <button class="btn" id="dark" title="Dark paper" aria-pressed="false">Dark</button>
+        <span class="theme" role="group" aria-label="Paper appearance">
+          <button class="btn" id="light" title="Light paper" aria-label="Light paper" aria-pressed="true"><svg viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path fill-rule="evenodd" d="M6 0h1v2H6zM6 11h1v2H6zM0 6h2v1H0zM11 6h2v1h-2zM2 2h2v2H2zM9 2h2v2H9zM2 9h2v2H2zM9 9h2v2H9zM5 4h3v1h1v3H8v1H5V8H4V5h1zM5 5v3h3V5z"/></svg></button>
+          <button class="btn" id="dark" title="Dark paper" aria-label="Dark paper" aria-pressed="false"><svg viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path d="M7 1H5v1H3v1H2v2H1v3h1v2h1v1h2v1h3v-1h2v-1h1V8H9v1H6V8H5V7H4V4h1V2h2z"/></svg></button>
+        </span>
       </span>
     </div>
     <div class="body doc">
