@@ -50,19 +50,10 @@ Update** to take the update anyway. A restart that changes nothing the
 browser runs leaves your windows alone.
 
 Right-click the desktop (long-press on a phone) for the **desktop menu**: a
-NeXT-style menu that pops up at the pointer and reaches everything — New
-VM, a terminal, the Workspace, every VM (each with its own submenu: Open,
-Terminal, Start/Stop, Restart, Expose…), every app and open window, the
-tools, Cloudflare and Help. **Customize…** at its bottom opens the menu's
-text file in an editor: one item per line — a label, a tab or two spaces,
-then an action — a label on its own starts a submenu (indent the lines
-under it), `-` is a separator, and `@vms`, `@apps` and `@windows` are lists
-that fill themselves in. `terminal btop` makes an item a shortcut to a CLI
-tool: it opens in a Terminal window of its own, titled after it, that ends
-when it exits. The file's own header lists every action. Save
-hands it to the daemon, which checks it — a bad line is named and nothing
-changes — and then puts the new menu on every desk sharing this one; an
-empty file restores the factory menu.
+NeXT-style menu at the pointer, with shortcuts to VMs, apps, windows and
+tools. Choose **Customize…** to edit it. The
+[Desktop context menu](https://exe.v2core.com/docs/using/desktop-context-menu)
+chapter covers the format, every supported action and examples.
 
 Desktop icons: **Workspace** (shared files), **Terminal** (a shell on this
 host machine), **Claude Code** and **Codex** (each appears when its CLI is
@@ -259,6 +250,206 @@ VM's state. **New Icon…** adds icons of your own on a 32×32 or 16×16 grid �
 draw them, copy their SVG for use anywhere, delete them when done. System
 icons can only be repainted, never deleted. Restored editors keep their position,
 stacking and shaded state even when their icon loads after the desktop layout.
+
+## Desktop context menu
+
+The desktop context menu is a NeXT-style menu that opens at the pointer.
+Right-click an empty part of the desktop, or long-press it on a touch
+screen. A quick two-finger tap also opens the menu; on a phone this works
+inside an ordinary window too, away from controls, menus and dialogs.
+
+The factory menu offers New VM, Terminal, Workspace, lists of VMs, apps
+and windows, Show All Windows, tools, Cloudflare and Help. You can rename
+or reorder items, add shortcuts and group them in submenus.
+
+### Edit and save
+
+Choose **Customize…** to open the menu editor. Edit the text, then click
+**Save**, or press **Command-S** on a Mac or **Ctrl-S** elsewhere. Save
+checks the format first: an error identifies and selects the bad line,
+and your current menu stays in place until the file is valid.
+
+The menu is stored as `System :menu.txt` (normally
+`~/.exe/appdata/System/menu.txt`). A saved change reaches other open
+desktops and syncs to joined nodes. Each desktop fills the automatic lists
+from its own VMs, installed apps and open windows. Existing custom menus
+keep their contents when the factory menu changes; add new shortcuts to
+your own file with **Customize…**.
+
+### Menu format
+
+Write one item per line. Separate the label from its action with a tab or
+at least two spaces. Single spaces are fine inside a label; two spaces
+end it. Action names, list names and VM tab names are lowercase and
+case-sensitive.
+
+In the format examples below, `<TAB>` means a tab character, not the
+literal text `<TAB>`. The complete example menu further down uses spaces
+and can be copied directly.
+
+| Line | Meaning |
+|---|---|
+| `Terminal<TAB>terminal` | A label, a tab, then an action. Two or more spaces work too. |
+| `Tools` | A submenu heading. Put at least one indented item below it. |
+| `-` | A separator. A line made only of several hyphens works too. |
+| `# My shortcuts` | A comment on its own line; it may be indented. Blank lines are ignored. |
+| `@apps` | Insert an automatic list at this position. |
+| `Applications<TAB>@apps` | Put an automatic list inside a named submenu. |
+
+Indent submenu children consistently, for example with two spaces per
+level. The top level has no indentation. When returning to a parent
+level, use exactly its earlier indentation. Only a plain submenu heading
+can have indented children; an action or automatic list cannot.
+
+Except for `terminal`, arguments are separated by whitespace: quotation
+marks do not combine words into one argument. A Workspace path or app
+name containing spaces therefore cannot be used directly in an `edit`,
+`workspace` or `app` item. Use `workspace` to browse to that file or folder,
+or `@apps` to list apps by their display names. Put comments on their own
+lines, rather than after an action.
+
+### All supported actions
+
+The following table lists every supported action. In the syntax column,
+angle brackets mark a required value and square brackets an optional one;
+replace these placeholders rather than typing the brackets. Each action
+needs a label before it, as in `My terminal<TAB>terminal`.
+
+| Action syntax | What it does |
+|---|---|
+| `about` | Open About This Computer. |
+| `newvm` | Open the New VM dialog. |
+| `upload` | Open Upload to Workspace. |
+| `closewin` | Close the front window. |
+| `showall` | Toggle the overview of all open windows. |
+| `refresh` | Refresh the VM and app lists, including My Apps when it is open. |
+| `terminal [command]` | Open a new terminal on the host. With a command, run that command instead of an interactive shell. |
+| `claude` | Open the host's Claude Code window. Disabled when its CLI is unavailable. |
+| `codex` | Open the host's Codex window. Disabled when its CLI is unavailable. |
+| `workspace [folder]` | Open the Workspace root, or a folder relative to that root. |
+| `edit <file>` | Open a file in the text editor, using a path relative to the Workspace root. |
+| `app <name>` | Open an installed app by its app ID. Disabled when it is unavailable. |
+| `vm <name> [tab]` | Open a VM's detail window, optionally on a specific tab listed below. Defaults to Services; disabled if the VM does not exist on this node. |
+| `chat [vm]` | Open Chat. With a VM name, show that VM's chats and pin new chats to it; without one, show all chat sessions. Disabled when Chat is unavailable. |
+| `winvms` | Open the Virtual Machines window. |
+| `winmyapps` | Open My Apps, the window of published sites and their domains. |
+| `winchat` | Open Chat with all sessions, the same as `chat` without an argument. Disabled when Chat is unavailable. |
+| `winnews` | Open the Newsfeed. |
+| `winicons` | Open the Icon Editor. |
+| `winconfig` | Open Configuration. |
+| `winlog` | Open the Daemon Log. |
+| `search` | Open desktop Search. |
+| `trash` | Open the Trash. |
+| `join` | Open the Join dialog to pair another exe node. |
+| `cfstatus` | Open Cloudflare Status. |
+| `cfwizard` | Open the Cloudflare Setup Wizard. |
+| `token` | Open Set API Token for this browser. |
+| `url <address>` | Open an `http://` or `https://` address in a new browser tab. |
+| `docs` | Open the Using exe manual in the desktop. |
+| `skillguide` | Open the Agent Skill Guide. |
+| `customize` | Open this menu's editor. |
+
+For `workspace` and `edit`, use relative paths such as `Projects/demo` or
+`Projects/demo/README.md`. Absolute paths and paths that escape the
+Workspace are rejected. For built-in apps, use their lowercase IDs:
+`app macos9`, `app hub` or `app bluepencil`. Other apps use their installed
+folder name. There is no separate `macos9` action in the customization
+format; use `app macos9`.
+
+The command after `terminal` is kept as one command line, including spaces,
+quotes and shell operators. For example, `Monitor<TAB>terminal btop` opens
+btop on the host if it is installed. On Linux and macOS it runs in the
+host user's login shell; on Windows it runs in PowerShell. The terminal
+session ends when the command exits. To reach a VM's shell instead, use
+`vm <name> term`.
+
+### VM tabs
+
+Use these values as the optional second argument to `vm`. For example,
+`Demo terminal<TAB>vm demo term` opens the Terminal tab of the VM named
+`demo`.
+
+| Tab | Opens |
+|---|---|
+| `svc` | Services (the default). |
+| `term` | Terminal. |
+| `vibe` | Agent. |
+| `expose` | Expose. |
+| `sess` | Sessions. |
+| `notes` | Notes. |
+
+### Automatic lists
+
+These lists fill themselves when you open the menu. Use a list name alone
+to insert its entries in place, or give it a label to make a submenu.
+They take no arguments. An empty list shows a disabled **No VMs**,
+**No Apps** or **No Windows** entry.
+
+| List | Contents | Named submenu example |
+|---|---|---|
+| `@vms` | Every VM on this node, each with an operations submenu. | `Virtual Machines<TAB>@vms` |
+| `@apps` | Installed apps, including built-in apps, shown by their display names. | `Applications<TAB>@apps` |
+| `@windows` | Open windows on this desktop, sorted by title. Pick one to bring it forward. | `Windows<TAB>@windows` |
+
+Each `@vms` submenu offers **Open**, **Open Terminal**, **Chat with this
+VM**, **Start** or **Stop**, **Restart**, **Copy IP**, **Expose Port…** and
+**Publish to GitHub…**. Availability follows the VM's state, its IP and
+Chat availability. Delete is not included. These operations are supplied
+by `@vms`; names such as `start`, `stop` and `restart` are not standalone
+customization actions.
+
+### Example menu
+
+This example uses two spaces between a label and its action, and two
+spaces of indentation for each submenu level. Replace `demo` and the
+Workspace paths with your own VM and files; install btop on the host to
+use the monitor shortcut.
+
+```text
+# My desktop menu
+New VM…  newvm
+Terminal  terminal
+Workspace  workspace
+-
+Projects
+  Demo folder  workspace Projects/demo
+  Demo README  edit Projects/demo/README.md
+  Demo terminal  vm demo term
+  Demo notes  vm demo notes
+Tools
+  Monitor  terminal btop
+  Claude Code  claude
+  Codex  codex
+  Mac OS 9  app macos9
+  Hub  app hub
+Virtual Machines  @vms
+Applications  @apps
+Windows  @windows
+Show All Windows  showall
+-
+Help
+  Using exe  docs
+  Online documentation  url https://exe.v2core.com/docs/
+Customize…  customize
+```
+
+### Limits and recovery
+
+The menu may contain up to 300 entries, counting headings, actions,
+automatic-list entries in the file and separators across all levels.
+Expanded list contents do not count toward that limit. Labels may be up
+to 60 characters; the file must be UTF-8 and at most 64 KiB. You can nest
+three submenu levels below the root (four levels in total).
+
+If you remove `customize`, the desktop appends **Customize…** so you can
+always get back to the editor. If a stored or synced file cannot be
+parsed, the desktop uses the factory menu and adds **The menu file has an
+error…** to open the editor on the problem.
+
+To reset, choose **Restore Defaults** and confirm, or clear the editor
+completely and **Save**. This removes the custom menu from every desktop
+sharing the desk. Only an empty or whitespace-only file restores defaults;
+a file containing just comments is still a custom menu.
 
 ## Mac OS 9
 
