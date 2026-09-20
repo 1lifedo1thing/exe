@@ -1051,6 +1051,20 @@ td .mono, td.mono { user-select: text; }
 .wiz-review div { padding: 4px 0; border-bottom: 1px solid var(--g500); display: flex;
   justify-content: space-between; gap: 12px; }
 .wiz-review div:last-child { border-bottom: none; }
+.cf-live { margin-top: 12px; }
+.cf-live h3 { font-size: 12px; margin: 12px 0 4px; }
+.cf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; }
+.cf-stat { min-width: 0; height: 38px; }
+.cf-stat > span { display: block; font-size: 11px; color: var(--g800); line-height: 16px; }
+.cf-stat > b { display: block; line-height: 20px; font-size: 12px; font-weight: normal;
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cf-note { font-size: 11px; line-height: 16px; height: 32px; overflow: hidden; margin-top: 4px; color: var(--g800); }
+#ctx-menu.cf-menu { width: 304px; max-width: calc(100vw - 8px); }
+#ctx-menu.cf-menu .dd-item { overflow: hidden; text-overflow: ellipsis; }
+#sum-overlay .win-body { max-height: calc(100dvh - 80px); overflow-y: auto; }
+body.mobile .cf-stat { height: 54px; }
+body.mobile .cf-stat > span { height: 32px; }
+body.mobile .cf-note { height: 48px; }
 /* OpenAI tab rate-limit usage */
 .oai-usage { display: flex; align-items: center; gap: 8px; }
 .oai-meter { width: 72px; height: 8px; border: 1px solid var(--black); background: #fff; }
@@ -1850,6 +1864,25 @@ body.mobile th.sorted {
     <div class="win-frame">
       <div class="win-body">
         <div id="sum-body"></div>
+        <div id="sum-live" class="cf-live">
+          <h3>All replicas <span class="muted" id="cf-tunnel-name"></span></h3>
+          <div class="cf-grid">
+            <div class="cf-stat"><span>Replicas</span><b data-cf-stat="replicas">—</b></div>
+            <div class="cf-stat"><span>Edge connections</span><b data-cf-stat="edges">—</b></div>
+          </div>
+          <div class="cf-note" id="cf-tunnel-note">Connection counts refresh every 30 seconds.</div>
+          <h3>This node’s connector</h3>
+          <div class="cf-grid">
+            <div class="cf-stat"><span>Requests / second</span><b data-cf-stat="rate">—</b></div>
+            <div class="cf-stat"><span>Active requests</span><b data-cf-stat="active">—</b></div>
+            <div class="cf-stat"><span>Requests since startup</span><b data-cf-stat="requests">—</b></div>
+            <div class="cf-stat"><span>Origin errors since startup</span><b data-cf-stat="errors">—</b></div>
+            <div class="cf-stat"><span>Edge connections</span><b data-cf-stat="localEdges">—</b></div>
+            <div class="cf-stat"><span>Uptime</span><b data-cf-stat="uptime">—</b></div>
+          </div>
+          <div class="cf-note" id="cf-local-note">Local traffic refreshes every 5 seconds.</div>
+        </div>
+        <div id="sum-config"></div>
         <div class="row" style="justify-content:space-between; margin-top:18px">
           <button class="ghost" id="sum-recheck">Re-check Now</button>
           <button class="btn" id="sum-restart">Start Over…</button>
@@ -3162,6 +3195,7 @@ let CF_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="
   <path fill="#99ee99" d="M11 11h2v1H11zM11 12h1v1H11z"/>
 </svg>`;
 let cfLast = null; // the last Cloudflare heartbeat; declared here so an icon override can repaint before the strip code runs
+let cfStatsLast = null, cfStatsPending = false, cfStatsFailed = false;
 // the Control Strip's Tailscale module: an indicator panel of nine lamps
 // on a dark plate, the four of Tailscale's mark lit — the lit lamps' two
 // blues are reserved, tsStripPaint repaints exactly them per tailnet state
@@ -7722,6 +7756,7 @@ const CONFIG_FIELDS = [
     { path: "cloudflare.zone_id" },
     { path: "cloudflare.tunnel_id" },
     { path: "cloudflare.domain" },
+    { path: "cloudflare.metrics_url", hint: "local cloudflared metrics server; default http://127.0.0.1:20241" },
   ]},
 ];
 // modelSelect is a dropdown of a backend's live model list (Ollama's
@@ -8321,6 +8356,7 @@ $("#wiz-next").onclick = async () => {
     try {
       const cur = await j("/v1/config");
       cur.cloudflare = {
+        ...cur.cloudflare,
         api_token: wiz.values.api_token, account_id: wiz.values.account_id,
         zone_id: wiz.values.zone_id, tunnel_id: wiz.values.tunnel_id, domain: wiz.values.domain,
       };
@@ -8366,8 +8402,68 @@ async function cfHeartbeat(force) {
   try {
     cfLast = await j("/v1/cloudflare/health" + (force ? "?force=1" : ""));
     cfStripPaint();
+    if (!$("#sum-overlay").hidden) renderSum();
   } catch (e) { /* keep the last known lamp */ }
 }
+
+function cfLiveValues() {
+  // A suspended tab or a disconnected daemon must not look like live data.
+  const fresh = cfStatsLast && Date.now() - new Date(cfStatsLast.sampled_at).getTime() < 15000;
+  const t = fresh && cfStatsLast.tunnel, l = fresh && cfStatsLast.local;
+  const num = n => typeof n === "number" && Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—";
+  const age = l ? Math.floor(l.uptime_seconds) : 0;
+  return {
+    t, l, fresh, replicas: num(t && t.replicas), edges: num(t && t.connections),
+    localEdges: num(l && l.connections), active: num(l && l.active_requests),
+    requests: num(l && l.requests), errors: num(l && l.origin_errors),
+    rate: l ? (l.requests_per_second == null ? "Sampling…" : l.requests_per_second.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })) : "—",
+    uptime: l ? (age >= 86400 ? Math.floor(age / 86400) + "d " + Math.floor(age % 86400 / 3600) + "h"
+      : age >= 3600 ? Math.floor(age / 3600) + "h " + Math.floor(age % 3600 / 60) + "m"
+      : Math.floor(age / 60) + "m " + age % 60 + "s") : "—",
+  };
+}
+function cfMenuValues() {
+  const v = cfLiveValues();
+  return {
+    all: `All replicas: ${v.replicas} · ${v.edges} connections${v.t && v.t.stale ? " (last known)" : ""}`,
+    local: `This node: ${v.localEdges} connections · ${v.active} active`,
+    rate: `Local traffic: ${v.rate}${v.l && v.l.requests_per_second != null ? " requests/s" : ""}`,
+    total: `Local total: ${v.requests} requests`,
+    errors: `Local errors: ${v.errors} since startup`,
+  };
+}
+function cfStatsPaint() {
+  const v = cfLiveValues(), menu = cfMenuValues();
+  document.querySelectorAll("[data-cf-stat]").forEach(e => { e.textContent = v[e.dataset.cfStat]; });
+  document.querySelectorAll("[data-cf-menu]").forEach(e => { e.textContent = menu[e.dataset.cfMenu]; });
+  $("#cf-tunnel-name").textContent = v.t ? "— " + v.t.name : "";
+  $("#cf-tunnel-note").textContent = v.t ? (v.t.stale ? "Last known counts; Cloudflare is unavailable."
+    : "Checked " + new Date(v.t.checked_at).toLocaleTimeString() + ". Refreshes every 30 seconds.")
+    : cfStatsLast && cfStatsLast.tunnel_error || (cfStatsFailed ? "Connection counts unavailable." : "Connection counts refresh every 30 seconds.");
+  $("#cf-local-note").textContent = v.l ? "Local traffic only; refreshes every 5 seconds. Totals reset when this connector restarts."
+    : cfStatsLast && cfStatsLast.local_error || (cfStatsFailed ? "Local traffic unavailable; retrying while this view is open." : "Local traffic refreshes every 5 seconds.");
+  $("#cf-local-note").title = $("#cf-local-note").textContent;
+  if (csCF.classList.contains("down")) {
+    ctxMenu.title = cfStatsLast && cfStatsLast.local_error || "Traffic is for this node’s connector. Totals are since startup.";
+  }
+  cfStripPaint();
+}
+async function cfStatsRefresh() {
+  if (cfStatsPending) return;
+  cfStatsPending = true;
+  cfStatsPaint();
+  try {
+    cfStatsLast = await j("/v1/cloudflare/stats");
+    cfStatsFailed = false;
+  } catch (e) {
+    cfStatsLast = null;
+    cfStatsFailed = true;
+  } finally {
+    cfStatsPending = false;
+    cfStatsPaint();
+  }
+}
+function cfStatsVisible() { return csCF.classList.contains("down") || !$("#sum-overlay").hidden; }
 
 // ---- Control Strip ----
 // Four modules: the Cloudflare heartbeat, then the Tailscale panel, the
@@ -8383,6 +8479,7 @@ function cfStripPaint() {
   const [lamp, glint] = CF_LAMP[!cfLast ? "off" : cfLast.status === "ok" ? "ok" : "warn"];
   $("#cs-cf .cs-ico").innerHTML = iconCurrent("cloudflare").replace(/#33cc33/gi, lamp).replace(/#99ee99/gi, glint);
   csCF.title = cfLast ? (cfLast.message || "Cloudflare status: " + cfLast.status) : "Cloudflare status — checking…";
+  if (cfStatsLast && cfLiveValues().fresh) csCF.title += "\n" + Object.values(cfMenuValues()).join("\n");
 }
 let csMenuClosedAt = 0;
 function cfStripMenu() {
@@ -8390,17 +8487,24 @@ function cfStripMenu() {
   const st = cfLast && cfLast.status;
   const head = !st ? "Cloudflare: checking…" : st === "ok" ? "Cloudflare: working"
     : st === "unconfigured" ? "Cloudflare: not set up" : "Cloudflare: needs attention";
+  const live = Object.entries(cfMenuValues()).map(([key, label]) => ({
+    label: el("span", { "data-cf-menu": key }, label), dis: true, info: true,
+  }));
   showCtxMenu(0, 0, [
     { label: head, dis: true },
+    "-",
+    ...live,
     "-",
     { label: "Cloudflare Status…", act: () => sumOpen() },
     { label: "Cloudflare Setup Wizard…", act: () => wizOpen(false) },
     "-",
-    { label: "Check Now", act: () => cfHeartbeat(true).then(() =>
+    { label: "Check Now", act: () => Promise.all([cfHeartbeat(true), cfStatsRefresh()]).then(() =>
       toast(cfLast ? (cfLast.message || "Cloudflare status: " + cfLast.status) : "The Cloudflare check did not answer.")) },
-  ], () => { csCF.classList.remove("down"); csMenuClosedAt = Date.now(); });
+  ], () => { csCF.classList.remove("down"); ctxMenu.classList.remove("cf-menu"); ctxMenu.removeAttribute("title"); csMenuClosedAt = Date.now(); });
   csCF.classList.add("down");
+  ctxMenu.classList.add("cf-menu");
   csMenuAt(csCF);
+  cfStatsRefresh();
 }
 // a module's menu grows out of its tile: left edge on the tile's separator
 // line, bottom line two rows into the strip (sampled from OS 9) — unless a
@@ -8997,7 +9101,9 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) tsRe
 // ---- cloudflare status summary ----
 async function sumOpen() {
   $("#sum-overlay").hidden = false;
-  $("#sum-body").replaceChildren(el("span", { class: "muted" }, "loading…"));
+  renderSum();
+  cfStatsPaint();
+  cfStatsRefresh();
   try { loadedConfig = await j("/v1/config"); } catch (e) {}
   renderSum();
 }
@@ -9020,14 +9126,14 @@ function renderSum() {
       ? cfLast.tunnel_name + " (" + mask(c.tunnel_id) + ")" : mask(c.tunnel_id)),
     row("domain", c.domain),
     row("last checked", cfLast && cfLast.checked_at ? new Date(cfLast.checked_at).toLocaleString() : ""));
-  body.append(rev);
+  $("#sum-config").replaceChildren(rev);
 }
 $("#sum-x").onclick = () => { $("#sum-overlay").hidden = true; };
 $("#sum-recheck").onclick = async () => {
   const b = $("#sum-recheck");
   b.disabled = true;
   b.textContent = "Checking…";
-  await cfHeartbeat(true);
+  await Promise.all([cfHeartbeat(true), cfStatsRefresh()]);
   renderSum();
   b.disabled = false;
   b.textContent = "Re-check Now";
@@ -9037,7 +9143,13 @@ $("#sum-restart").onclick = () => {
   wizOpen(true);
 };
 setInterval(() => { if (!document.hidden) cfHeartbeat(false); }, 30000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) cfHeartbeat(false); });
+setInterval(() => { if (!document.hidden && cfStatsVisible()) cfStatsRefresh(); }, 5000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    cfHeartbeat(false);
+    if (cfStatsVisible()) cfStatsRefresh();
+  }
+});
 
 // ---- node sync: Join dialog (Special ▸ Join…) ----
 // Latency refreshes every 5 s while the dialog is open (the daemon probes

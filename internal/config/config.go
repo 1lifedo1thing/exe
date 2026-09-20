@@ -80,6 +80,9 @@ type CloudflareConfig struct {
 	ZoneID    string `json:"zone_id"`
 	TunnelID  string `json:"tunnel_id"`
 	Domain    string `json:"domain"`
+	// MetricsURL is the local cloudflared metrics server, without /metrics.
+	// Empty uses http://127.0.0.1:20241. Only loopback addresses are accepted.
+	MetricsURL string `json:"metrics_url,omitempty"`
 }
 
 type FirecrackerConfig struct {

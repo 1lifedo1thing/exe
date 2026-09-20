@@ -70,8 +70,15 @@ reachable) and the **Trash**. Double-click opens things.
 The **Control Strip** in the bottom-left corner is OS 9's tray. Its first
 module is the Cloudflare heartbeat: the lamp on the cloud is green while
 the tunnel is healthy, yellow when it needs attention, grey while it is
-still checking; click it for Cloudflare Status, the Setup Wizard and Check
-Now. Right of it, on a machine with Tailscale installed, the **Tailscale**
+still checking. Its menu shows the tunnel's replicas and edge connections,
+plus this node's request rate, active requests, totals and origin errors.
+Open **Cloudflare Status…** for the same live counters and connector uptime.
+Local traffic refreshes every five seconds while either view is open;
+tunnel-wide connection counts refresh every 30 seconds. Traffic totals
+are for this node's connector, include every hostname on its tunnel, and
+reset when cloudflared restarts. Unavailable data is shown as a dash.
+The menu also offers the Setup Wizard and Check Now.
+Right of it, on a machine with Tailscale installed, the **Tailscale**
 module: a panel of nine lamps that lights Tailscale's four while the tailnet
 is connected, blue while the machine's traffic leaves through an exit node,
 yellow when something needs attention (a health warning, a login due), all
@@ -417,6 +424,15 @@ One-time setup: run **Special → Cloudflare Setup Wizard…** with a Cloudflare
 API token (Zone → DNS → Edit, Account → Cloudflare Tunnel → Edit) and a
 remotely-managed tunnel. The Cloudflare module in the Control Strip
 (bottom-left) shows tunnel health at a glance.
+
+Live local traffic uses cloudflared's loopback metrics listener at
+`http://127.0.0.1:20241`. If it uses another local port, set
+`cloudflare.metrics_url` in **Configuration → Cloudflare** to the base
+address (without `/metrics`). exe verifies that the local connector belongs
+to the selected tunnel. A machine without a local cloudflared connector
+can still show the tunnel-wide connection counts; its local counters stay
+unavailable. A Cloudflare API failure labels cached connection counts as
+last known rather than reporting them as live.
 
 Then, in a VM's **Expose** tab, pick a port and an optional subdomain (it
 defaults to the VM name). exe creates the DNS record, updates the tunnel

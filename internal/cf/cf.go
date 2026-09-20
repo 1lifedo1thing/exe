@@ -91,10 +91,18 @@ type IDName struct {
 }
 
 type Tunnel struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Status       string `json:"status"`
-	RemoteConfig bool   `json:"remote_config"`
+	ID           string       `json:"id"`
+	Name         string       `json:"name"`
+	Status       string       `json:"status"`
+	RemoteConfig bool         `json:"remote_config"`
+	Connections  []Connection `json:"connections"`
+}
+
+type Connection struct {
+	ID               string `json:"id"`
+	ClientID         string `json:"client_id"`
+	Location         string `json:"colo_name"`
+	PendingReconnect bool   `json:"is_pending_reconnect"`
 }
 
 // VerifyToken checks that the API token itself is valid and active.
