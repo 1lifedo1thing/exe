@@ -680,7 +680,11 @@ goes. Dragging the line between the list and the fields sets the list's
 width. Every draft is kept, checked paragraphs included: reload the
 window, or open it on another desk sharing this node, and the column
 comes back as it was without asking the model again; which draft is open
-is this browser's own.
+is this browser's own. With a draft open on two desks at once, the text
+belongs to the desk you type in: a check that finishes on the other desk
+adds its corrections and never changes your words, and text that does
+arrive from another desk waits for a word still being composed (an IME, a
+phone keyboard) and leaves the caret where it was.
 
 The check runs on the Ollama endpoint in **Configuration**
 (`ollama.base_url`, `ollama.model`) unless the options point it at

@@ -410,6 +410,10 @@ const doc = { version: 2, drafts: [] }; // every draft on this node (synced app 
 let sel = null;           // the open draft's id — per-viewer state, never in the doc
 const unseen = new Set(); // drafts the pencil finished while the window showed another
 const live = () => doc.drafts.filter(d => !d.deleted);
+// an edit's stamp: now, and always past the stamp the record carried — so
+// typing here outranks the text just adopted from a desk whose clock runs
+// ahead of this one
+const stamp = d => Math.max(Date.now(), (d.updated || 0) + 1);
 const cur = () => doc.drafts.find(d => d.id === sel && !d.deleted) || null;
 
 // ---- paragraphs ----
@@ -621,14 +625,17 @@ async function pass() {
     render();
   }
 }
-// A paragraph came back for a draft: its record changed (the checked map
-// is rebuilt from the cache on save), and a draft checked to its end
+// A paragraph came back for a draft: its record wants saving (the checked
+// map is rebuilt from the cache on save), and a draft checked to its end
 // while the window showed another gets the black dot — finished, waiting
-// for you.
+// for you. The updated stamp stays as it was: it says when the text was
+// last edited, and settles whose text wins between two windows. A check
+// is not an edit — a window that restamped here would pass off whatever
+// copy of the text it held as the newest, and take the words typed since
+// in another.
 function landed(id, text) {
   const d = doc.drafts.find(x => x.id === id);
   if (!d || d.deleted || !d.text.includes(text)) return;
-  d.updated = Date.now();
   scheduleSave();
   if (id !== sel && !pendingCount(d)) unseen.add(id);
 }
@@ -677,7 +684,8 @@ src.addEventListener("input", () => {
   const d = cur();
   if (!d) return;
   d.text = src.value;
-  d.updated = lastInput = Date.now();
+  lastInput = Date.now();
+  d.updated = stamp(d);
   lastErr = "";
   if (current && current.id === d.id && !d.text.includes(current.text)) current.ctrl.abort();
   render();
@@ -850,12 +858,36 @@ async function loadDoc() {
 // is strictly newer — a genuine unsaved edit; on an updated tie disk
 // wins, matching the daemon's tiebreak, so app and daemon never disagree
 // into an endless save→merge→push loop.
+// The field is never written while a word is still being composed: an
+// IME or a phone keyboard would set the word down again on top of it. The
+// reload waits for the word to land, then runs.
+let composing = false, reloadHeld = false;
+src.addEventListener("compositionstart", () => { composing = true; });
+src.addEventListener("compositionend", () => {
+  composing = false;
+  if (reloadHeld) { reloadHeld = false; setTimeout(reloadFromDisk, 0); } // after the word's own input event
+});
+// adoptText sets the field to another desk's text by replacing only the
+// span that differs, so the caret, the selection and the scroll stay
+// where they were
+function adoptText(v) {
+  const old = src.value;
+  if (v === old) return;
+  const n = Math.min(old.length, v.length);
+  let pre = 0;
+  while (pre < n && old[pre] === v[pre]) pre++;
+  let suf = 0;
+  while (suf < n - pre && old[old.length - 1 - suf] === v[v.length - 1 - suf]) suf++;
+  src.setRangeText(v.slice(pre, v.length - suf), pre, old.length - suf, "preserve");
+}
 async function reloadFromDisk() {
+  if (composing) { reloadHeld = true; return; }
   try {
     const r = await api(DRAFTS_URL);
     if (!r.ok) return;
     const d = await r.json();
     if (!d || !Array.isArray(d.drafts)) return;
+    if (composing) { reloadHeld = true; return; } // a word began meanwhile: read again once it lands
     const disk = new Map(d.drafts.filter(x => x && x.id).map(x => [String(x.id), normDraft(x)]));
     const byId = new Map(disk);
     let ahead = false; // we hold something disk lacks: push it back
@@ -863,7 +895,6 @@ async function reloadFromDisk() {
       const dv = byId.get(l.id);
       if (!dv || l.updated > dv.updated) { byId.set(l.id, l); ahead = true; }
     }
-    const before = cur() ? cur().text : null;
     doc.drafts = [...byId.values()];
     sortDrafts();
     for (const x of doc.drafts) adoptChecked(x);
@@ -871,13 +902,15 @@ async function reloadFromDisk() {
       const x = doc.drafts.find(y => y.id === id);
       if (!x || x.deleted || pendingCount(x)) unseen.delete(id);
     }
-    if (current && !doc.drafts.some(x => x.id === current.id && !x.deleted)) current.ctrl.abort();
+    // the check in flight is moot once its draft is gone, or another
+    // window's answer for the paragraph came in with the doc
+    if (current && (cache.has(current.text) || !doc.drafts.some(x => x.id === current.id && !x.deleted))) current.ctrl.abort();
     const c = cur();
     if (!c) { // the open draft went away: the window moves to the newest, or a fresh one
       sel = null;
       selectDraft(live().length ? live()[0].id : newDraft(), false);
     } else {
-      if (c.text !== before) { src.value = c.text; src.setSelectionRange(c.text.length, c.text.length); }
+      adoptText(c.text);
       lastInput = 0;
       render();
       kick();
@@ -994,7 +1027,8 @@ function selectDraft(id, focus) {
 }
 function dropDraft(d) {
   if (current && current.id === d.id) current.ctrl.abort();
-  d.deleted = d.updated = Date.now();
+  d.updated = stamp(d);
+  d.deleted = Date.now();
   d.text = "";
   d.checked = {};
   unseen.delete(d.id);
