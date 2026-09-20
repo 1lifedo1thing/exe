@@ -15,6 +15,13 @@
 /* the one the page is for wears the default ring */
 .btn.default { outline: 2px solid #262626; outline-offset: 1px; border-radius: 4px; }
 
+/* a status line with two ends: the first label stays at the left, the
+   last is pushed to the right, and the room between them is whatever is
+   left over rather than a fixed gap. The desktop sends its trailing
+   figure over the same way (#chat-usage, .term-usage); the chrome's 12px
+   gap is then only the least the two may be apart. */
+.statusbar > :last-child:not(:first-child) { margin-left: auto; }
+
 .body { padding: 16px 16px 4px; }
 .head { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
 .head img { display: block; width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
