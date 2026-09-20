@@ -4103,8 +4103,13 @@ const svgGridSize = svg => { const m = /viewBox="0 0 (\d+)/.exec(svg || ""); ret
 const iconDef = k => ICON_DEFS.find(x => x.key === k)
   || (iconCustom[k] && { key: k, label: iconCustom[k].label, size: svgGridSize(iconCustom[k].svg), custom: true });
 const iconCurrent = k => iconCustom[k] ? iconCustom[k].svg : (iconOv[k] || ICON_FACTORY[k]);
+// the save's stamp counts upward whatever the clock does: two saves in one
+// millisecond, or a clock set back, would otherwise carry a stamp the daemon
+// has already taken, and the newer set be the one answered stale
+let iconSeq = 0;
 const putIcons = () => j("/v1/apps/System/data/icons.json", {
-  method: "PUT", json: { icons: iconOv, custom: iconCustom }, headers: { "X-Exe-Seq": String(Date.now()) },
+  method: "PUT", json: { icons: iconOv, custom: iconCustom },
+  headers: { "X-Exe-Seq": String(iconSeq = Math.max(Date.now(), iconSeq + 1)) },
 });
 
 // land a new override set: swap the art everywhere, then repaint whatever

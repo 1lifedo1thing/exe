@@ -802,6 +802,12 @@ function scheduleSave() {
   clearTimeout(docT);
   docT = setTimeout(saveDoc, 400);
 }
+// X-Exe-Seq stamps count upward whatever the clock does: two snapshots in
+// one millisecond (a debounced save, then the unload flush right behind it)
+// or a clock set back would otherwise carry a stamp the daemon has already
+// taken, and the newer text be the one answered stale.
+let lastSeq = 0;
+const nextSeq = () => (lastSeq = Math.max(Date.now(), lastSeq + 1));
 async function saveDoc(flush) {
   clearTimeout(docT);
   docT = null;
@@ -809,7 +815,7 @@ async function saveDoc(flush) {
   // X-Exe-Seq is a content timestamp: the daemon drops a PUT older than one
   // it already stored, so an in-flight save can't land stale over the flush.
   const headers = { "Content-Type": "application/json",
-    "X-Exe-Seq": String(Date.now()), "X-Exe-Client": CLIENT };
+    "X-Exe-Seq": String(nextSeq()), "X-Exe-Client": CLIENT };
   if (flush) {
     // unload: a keepalive PUT of the latest doc, bypassing the in-flight
     // gate — the desktop may tear the iframe down before a normal one lands
