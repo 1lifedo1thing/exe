@@ -6,7 +6,7 @@ any VM port to a real HTTPS subdomain through your Cloudflare Tunnel. macOS
 uses Virtualization.framework; Linux uses KVM through Firecracker; Windows
 uses QEMU on the Windows Hypervisor Platform.
 
-![The web UI — a Mac OS 9 Platinum desktop: sortable VM list and an SSH terminal into a VM](docs/screenshot.png)
+![The web UI — a Mac OS 9 Platinum desktop: sortable VM list and an SSH terminal into a VM](internal/server/site/screenshot.png)
 
 ```
 phone/laptop ──► exe API (bind to Tailscale IP)
@@ -297,13 +297,19 @@ persist and `exe start` boots them again.
 
 ## Homepage
 
-https://exe.v2core.com is [`site/`](site/index.html), a single static page,
-served the way exe serves anything: nginx in a VM, published with `exe
-expose`. `make site` ([`deploy/site/publish.sh`](deploy/site/publish.sh))
-uploads the tracked files through the SSH gate, switches the VM's `current`
-symlink to the new release and checks that the public URL returns the same
-bytes. The first run installs nginx and makes the route; `EXE_SITE_VM` and
-`EXE_SITE_SUB` pick another VM or subdomain.
+The daemon also carries a public front door — one static page in the same
+Platinum blocks as the desktop, [`internal/server/site/index.html`](internal/server/site/index.html),
+served out of the binary:
+
+```sh
+./exe site                # -> https://exe.<domain>, or -sub <name>
+```
+
+That makes the DNS record and the tunnel ingress rule the way `exe expose`
+does, and routes the hostname to the page inside this daemon (`exe routes`
+shows it as `exe:site`) rather than to a VM. Nothing is deployed and
+nothing is kept in step: the running binary is the site, so a rebuild and
+a restart publish it. `exe unexpose exe.<domain>` takes it down.
 
 ## Roadmap / ideas
 

@@ -6,6 +6,7 @@ package proxy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -23,6 +24,37 @@ type Proxy struct {
 	// dial, when set, opens backend connections — used when VM IPs only
 	// exist inside the daemon process (Windows). Set before Handler.
 	dial func(ctx context.Context, network, addr string) (net.Conn, error)
+
+	// builtin backends: a route whose backend is one of these names (they
+	// all read "exe:<something>", which no VM URL can) is answered by the
+	// daemon itself instead of dialled — the homepage is the one such
+	// backend. Registered before Handler.
+	builtin map[string]http.Handler
+}
+
+// Builtin is the prefix of every backend the daemon answers itself.
+const Builtin = "exe:"
+
+// SetBuiltin registers a backend the daemon serves in place of a VM, e.g.
+// "exe:site" for the homepage. Call before Handler.
+func (p *Proxy) SetBuiltin(backend string, h http.Handler) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.builtin == nil {
+		p.builtin = map[string]http.Handler{}
+	}
+	p.builtin[backend] = h
+}
+
+// builtinFor returns the handler for a builtin backend.
+func (p *Proxy) builtinFor(backend string) (http.Handler, bool) {
+	if !strings.HasPrefix(backend, Builtin) {
+		return nil, false
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	h, ok := p.builtin[backend]
+	return h, ok
 }
 
 // SetDial installs a custom backend dialer; call before Handler.
@@ -51,6 +83,11 @@ func (p *Proxy) save() error {
 func (p *Proxy) Set(host, backend string) error {
 	if _, err := url.Parse(backend); err != nil {
 		return err
+	}
+	if strings.HasPrefix(backend, Builtin) {
+		if _, ok := p.builtinFor(backend); !ok {
+			return errors.New("no builtin backend " + backend)
+		}
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -131,8 +168,19 @@ func (p *Proxy) Handler() http.Handler {
 		},
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := p.lookup(r.Host); !ok {
+		backend, ok := p.lookup(r.Host)
+		if !ok {
 			http.Error(w, "exe proxy: no route for host "+r.Host, http.StatusBadGateway)
+			return
+		}
+		// A backend the daemon answers itself (the homepage) never leaves
+		// this process; an "exe:" route whose builtin this binary does not
+		// have reads as a route to nowhere, which is what it is.
+		if h, ok := p.builtinFor(backend); ok {
+			h.ServeHTTP(w, r)
+			return
+		} else if strings.HasPrefix(backend, Builtin) {
+			http.Error(w, "exe proxy: no builtin backend "+backend, http.StatusBadGateway)
 			return
 		}
 		rp.ServeHTTP(w, r)

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -166,6 +167,12 @@ type Server struct {
 
 func New(cfg *config.Config, vms vmm.Manager, px *proxy.Proxy, keyPath, stateDir string) *Server {
 	s := &Server{VMs: vms, Proxy: px, KeyPath: keyPath, StateDir: stateDir}
+	// The homepage is a backend of the daemon's own (site.go): a route
+	// pointing at it is served from this binary, not dialled. Tests build
+	// a Server without a proxy.
+	if px != nil {
+		px.SetBuiltin(SiteBackend, SiteHandler())
+	}
 	s.hubAgent.kick = make(chan struct{}, 1)
 	s.cfg.Store(cfg)
 	s.ensureStateDirs()
@@ -188,6 +195,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/vms/{name}", s.handleDelete)
 	mux.HandleFunc("POST /v1/vms/{name}/agent", s.handleAgent)
 	mux.HandleFunc("POST /v1/vms/{name}/expose", s.handleExpose)
+	mux.HandleFunc("POST /v1/site/publish", s.handleSitePublish)
 	mux.HandleFunc("GET /v1/vms/{name}/ports", s.handlePorts)
 	mux.HandleFunc("GET /v1/vms/{name}/terminal", s.handleTerminal)
 	mux.HandleFunc("GET /v1/host/terminal", s.handleHostTerminal)
@@ -610,8 +618,16 @@ func (s *Server) exposeVM(ctx context.Context, info *vmm.Info, name, sub string,
 	if sub == "" {
 		sub = name
 	}
-	fqdn := sub + "." + cfg.Cloudflare.Domain
-	backend := "http://" + net.JoinHostPort(info.IP, strconv.Itoa(port))
+	return s.publishHost(ctx, sub+"."+cfg.Cloudflare.Domain,
+		"http://"+net.JoinHostPort(info.IP, strconv.Itoa(port)))
+}
+
+// publishHost routes <fqdn> to backend in the local proxy and, when
+// Cloudflare is configured, ensures the hostname's DNS record and tunnel
+// ingress rule. The backend is a VM's URL (exe expose) or a builtin the
+// daemon answers itself (exe site). The caller validates the domain.
+func (s *Server) publishHost(ctx context.Context, fqdn, backend string) (map[string]any, error) {
+	cfg := s.Config()
 	if err := s.Proxy.Set(fqdn, backend); err != nil {
 		log.Printf("expose %s: proxy: %v", fqdn, err)
 		return nil, err
@@ -655,6 +671,34 @@ func (s *Server) exposeVM(ctx context.Context, info *vmm.Info, name, sub string,
 		log.Printf("expose %s -> %s", fqdn, backend)
 	}
 	return res, nil
+}
+
+// handleSitePublish puts this daemon's homepage on <sub>.<domain>: the
+// same DNS record and tunnel ingress rule as exe expose, routed to the
+// page inside the binary instead of to a VM.
+func (s *Server) handleSitePublish(w http.ResponseWriter, r *http.Request) {
+	cfg := s.Config()
+	var req struct {
+		Subdomain string `json:"subdomain"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if cfg.Cloudflare.Domain == "" {
+		writeErr(w, http.StatusBadRequest, errors.New("cloudflare.domain is not configured"))
+		return
+	}
+	sub := strings.TrimSpace(req.Subdomain)
+	if sub == "" {
+		sub = "exe"
+	}
+	res, err := s.publishHost(r.Context(), sub+"."+cfg.Cloudflare.Domain, SiteBackend)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 func (s *Server) handleExpose(w http.ResponseWriter, r *http.Request) {

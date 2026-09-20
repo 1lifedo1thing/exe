@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -45,5 +46,41 @@ func TestForwardedProto(t *testing.T) {
 	}
 	if h := get(""); h.Get("X-Forwarded-Proto") != "http" {
 		t.Errorf("plain request: proto=%q, want http", h.Get("X-Forwarded-Proto"))
+	}
+}
+
+// A builtin backend is answered by the daemon itself: the request never
+// reaches a VM, and a route naming a builtin this binary lacks says so
+// rather than dialling something.
+func TestBuiltinBackend(t *testing.T) {
+	p, err := New(filepath.Join(t.TempDir(), "routes.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.SetBuiltin("exe:site", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "homepage")
+	}))
+	if err := p.Set("exe.example.com", "exe:site"); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Set("nope.example.com", "exe:nothing"); err == nil {
+		t.Fatal("a route to an unknown builtin was accepted")
+	}
+	h := p.Handler()
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "http://exe.example.com/", nil)
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 || rec.Body.String() != "homepage" {
+		t.Fatalf("builtin route: %d %q", rec.Code, rec.Body.String())
+	}
+	// Written straight into the table (as an older routes.json may hold
+	// it) a builtin name this binary does not know is a dead route.
+	p.mu.Lock()
+	p.routes["old.example.com"] = "exe:gone"
+	p.mu.Unlock()
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "http://old.example.com/", nil))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("unknown builtin: %d", rec.Code)
 	}
 }

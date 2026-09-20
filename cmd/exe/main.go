@@ -49,6 +49,7 @@ Usage:
   exe ssh <name> [command...]
   exe code <name> [-m model] <prompt...>   vibecode inside the VM (Ollama agent)
   exe expose <name> -port N [-sub name]    publish https://<sub>.<domain> -> VM port
+  exe site [-sub name]                     publish this daemon's homepage (default exe.<domain>)
   exe unexpose <host>                      remove a proxy route
   exe routes                               show proxy routes
 
@@ -88,6 +89,8 @@ func main() {
 		err = cmdCode(args)
 	case "expose":
 		err = cmdExpose(args)
+	case "site":
+		err = cmdSite(args)
 	case "unexpose":
 		err = cmdUnexpose(args)
 	case "routes":
@@ -815,6 +818,41 @@ func cmdCode(args []string) error {
 	}
 	_, err = io.Copy(os.Stdout, resp.Body)
 	return err
+}
+
+// cmdSite publishes the daemon's own homepage — the public front door,
+// served out of this binary — at <sub>.<domain>, with the same DNS record
+// and tunnel ingress rule exe expose makes for a VM.
+func cmdSite(args []string) error {
+	fs := flag.NewFlagSet("site", flag.ExitOnError)
+	sub := fs.String("sub", "", "subdomain (default: exe)")
+	fs.Parse(args)
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	resp, err := api(cfg, "POST", "/v1/site/publish", map[string]any{"subdomain": *sub}, time.Minute)
+	if err != nil {
+		return err
+	}
+	var res map[string]any
+	if err := decodeInto(resp, &res); err != nil {
+		return err
+	}
+	fmt.Printf("route: %s -> %s (the homepage inside this daemon)\n", res["host"], res["backend"])
+	if v, ok := res["dns"]; ok {
+		fmt.Println("dns:", v)
+	}
+	if v, ok := res["ingress"]; ok {
+		fmt.Println("tunnel ingress ->", v)
+	}
+	if ws, ok := res["warnings"].([]any); ok {
+		for _, wmsg := range ws {
+			fmt.Println("warning:", wmsg)
+		}
+	}
+	fmt.Println("url:", res["url"])
+	return nil
 }
 
 func cmdExpose(args []string) error {

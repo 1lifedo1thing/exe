@@ -23,12 +23,12 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   `~/.exe/autostart`, the agent tmux servers survive. The desktop and the
   sysapps ship inside the binary, so their changes need build + restart;
   exe-apps do not. Rebuild and restart once a feature is done.
-- The homepage, https://exe.v2core.com, is `site/`: one static page in the
-  hub public pages' Platinum blocks, its screenshot and icons symlinks to
-  the repo's own. nginx in the `test` VM serves it; `make site`
-  (`deploy/site/publish.sh`) uploads what git tracks there, swaps the
-  release in and fails unless the public URL serves the same bytes. Not in
-  the binary: no build, no restart. Publish after committing a change to it.
+- The homepage, https://exe.v2core.com, is
+  `internal/server/site/index.html`: one static page in the hub public
+  pages' Platinum blocks, served out of the binary (`internal/server/site.go`,
+  proxy backend `exe:site`, published once with `exe site`). It ships with
+  the daemon, so a change to it needs build + restart like the desktop, and
+  its screenshot is the README's too.
 - Test: `go test ./...`. Check UI in headless Chromium
   (`~/tools/playwright`, node at `~/.nvm/versions/node/v24.15.0/bin`);
   screenshot and look at every UI change at device pixel ratios 1, 1.5
