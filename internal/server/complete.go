@@ -8,6 +8,9 @@
 // local work — unless the body says "provider": "openai", which runs it on
 // the ChatGPT subscription signed in under Configuration → OpenAI, the way
 // the Chat window does.
+//
+// A body with "share": true joins an identical call already running
+// instead of starting its own — see completeFlight.
 package server
 
 import (
@@ -20,6 +23,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"exe/internal/agent"
 	"exe/internal/codex"
@@ -28,14 +33,23 @@ import (
 const (
 	completeMaxPrompt = 64 << 10
 	completeMaxSystem = 8 << 10
+	// a shared answer stays on hand this long after it finished, and at
+	// most this many of them
+	completeKeep    = 10 * time.Minute
+	completeKeepMax = 128
 )
+
+// completeCall runs one model turn on a backend, fragment by fragment.
+type completeCall func(ctx context.Context, msgs []agent.Message, onDelta func(string)) error
 
 // handleChatComplete streams newline-delimited JSON: {"delta":"…"} per
 // content fragment, then {"done":true,"model":"…","provider":"…"}. The
 // body carries the prompts plus optional provider, model, effort and
 // Ollama options overrides. A failure before the first fragment is a plain
 // JSON error (400/502/503); one mid-stream lands as a final {"error":"…"}
-// line. Closing the request cancels the model call.
+// line. Closing the request cancels the model call — a shared one once its
+// last asker has closed. An asker that joined a call already running, or
+// got an answer kept from one, reads "shared":true on its done line.
 func (s *Server) handleChatComplete(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		// Provider is "ollama" (the default) or "openai".
@@ -46,6 +60,8 @@ func (s *Server) handleChatComplete(w http.ResponseWriter, r *http.Request) {
 		Effort   string `json:"effort"`
 		// Options go to Ollama as-is: temperature, seed, num_predict…
 		Options map[string]any `json:"options"`
+		// Share lets this call be one with every identical call.
+		Share bool `json:"share"`
 	}
 	body := io.LimitReader(r.Body, completeMaxPrompt+completeMaxSystem+4096)
 	if err := json.NewDecoder(body).Decode(&req); err != nil {
@@ -71,7 +87,8 @@ func (s *Server) handleChatComplete(w http.ResponseWriter, r *http.Request) {
 
 	// call runs the one model turn on the chosen backend; it is built before
 	// any byte is written so a backend not ready to run is a plain error.
-	var call func(ctx context.Context, msgs []agent.Message, onDelta func(string)) error
+	var call completeCall
+	endpoint := "" // what else tells two backends apart, for the share key
 	switch provider {
 	case "ollama":
 		if cfg.Ollama.BaseURL == "" {
@@ -90,7 +107,7 @@ func (s *Server) handleChatComplete(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusServiceUnavailable, errors.New("ollama.model is not configured"))
 			return
 		}
-		model = acfg.Model
+		model, effort, endpoint = acfg.Model, acfg.Effort, acfg.BaseURL
 		call = func(ctx context.Context, msgs []agent.Message, onDelta func(string)) error {
 			_, err := agent.ChatStream(ctx, acfg, msgs, nil, onDelta)
 			return err
@@ -157,9 +174,18 @@ func (s *Server) handleChatComplete(w http.ResponseWriter, r *http.Request) {
 			fl.Flush()
 		}
 	}
-	err := call(r.Context(), msgs, func(delta string) {
-		emit(map[string]string{"delta": delta})
-	})
+	onDelta := func(delta string) { emit(map[string]string{"delta": delta}) }
+	var err error
+	shared := false
+	if req.Share {
+		key := completeShareKey(provider, endpoint, model, effort, req.System, req.Prompt, req.Options)
+		var f *completeFlight
+		f, shared = s.joinComplete(key, call, msgs)
+		err = f.follow(r.Context(), onDelta)
+		s.leaveComplete(key, f)
+	} else {
+		err = call(r.Context(), msgs, onDelta)
+	}
 	if err != nil {
 		if !started {
 			writeErr(w, http.StatusBadGateway, err)
@@ -168,7 +194,160 @@ func (s *Server) handleChatComplete(w http.ResponseWriter, r *http.Request) {
 		emit(map[string]string{"error": err.Error()})
 		return
 	}
-	emit(map[string]any{"done": true, "model": model, "provider": provider})
+	done := map[string]any{"done": true, "model": model, "provider": provider}
+	if shared {
+		done["shared"] = true
+	}
+	emit(done)
+}
+
+// ---- shared calls ----
+//
+// The same backend, model, effort, prompts and options is the same
+// question, so every asker of it reads one answer: the fragments so far at
+// once, the rest as they stream. Blue Pencil asks this way — each desk
+// showing a draft checks the same paragraphs, and a second window must not
+// cost a second model call. The call belongs to the flight, not to the
+// request that started it: it outlives any one asker and is cancelled when
+// the last has gone. A finished answer is kept for completeKeep, so an
+// asker a moment too late to join still gets it without a call; a failed
+// one is dropped at once, so the next ask tries again.
+type completeFlight struct {
+	mu      sync.Mutex
+	deltas  []string
+	done    bool
+	err     error
+	at      time.Time     // when it finished
+	changed chan struct{} // closed, and replaced, whenever the fields above move
+	askers  int
+	cancel  context.CancelFunc
+}
+
+// completeShareKey names a question: a digest of everything the answer
+// depends on, after the configured defaults are filled in.
+func completeShareKey(provider, endpoint, model, effort, system, prompt string, options map[string]any) string {
+	b, _ := json.Marshal([]any{provider, endpoint, model, effort, system, prompt, options}) // map keys marshal sorted
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// joinComplete returns the flight answering key, starting the call if
+// nobody has asked yet; joined reports that somebody had. Pair it with
+// leaveComplete.
+func (s *Server) joinComplete(key string, call completeCall, msgs []agent.Message) (f *completeFlight, joined bool) {
+	s.completeMu.Lock()
+	defer s.completeMu.Unlock()
+	if f = s.completeFlights[key]; f != nil {
+		f.mu.Lock()
+		stale := f.done && time.Since(f.at) > completeKeep
+		if !stale {
+			f.askers++
+		}
+		f.mu.Unlock()
+		if !stale {
+			return f, true
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	f = &completeFlight{changed: make(chan struct{}), askers: 1, cancel: cancel}
+	if s.completeFlights == nil {
+		s.completeFlights = map[string]*completeFlight{}
+	}
+	s.completeFlights[key] = f
+	go func() {
+		err := call(ctx, msgs, func(delta string) {
+			f.mu.Lock()
+			f.deltas = append(f.deltas, delta)
+			f.wake()
+			f.mu.Unlock()
+		})
+		cancel()
+		f.mu.Lock()
+		f.done, f.err, f.at = true, err, time.Now()
+		f.wake()
+		f.mu.Unlock()
+		s.completeMu.Lock()
+		if err != nil && s.completeFlights[key] == f {
+			delete(s.completeFlights, key)
+		}
+		s.pruneComplete()
+		s.completeMu.Unlock()
+	}()
+	return f, false
+}
+
+// wake tells every follower the flight moved; the caller holds f.mu.
+func (f *completeFlight) wake() {
+	close(f.changed)
+	f.changed = make(chan struct{})
+}
+
+// follow feeds onDelta the answer from its start, and returns once it is
+// whole (or failed), or ctx — the asker — is gone.
+func (f *completeFlight) follow(ctx context.Context, onDelta func(string)) error {
+	for i := 0; ; {
+		f.mu.Lock()
+		batch := f.deltas[i:]
+		i = len(f.deltas)
+		done, err, changed := f.done, f.err, f.changed
+		f.mu.Unlock()
+		for _, d := range batch {
+			onDelta(d)
+		}
+		if done {
+			return err
+		}
+		select {
+		case <-changed:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// leaveComplete is an asker going; the last one to leave a call still
+// running takes the call with it.
+func (s *Server) leaveComplete(key string, f *completeFlight) {
+	s.completeMu.Lock()
+	defer s.completeMu.Unlock()
+	f.mu.Lock()
+	f.askers--
+	orphan := f.askers == 0 && !f.done
+	f.mu.Unlock()
+	if orphan {
+		f.cancel()
+		if s.completeFlights[key] == f {
+			delete(s.completeFlights, key)
+		}
+	}
+}
+
+// pruneComplete drops the kept answers past completeKeep, then the oldest
+// over completeKeepMax; the caller holds completeMu.
+func (s *Server) pruneComplete() {
+	kept := 0
+	for k, f := range s.completeFlights {
+		f.mu.Lock()
+		old := f.done && time.Since(f.at) > completeKeep
+		if f.done && !old {
+			kept++
+		}
+		f.mu.Unlock()
+		if old {
+			delete(s.completeFlights, k)
+		}
+	}
+	for ; kept > completeKeepMax; kept-- {
+		oldest, at := "", time.Time{}
+		for k, f := range s.completeFlights {
+			f.mu.Lock()
+			if f.done && (oldest == "" || f.at.Before(at)) {
+				oldest, at = k, f.at
+			}
+			f.mu.Unlock()
+		}
+		delete(s.completeFlights, oldest)
+	}
 }
 
 // completeCacheKey is the ChatGPT prompt cache key for one-shot calls: a

@@ -145,6 +145,11 @@ type Server struct {
 	appSeqMu sync.Mutex
 	appSeq   map[string]int64
 
+	// Shared one-shot completions: identical calls in flight, and answers
+	// just finished, by question (see complete.go).
+	completeMu      sync.Mutex
+	completeFlights map[string]*completeFlight
+
 	// One-writer guard for this node's Newsfeed journal (see newsfeed.go).
 	newsMu  sync.Mutex
 	newsSeq int64

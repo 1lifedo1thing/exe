@@ -425,6 +425,9 @@ function splitParas(text) {
   return text.split(/(\n(?:[ \t]*\n)+)/).map((t, i) => ({ text: t, sep: i % 2 === 1 }));
 }
 const checkable = p => !p.sep && p.text.trim() !== "";
+// whether a draft still holds a paragraph, whole: a paragraph typed on at
+// its end contains the old one, and is not it
+const hasPara = (d, text) => splitParas(d.text).some(p => !p.sep && p.text === text);
 
 // remember files a corrected paragraph; the diff that marks it is worked
 // out when the paragraph is first drawn, so a column of stored drafts
@@ -635,7 +638,7 @@ async function pass() {
 // in another.
 function landed(id, text) {
   const d = doc.drafts.find(x => x.id === id);
-  if (!d || d.deleted || !d.text.includes(text)) return;
+  if (!d || d.deleted || !hasPara(d, text)) return;
   scheduleSave();
   if (id !== sel && !pendingCount(d)) unseen.add(id);
 }
@@ -651,11 +654,14 @@ function landed(id, text) {
 // only "off" is risky, since a reasoning model told not to think (glm-5.3)
 // reasons out loud instead and the whole chain arrives as content. Models
 // without levels get the daemon's fallback: think=true, then no field.
+// The call is shared: every window on this node showing the draft asks
+// about the same paragraph, and the daemon answers them all from one model
+// call — whoever asks second joins the first's answer as it streams.
 async function complete(text, signal, onDelta) {
   const r = await api("/v1/chat/complete", { method: "POST", signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ provider: providerOf(cfg), system: SYSTEM, prompt: ask(text), model: cfg.model || "",
-      effort: effortOf(cfg) === "default" ? "" : effortOf(cfg), options: { temperature: 0 } }) });
+      effort: effortOf(cfg) === "default" ? "" : effortOf(cfg), options: { temperature: 0 }, share: true }) });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
     throw new Error(e.error || "HTTP " + r.status);
@@ -687,7 +693,7 @@ src.addEventListener("input", () => {
   lastInput = Date.now();
   d.updated = stamp(d);
   lastErr = "";
-  if (current && current.id === d.id && !d.text.includes(current.text)) current.ctrl.abort();
+  if (current && current.id === d.id && !hasPara(d, current.text)) current.ctrl.abort();
   render();
   scheduleSave();
   clearTimeout(timer);
@@ -891,9 +897,14 @@ async function reloadFromDisk() {
     const disk = new Map(d.drafts.filter(x => x && x.id).map(x => [String(x.id), normDraft(x)]));
     const byId = new Map(disk);
     let ahead = false; // we hold something disk lacks: push it back
+    let typed = false; // text came in that was typed elsewhere
     for (const l of doc.drafts) {
       const dv = byId.get(l.id);
       if (!dv || l.updated > dv.updated) { byId.set(l.id, l); ahead = true; }
+      else if (!dv.deleted && dv.text !== l.text) typed = true;
+    }
+    for (const [id, dv] of disk) { // or a draft started elsewhere
+      if (!dv.deleted && !doc.drafts.some(l => l.id === id)) typed = true;
     }
     doc.drafts = [...byId.values()];
     sortDrafts();
@@ -902,16 +913,23 @@ async function reloadFromDisk() {
       const x = doc.drafts.find(y => y.id === id);
       if (!x || x.deleted || pendingCount(x)) unseen.delete(id);
     }
-    // the check in flight is moot once its draft is gone, or another
-    // window's answer for the paragraph came in with the doc
-    if (current && (cache.has(current.text) || !doc.drafts.some(x => x.id === current.id && !x.deleted))) current.ctrl.abort();
+    // the check in flight is moot once its draft is gone, its paragraph
+    // was edited away on another desk, or another window's answer for it
+    // came in with the doc
+    if (current && (cache.has(current.text)
+      || !doc.drafts.some(x => x.id === current.id && !x.deleted && hasPara(x, current.text)))) current.ctrl.abort();
     const c = cur();
     if (!c) { // the open draft went away: the window moves to the newest, or a fresh one
       sel = null;
       selectDraft(live().length ? live()[0].id : newDraft(), false);
     } else {
       adoptText(c.text);
-      lastInput = 0;
+      // text typed elsewhere waits out the same quiet as typing here, from
+      // when it arrived: the window being typed in asks first, and this
+      // one joins its call instead of racing it on every pause. Nothing
+      // that arrives cuts the quiet short — another desk's save landing
+      // mid-sentence must not send the half-typed paragraph to the model.
+      if (typed) lastInput = Date.now();
       render();
       kick();
     }

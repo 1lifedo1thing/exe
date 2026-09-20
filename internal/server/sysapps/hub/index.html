@@ -2193,7 +2193,7 @@ async function pencilComplete(text, signal) {
   const r = await api("/v1/chat/complete", { method: "POST", signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ provider: c.provider, system: PENCIL_SYSTEM, prompt: pencilAsk(text), model: c.model,
-      effort: c.effort === "default" ? "" : c.effort, options: { temperature: 0 } }) });
+      effort: c.effort === "default" ? "" : c.effort, options: { temperature: 0 }, share: true }) });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
     throw new Error(e.error || "HTTP " + r.status);
@@ -2458,7 +2458,8 @@ function pencilInput(e) {
   hideMenu();
   pLastInput = Date.now();
   pErr = "";
-  if (pCurrent && !textEl.value.includes(pCurrent.text)) pCurrent.ctrl.abort();
+  // whole paragraphs: one typed on at its end contains the old one, and is not it
+  if (pCurrent && !splitParas(textEl.value).some(p => !p.sep && p.text === pCurrent.text)) pCurrent.ctrl.abort();
   pencilRender();
   clearTimeout(pTimer);
   // an IME's unfinished syllables are not text yet: the check waits for

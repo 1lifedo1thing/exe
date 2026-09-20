@@ -691,7 +691,10 @@ The check runs on the Ollama endpoint in **Configuration**
 ChatGPT, so with a local model nothing you write leaves this machine; on
 ChatGPT the passage goes to OpenAI. Text is checked a paragraph at a time
 and only the paragraph you touched is re-checked, which keeps long
-documents cheap.
+documents cheap. A draft open on two desks of this node — or in the Hub
+composer too — still costs one model call a paragraph: the desk you type
+in asks first, the others join its answer as it streams, and a paragraph
+edited mid-check has its call cancelled once every desk has let go of it.
 
 A working Blue Pencil also proofreads the **Hub** app's composer, in
 place: blue rules under what it would change and a floating menu to
@@ -703,7 +706,12 @@ newline-delimited JSON — `{"delta": …}` lines, then `{"done": true}` — and
 optional `model`, `effort` and Ollama `options` (`temperature`, `seed`, …)
 fields override the configuration for that one call. `"provider":
 "openai"` runs it on the ChatGPT subscription instead (`openai.model`,
-`openai.effort`, and the sign-in under Configuration → OpenAI).
+`openai.effort`, and the sign-in under Configuration → OpenAI). With
+`"share": true`, identical calls are one model call: whoever asks while
+another asker's call is running reads that answer from its start, the
+call ends when the last asker hangs up, and a finished answer is kept ten
+minutes for whoever asks next — those read `"shared": true` on the done
+line. Leave it off when every call should sample afresh.
 
 ## Configuration
 
