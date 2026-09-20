@@ -311,6 +311,13 @@ shows it as `exe:site`) rather than to a VM. Nothing is deployed and
 nothing is kept in step: the running binary is the site, so a rebuild and
 a restart publish it. `exe unexpose exe.<domain>` takes it down.
 
+The page counts its own readers — server-side, no script and no cookie —
+and shows them at `https://exe.<domain>/stats`, with the same report as
+JSON at `/v1/stats`. That is [exe-stats](https://github.com/livid/exe-stats),
+the package the [exe hub](https://github.com/livid/exe-hub) draws its own
+`/stats` with; the hits live in `~/.exe/stats.db`, a database of this
+node's own.
+
 ## Roadmap / ideas
 
 - `exe unexpose` currently leaves the Cloudflare DNS record + ingress rule in place.

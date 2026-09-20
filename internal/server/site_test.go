@@ -5,13 +5,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	stats "github.com/livid/exe-stats"
 )
 
 // The homepage comes out of the binary: the page itself, its picture, and
 // the desktop's icons, each with the caching a public page wants; nothing
 // else is served from that host.
 func TestSiteHandler(t *testing.T) {
-	h := SiteHandler()
+	h := SiteHandler(nil)
 	for _, tc := range []struct {
 		path, kind, cache, want string
 	}{
@@ -40,6 +43,45 @@ func TestSiteHandler(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "http://exe.example.com/secrets", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("an unknown path answered %d", rec.Code)
+	}
+}
+
+// With stats the page is counted and read back at /stats on the same
+// host; its pictures are not visits.
+func TestSiteStats(t *testing.T) {
+	an := SiteStats(t.TempDir())
+	if an == nil {
+		t.Fatal("no stats over a fresh state directory")
+	}
+	defer an.Stop()
+	h := SiteHandler(an)
+	nav := func(path string) int {
+		r := httptest.NewRequest("GET", "http://exe.example"+path, nil)
+		r.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/128.0 Safari/537.36")
+		r.Header.Set("Sec-Fetch-Dest", "document")
+		r.Header.Set("Accept", "text/html")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	if code := nav("/"); code != http.StatusOK {
+		t.Fatalf("the homepage answered %d", code)
+	}
+	nav("/screenshot.png")
+	if err := an.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	sum, err := an.DB().Summary(stats.Filter{To: time.Now().UnixMilli() + 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Pageviews != 1 || sum.Visitors != 1 {
+		t.Errorf("counted %+v, want the one page view (the picture is not a visit)", sum)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "http://exe.example/stats", nil))
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Page views") {
+		t.Errorf("the desk answered %d", w.Code)
 	}
 }
 

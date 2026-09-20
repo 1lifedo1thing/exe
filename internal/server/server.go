@@ -26,6 +26,8 @@ import (
 	"exe/internal/agent"
 	"exe/internal/cf"
 	"exe/internal/codex"
+	stats "github.com/livid/exe-stats"
+
 	"exe/internal/config"
 	"exe/internal/github"
 	"exe/internal/hostinfo"
@@ -48,6 +50,10 @@ type Server struct {
 	// Logs, when set by main, holds the daemon log ring that GET /v1/logs
 	// streams to the web UI.
 	Logs *LogBuffer
+
+	// Site counts the homepage's readers and draws them at /stats on the
+	// site's own hostname (site.go); nil counts nothing.
+	Site *stats.Stats
 
 	// OnRebind, when set, is called after a config PUT changes listen,
 	// proxy_listen or ssh_listen so the daemon can re-bind those listeners
@@ -168,10 +174,15 @@ type Server struct {
 func New(cfg *config.Config, vms vmm.Manager, px *proxy.Proxy, keyPath, stateDir string) *Server {
 	s := &Server{VMs: vms, Proxy: px, KeyPath: keyPath, StateDir: stateDir}
 	// The homepage is a backend of the daemon's own (site.go): a route
-	// pointing at it is served from this binary, not dialled. Tests build
-	// a Server without a proxy.
+	// pointing at it is served from this binary, not dialled, and its
+	// readers are counted into the node's own stats.db. Tests build a
+	// Server without a proxy.
 	if px != nil {
-		px.SetBuiltin(SiteBackend, SiteHandler())
+		s.Site = SiteStats(stateDir)
+		if s.Site != nil {
+			go s.Site.Run()
+		}
+		px.SetBuiltin(SiteBackend, SiteHandler(s.Site))
 	}
 	s.hubAgent.kick = make(chan struct{}, 1)
 	s.cfg.Store(cfg)

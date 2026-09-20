@@ -1,9 +1,16 @@
 package server
 
 import (
+	"database/sql"
 	"embed"
+	"log"
 	"net/http"
+	"path/filepath"
 	"strings"
+	"time"
+
+	stats "github.com/livid/exe-stats"
+	_ "modernc.org/sqlite"
 )
 
 // The project homepage — the public front door at https://<sub>.<domain>,
@@ -40,11 +47,51 @@ var siteFiles = map[string]siteFile{
 	"/icon-192.png":   {name: "ui/icon-192.png", kind: "image/png", maxAge: "max-age=14400", fromUI: true},
 }
 
-// SiteHandler serves the homepage on the proxy listener. The page itself
-// is revalidated on every visit, so a new binary shows at once; its
-// pictures may sit in a cache for four hours.
-func SiteHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// SiteStats opens the homepage's own analytics — github.com/livid/exe-stats,
+// the same package that draws the hub's /stats, over a database of this
+// node's own (stats.db in the state directory, nothing to do with the
+// hub's). A failure here only means the page is not counted.
+func SiteStats(stateDir string) *stats.Stats {
+	db, err := sql.Open("sqlite", filepath.Join(stateDir, "stats.db")+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	if err != nil {
+		log.Printf("site: stats: %v (the homepage will not be counted)", err)
+		return nil
+	}
+	db.SetMaxOpenConns(1)
+	an, err := stats.New(db, stats.Options{
+		Location:  time.Local,
+		Title:     "Stats · exe",
+		HomeURL:   "/",
+		HomeLabel: "Back to the homepage",
+	})
+	if err != nil {
+		log.Printf("site: stats: %v (the homepage will not be counted)", err)
+		db.Close()
+		return nil
+	}
+	return an // the caller starts Run
+}
+
+// SiteHandler serves the homepage on the proxy listener, its readers
+// counted and read back at /stats. The page itself is revalidated on
+// every visit, so a new binary shows at once; its pictures may sit in a
+// cache for four hours.
+func SiteHandler(an *stats.Stats) http.Handler {
+	page := http.HandlerFunc(sitePage)
+	if an == nil {
+		return page
+	}
+	mux := http.NewServeMux()
+	// the page is counted; its pictures and icons are not a visit
+	mux.Handle("GET /{$}", an.Counted("home", page))
+	mux.Handle("GET /stats", an.PageHandler())
+	mux.Handle("GET /v1/stats", an.JSONHandler())
+	mux.Handle("/", page)
+	return mux
+}
+
+func sitePage(w http.ResponseWriter, r *http.Request) {
+	{
 		f, ok := siteFiles[strings.TrimSuffix(r.URL.Path, "index.html")]
 		if !ok {
 			http.Error(w, "exe site: no such page", http.StatusNotFound)
@@ -69,5 +116,5 @@ func SiteHandler() http.Handler {
 			return
 		}
 		w.Write(b)
-	})
+	}
 }

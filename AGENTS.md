@@ -28,7 +28,10 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   pages' Platinum blocks, served out of the binary (`internal/server/site.go`,
   proxy backend `exe:site`, published once with `exe site`). It ships with
   the daemon, so a change to it needs build + restart like the desktop, and
-  its screenshot is the README's too.
+  its screenshot is the README's too. Its readers are counted by
+  `github.com/livid/exe-stats` (the hub's /stats, now a package of its
+  own — /www/exe-stats, `replace`d locally until it is published) into
+  `~/.exe/stats.db`, and read back at exe.v2core.com/stats.
 - Test: `go test ./...`. Check UI in headless Chromium
   (`~/tools/playwright`, node at `~/.nvm/versions/node/v24.15.0/bin`);
   screenshot and look at every UI change at device pixel ratios 1, 1.5
