@@ -1,19 +1,25 @@
 package server
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
 )
 
-// The desktop is the source of truth for this look. The site's chrome is
-// copied from it, and this is what keeps the copy honest: every visual
+// The desktop is the source of truth for this look. The chrome the site
+// serves comes from github.com/livid/exe-stats, so the homepage, the
+// documentation and the stats desk all wear one; this is what keeps that
+// one honest: every visual
 // declaration of a shared block must say what the desktop says. Only the
 // properties that place a window on a desk — where it sits and how big it
 // may be — are the site's own.
 func TestSiteChromeFollowsTheDesktop(t *testing.T) {
 	desk := cssBlocks(string(uiHTML))
-	site := cssBlocks(string(mustSiteFile("site/site.css")))
+	// what a reader is served: the shared chrome and then this site's
+	// own styles, as one stylesheet
+	site := cssBlocks(string(siteCSS))
 
 	// what a page places for itself: a window is centred in a column
 	// here, not dragged around a desk
@@ -101,4 +107,34 @@ func cssBlocks(src string) map[string]map[string]string {
 		}
 	}
 	return out
+}
+
+// The site draws one chrome. The stats desk is rendered inside it —
+// through the package's own template blocks, the way the hub does it —
+// rather than in the chrome the package carries for a host that has
+// none, so the window a reader sees at /stats is the window it sees
+// everywhere else on the site.
+func TestSiteStatsWearsTheSiteChrome(t *testing.T) {
+	an := SiteStats(t.TempDir())
+	if an == nil {
+		t.Fatal("no stats over a fresh state directory")
+	}
+	defer an.Stop()
+	w := httptest.NewRecorder()
+	SiteHandler(an).ServeHTTP(w, httptest.NewRequest("GET", "http://exe.example/stats", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("/stats answered %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `href="/v`+siteBuild+`/site.css"`) {
+		t.Error("the stats desk does not wear the site's stylesheet")
+	}
+	if strings.Contains(body, "statsbase") || strings.Contains(body, ".tbox { position: relative") {
+		t.Error("the stats desk brought the package's own chrome with it")
+	}
+	for _, want := range []string{`class="sdesk"`, "Page views", `class="window`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the stats desk has no %s", want)
+		}
+	}
 }

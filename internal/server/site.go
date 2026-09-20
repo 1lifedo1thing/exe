@@ -48,9 +48,12 @@ var siteBuild = func() string {
 	for _, n := range []string{"/site.css", "/icon.svg", "/icon-192.png", "/screenshot.png"} {
 		f := siteFiles[n]
 		var b []byte
-		if f.fromUI {
+		switch {
+		case f.bytes != nil:
+			b = f.bytes
+		case f.fromUI:
 			b, _ = uiFS.ReadFile(f.name)
-		} else {
+		default:
 			b, _ = f.fs.ReadFile(f.name)
 		}
 		sum.Write(b)
@@ -72,11 +75,18 @@ type siteFile struct {
 	kind   string
 	maxAge string
 	fromUI bool
+	bytes  []byte // a file the daemon puts together rather than embeds
 }
+
+// siteCSS is the stylesheet every page of the site links: the Platinum
+// chrome from github.com/livid/exe-stats, which the stats desk is drawn
+// in too, and then this site's own styles. One chrome, written once —
+// and TestSiteChromeFollowsTheDesktop holds it to what the desktop says.
+var siteCSS = []byte(stats.ChromeCSS() + "\n" + string(mustSiteFile("site/site.css")))
 
 var siteFiles = map[string]siteFile{
 	"/":               {fs: siteFS, name: "site/index.html", kind: "text/html; charset=utf-8", maxAge: "no-cache"},
-	"/site.css":       {fs: siteFS, name: "site/site.css", kind: "text/css; charset=utf-8", maxAge: "no-cache"},
+	"/site.css":       {bytes: siteCSS, kind: "text/css; charset=utf-8", maxAge: "no-cache"},
 	"/screenshot.png": {fs: siteFS, name: "site/screenshot.png", kind: "image/png", maxAge: "max-age=14400"},
 	"/icon.svg":       {name: "ui/icon.svg", kind: "image/svg+xml", maxAge: "max-age=14400", fromUI: true},
 	"/icon-192.png":   {name: "ui/icon-192.png", kind: "image/png", maxAge: "max-age=14400", fromUI: true},
@@ -161,6 +171,54 @@ func mustSiteFile(name string) []byte {
 	return b
 }
 
+// siteStatsData is the stats desk with what this site's own document
+// needs around it.
+type siteStatsData struct {
+	P     *stats.Page
+	Build string
+}
+
+// siteStatsTmpl draws the stats desk in the site's own chrome rather
+// than the one the package carries for a host that has none: the window,
+// its striped bar and its close box are the desktop's, here as on every
+// other page of the site, and there is one stylesheet for all of them.
+var siteStatsTmpl = template.Must(template.Must(template.New("statsdoc").
+	Funcs(stats.Funcs()).Parse(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{.P.Title}}{{with .P.Host}} · {{.}}{{end}}</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#dddddd">
+<link rel="icon" href="/v{{.Build}}/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/v{{.Build}}/icon-192.png">
+<link rel="stylesheet" href="/v{{.Build}}/site.css">
+{{template "statshead" .P}}{{template "statscss"}}</head>
+<body>
+{{template "stats" .P}}
+</body>
+</html>
+`)).Parse(stats.TemplateHTML()))
+
+// siteStatsHandler answers with the desk in this site's chrome.
+func siteStatsHandler(an *stats.Stats) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p, err := an.PageData(r)
+		if err != nil {
+			log.Printf("site: stats: %v", err)
+			http.Error(w, "the stats could not be read", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if err := siteStatsTmpl.Execute(w, siteStatsData{P: p, Build: siteBuild}); err != nil {
+			log.Printf("site: stats: %v", err)
+		}
+	}
+}
+
 // SiteHandler serves the homepage on the proxy listener, its readers
 // counted and read back at /stats. The page itself is revalidated on
 // every visit, so a new binary shows at once; its pictures may sit in a
@@ -188,7 +246,7 @@ func SiteHandler(an *stats.Stats) http.Handler {
 	mux.Handle("GET /docs/{page}", an.Counted("docs", docs))
 	mux.Handle("GET /docs/using/{chapter}", an.Counted("docs", docs))
 	mux.Handle("GET /docs", http.RedirectHandler("/docs/", http.StatusMovedPermanently))
-	mux.Handle("GET /stats", an.PageHandler())
+	mux.Handle("GET /stats", siteStatsHandler(an))
 	mux.Handle("GET /v1/stats", an.JSONHandler())
 	mux.Handle("/", page)
 	return mux
@@ -222,9 +280,12 @@ func sitePage(w http.ResponseWriter, r *http.Request, an *stats.Stats) {
 		}
 		var b []byte
 		var err error
-		if f.fromUI {
+		switch {
+		case f.bytes != nil:
+			b = f.bytes
+		case f.fromUI:
 			b, err = uiFS.ReadFile(f.name)
-		} else {
+		default:
 			b, err = f.fs.ReadFile(f.name)
 		}
 		if err != nil {
