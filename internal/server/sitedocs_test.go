@@ -73,10 +73,36 @@ func TestSiteDocs(t *testing.T) {
 			t.Errorf("/docs/%s has no way back", d.Slug)
 		}
 	}
-	// the manual is the one the desktop opens, not a copy of it
+	// the manual is read in chapters: its front lists them, each one is a
+	// page, and they are the manual's own headings — not a copy of it
 	_, using := getDoc(t, h, "/docs/using")
-	if !strings.Contains(using, "Using exe") || !strings.Contains(using, "The desktop") {
-		t.Error("the manual page is not the desktop's manual")
+	if len(manualChapters) < 10 {
+		t.Fatalf("the manual came apart into %d chapters", len(manualChapters))
+	}
+	for _, c := range manualChapters {
+		if !strings.Contains(using, `href="/docs/using/`+c.Slug+`"`) {
+			t.Errorf("the manual's contents do not offer %s", c.Slug)
+		}
+		code, page := getDoc(t, h, "/docs/using/"+c.Slug)
+		if code != http.StatusOK {
+			t.Fatalf("/docs/using/%s answered %d", c.Slug, code)
+		}
+		if !strings.Contains(page, "<h1") || !strings.Contains(page, `href="/docs/using"`) {
+			t.Errorf("/docs/using/%s has no heading or no way back", c.Slug)
+		}
+		if strings.Contains(page, "```") {
+			t.Errorf("/docs/using/%s went out with unrendered markdown in it", c.Slug)
+		}
+	}
+	// every word of the manual is on exactly one chapter page
+	if strings.Contains(using, "The menu bar works like") {
+		t.Error("the manual's front carries a chapter's text as well")
+	}
+	if _, desk := getDoc(t, h, "/docs/using/the-desktop"); !strings.Contains(desk, "The menu bar works like") {
+		t.Error("a chapter lost its text")
+	}
+	if code, _ := getDoc(t, h, "/docs/using/nothing"); code != http.StatusNotFound {
+		t.Errorf("an unknown chapter answered %d", code)
 	}
 	if code, _ := getDoc(t, h, "/docs/nothing"); code != http.StatusNotFound {
 		t.Errorf("an unknown page answered %d", code)

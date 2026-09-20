@@ -82,13 +82,18 @@ func siteLabel(path string) string {
 		return "/ (the homepage)"
 	}
 	if slug, ok := strings.CutPrefix(path, "/docs/"); ok {
+		if slug == "" {
+			return "Docs: all of them"
+		}
+		if ch, ok := strings.CutPrefix(slug, "using/"); ok {
+			if i, ok := manualChapterAt(ch); ok {
+				return "Manual: " + manualChapters[i].Title
+			}
+		}
 		for _, d := range siteDocs {
 			if d.Slug == slug {
 				return "Docs: " + d.Title
 			}
-		}
-		if slug == "" {
-			return "Docs: all of them"
 		}
 	}
 	return path
@@ -118,8 +123,10 @@ func SiteHandler(an *stats.Stats) http.Handler {
 		// without stats the site is the page and its documentation, and
 		// nothing is counted
 		mux := http.NewServeMux()
-		mux.Handle("GET /docs/{$}", siteDocsHandler(true, nil))
-		mux.Handle("GET /docs/{page}", siteDocsHandler(false, nil))
+		docs := siteDocsHandler(nil)
+		mux.Handle("GET /docs/{$}", docs)
+		mux.Handle("GET /docs/{page}", docs)
+		mux.Handle("GET /docs/using/{chapter}", docs)
 		mux.Handle("GET /docs", http.RedirectHandler("/docs/", http.StatusMovedPermanently))
 		mux.Handle("/", page)
 		return mux
@@ -128,8 +135,10 @@ func SiteHandler(an *stats.Stats) http.Handler {
 	// the pages are counted; the stylesheet, the pictures and the icons
 	// are not a visit
 	mux.Handle("GET /{$}", an.Counted("home", page))
-	mux.Handle("GET /docs/{$}", an.Counted("docs", siteDocsHandler(true, an)))
-	mux.Handle("GET /docs/{page}", an.Counted("docs", siteDocsHandler(false, an)))
+	docs := siteDocsHandler(an)
+	mux.Handle("GET /docs/{$}", an.Counted("docs", docs))
+	mux.Handle("GET /docs/{page}", an.Counted("docs", docs))
+	mux.Handle("GET /docs/using/{chapter}", an.Counted("docs", docs))
 	mux.Handle("GET /docs", http.RedirectHandler("/docs/", http.StatusMovedPermanently))
 	mux.Handle("GET /stats", an.PageHandler())
 	mux.Handle("GET /v1/stats", an.JSONHandler())

@@ -47,10 +47,54 @@ var siteDocs = []siteDoc{
 	{Slug: "config", Title: "Configuration",
 		Blurb: "Every key of ~/.exe/config.json, and the Cloudflare setup.",
 		src:   docFile("config")},
-	{Slug: "using", Title: "Using exe",
-		Blurb: "The desktop's own manual — the same text its Help menu opens.",
-		src:   func() string { return string(docsMD) }},
+	manualDoc,
 }
+
+// The manual (internal/server/docs.md) is one file — the desktop's Help
+// window opens the whole of it — and too long for one page on the site,
+// so the site reads it as chapters: its own "## " headings, each a page
+// of its own under /docs/using/. Nothing is edited on the way; the split
+// is where the manual already divides itself.
+
+type manualChapter struct {
+	Slug, Title string
+	Body        string
+}
+
+var manualIntro, manualChapters = func() (string, []manualChapter) {
+	lines := strings.Split(string(docsMD), "\n")
+	var intro []string
+	var chapters []manualChapter
+	cur := -1
+	for _, l := range lines {
+		if strings.HasPrefix(l, "## ") {
+			title := strings.TrimSpace(strings.TrimPrefix(l, "## "))
+			chapters = append(chapters, manualChapter{Slug: mdSlug(title), Title: title})
+			cur = len(chapters) - 1
+			continue
+		}
+		if cur < 0 {
+			intro = append(intro, l)
+			continue
+		}
+		chapters[cur].Body += l + "\n"
+	}
+	return strings.Join(intro, "\n"), chapters
+}()
+
+func manualChapterAt(slug string) (int, bool) {
+	for i, c := range manualChapters {
+		if c.Slug == slug {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// manualDoc is the manual's place in the index; its pages are its
+// chapters, so it has no source of its own.
+var manualDoc = siteDoc{Slug: "using", Title: "Using exe",
+	Blurb: "The desktop's own manual, in chapters — the same text its Help menu opens."}
 
 func docFile(slug string) func() string {
 	return func() string {
@@ -62,15 +106,22 @@ func docFile(slug string) func() string {
 	}
 }
 
-// siteDocPage is what the template draws.
+// siteDocPage is what the template draws: a body, and on a page that
+// leads somewhere (the index, the manual's front) a contents list under
+// it. Up is the close box's target, Next the foot's way on.
 type siteDocPage struct {
 	Title  string
 	Blurb  string
 	Body   template.HTML
-	Pages  []siteDoc // the index's list; empty on a page
-	Next   *siteDoc
+	Items  []tocItem // a contents list under the body; none on a text page
+	Up     string    // where the close box leads
+	UpName string    // and what it is called on the status line
+	Next   *tocItem
 	Online int
 }
+
+// tocItem is one line of a contents list.
+type tocItem struct{ URL, Title, Blurb string }
 
 var siteDocTmpl = template.Must(template.New("doc").Parse(`<!doctype html>
 <html lang="en">
@@ -87,17 +138,12 @@ var siteDocTmpl = template.Must(template.New("doc").Parse(`<!doctype html>
 <body>
 
 <div class="window">
-  <div class="titlebar"><span class="tbox"><a href="{{if .Pages}}/{{else}}/docs/{{end}}" title="{{if .Pages}}The homepage{{else}}All the documentation{{end}}"></a></span><span class="stripe"></span><span class="title">{{.Title}}</span><span class="stripe"></span></div>
+  <div class="titlebar"><span class="tbox"><a href="{{.Up}}" title="{{.UpName}}"></a></span><span class="stripe"></span><span class="title">{{.Title}}</span><span class="stripe"></span></div>
   <div class="frame">
     <div class="body doc">
-{{if .Pages}}<h1>Documentation</h1>
-<p>exe is a personal VM cloud in a single Go binary. These pages are the
-detail; the <a href="/">homepage</a> is the short version and the
-<a href="https://github.com/livid/exe" target="_blank" rel="noopener">source</a> is on GitHub.</p>
-<ul class="toc">{{range .Pages}}<li><a href="/docs/{{.Slug}}">{{.Title}}</a><span>{{.Blurb}}</span></li>{{end}}</ul>
-{{else}}{{.Body}}{{end}}
+{{.Body}}{{with .Items}}<ul class="toc">{{range .}}<li><a href="{{.URL}}">{{.Title}}</a>{{with .Blurb}}<span>{{.}}</span>{{end}}</li>{{end}}</ul>{{end}}
     </div>
-    <div class="statusbar"><span><a href="/">exe</a>{{if not .Pages}} · <a href="/docs/">Documentation</a>{{end}}</span><span>{{with .Next}}Next: <a href="/docs/{{.Slug}}">{{.Title}}</a>{{else}}{{if .Online}}<a href="/stats">{{.Online}} online</a>{{end}}{{end}}</span></div>
+    <div class="statusbar"><span><a href="/">exe</a>{{if ne .Up "/"}} · <a href="/docs/">Documentation</a>{{end}}{{if eq .Up "/docs/using"}} · <a href="/docs/using">Using exe</a>{{end}}</span><span>{{with .Next}}Next: <a href="{{.URL}}">{{.Title}}</a>{{else}}{{if .Online}}<a href="/stats">{{.Online}} online</a>{{end}}{{end}}</span></div>
   </div>
 </div>
 
@@ -105,17 +151,59 @@ detail; the <a href="/">homepage</a> is the short version and the
 </html>
 `))
 
-// siteDocsHandler serves the index and the pages.
-func siteDocsHandler(index bool, an interface{ Online() int }) http.HandlerFunc {
+// siteDocsHandler serves the documentation: the index, a page, the
+// manual's front, and a chapter of the manual. Which one it is comes
+// from the path, so the routes and this switch stay in step.
+func siteDocsHandler(an interface{ Online() int }) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		p := siteDocPage{Title: "Documentation", Blurb: "How exe works: getting started, SSH, VMs, configuration and the desktop's manual."}
-		if index {
-			p.Pages = siteDocs
-		} else {
-			slug := strings.TrimPrefix(r.URL.Path, "/docs/")
+		var p siteDocPage
+		rest := strings.TrimPrefix(r.URL.Path, "/docs/")
+		switch {
+		case rest == "":
+			p = siteDocPage{
+				Title:  "Documentation",
+				Blurb:  "How exe works: getting started, SSH, VMs, configuration and the desktop's manual.",
+				Up:     "/",
+				UpName: "The homepage",
+				Body: `<h1>Documentation</h1>
+<p>exe is a personal VM cloud in a single Go binary. These pages are the
+detail; the <a href="/">homepage</a> is the short version and the
+<a href="https://github.com/livid/exe" target="_blank" rel="noopener">source</a> is on GitHub.</p>`,
+			}
+			for _, d := range siteDocs {
+				p.Items = append(p.Items, tocItem{URL: "/docs/" + d.Slug, Title: d.Title, Blurb: d.Blurb})
+			}
+
+		case rest == "using":
+			// the manual's front: its own opening words, then its chapters
+			p = siteDocPage{Title: "Using exe", Blurb: manualDoc.Blurb, Up: "/docs/", UpName: "All the documentation",
+				Body: mdRender(manualIntro)}
+			for _, c := range manualChapters {
+				p.Items = append(p.Items, tocItem{URL: "/docs/using/" + c.Slug, Title: c.Title})
+			}
+			if len(manualChapters) > 0 {
+				p.Next = &p.Items[0]
+			}
+
+		case strings.HasPrefix(rest, "using/"):
+			i, ok := manualChapterAt(strings.TrimPrefix(rest, "using/"))
+			if !ok {
+				http.Error(w, "exe docs: no such chapter", http.StatusNotFound)
+				return
+			}
+			c := manualChapters[i]
+			p = siteDocPage{Title: c.Title, Blurb: "From the exe manual: " + c.Title + ".",
+				Up: "/docs/using", UpName: "The whole manual",
+				Body: mdRender("# " + c.Title + "\n" + c.Body)}
+			if i+1 < len(manualChapters) {
+				n := manualChapters[i+1]
+				p.Next = &tocItem{URL: "/docs/using/" + n.Slug, Title: n.Title}
+			}
+
+		default:
 			found := -1
 			for j := range siteDocs {
-				if siteDocs[j].Slug == slug {
+				if siteDocs[j].Slug == rest {
 					found = j
 					break
 				}
@@ -125,10 +213,11 @@ func siteDocsHandler(index bool, an interface{ Online() int }) http.HandlerFunc 
 				return
 			}
 			d := siteDocs[found]
-			p.Title, p.Blurb = d.Title, d.Blurb
-			p.Body = mdRender(d.src())
+			p = siteDocPage{Title: d.Title, Blurb: d.Blurb, Up: "/docs/", UpName: "All the documentation",
+				Body: mdRender(d.src())}
 			if found+1 < len(siteDocs) {
-				p.Next = &siteDocs[found+1]
+				n := siteDocs[found+1]
+				p.Next = &tocItem{URL: "/docs/" + n.Slug, Title: n.Title}
 			}
 		}
 		if an != nil {
