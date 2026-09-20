@@ -94,6 +94,9 @@ body.mobile #clock { padding: 0 10px; }
 .dd-item:hover { background: var(--hl); color: #fff; }
 .dd-item.dis { color: #888; }
 .dd-item.dis:hover { background: none; color: #888; }
+/* a line that is there to be read, not picked (a module's history): inert
+   like a disabled item, but in the normal text colour */
+.dd-item.dis.info, .dd-item.dis.info:hover { color: var(--black); }
 .dd-sep { height: 2px; margin: 3px 2px; border-top: 1px solid var(--g600); border-bottom: 1px solid #fff; }
 /* Finder contextual menu, sampled from a real OS 9 capture: #ddd face
    (menubar menus are lighter), same groove separators and hard shadow.
@@ -4564,7 +4567,8 @@ document.addEventListener("mousemove", e => {
   ctxLast = pt;
 });
 // Items: { label, act, dis } is a command, { label, items } a submenu, "-"
-// (or { sep: true }) a separator; an item's `icon` (16px SVG or <img>
+// (or { sep: true }) a separator; `info` with `dis` is a line to read, inert
+// but in the normal text colour; an item's `icon` (16px SVG or <img>
 // markup) draws at its left, and a panel with any icon lays every row out
 // with the icon column. Submenus open on hover (a click opens them too,
 // for touch) to the right of the parent, overlapping it by 3px with the
@@ -4577,7 +4581,7 @@ function ctxFill(panel, items, depth) {
   for (const it of items) {
     if (it === "-" || it.sep) { panel.append(el("div", { class: "dd-sep" })); continue; }
     const sub = !it.dis && Array.isArray(it.items);
-    const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") + (Array.isArray(it.items) ? " sub" : "") + (it.mark ? " mark" : "") });
+    const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") + (it.info ? " info" : "") + (Array.isArray(it.items) ? " sub" : "") + (it.mark ? " mark" : "") });
     if (it.mark) { const m = el("span", { class: "dd-mark" }); m.innerHTML = DD_MARK; d.append(m); }
     if (it.title) d.title = it.title; // a plain-words tooltip for a setting whose name alone does not say what it does
     if (it.icon) { const i = el("span", { class: "dd-ico" }); i.innerHTML = it.icon; d.append(i); }
@@ -8443,12 +8447,14 @@ async function pxAlertsRefresh() {
     pxAlertsPrimed = true;
   } catch (e) {}
 }
-// the Recent Moves submenu: the last eight, newest first, then the thresholds
+// the Recent Moves submenu: the last eight, newest first, then the thresholds.
+// The moves are what the menu is opened to read, so they keep the normal text
+// colour (`info`); the thresholds under them stay a grey footnote
 function pxRecentItems() {
   const items = [];
   const when = t => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   for (const a of (pxAlerts ? pxAlerts.alerts : []).slice(0, 8))
-    items.push({ label: a.title + (a.held_back ? " (held back)" : "") + " · " + when(a.t), dis: true });
+    items.push({ label: a.title + (a.held_back ? " (held back)" : "") + " · " + when(a.t), dis: true, info: true });
   if (!items.length) items.push({ label: pxAlerts ? "No big moves yet" : "Checking…", dis: true });
   if (pxAlerts && pxAlerts.rules) { // short lines: this submenu opens on phones too
     const r = t => t + " " + pxAlerts.rules[t].hour + "% / " + pxAlerts.rules[t].day + "%";

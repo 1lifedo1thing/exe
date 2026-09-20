@@ -166,7 +166,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   inverts to `#333399`. Menus: `#eee`, 1px black, hard shadow `2px 2px 0
   rgba(38,38,38,.85)`, items `3px 22px 3px 18px`, hover inverted, disabled
   `#888`, separators a 1px `#999` line over a 1px white one. Contextual menus
-  are `#ddd`.
+  are `#ddd`. A line that is there to be read rather than picked (the price
+  module's Recent Moves) is `dis` plus `info`: inert, never highlighted, but
+  in the normal text colour; heads, footnotes and empty states stay `#888`.
 - Desktop icons: 32x32 pixel art at exactly 32 CSS px, 11px white labels
   with a 1px black text shadow; selected is a `#333399` label and a darkened
   icon. Window lists show the 32px art scaled to 16.
