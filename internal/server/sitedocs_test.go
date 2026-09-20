@@ -165,3 +165,47 @@ func TestDocsToolbar(t *testing.T) {
 		t.Error("the homepage carries the documentation's toolbar")
 	}
 }
+
+// The edge in front of the site keeps a stylesheet and a picture for
+// hours whatever the daemon says, so the pages link them under a stamp
+// of the build: new bytes, new address, and the old one may be kept for
+// ever without ever being wrong.
+func TestSiteBuildStamp(t *testing.T) {
+	h := SiteHandler(nil)
+	if len(siteBuild) < 6 {
+		t.Fatalf("the build stamp is %q", siteBuild)
+	}
+	for _, path := range []string{"/", "/docs/", "/docs/config", "/docs/using/the-hub"} {
+		_, body := getDoc(t, h, path)
+		if !strings.Contains(body, `href="/v`+siteBuild+`/site.css"`) {
+			t.Errorf("%s does not link the stylesheet under this build", path)
+		}
+	}
+	// the stamped address is this build's copy, kept for good
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "http://exe.example/v"+siteBuild+"/site.css", nil))
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), ".doc table") {
+		t.Fatalf("the stamped stylesheet answered %d", w.Code)
+	}
+	if got := w.Header().Get("Cache-Control"); !strings.Contains(got, "immutable") {
+		t.Errorf("a stamped asset is kept as %q", got)
+	}
+	if got := w.Header().Get("Content-Type"); got != "text/css; charset=utf-8" {
+		t.Errorf("a stamped stylesheet is served as %q", got)
+	}
+	// an older stamp still serves, and the plain address still works
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "http://exe.example/vdeadbeef01/icon.svg", nil))
+	if w.Code != http.StatusOK {
+		t.Errorf("an older stamp answered %d", w.Code)
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "http://exe.example/site.css", nil))
+	if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-cache" {
+		t.Errorf("the plain address answered %d as %q", w.Code, w.Header().Get("Cache-Control"))
+	}
+	// the stamp follows the bytes: the same build gives the same stamp
+	if siteBuild != siteStamped("/x")[2:2+len(siteBuild)] {
+		t.Error("the stamp and the address it makes disagree")
+	}
+}

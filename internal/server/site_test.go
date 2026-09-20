@@ -121,7 +121,7 @@ func TestSitePageAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := string(b)
-	for _, want := range []string{`src="icon.svg"`, `src="screenshot.png"`, `href="icon-192.png"`} {
+	for _, want := range []string{`src="/v{{.Build}}/icon.svg"`, `src="/v{{.Build}}/screenshot.png"`, `href="/v{{.Build}}/icon-192.png"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the page does not reference %s", want)
 		}

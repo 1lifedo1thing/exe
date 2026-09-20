@@ -1,12 +1,15 @@
 package server
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"embed"
+	"encoding/hex"
 	"html/template"
 	"log"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -30,6 +33,36 @@ var siteFS embed.FS
 // SiteBackend is the proxy backend that names this handler. `exe site`
 // writes it into the route table; the proxy serves it from the daemon.
 const SiteBackend = "exe:site"
+
+// siteBuild names this binary's copy of the site's assets: a short hash
+// over the bytes of every file a page links to. The pages link them
+// under /v<build>/, so a rebuild that changes one changes its address —
+// which is the only way to be sure a reader sees it. The edge in front
+// of this site raises the lifetime of a stylesheet or a picture to four
+// hours whatever the daemon answers (seen on exe.v2core.com: a
+// no-cache stylesheet came back max-age=14400), so a stamped address is
+// what makes a change arrive at once. The pages themselves are no-cache
+// and are not cached, so they always name the current stamp.
+var siteBuild = func() string {
+	sum := sha256.New()
+	for _, n := range []string{"/site.css", "/icon.svg", "/icon-192.png", "/screenshot.png"} {
+		f := siteFiles[n]
+		var b []byte
+		if f.fromUI {
+			b, _ = uiFS.ReadFile(f.name)
+		} else {
+			b, _ = f.fs.ReadFile(f.name)
+		}
+		sum.Write(b)
+	}
+	return hex.EncodeToString(sum.Sum(nil))[:10]
+}()
+
+// siteStamped is the address a page links an asset by: /v<build>/<name>.
+func siteStamped(name string) string { return "/v" + siteBuild + name }
+
+// siteStamp matches an address a page linked, whatever build made it.
+var siteStamp = regexp.MustCompile(`^/v[0-9a-f]{6,32}(/.+)$`)
 
 // siteFile is one file of the homepage: where its bytes come from, what
 // it is, and how long a browser and the edge may keep it.
@@ -160,7 +193,14 @@ func sitePage(w http.ResponseWriter, r *http.Request, an *stats.Stats) {
 			http.Redirect(w, r, to.RequestURI(), http.StatusMovedPermanently)
 			return
 		}
-		f, ok := siteFiles[r.URL.Path]
+		// an asset asked for under a build's stamp is that build's copy
+		// for good: the address changes when the bytes do, so it may be
+		// kept for as long as anyone likes
+		path, stamped := r.URL.Path, false
+		if m := siteStamp.FindStringSubmatch(path); m != nil {
+			path, stamped = m[1], true
+		}
+		f, ok := siteFiles[path]
 		if !ok {
 			http.Error(w, "exe site: no such page", http.StatusNotFound)
 			return
@@ -177,7 +217,11 @@ func sitePage(w http.ResponseWriter, r *http.Request, an *stats.Stats) {
 			return
 		}
 		w.Header().Set("Content-Type", f.kind)
-		w.Header().Set("Cache-Control", f.maxAge)
+		if stamped {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", f.maxAge)
+		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		if r.Method == http.MethodHead {
 			w.WriteHeader(http.StatusOK)
@@ -200,7 +244,10 @@ func sitePage(w http.ResponseWriter, r *http.Request, an *stats.Stats) {
 				online = 1
 			}
 		}
-		if err := sitePageTmpl.Execute(w, struct{ Online int }{online}); err != nil {
+		if err := sitePageTmpl.Execute(w, struct {
+			Online int
+			Build  string
+		}{online, siteBuild}); err != nil {
 			log.Printf("site: %v", err)
 		}
 	}

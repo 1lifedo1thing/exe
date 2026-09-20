@@ -118,6 +118,7 @@ type siteDocPage struct {
 	UpName string    // and what it is called on the status line
 	Next   *tocItem
 	Online int
+	Build  string // the stamp its stylesheet and icons are linked under
 }
 
 // tocItem is one line of a contents list.
@@ -131,9 +132,9 @@ var siteDocTmpl = template.Must(template.New("doc").Parse(`<!doctype html>
 <title>{{.Title}} — exe</title>
 {{with .Blurb}}<meta name="description" content="{{.}}">{{end}}
 <meta name="theme-color" content="#dddddd">
-<link rel="icon" href="/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/icon-192.png">
-<link rel="stylesheet" href="/site.css">
+<link rel="icon" href="/v{{.Build}}/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/v{{.Build}}/icon-192.png">
+<link rel="stylesheet" href="/v{{.Build}}/site.css">
 <script>
 // The reader's own text size and mode, read back before the first paint
 // so a page never shows one and turns into the other. The same beat
@@ -273,6 +274,7 @@ detail; the <a href="/">homepage</a> is the short version and the
 				p.Next = &tocItem{URL: "/docs/" + n.Slug, Title: n.Title}
 			}
 		}
+		p.Build = siteBuild
 		if an != nil {
 			p.Online = an.Online()
 		}

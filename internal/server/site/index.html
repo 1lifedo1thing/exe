@@ -6,15 +6,15 @@
 <title>exe — a personal VM cloud</title>
 <meta name="description" content="A single Go binary: persistent Linux VMs on macOS, Linux or Windows, an agent that codes inside them, and any VM port published to a real HTTPS subdomain.">
 <meta name="theme-color" content="#dddddd">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="/v{{.Build}}/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/v{{.Build}}/icon-192.png">
 <meta property="og:type" content="website">
 <meta property="og:title" content="exe — a personal VM cloud">
 <meta property="og:description" content="A single Go binary: persistent Linux VMs, an agent that codes inside them, and any VM port published to a real HTTPS subdomain.">
 <meta property="og:url" content="https://exe.v2core.com/">
 <meta property="og:image" content="https://exe.v2core.com/screenshot.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/site.css">
+<link rel="stylesheet" href="/v{{.Build}}/site.css">
 </head>
 <body>
 
@@ -23,7 +23,7 @@
   <div class="frame">
     <div class="body">
       <div class="head">
-        <img src="icon.svg" alt="" width="32" height="32">
+        <img src="/v{{.Build}}/icon.svg" alt="" width="32" height="32">
         <h1>exe<small>A personal VM cloud in a single Go binary.</small></h1>
       </div>
       <p>Create persistent Linux VMs on macOS, Linux or Windows, let an agent
@@ -31,7 +31,7 @@
       to a real HTTPS subdomain through your Cloudflare Tunnel. It all runs on
       a machine you own.</p>
 
-      <a class="shot" href="screenshot.png"><img src="screenshot.png" width="2088" height="1522"
+      <a class="shot" href="/v{{.Build}}/screenshot.png"><img src="/v{{.Build}}/screenshot.png" width="2088" height="1522"
         alt="The web UI, a Mac OS 9 Platinum desktop: the list of virtual machines, and an SSH terminal into one of them."></a>
 
       <h2>What it does</h2>
