@@ -259,6 +259,73 @@ func TestAppDataSeqDropsOlderContent(t *testing.T) {
 	}
 }
 
+// The seq mark orders one writer's own saves. Two desks stamp it off two
+// clocks: a save from the desk whose clock runs behind must not be dropped
+// as older than the other desk's — it is the newest thing written, and
+// nobody would ever hear it was thrown away.
+func TestAppDataSeqIsPerClient(t *testing.T) {
+	a := newTestNode(t)
+	a.installBundle(t, "Paint")
+	put := func(client, seq, body string) string {
+		req, _ := http.NewRequest("PUT", a.ts.URL+"/v1/apps/Paint/data/canvas.png", strings.NewReader(body))
+		req.Header.Set("X-Exe-Seq", seq)
+		if client != "" {
+			req.Header.Set("X-Exe-Client", client)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var m map[string]any
+		json.NewDecoder(resp.Body).Decode(&m)
+		return fmt.Sprint(m["status"])
+	}
+	onDisk := func() string {
+		got, _ := os.ReadFile(a.dataFile("Paint", "canvas.png"))
+		return string(got)
+	}
+	if s := put("phone", "9000", "from the phone"); s != "saved" { // its clock runs five seconds ahead
+		t.Fatalf("phone write: %s", s)
+	}
+	if s := put("pc", "4000", "typed on the pc afterwards"); s != "saved" {
+		t.Fatalf("a save stamped off a slower clock was dropped: %s", s)
+	}
+	if got := onDisk(); got != "typed on the pc afterwards" {
+		t.Fatalf("disk = %q", got)
+	}
+	// the mark still does its job within one writer: the pc's own older
+	// save, arriving late, is dropped
+	if s := put("pc", "3500", "pc, an older save in flight"); s != "stale" {
+		t.Fatalf("a writer's own older save must be dropped: %s", s)
+	}
+	if got := onDisk(); got != "typed on the pc afterwards" {
+		t.Fatalf("older content clobbered newer: %q", got)
+	}
+	if s := put("phone", "9500", "phone again"); s != "saved" {
+		t.Fatalf("phone's next write: %s", s)
+	}
+	// marks of writers long gone do not pile up
+	a.srv.appSeqMu.Lock()
+	for k, m := range a.srv.appSeq {
+		m.at = m.at.Add(-2 * appSeqKeep)
+		a.srv.appSeq[k] = m
+	}
+	for i := 0; i < appSeqMax; i++ {
+		a.srv.appSeq[fmt.Sprintf("Paint/gone-%d.png", i)] = seqMark{seq: 1, at: time.Now().Add(-2 * appSeqKeep)}
+	}
+	a.srv.appSeqMu.Unlock()
+	if s := put("tablet", "100", "tablet"); s != "saved" {
+		t.Fatalf("tablet write: %s", s)
+	}
+	a.srv.appSeqMu.Lock()
+	n := len(a.srv.appSeq)
+	a.srv.appSeqMu.Unlock()
+	if n != 1 {
+		t.Fatalf("marks kept = %d, want the tablet's alone", n)
+	}
+}
+
 func TestConcurrentDeleteVsLivePreservesData(t *testing.T) {
 	// The hello scenario end-to-end: node B independently deleted a file that
 	// node A has real data for. The versions are concurrent (they were never

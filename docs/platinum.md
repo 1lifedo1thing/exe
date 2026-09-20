@@ -310,7 +310,7 @@ restyling: `internal/server/ui/index.html` (the desktop),
   grow-end`, `hide` and `show` (pause loops and timers), `data-changed`.
 - State goes through `/v1/apps/<Name>/data/<file>` under the sync contract
   in `/www/exe-apps/CLAUDE.md`: debounced serialized whole-document PUT
-  with `X-Exe-Seq`, keepalive flush on pagehide, a loaded guard, ids and
-  updated stamps and tombstones on records.
+  with `X-Exe-Seq` and `X-Exe-Client`, keepalive flush on pagehide, a
+  loaded guard, ids and updated stamps and tombstones on records.
 - Check every change in headless Chromium at 1x, 1.5x and 2x, and look at
   the screenshot. Where a real OS 9 sample exists, diff against it.

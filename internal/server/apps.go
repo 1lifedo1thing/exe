@@ -485,14 +485,15 @@ func (s *Server) handleAppDataPut(w http.ResponseWriter, r *http.Request) {
 		// X-Exe-Seq is an optional monotonic content timestamp the app stamps
 		// on each save; it lets us reject a PUT whose content is older than
 		// one already stored, closing the window where two of an app's own
-		// saves race on unload and the older rename lands last.
+		// saves race on unload and the older rename lands last. It is judged
+		// among one writer's saves only (seqKey).
 		seq, _ := strconv.ParseInt(r.Header.Get("X-Exe-Seq"), 10, 64)
 		wrote := false
 		// The file write and its versioning run under the sync engine's file
 		// lock so a concurrent ApplyRemote can't clobber a write the API is
 		// about to acknowledge (last-writer-loses race).
 		s.withFileLock(func() {
-			key := app + "/" + rel
+			key := seqKey(app, rel, r.Header.Get("X-Exe-Client"))
 			if seq > 0 && !s.seqNewer(key, seq) {
 				writeJSON(w, http.StatusOK, map[string]any{"status": "stale", "path": rel})
 				return
@@ -515,12 +516,45 @@ func (s *Server) handleAppDataPut(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// seqMark is the newest content timestamp accepted under one seqKey, and
+// when it was.
+type seqMark struct {
+	seq int64
+	at  time.Time
+}
+
+const (
+	// a mark guards the seconds in which a window's last saves race each
+	// other; past appSeqMax of them, those untouched for appSeqKeep go
+	appSeqKeep = 10 * time.Minute
+	appSeqMax  = 256
+)
+
+// seqKey names whose saves a seq is judged against: one file's, from one
+// writer — the window behind the X-Exe-Client tag. The stamp is the
+// writer's own clock, so it orders that writer's saves and nothing else:
+// held against another desk's, a save stamped off the slower clock is
+// dropped as "older" though it is the newest thing written, and the app is
+// never told. Which desk's content wins is the apps' business (they reload
+// on the change event and compare their records), not the clocks'. A PUT
+// without the tag is judged file-wide.
+func seqKey(app, rel, client string) string {
+	key := app + "/" + rel
+	if client == "" {
+		return key
+	}
+	if len(client) > 64 {
+		client = client[:64]
+	}
+	return key + "\x00" + client
+}
+
 // seqNewer reports whether seq is newer than the last accepted content
 // timestamp for key (does not record it).
 func (s *Server) seqNewer(key string, seq int64) bool {
 	s.appSeqMu.Lock()
 	defer s.appSeqMu.Unlock()
-	return seq > s.appSeq[key]
+	return seq > s.appSeq[key].seq
 }
 
 // recordSeq stores seq as the newest accepted content timestamp for key.
@@ -528,10 +562,18 @@ func (s *Server) recordSeq(key string, seq int64) {
 	s.appSeqMu.Lock()
 	defer s.appSeqMu.Unlock()
 	if s.appSeq == nil {
-		s.appSeq = map[string]int64{}
+		s.appSeq = map[string]seqMark{}
 	}
-	if seq > s.appSeq[key] {
-		s.appSeq[key] = seq
+	now := time.Now()
+	if seq > s.appSeq[key].seq {
+		s.appSeq[key] = seqMark{seq: seq, at: now}
+	}
+	if len(s.appSeq) > appSeqMax { // every page load is a new writer
+		for k, m := range s.appSeq {
+			if k != key && now.Sub(m.at) > appSeqKeep {
+				delete(s.appSeq, k)
+			}
+		}
 	}
 }
 func (s *Server) handleAppDataDelete(w http.ResponseWriter, r *http.Request) {

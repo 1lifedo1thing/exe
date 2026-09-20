@@ -139,11 +139,12 @@ type Server struct {
 	appEv appEvents
 
 	// appSeq is the last accepted client sequence (X-Exe-Seq, a content
-	// timestamp) per app-data file, so the daemon drops a PUT carrying older
-	// content than one it already stored even if that older PUT's write lands
-	// last — e.g. two of an app's own saves racing on window close.
+	// timestamp) per app-data file and writer, so the daemon drops a PUT
+	// carrying older content than one it already stored from that writer even
+	// if the older PUT's write lands last — e.g. two of an app's own saves
+	// racing on window close (see seqKey in apps.go).
 	appSeqMu sync.Mutex
-	appSeq   map[string]int64
+	appSeq   map[string]seqMark
 
 	// Shared one-shot completions: identical calls in flight, and answers
 	// just finished, by question (see complete.go).

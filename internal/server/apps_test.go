@@ -189,7 +189,7 @@ func TestAppAliasSharesDataVersionsAndEvents(t *testing.T) {
 					t.Fatalf("stale write clobbered shared data: %d %s", w.Code, w.Body.String())
 				}
 			}
-			if s.appSeq[pair[0]+"/config.json"] != 20 || len(s.appSeq) != 1 {
+			if s.appSeq[pair[0]+"/config.json"].seq != 20 || len(s.appSeq) != 1 {
 				t.Fatalf("split version namespace: %v", s.appSeq)
 			}
 			if _, err := os.Stat(filepath.Join(s.StateDir, "appdata", pair[0], "config.json")); err != nil {
