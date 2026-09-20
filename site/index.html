@@ -69,15 +69,18 @@ code { font: 11px/1.45 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
 /* the button row: its own row under the text, 12px from the frame's
    edges and between buttons, the default rightmost */
 .row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding: 8px 12px 12px; }
-/* a terminal, as the desktop draws one: black, scrolling sideways inside
-   itself so the page never does */
-.term { margin: 0; padding: 8px 10px; overflow-x: auto; background: #000; color: #fff; cursor: text;
+/* a terminal, as the desktop draws one: black, and wrapping at its edge
+   as a terminal does, so a phone hides none of the instructions and the
+   page never scrolls sideways */
+.term { margin: 0; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; background: #000; color: #fff; cursor: text;
   font: 11px/1.5 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
-/* in the Quick Start's steps a terminal is a sunken field among the text */
-.steps { padding-bottom: 8px; }
-.steps h2:first-child { margin-top: 0; }
-.steps .term { margin: 8px 0; border: 1px solid #262626; box-shadow: -1px -1px 0 #999, 1px 1px 0 #fff; }
+/* the instructions are the terminal's comments; a word in one that leads
+   to the README is underlined, in the comment's own grey */
 .term .c { color: #999; }
+.term a { color: inherit; cursor: default; }
+/* a remark after a command goes to the next line whole when the terminal
+   is too narrow for both, rather than leaving its # behind */
+.term .t { display: inline-block; max-width: 100%; vertical-align: top; }
 .term .p { color: #6c6; }
 .foot { max-width: 720px; margin: 0 auto; text-align: center; font-size: 11px; color: #333; }
 .foot code { white-space: nowrap; }
@@ -128,33 +131,22 @@ code { font: 11px/1.45 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
 <div class="window">
   <div class="titlebar"><div class="tbox"></div><div class="stripe"></div><div class="title">Quick Start</div><div class="stripe"></div></div>
   <div class="frame">
-    <div class="body steps">
-      <h2>1. Open the desktop</h2>
-      <p>Needs Go 1.25 or newer.</p>
-<pre class="term"><span class="p">$</span> git clone https://github.com/livid/exe.git
+<pre class="term"><span class="c"># 1. Open the desktop. Needs Go 1.25 or newer.</span>
+<span class="p">$</span> git clone https://github.com/livid/exe.git
 <span class="p">$</span> cd exe
-<span class="p">$</span> make build        <span class="c"># Windows: go build -o exe.exe ./cmd/exe</span>
-<span class="p">$</span> ./exe init        <span class="c"># writes ~/.exe/config.json</span>
-<span class="p">$</span> ./exe serve       <span class="c"># the daemon; it keeps this terminal</span></pre>
-      <p>Open <code>http://127.0.0.1:7777</code>: the desktop is the first thing that
-      works, and it needs nothing else. A Linux machine without KVM or Firecracker
-      still gets it, with the apps, the Terminal and the Hub, and an empty VM list;
-      see <a href="https://github.com/livid/exe#running-without-vms-a-nas-a-container" target="_blank" rel="noopener">Running without VMs</a>.</p>
+<span class="p">$</span> make build        <span class="c t"># Windows: go build -o exe.exe ./cmd/exe</span>
+<span class="p">$</span> ./exe init        <span class="c t"># writes ~/.exe/config.json</span>
+<span class="p">$</span> ./exe serve       <span class="c t"># the daemon; it keeps this terminal</span>
+<span class="c"># Now open http://127.0.0.1:7777: the desktop, and it needs nothing else.</span>
+<span class="c"># A Linux machine without KVM still gets it; see <a href="https://github.com/livid/exe#running-without-vms-a-nas-a-container" target="_blank" rel="noopener">Running without VMs</a>.</span>
 
-      <h2>2. A VM, from a second terminal</h2>
-      <p><code>serve</code> has the first. Linux and Windows have requirements of their own
-      (<a href="https://github.com/livid/exe#linux-requirements" target="_blank" rel="noopener">Linux</a>, <a href="https://github.com/livid/exe#windows-requirements" target="_blank" rel="noopener">Windows</a>);
-      <code>exe code</code> talks to the Ollama named in the
-      <a href="https://github.com/livid/exe#configuration-execonfigjson" target="_blank" rel="noopener">configuration</a>.</p>
-<pre class="term"><span class="p">$</span> ./exe create demo   <span class="c"># Debian 13; the first one downloads a 3 GB image</span>
+<span class="c"># 2. A VM, from a second terminal. Requirements of their own: <a href="https://github.com/livid/exe#linux-requirements" target="_blank" rel="noopener">Linux</a>, <a href="https://github.com/livid/exe#windows-requirements" target="_blank" rel="noopener">Windows</a>.</span>
+<span class="p">$</span> ./exe create demo   <span class="c t"># Debian 13; the first one downloads a 3 GB image</span>
 <span class="p">$</span> ./exe ssh demo
-<span class="p">$</span> ./exe code demo "build me a guestbook app on port 8000"</pre>
+<span class="p">$</span> ./exe code demo "build me a guestbook app on port 8000"   <span class="c t"># needs Ollama: <a href="https://github.com/livid/exe#configuration-execonfigjson" target="_blank" rel="noopener">configuration</a></span>
 
-      <h2>3. A public URL</h2>
-      <p>Needs a Cloudflare tunnel and a token, set up once:
-      <a href="https://github.com/livid/exe#cloudflare-setup-one-time" target="_blank" rel="noopener">Cloudflare setup</a>.</p>
-<pre class="term"><span class="p">$</span> ./exe expose demo -port 8000 -sub guestbook   <span class="c"># https://guestbook.your.domain</span></pre>
-    </div>
+<span class="c"># 3. A public URL. Needs a Cloudflare tunnel, set up once: <a href="https://github.com/livid/exe#cloudflare-setup-one-time" target="_blank" rel="noopener">Cloudflare setup</a>.</span>
+<span class="p">$</span> ./exe expose demo -port 8000 -sub guestbook   <span class="c t"># https://guestbook.your.domain</span></pre>
     <div class="statusbar"><span>The rest is in the README</span></div>
   </div>
 </div>
