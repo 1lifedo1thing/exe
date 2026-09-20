@@ -134,12 +134,33 @@ var siteDocTmpl = template.Must(template.New("doc").Parse(`<!doctype html>
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="stylesheet" href="/site.css">
+<script>
+// The reader's own text size and mode, read back before the first paint
+// so a page never shows one and turns into the other. The same beat
+// tells the stylesheet that the toolbar's buttons will work, so it is
+// drawn only where it does something — and from the first paint, so
+// nothing appears late and nothing moves.
+try {
+  var d = document.documentElement, z = localStorage.getItem("exe-docs-size"), t = localStorage.getItem("exe-docs-theme");
+  if (z !== null && z >= 0 && z <= 4) d.setAttribute("data-size", z);
+  if (t === "dark" || t === "light") d.setAttribute("data-theme", t);
+  d.className = "js";
+} catch (e) {}
+</script>
 </head>
-<body>
+<body class="docs">
 
 <div class="window">
   <div class="titlebar"><span class="tbox"><a href="{{.Up}}" title="{{.UpName}}"></a></span><span class="stripe"></span><span class="title">{{.Title}}</span><span class="stripe"></span></div>
   <div class="frame">
+    <div class="strip tools">
+      <span class="lbl">Text</span>
+      <button class="btn sz" id="smaller" title="Smaller text" aria-label="Smaller text">&minus;</button>
+      <button class="btn sz" id="bigger" title="Larger text" aria-label="Larger text">+</button>
+      <span class="fill"></span>
+      <button class="btn" id="light" title="Light paper" aria-pressed="true">Light</button>
+      <button class="btn" id="dark" title="Dark paper" aria-pressed="false">Dark</button>
+    </div>
     <div class="body doc">
 {{.Body}}{{with .Items}}<ul class="toc">{{range .}}<li><a href="{{.URL}}">{{.Title}}</a>{{with .Blurb}}<span>{{.}}</span>{{end}}</li>{{end}}</ul>{{end}}
     </div>
@@ -147,6 +168,38 @@ var siteDocTmpl = template.Must(template.New("doc").Parse(`<!doctype html>
   </div>
 </div>
 
+<script>
+// The toolbar. Both choices are this browser's own: nothing is sent
+// anywhere and the page is the same page whatever they are.
+(function () {
+  var d = document.documentElement, sizes = 5, def = 1;
+  function size() { var v = parseInt(d.getAttribute("data-size"), 10); return isNaN(v) ? def : v; }
+  function setSize(v) {
+    v = Math.max(0, Math.min(sizes - 1, v));
+    d.setAttribute("data-size", v);
+    try { localStorage.setItem("exe-docs-size", v); } catch (e) {}
+    draw();
+  }
+  function setTheme(t) {
+    d.setAttribute("data-theme", t);
+    try { localStorage.setItem("exe-docs-theme", t); } catch (e) {}
+    draw();
+  }
+  function draw() {
+    var dark = d.getAttribute("data-theme") === "dark", v = size();
+    light.classList.toggle("on", !dark); dark_.classList.toggle("on", dark);
+    light.setAttribute("aria-pressed", !dark); dark_.setAttribute("aria-pressed", dark);
+    smaller.disabled = v <= 0; bigger.disabled = v >= sizes - 1;
+  }
+  var smaller = document.getElementById("smaller"), bigger = document.getElementById("bigger"),
+      light = document.getElementById("light"), dark_ = document.getElementById("dark");
+  smaller.onclick = function () { setSize(size() - 1); };
+  bigger.onclick = function () { setSize(size() + 1); };
+  light.onclick = function () { setTheme("light"); };
+  dark_.onclick = function () { setTheme("dark"); };
+  draw();
+})();
+</script>
 </body>
 </html>
 `))

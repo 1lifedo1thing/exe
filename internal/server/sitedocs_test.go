@@ -138,3 +138,30 @@ func TestSiteLabel(t *testing.T) {
 		}
 	}
 }
+
+// The reader's toolbar: it is on the documentation and nowhere else, it
+// is drawn only where its buttons work, and the choice is read back
+// before the page is drawn.
+func TestDocsToolbar(t *testing.T) {
+	h := SiteHandler(nil)
+	for _, path := range []string{"/docs/", "/docs/config", "/docs/using", "/docs/using/the-hub"} {
+		_, body := getDoc(t, h, path)
+		for _, want := range []string{
+			`<div class="strip tools">`,
+			`id="smaller"`, `id="bigger"`, `id="light"`, `id="dark"`,
+			`localStorage.getItem("exe-docs-size")`, // before the first paint
+			`localStorage.setItem("exe-docs-theme"`, // and kept for the next visit
+			`<body class="docs">`,                   // the theme reaches this page only
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s has no %s", path, want)
+			}
+		}
+	}
+	// the homepage is not the documentation: it keeps its own chrome
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "http://exe.example/", nil))
+	if strings.Contains(w.Body.String(), `class="strip tools"`) || strings.Contains(w.Body.String(), "exe-docs-theme") {
+		t.Error("the homepage carries the documentation's toolbar")
+	}
+}
