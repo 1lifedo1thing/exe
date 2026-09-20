@@ -116,13 +116,20 @@ type siteDocPage struct {
 	Items  []tocItem // a contents list under the body; none on a text page
 	Up     string    // where the close box leads
 	UpName string    // and what it is called on the status line
+	Crumbs []tocItem // the trail at the toolbar's left, this page apart
+	Crumb  string    // this page, ending the trail, compactly named
 	Next   *tocItem
 	Online int
 	Build  string // the stamp its stylesheet and icons are linked under
 }
 
-// tocItem is one line of a contents list.
+// tocItem is one line of a contents list, or one step of the trail.
 type tocItem struct{ URL, Title, Blurb string }
+
+// docCrumbs is the trail every page below the index begins with.
+func docCrumbs() []tocItem {
+	return []tocItem{{URL: "/", Title: "exe"}, {URL: "/docs/", Title: "Docs"}}
+}
 
 var siteDocTmpl = template.Must(template.New("doc").Parse(`<!doctype html>
 <html lang="en">
@@ -155,17 +162,20 @@ try {
   <div class="titlebar"><span class="tbox"><a href="{{.Up}}" title="{{.UpName}}"></a></span><span class="stripe"></span><span class="title">{{.Title}}</span><span class="stripe"></span></div>
   <div class="frame">
     <div class="strip tools">
-      <span class="lbl">Text</span>
-      <button class="btn sz" id="smaller" title="Smaller text" aria-label="Smaller text">&minus;</button>
-      <button class="btn sz" id="bigger" title="Larger text" aria-label="Larger text">+</button>
+      <nav class="crumbs" aria-label="Breadcrumb">{{range .Crumbs}}<span class="crumb"><a href="{{.URL}}">{{.Title}}</a><span class="sep">&middot;</span></span>{{end}}<b>{{.Crumb}}</b></nav>
       <span class="fill"></span>
-      <button class="btn" id="light" title="Light paper" aria-pressed="true">Light</button>
-      <button class="btn" id="dark" title="Dark paper" aria-pressed="false">Dark</button>
+      <span class="prefs">
+        <span class="lbl">Text</span>
+        <button class="btn sz" id="smaller" title="Smaller text" aria-label="Smaller text">&minus;</button>
+        <button class="btn sz" id="bigger" title="Larger text" aria-label="Larger text">+</button>
+        <button class="btn" id="light" title="Light paper" aria-pressed="true">Light</button>
+        <button class="btn" id="dark" title="Dark paper" aria-pressed="false">Dark</button>
+      </span>
     </div>
     <div class="body doc">
 {{.Body}}{{with .Items}}<ul class="toc">{{range .}}<li><a href="{{.URL}}">{{.Title}}</a>{{with .Blurb}}<span>{{.}}</span>{{end}}</li>{{end}}</ul>{{end}}
     </div>
-    <div class="statusbar"><span><a href="/">exe</a>{{if ne .Up "/"}} · <a href="/docs/">Documentation</a>{{end}}{{if eq .Up "/docs/using"}} · <a href="/docs/using">Using exe</a>{{end}}</span><span>{{with .Next}}Next: <a href="{{.URL}}">{{.Title}}</a>{{else}}{{if .Online}}<a href="/stats">{{.Online}} online</a>{{end}}{{end}}</span></div>
+    <div class="statusbar"><span>{{if .Online}}<a href="/stats">{{.Online}} online</a>{{end}}</span><span>{{with .Next}}Next: <a href="{{.URL}}">{{.Title}}</a>{{end}}</span></div>
   </div>
 </div>
 
@@ -215,6 +225,8 @@ func siteDocsHandler(an interface{ Online() int }) http.HandlerFunc {
 		switch {
 		case rest == "":
 			p = siteDocPage{
+				Crumbs: []tocItem{{URL: "/", Title: "exe"}},
+				Crumb:  "Docs",
 				Title:  "Documentation",
 				Blurb:  "How exe works: getting started, SSH, VMs, configuration and the desktop's manual.",
 				Up:     "/",
@@ -231,6 +243,7 @@ detail; the <a href="/">homepage</a> is the short version and the
 		case rest == "using":
 			// the manual's front: its own opening words, then its chapters
 			p = siteDocPage{Title: "Using exe", Blurb: manualDoc.Blurb, Up: "/docs/", UpName: "All the documentation",
+				Crumbs: docCrumbs(), Crumb: "Using exe",
 				Body: mdRender(manualIntro)}
 			for _, c := range manualChapters {
 				p.Items = append(p.Items, tocItem{URL: "/docs/using/" + c.Slug, Title: c.Title})
@@ -248,7 +261,9 @@ detail; the <a href="/">homepage</a> is the short version and the
 			c := manualChapters[i]
 			p = siteDocPage{Title: c.Title, Blurb: "From the exe manual: " + c.Title + ".",
 				Up: "/docs/using", UpName: "The whole manual",
-				Body: mdRender("# " + c.Title + "\n" + c.Body)}
+				Crumbs: append(docCrumbs(), tocItem{URL: "/docs/using", Title: "Using exe"}),
+				Crumb:  c.Title,
+				Body:   mdRender("# " + c.Title + "\n" + c.Body)}
 			if i+1 < len(manualChapters) {
 				n := manualChapters[i+1]
 				p.Next = &tocItem{URL: "/docs/using/" + n.Slug, Title: n.Title}
@@ -268,6 +283,7 @@ detail; the <a href="/">homepage</a> is the short version and the
 			}
 			d := siteDocs[found]
 			p = siteDocPage{Title: d.Title, Blurb: d.Blurb, Up: "/docs/", UpName: "All the documentation",
+				Crumbs: docCrumbs(), Crumb: d.Title,
 				Body: mdRender(d.src())}
 			if found+1 < len(siteDocs) {
 				n := siteDocs[found+1]

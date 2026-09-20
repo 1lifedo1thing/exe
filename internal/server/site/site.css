@@ -96,16 +96,38 @@ body.docs .frame { background: var(--paper); }
 body.docs .doc { color: var(--ink); }
 body.docs .doc a { color: var(--link); }
 
-/* the toolbar: its own row at the top of the frame, on the find strip's
-   platinum, so it is chrome and stays chrome in either mode. It is shown
-   only where its buttons do something (html.js, set by the head script),
-   from the first paint, so nothing appears late or moves. */
-.tools { display: none; align-items: center; gap: 8px; padding: 6px 12px;
+/* the toolbar: its own row at the top of the frame, on the same platinum
+   as the hub's find strip, so it is chrome and stays chrome in either
+   mode. The trail is at its left and is there for everyone; the reader's
+   two choices are at its right and are shown only where they do
+   something (html.js, set by the head script) — from the first paint, so
+   nothing appears late or moves. */
+.tools { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
   border-bottom: 1px solid #262626; background: #ddd; color: #333;
   box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; }
-html.js .tools { display: flex; }
+.tools .prefs { display: none; align-items: center; gap: 8px; flex: none; }
+html.js .tools .prefs { display: flex; }
+/* the trail: where this page sits, in one line. It gives way before the
+   buttons do — a long name is cut short rather than pushing them off. */
+.tools .crumbs { display: flex; align-items: baseline; gap: 5px; min-width: 0;
+  font-size: 11px; white-space: nowrap; overflow: hidden; }
+.tools .crumbs .crumb { display: inline-flex; align-items: baseline; gap: 5px; flex: none; }
+.tools .crumbs a { color: #333399; text-decoration: none; }
+.tools .crumbs a:hover { text-decoration: underline; }
+.tools .crumbs .sep { color: #777; }
+/* this page's own name is the last thing to give way: it shortens with
+   an ellipsis, and where even that is too narrow the steps above it go
+   before it does, nearest first */
+.tools .crumbs b { flex: 0 1 auto; min-width: 3em; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 480px) { .tools .crumbs .crumb:not(:last-of-type) { display: none; } }
+/* narrower than any phone: the page's own name alone, and the window's
+   title bar says the same thing above it */
+@media (max-width: 359px) { .tools .crumbs .crumb { display: none; } }
 .tools .lbl { font-size: 11px; white-space: nowrap; }
-.tools .fill { flex: 1 1 auto; }
+.tools .fill { flex: 1 1 auto; min-width: 8px; }
+/* on a phone the trail keeps the room: the word before the text buttons
+   goes, the buttons say what they are by their glyphs */
+@media (max-width: 480px) { .tools .lbl { display: none; } }
 .tools .btn { min-width: 0; padding: 2px 10px; font-family: inherit; }
 .tools .btn.sz { min-width: 28px; padding: 2px 6px; font-size: 13px; line-height: 12px; }
 /* the mode in force wears the pressed look, as a held-down button does */

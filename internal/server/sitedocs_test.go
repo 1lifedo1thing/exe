@@ -209,3 +209,34 @@ func TestSiteBuildStamp(t *testing.T) {
 		t.Error("the stamp and the address it makes disagree")
 	}
 }
+
+// The trail at the toolbar's left: where this page sits, each step a
+// link, the page itself the last word and not a link. It is navigation,
+// so it is there whether or not the script runs.
+func TestDocsBreadcrumb(t *testing.T) {
+	h := SiteHandler(nil)
+	for _, c := range []struct{ path, want string }{
+		{"/docs/", `<span class="crumb"><a href="/">exe</a><span class="sep">&middot;</span></span><b>Docs</b>`},
+		{"/docs/config", `<span class="crumb"><a href="/">exe</a><span class="sep">&middot;</span></span><span class="crumb"><a href="/docs/">Docs</a><span class="sep">&middot;</span></span><b>Configuration</b>`},
+		{"/docs/using", `<span class="crumb"><a href="/docs/">Docs</a><span class="sep">&middot;</span></span><b>Using exe</b>`},
+		{"/docs/using/the-hub", `<span class="crumb"><a href="/docs/using">Using exe</a><span class="sep">&middot;</span></span><b>The Hub</b>`},
+	} {
+		_, body := getDoc(t, h, c.path)
+		if !strings.Contains(body, c.want) {
+			t.Errorf("%s does not say where it sits:\nwant %s", c.path, c.want)
+		}
+		// the trail is in the toolbar, and only there
+		i, j := strings.Index(body, `class="strip tools"`), strings.Index(body, `class="statusbar"`)
+		if k := strings.Index(body, `class="crumbs"`); k < i || k > j {
+			t.Errorf("%s puts the trail outside the toolbar", c.path)
+		}
+		if strings.Count(body, `class="crumbs"`) != 1 {
+			t.Errorf("%s draws the trail twice", c.path)
+		}
+	}
+	// a chapter's trail is four steps, and the manual's is three
+	_, chapter := getDoc(t, h, "/docs/using/apps")
+	if n := strings.Count(chapter[strings.Index(chapter, `class="crumbs"`):strings.Index(chapter, "</nav>")], "<a href"); n != 3 {
+		t.Errorf("a chapter's trail has %d links, want exe, Docs and Using exe", n)
+	}
+}
