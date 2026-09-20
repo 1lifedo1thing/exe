@@ -552,6 +552,14 @@ body.mobile #cstrip { z-index: 5; }
   border: 0; border-radius: 0; box-shadow: none; background: #fff; color: #000;
   font: 12px/1.4 var(--mono); min-height: 0; resize: none; }
 .ed-text:focus { outline: none; }
+/* Menu actions stay above the document, leaving its scrollbars flush with
+   the frame and the shared grow tile at their bottom-right intersection. */
+.menu-actions { display: flex; align-items: center; justify-content: flex-end;
+  gap: 12px; padding: 12px; border-bottom: 1px solid var(--black); flex: none; }
+.menu-actions button { flex: none; height: 20px; }
+#menu-save { min-width: 58px; }
+#menu-hint { flex: 1; font-size: 11px; line-height: 16px; }
+body.mobile #menu-hint { display: none; }
 
 /* image viewer windows, modeled on PictureViewer: a platinum info bar
    (colon path, dimensions, size) over the picture on white — natural size
@@ -1792,20 +1800,19 @@ body.mobile th.sorted {
        :menu.txt) shown in the BBEdit-style editor chrome. Save hands the
        text to the daemon, which validates it — a bad line is named in the
        info bar and nothing changes — and lands the new menu on every desk.
-       Edges resize it (no grow corner: the statusbar is full of buttons) -->
-  <div class="window edge-grow" id="win-menu" style="left:170px; top:70px; width:560px;" hidden>
+       The document's scrollbars meet at the shared OS 9 grow corner. -->
+  <div class="window grow" id="win-menu" style="left:170px; top:70px; width:560px;" hidden>
     <div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
       <div class="title">Desktop Menu</div>
       <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
     <div class="win-frame">
       <div class="ed-info" id="menu-info"></div>
-      <textarea class="ed-text doc-scroll" id="menu-text" wrap="off" spellcheck="false" autocomplete="off"></textarea>
-      <div class="statusbar">
-        <span class="muted" id="menu-hint">Save checks the file and applies the menu everywhere</span>
-        <span style="flex:1"></span>
-        <button class="ghost sm" id="menu-defaults">Restore Defaults</button>
-        <button class="ghost sm" id="menu-save">Save</button>
+      <div class="menu-actions">
+        <span class="muted" id="menu-hint">Save checks and applies the menu everywhere</span>
+        <button class="ghost" id="menu-defaults">Restore Defaults</button>
+        <button class="ghost" id="menu-save">Save</button>
       </div>
+      <textarea class="ed-text doc-scroll" id="menu-text" aria-label="Desktop menu definition" wrap="off" spellcheck="false" autocomplete="off"></textarea>
     </div>
   </div>
 
@@ -2768,6 +2775,7 @@ function applyWinState(st) {
       if (id === "win-docs" && v.h) $("#docs-body").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-myapps" && v.h) $("#ma-icons").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-icons" && v.h) $("#ic-gallery").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
+      if (id === "win-menu" && v.h) $("#menu-text").style.height = Math.max(160, Math.min(window.innerHeight - 170, v.h)) + "px";
       // vms/config/detail carry h only once edge-resized — an absent h means
       // natural content height, so clear any leftover pin instead of keeping it
       if (id === "win-vms") $("#win-vms .win-body").style.height = v.h ? Math.max(120, Math.min(window.innerHeight - 170, v.h)) + "px" : "";
@@ -5188,7 +5196,8 @@ document.addEventListener("keydown", e => {
     if (!w.hidden && w.classList.contains("front")) { e.preventDefault(); menuSave(menuText.value); }
   }
 });
-wireEdges($("#win-menu"), menuText, 420, { minH: 160 });
+$("#win-menu .win-frame").insertAdjacentHTML("beforeend", GROW_TILE);
+wireGrow($("#win-menu .grow-box"), $("#win-menu"), menuText, 420, { minH: 160 });
 
 // ---- image viewer windows, modeled on PictureViewer ----
 // Pictures double-clicked in a Finder window open here instead of a browser

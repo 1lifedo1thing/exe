@@ -268,6 +268,8 @@ Choose **Customize…** to open the menu editor. Edit the text, then click
 **Save**, or press **Command-S** on a Mac or **Ctrl-S** elsewhere. Save
 checks the format first: an error identifies and selects the bad line,
 and your current menu stays in place until the file is valid.
+The scrollbars run along the document's right and bottom edges; drag the
+resize tile where they meet to make the editor wider or taller.
 
 The menu is stored as `System :menu.txt` (normally
 `~/.exe/appdata/System/menu.txt`). A saved change reaches other open
