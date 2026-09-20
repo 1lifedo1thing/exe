@@ -143,6 +143,12 @@ gate instead and only reach for this to delegate.
   Tunnel. `subdomain` defaults to the VM name. Requires Cloudflare to be
   configured (`cloudflare.domain` in `GET /v1/config`); a `warnings` array in
   the response means it only partially applied.
+- `POST /v1/routes/redirect` body `{"host":"example.com","target":"https://exe.example.com"}`
+  publishes a 308 permanent redirect without a VM. The source is the
+  configured domain or a full subdomain; the target is an HTTP(S) origin
+  without credentials, path, query or fragment. Requests keep their path
+  and query. Returns the same publishing result and warnings as expose,
+  with `backend: "redirect:https://exe.example.com"`.
 - `GET /v1/routes` → `{"host": "backend-url", ...}` current published routes;
   `DELETE /v1/routes/{host}` unpublishes one.
 

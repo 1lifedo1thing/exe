@@ -49,6 +49,7 @@ Usage:
   exe ssh <name> [command...]
   exe code <name> [-m model] <prompt...>   vibecode inside the VM (Ollama agent)
   exe expose <name> -port N [-sub name]    publish https://<sub>.<domain> -> VM port
+  exe expose <host> -redirect https://target  permanent redirect, preserving path/query
   exe site [-sub name]                     publish this daemon's homepage (default exe.<domain>)
   exe unexpose <host>                      remove a proxy route
   exe routes                               show proxy routes
@@ -863,16 +864,28 @@ func cmdExpose(args []string) error {
 	fs := flag.NewFlagSet("expose", flag.ExitOnError)
 	port := fs.Int("port", 0, "VM port to publish (required)")
 	sub := fs.String("sub", "", "subdomain (default: vm name)")
+	redirect := fs.String("redirect", "", "redirect this full hostname to an HTTP(S) origin (no VM needed)")
 	fs.Parse(rest)
-	if *port == 0 {
-		return fmt.Errorf("-port is required")
+	if fs.NArg() != 0 {
+		return fmt.Errorf("unexpected arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	if *redirect != "" && (*port != 0 || *sub != "") {
+		return fmt.Errorf("-redirect cannot be combined with -port or -sub")
+	}
+	if *redirect == "" && (*port < 1 || *port > 65535) {
+		return fmt.Errorf("-port (1-65535) or -redirect is required")
 	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
-	resp, err := api(cfg, "POST", "/v1/vms/"+name+"/expose",
-		map[string]any{"subdomain": *sub, "port": *port}, 2*time.Minute)
+	path := "/v1/vms/" + name + "/expose"
+	body := map[string]any{"subdomain": *sub, "port": *port}
+	if *redirect != "" {
+		path = "/v1/routes/redirect"
+		body = map[string]any{"host": name, "target": *redirect}
+	}
+	resp, err := api(cfg, "POST", path, body, 2*time.Minute)
 	if err != nil {
 		return err
 	}

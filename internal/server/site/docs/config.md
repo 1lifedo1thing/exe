@@ -46,3 +46,16 @@ Secrets can also come from `OLLAMA_API_KEY`, `CLOUDFLARE_API_TOKEN`, `EXE_API_TO
 creates/updates the CNAME `<sub>.<domain>` → `<tunnel>.cfargotunnel.com`,
 upserts a tunnel ingress rule `<sub>.<domain>` → `http://<advertise_host>:8090`,
 and routes that hostname in the local proxy to `http://<vm_ip>:N`.
+
+To redirect the zone apex or a full subdomain without a VM:
+
+```sh
+exe expose example.com -redirect https://exe.example.com
+exe expose www.example.com -redirect https://exe.example.com
+```
+
+This publishes DNS and tunnel ingress the same way, but the daemon answers
+with **308 Permanent Redirect**. Paths and query strings are preserved;
+the target must be an HTTP(S) origin without a path, query, fragment or
+credentials. The source must be the configured domain or a subdomain.
+Use `exe routes` to inspect redirects and `exe unexpose <host>` to remove one.

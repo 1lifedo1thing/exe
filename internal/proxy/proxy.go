@@ -81,6 +81,13 @@ func (p *Proxy) save() error {
 }
 
 func (p *Proxy) Set(host, backend string) error {
+	if strings.HasPrefix(backend, Redirect) {
+		var err error
+		backend, err = RedirectBackend(host, strings.TrimPrefix(backend, Redirect))
+		if err != nil {
+			return err
+		}
+	}
 	if _, err := url.Parse(backend); err != nil {
 		return err
 	}
@@ -171,6 +178,25 @@ func (p *Proxy) Handler() http.Handler {
 		backend, ok := p.lookup(r.Host)
 		if !ok {
 			http.Error(w, "exe proxy: no route for host "+r.Host, http.StatusBadGateway)
+			return
+		}
+		if strings.HasPrefix(backend, Redirect) {
+			// Validate persisted routes too, before putting any of their
+			// content in a Location header. Only the path/query come from
+			// the request; its Host can never change the destination.
+			host := r.Host
+			if name, _, err := net.SplitHostPort(host); err == nil {
+				host = name
+			}
+			validated, err := RedirectBackend(host, strings.TrimPrefix(backend, Redirect))
+			if err != nil {
+				http.Error(w, "exe proxy: invalid redirect", http.StatusBadGateway)
+				return
+			}
+			u, _ := url.Parse(strings.TrimPrefix(validated, Redirect))
+			u.Path, u.RawPath = r.URL.Path, r.URL.RawPath
+			u.RawQuery, u.ForceQuery = r.URL.RawQuery, r.URL.ForceQuery
+			http.Redirect(w, r, u.String(), http.StatusPermanentRedirect)
 			return
 		}
 		// A backend the daemon answers itself (the homepage) never leaves

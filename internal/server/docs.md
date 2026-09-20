@@ -647,6 +647,22 @@ click later the service is live at `https://<sub>.<your-domain>`. Current
 routes are listed in the Services tab and in **Special → Cloudflare
 Status…**, where they can be unpublished.
 
+The CLI can also publish a permanent redirect without a VM:
+
+```sh
+exe expose example.com -redirect https://exe.example.com
+exe expose www.example.com -redirect https://exe.example.com
+```
+
+Use your configured domain or one of its full subdomain names. The target
+must be an HTTP(S) origin, with no path, query, fragment or credentials.
+exe creates the same DNS and tunnel rules, then answers with **308 Permanent
+Redirect**, preserving each request's path and query string. For example,
+`https://example.com/docs/?from=home` becomes
+`https://exe.example.com/docs/?from=home`. The method and body survive when
+the client follows the redirect. `exe routes` lists these routes as
+`redirect:https://…`; `exe unexpose <host>` removes one.
+
 ## Publishing to GitHub
 
 Right-click a running VM and choose **Publish to GitHub…** to turn a
