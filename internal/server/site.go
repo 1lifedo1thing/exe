@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
-	"strings"
 	"time"
 
 	stats "github.com/livid/exe-stats"
@@ -107,7 +106,19 @@ func SiteHandler(an *stats.Stats) http.Handler {
 
 func sitePage(w http.ResponseWriter, r *http.Request, an *stats.Stats) {
 	{
-		f, ok := siteFiles[strings.TrimSuffix(r.URL.Path, "index.html")]
+		// A bookmark of /index.html is the homepage under a second name.
+		// It used to be served as an alias, which meant it arrived through
+		// the fallback and was never counted; counting it there instead
+		// would split the homepage into two rows in the report. So it is
+		// a redirect, and the query goes with it — the navigation lands on
+		// "/" as a document fetch and counts once, campaign and all.
+		if r.URL.Path == "/index.html" {
+			to := *r.URL
+			to.Path = "/"
+			http.Redirect(w, r, to.RequestURI(), http.StatusMovedPermanently)
+			return
+		}
+		f, ok := siteFiles[r.URL.Path]
 		if !ok {
 			http.Error(w, "exe site: no such page", http.StatusNotFound)
 			return

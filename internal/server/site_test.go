@@ -19,7 +19,6 @@ func TestSiteHandler(t *testing.T) {
 		path, kind, cache, want string
 	}{
 		{"/", "text/html; charset=utf-8", "no-cache", "<title>exe"},
-		{"/index.html", "text/html; charset=utf-8", "no-cache", "<title>exe"},
 		{"/screenshot.png", "image/png", "max-age=14400", "PNG"},
 		{"/icon.svg", "image/svg+xml", "max-age=14400", "<svg"},
 		{"/icon-192.png", "image/png", "max-age=14400", "PNG"},
@@ -130,4 +129,63 @@ func TestSitePageAssets(t *testing.T) {
 	if strings.Contains(page, "127.0.0.1:7777/ui") {
 		t.Error("the page links to a local desktop")
 	}
+}
+
+// A bookmark of /index.html lands on the homepage and is counted once,
+// with what the link carried: the visit must not slip through uncounted,
+// nor stand as a second page in the report.
+func TestSiteIndexAlias(t *testing.T) {
+	an := SiteStats(t.TempDir())
+	if an == nil {
+		t.Fatal("no stats over a fresh state directory")
+	}
+	defer an.Stop()
+	h := SiteHandler(an)
+	nav := func(path string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "http://exe.example"+path, nil)
+		r.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/128.0 Safari/537.36")
+		r.Header.Set("Sec-Fetch-Dest", "document")
+		r.Header.Set("Accept", "text/html")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	w := nav("/index.html?utm_source=test&utm_campaign=alias")
+	if w.Code != http.StatusMovedPermanently {
+		t.Fatalf("/index.html answered %d, want a permanent redirect", w.Code)
+	}
+	loc := w.Header().Get("Location")
+	if loc != "/?utm_source=test&utm_campaign=alias" {
+		t.Fatalf("redirected to %q: the query did not come along", loc)
+	}
+	if n := count(t, an); n != 0 {
+		t.Fatalf("the redirect itself counted %d", n)
+	}
+	nav(loc) // the browser follows it
+	if err := an.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, an); n != 1 {
+		t.Fatalf("the bookmark counted %d times, want once", n)
+	}
+	to := stats.Filter{To: time.Now().UnixMilli() + 1000}
+	if rows, _ := an.DB().Top(to, "path"); len(rows) != 1 || rows[0].Key != "/" {
+		t.Errorf("paths %v, want the homepage alone — not a row for the alias", rows)
+	}
+	if rows, _ := an.DB().Top(to, "campaign"); len(rows) != 1 || rows[0].Key != "alias" {
+		t.Errorf("campaigns %v, want the one the bookmark carried", rows)
+	}
+	if rows, _ := an.DB().Top(to, "source"); len(rows) != 1 || rows[0].Key != "test" {
+		t.Errorf("sources %v, want the one the bookmark carried", rows)
+	}
+}
+
+// count is how many page views the node has recorded.
+func count(t *testing.T, an *stats.Stats) int {
+	t.Helper()
+	sum, err := an.DB().Summary(stats.Filter{To: time.Now().UnixMilli() + 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sum.Pageviews
 }
