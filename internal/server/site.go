@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	stats "github.com/livid/exe-stats"
@@ -23,7 +24,7 @@ import (
 // The page's icons are the desktop's own (uiFS), served here so the site
 // host is self-contained and the repository keeps one copy of each.
 
-//go:embed site/index.html site/screenshot.png
+//go:embed site/index.html site/site.css site/screenshot.png
 var siteFS embed.FS
 
 // SiteBackend is the proxy backend that names this handler. `exe site`
@@ -42,6 +43,7 @@ type siteFile struct {
 
 var siteFiles = map[string]siteFile{
 	"/":               {fs: siteFS, name: "site/index.html", kind: "text/html; charset=utf-8", maxAge: "no-cache"},
+	"/site.css":       {fs: siteFS, name: "site/site.css", kind: "text/css; charset=utf-8", maxAge: "no-cache"},
 	"/screenshot.png": {fs: siteFS, name: "site/screenshot.png", kind: "image/png", maxAge: "max-age=14400"},
 	"/icon.svg":       {name: "ui/icon.svg", kind: "image/svg+xml", maxAge: "max-age=14400", fromUI: true},
 	"/icon-192.png":   {name: "ui/icon-192.png", kind: "image/png", maxAge: "max-age=14400", fromUI: true},
@@ -63,6 +65,7 @@ func SiteStats(stateDir string) *stats.Stats {
 		Title:     "Stats · exe",
 		HomeURL:   "/",
 		HomeLabel: "Back to the homepage",
+		PathLabel: siteLabel,
 	})
 	if err != nil {
 		log.Printf("site: stats: %v (the homepage will not be counted)", err)
@@ -70,6 +73,25 @@ func SiteStats(stateDir string) *stats.Stats {
 		return nil
 	}
 	return an // the caller starts Run
+}
+
+// siteLabel names a path in the stats: the homepage as itself and a
+// documentation page by its title, so the report reads as the site does.
+func siteLabel(path string) string {
+	if path == "/" {
+		return "/ (the homepage)"
+	}
+	if slug, ok := strings.CutPrefix(path, "/docs/"); ok {
+		for _, d := range siteDocs {
+			if d.Slug == slug {
+				return "Docs: " + d.Title
+			}
+		}
+		if slug == "" {
+			return "Docs: all of them"
+		}
+	}
+	return path
 }
 
 // sitePageTmpl is the page with the one thing about it that is not the
@@ -93,11 +115,22 @@ func mustSiteFile(name string) []byte {
 func SiteHandler(an *stats.Stats) http.Handler {
 	page := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sitePage(w, r, an) })
 	if an == nil {
-		return page
+		// without stats the site is the page and its documentation, and
+		// nothing is counted
+		mux := http.NewServeMux()
+		mux.Handle("GET /docs/{$}", siteDocsHandler(true, nil))
+		mux.Handle("GET /docs/{page}", siteDocsHandler(false, nil))
+		mux.Handle("GET /docs", http.RedirectHandler("/docs/", http.StatusMovedPermanently))
+		mux.Handle("/", page)
+		return mux
 	}
 	mux := http.NewServeMux()
-	// the page is counted; its pictures and icons are not a visit
+	// the pages are counted; the stylesheet, the pictures and the icons
+	// are not a visit
 	mux.Handle("GET /{$}", an.Counted("home", page))
+	mux.Handle("GET /docs/{$}", an.Counted("docs", siteDocsHandler(true, an)))
+	mux.Handle("GET /docs/{page}", an.Counted("docs", siteDocsHandler(false, an)))
+	mux.Handle("GET /docs", http.RedirectHandler("/docs/", http.StatusMovedPermanently))
 	mux.Handle("GET /stats", an.PageHandler())
 	mux.Handle("GET /v1/stats", an.JSONHandler())
 	mux.Handle("/", page)
