@@ -393,7 +393,7 @@ They take no arguments. An empty list shows a disabled **No VMs**,
 | `@apps` | Installed apps, including built-in apps, shown by their display names. | `Applications<TAB>@apps` |
 | `@windows` | Open windows on this desktop, sorted by title. Pick one to bring it forward. | `Windows<TAB>@windows` |
 
-Each `@vms` submenu offers **Open**, **Open Terminal**, **Chat with this
+Each `@vms` submenu offers **Open**, **Open Terminal**, **btop**, **Chat with this
 VM**, **Start** or **Stop**, **Restart**, **Copy IP**, **Expose Port…** and
 **Publish to GitHub…**. Availability follows the VM's state, its IP and
 Chat availability. Delete is not included. These operations are supplied
@@ -549,6 +549,10 @@ one keeps its disk, starting boots it again, deleting destroys the disk too.
 A node without a hypervisor — a NAS, a container without `/dev/kvm` — runs
 the desktop without VMs: the list stays empty and says why, About This
 Computer shows the same reason, and everything else works as usual.
+
+Right-click a running VM and choose **btop** to open its process monitor in
+an 80×24 terminal window. It runs the VM's installed `btop` over SSH; press
+**q** to quit and close the window. A failed launch leaves its error visible.
 
 Double-click a VM in the list to open its window. The tabs:
 

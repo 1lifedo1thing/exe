@@ -5737,6 +5737,7 @@ function vmCtxItems(vm) {
   return [
     { label: "Open", act: () => openVM(vm.name) },
     { label: "Open Terminal", act: () => openVM(vm.name, "term") },
+    { label: "btop", act: () => openHostTermWin(null, "btop", vm.name), dis: !running },
     { label: "Chat with this VM", act: () => openChatWin(vm.name), dis: !chatDetected },
     "-",
     running ? { label: "Stop", act: () => vmAction(vm.name, "stop") }
@@ -6128,8 +6129,9 @@ async function termPaste(term) {
 // between them and New starting another in a session of its own
 // (agentsessions.go). cmd is a command line to run in place of a shell
 // (the desktop menu's "terminal btop" shortcut) — the window is titled
-// after the tool and ends when it exits
-function openHostTermWin(app, cmd) {
+// after the tool and ends when it exits. With vm, the command runs over
+// SSH in that guest, opens at 80×24, and a successful exit closes its window.
+function openHostTermWin(app, cmd, vm) {
   const agent = app ? AGENT_APPS[app] : null;
   // the column needs tmux on the host, which hostinfo reports — but a
   // reload restores the window before that fetch answers, so the tab
@@ -6169,7 +6171,7 @@ function openHostTermWin(app, cmd) {
       <div class="statusbar"><span class="term-status">…</span><span class="term-usage" hidden></span></div>
       ${GROW_TILE}
     </div>`;
-  w.querySelector(".title").textContent = agent ? agent.title
+  w.querySelector(".title").textContent = vm ? vm + " — " + tool : agent ? agent.title
     : tool || (n === 1 ? "Terminal" : "Terminal " + n);
   const box = w.querySelector(".hostterm-box"), status = w.querySelector(".term-status"),
     usage = w.querySelector(".term-usage");
@@ -6193,6 +6195,18 @@ function openHostTermWin(app, cmd) {
   term.open(box);
   wireTermMenu(w, box, () => term);
   box.querySelector(".xterm-viewport").classList.add("vflush");
+  if (vm && !IS_MOBILE) {
+    // Use the same measured cells and cached scrollbar width as FitAddon:
+    // the viewport's DOM width can already reflect vflush while xterm's
+    // first fit still uses the original scrollbar measurement.
+    term.resize(80, 24);
+    const core = term._core, cell = core._renderService.dimensions.css.cell;
+    const pad = getComputedStyle(term.element);
+    w.style.width = Math.ceil(w.offsetWidth - box.clientWidth + cell.width * 80
+      + parseFloat(pad.paddingLeft) + parseFloat(pad.paddingRight)
+      + core.viewport.scrollBarWidth) + "px";
+    box.style.height = Math.ceil(cell.height * 24 + parseFloat(pad.paddingTop) + parseFloat(pad.paddingBottom)) + "px";
+  }
   fit.fit();
   // the session column: rows follow the daemon's {"sessions":…} frames, a
   // click moves the window's tmux client, New starts a conversation in a
@@ -6352,7 +6366,8 @@ function openHostTermWin(app, cmd) {
   if (tokenInput.value) qs.set("token", tokenInput.value);
   if (app) qs.set("app", app);
   if (cmd) qs.set("cmd", cmd);
-  const url = `${proto}://${location.host}/v1/host/terminal${qs.size ? "?" + qs : ""}`;
+  const endpoint = vm ? `/v1/vms/${encodeURIComponent(vm)}/terminal` : "/v1/host/terminal";
+  const url = `${proto}://${location.host}${endpoint}${qs.size ? "?" + qs : ""}`;
   const enc = new TextEncoder();
   let ws = null, retry = 0, retryTimer = 0;
   // the link's pulse, the browser's side: a {"ping":t} every 25 s, which
@@ -6412,7 +6427,7 @@ function openHostTermWin(app, cmd) {
       pinged = 0;
       clearInterval(hb);
       hb = setInterval(beat, 25000);
-      status.textContent = "connected";
+      status.textContent = vm ? "connected to " + vm : "connected";
       ws.send(JSON.stringify({ resize: [term.cols, term.rows] }));
       if (initial) term.focus(); // never steal focus on a background reconnect
       requestAnimationFrame(() => termSpacerFix(box, term));
@@ -6458,6 +6473,7 @@ function openHostTermWin(app, cmd) {
     clearInterval(hb); hb = 0;
     clearTimeout(probe); probe = 0;
     usage.hidden = true; // the figures come back with the link
+    if (vm && code === 1000 && reason === "session ended") { closeWin(w); return; }
     if (agent && !(code === 1000 && reason === "session ended")) {
       if (!retry) term.write("\r\n\x1b[90m[" + (reason === "detached" ? "detached" : "connection lost") + " — reconnecting]\x1b[0m\r\n");
       clearTimeout(retryTimer);
@@ -6467,7 +6483,8 @@ function openHostTermWin(app, cmd) {
       return;
     }
     term.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
-    status.textContent = agent ? "session ended — close and reopen to start again"
+    status.textContent = vm ? tool + ": " + (reason || "connection lost") + " — close and reopen to retry"
+      : agent ? "session ended — close and reopen to start again"
       : tool ? tool + " exited — close and reopen to run it again"
       : "disconnected — close and reopen for a new shell";
   }

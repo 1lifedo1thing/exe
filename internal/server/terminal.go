@@ -36,8 +36,8 @@ func (w *wsWriter) WriteText(p []byte) error {
 }
 
 // handleTerminal bridges a browser WebSocket to an interactive SSH shell in
-// the VM. Binary frames carry terminal bytes both ways; text frames carry
-// control messages ({"resize":[cols,rows]}).
+// the VM, or a single command when ?cmd= is set. Binary frames carry terminal
+// bytes both ways; text frames carry resize and ping control messages.
 func (s *Server) handleTerminal(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	info, err := s.runningVM(r.Context(), name)
@@ -90,14 +90,26 @@ func (s *Server) handleTerminal(w http.ResponseWriter, r *http.Request) {
 		c.Close(websocket.StatusInternalError, err.Error())
 		return
 	}
-	if err := sess.Shell(); err != nil {
+	command := r.URL.Query().Get("cmd")
+	if command != "" {
+		err = sess.Start(command)
+	} else {
+		err = sess.Shell()
+	}
+	if err != nil {
 		c.Close(websocket.StatusInternalError, err.Error())
 		return
 	}
 
 	go func() {
-		sess.Wait()
-		c.Close(websocket.StatusNormalClosure, "session ended")
+		err := sess.Wait()
+		// A command window may close itself on success. Keep a failed launch
+		// (for example, btop not installed) distinct so its output stays visible.
+		if command != "" && err != nil {
+			c.Close(websocket.StatusInternalError, "command failed")
+		} else {
+			c.Close(websocket.StatusNormalClosure, "session ended")
+		}
 		cancel()
 	}()
 
@@ -113,9 +125,17 @@ func (s *Server) handleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 		case websocket.MessageText:
 			var msg struct {
-				Resize []int `json:"resize"`
+				Resize []int           `json:"resize"`
+				Ping   json.RawMessage `json:"ping"`
 			}
-			if json.Unmarshal(data, &msg) == nil && len(msg.Resize) == 2 {
+			if json.Unmarshal(data, &msg) != nil {
+				continue
+			}
+			if len(msg.Ping) > 0 {
+				pong, _ := json.Marshal(map[string]json.RawMessage{"pong": msg.Ping})
+				out.WriteText(pong)
+			}
+			if len(msg.Resize) == 2 {
 				sess.WindowChange(msg.Resize[1], msg.Resize[0])
 			}
 		}
