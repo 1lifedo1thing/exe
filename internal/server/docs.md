@@ -286,6 +286,11 @@ re-enter the window. A bundled open-source USB tablet driver loads at boot;
 no guest installation is needed. Mouse-wheel scrolling is not supported by
 that driver; use the Mac’s scrollbar controls.
 
+The Mac’s clock starts at this machine’s own local date and time, so a browser
+in the guest judges today’s certificates against today’s date and HTTPS works
+without a visit to Date & Time. Only the installation boot is pinned to 2003,
+where the Universal installer and the era’s software expect to be.
+
 Click **CD…** in the toolbar to see the full mounted CD filename, mount an
 available disc image, or **Eject** it. The toolbar also shows the filename when
 space permits. **Upload image…** adds an ISO, CDR, IMG, or Toast raw disc image

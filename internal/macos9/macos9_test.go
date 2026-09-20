@@ -144,3 +144,25 @@ func TestAudioRuntimeRequiresEmulatorAndFirmware(t *testing.T) {
 		}
 	}
 }
+
+// The Mac's clock is seeded once at machine creation, so base= decides what
+// OS 9 believes all session: today for a normal boot, where current
+// certificates are valid, and 2003 for an install, where the era's
+// installers expect to be.
+func TestGuestClockStartsTodayExceptForTheInstall(t *testing.T) {
+	m := New(t.TempDir())
+	for installer, want := range map[bool]string{false: "base=localtime,clock=vm", true: "base=2003-06-01T12:00:00,clock=vm"} {
+		args := m.launchArgs(installer)
+		seen := ""
+		count := 0
+		for i, a := range args {
+			if a == "-rtc" && i+1 < len(args) {
+				seen = args[i+1]
+				count++
+			}
+		}
+		if count != 1 || seen != want {
+			t.Fatalf("installer %v: %d -rtc flags, got %q, want %q", installer, count, seen, want)
+		}
+	}
+}

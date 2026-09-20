@@ -598,7 +598,18 @@ func verifyFile(ctx context.Context, path, digest string, size int64) error {
 	return nil
 }
 func (m *Manager) launchArgs(installer bool) []string {
-	args := []string{"-L", m.path("firmware"), "-name", "exe-mac-os9", "-machine", "mac99", "-cpu", "G4", "-m", "512", "-accel", "tcg,tb-size=128", "-prom-env", "vga-ndrv?=true", "-g", "800x600x32", "-vga", "none", "-device", "VGA,edid=on,xres=800,yres=600,xmax=1024,ymax=768", "-usb", "-device", "usb-tablet", "-prom-env", "use-nvramrc?=true", "-prom-env", "nvramrc=" + strings.TrimSpace(tabletNVRAMRC), "-drive", "file=" + strings.ReplaceAll(m.path("macos9.qcow2"), ",", ",,") + ",format=qcow2,media=disk", "-rtc", "base=2003-06-01T12:00:00,clock=vm", "-display", "none", "-vnc", "unix:" + m.path("vnc.sock"), "-qmp", "unix:" + m.path("qmp.sock") + ",server=on,wait=off", "-monitor", "none", "-serial", "file:" + m.path("serial.log"), "-pidfile", m.path("qemu.pid"), "-daemonize"}
+	// The Mac's time of day is seeded once, when the machine is created: the
+	// CUDA clock this board carries never consults -rtc again, so whatever
+	// base= says at boot is what OS 9 believes until someone opens Date &
+	// Time. An install is pinned to 2003, where the Universal installer and
+	// the era's software expect to be; a normal boot starts today, so that
+	// current certificates are judged against a date that is in their window.
+	// base=localtime, not utc, because OS 9 keeps local time in its clock.
+	rtc := "base=localtime,clock=vm"
+	if installer {
+		rtc = "base=2003-06-01T12:00:00,clock=vm"
+	}
+	args := []string{"-L", m.path("firmware"), "-name", "exe-mac-os9", "-machine", "mac99", "-cpu", "G4", "-m", "512", "-accel", "tcg,tb-size=128", "-prom-env", "vga-ndrv?=true", "-g", "800x600x32", "-vga", "none", "-device", "VGA,edid=on,xres=800,yres=600,xmax=1024,ymax=768", "-usb", "-device", "usb-tablet", "-prom-env", "use-nvramrc?=true", "-prom-env", "nvramrc=" + strings.TrimSpace(tabletNVRAMRC), "-drive", "file=" + strings.ReplaceAll(m.path("macos9.qcow2"), ",", ",,") + ",format=qcow2,media=disk", "-rtc", rtc, "-display", "none", "-vnc", "unix:" + m.path("vnc.sock"), "-qmp", "unix:" + m.path("qmp.sock") + ",server=on,wait=off", "-monitor", "none", "-serial", "file:" + m.path("serial.log"), "-pidfile", m.path("qemu.pid"), "-daemonize"}
 	if _, err := os.Stat(m.path("runtime/usr/share/qemu/openbios-ppc")); err == nil {
 		args = append(args, "-L", m.path("runtime/usr/share/qemu"))
 	}
