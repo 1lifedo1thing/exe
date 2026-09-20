@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"embed"
+	"html/template"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -72,12 +73,26 @@ func SiteStats(stateDir string) *stats.Stats {
 	return an // the caller starts Run
 }
 
+// sitePageTmpl is the page with the one thing about it that is not the
+// same for everyone: how many are reading it. It is rendered per visit
+// (the page is revalidated every time anyway), so the number is there in
+// the first paint and nothing moves afterwards.
+var sitePageTmpl = template.Must(template.New("site").Parse(string(mustSiteFile("site/index.html"))))
+
+func mustSiteFile(name string) []byte {
+	b, err := siteFS.ReadFile(name)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
 // SiteHandler serves the homepage on the proxy listener, its readers
 // counted and read back at /stats. The page itself is revalidated on
 // every visit, so a new binary shows at once; its pictures may sit in a
 // cache for four hours.
 func SiteHandler(an *stats.Stats) http.Handler {
-	page := http.HandlerFunc(sitePage)
+	page := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sitePage(w, r, an) })
 	if an == nil {
 		return page
 	}
@@ -90,7 +105,7 @@ func SiteHandler(an *stats.Stats) http.Handler {
 	return mux
 }
 
-func sitePage(w http.ResponseWriter, r *http.Request) {
+func sitePage(w http.ResponseWriter, r *http.Request, an *stats.Stats) {
 	{
 		f, ok := siteFiles[strings.TrimSuffix(r.URL.Path, "index.html")]
 		if !ok {
@@ -115,6 +130,25 @@ func sitePage(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		w.Write(b)
+		if f.name != "site/index.html" {
+			w.Write(b)
+			return
+		}
+		// how many are reading: the visitors with a page in the last five
+		// minutes. A person reading this very request is one of them — it
+		// is being served and will be counted a moment later — so a reader
+		// is never told that nobody is here. A crawler is counted as a
+		// crawl and belongs to no human number, so it is told what the
+		// number really is, as is a curl that counts for nothing.
+		online := 0
+		if an != nil {
+			online = an.Online()
+			if _, _, _, bot := stats.Classify(r.UserAgent()); !bot && online < 1 && an.Wanted(r, "home") {
+				online = 1
+			}
+		}
+		if err := sitePageTmpl.Execute(w, struct{ Online int }{online}); err != nil {
+			log.Printf("site: %v", err)
+		}
 	}
 }

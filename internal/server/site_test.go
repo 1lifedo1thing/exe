@@ -83,6 +83,35 @@ func TestSiteStats(t *testing.T) {
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Page views") {
 		t.Errorf("the desk answered %d", w.Code)
 	}
+
+	// the foot says how many are reading, this visitor among them, and
+	// the number leads to the desk
+	w = httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "http://exe.example/", nil)
+	r.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/128.0 Safari/537.36")
+	r.Header.Set("Sec-Fetch-Dest", "document")
+	r.Header.Set("Accept", "text/html")
+	h.ServeHTTP(w, r)
+	if !strings.Contains(w.Body.String(), `<a href="/stats">1 online</a>`) {
+		t.Error("the foot does not say who is reading")
+	}
+	if strings.Contains(w.Body.String(), "{{") {
+		t.Error("the page went out with an unrendered action in it")
+	}
+	// a crawler counts for nothing, so over a hub nobody is reading it
+	// is told so rather than that one reader is here
+	quiet := SiteStats(t.TempDir())
+	if quiet == nil {
+		t.Fatal("no stats over a fresh state directory")
+	}
+	defer quiet.Stop()
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest("GET", "http://exe.example/", nil)
+	r.Header.Set("User-Agent", "Googlebot/2.1")
+	SiteHandler(quiet).ServeHTTP(w, r)
+	if strings.Contains(w.Body.String(), "online") {
+		t.Error("a crawler was told it was a reader")
+	}
 }
 
 // The page the daemon ships is the one in the repository, with its own

@@ -84,7 +84,8 @@ code { font: 11px/1.45 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
 .term .t { display: inline-block; max-width: 100%; vertical-align: top; }
 .term .p { color: #6c6; }
 .foot { max-width: 720px; margin: 0 auto; text-align: center; font-size: 11px; color: #333; }
-.foot code { white-space: nowrap; }
+/* the count and the words it belongs to never break apart */
+.foot code, .foot a { white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -150,7 +151,7 @@ code { font: 11px/1.45 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
   </div>
 </div>
 
-<p class="foot">This page is an exe daemon serving itself, published with <code>exe site</code>.</p>
+<p class="foot">This page is an exe daemon serving itself, published with <code>exe site</code>.{{if .Online}} <a href="/stats">{{.Online}} online</a>.{{end}}</p>
 
 </body>
 </html>
