@@ -1,6 +1,6 @@
 # exe — a personal VM cloud
 
-A single Go binary inspired by [exe.dev](https://exe.dev): create persistent Linux VMs on
+A single Go binary: create persistent Linux VMs on
 macOS, Linux or Windows, vibecode inside them with models from Ollama Cloud, and publish
 any VM port to a real HTTPS subdomain through your Cloudflare Tunnel. macOS
 uses Virtualization.framework; Linux uses KVM through Firecracker; Windows

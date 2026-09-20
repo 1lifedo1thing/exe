@@ -17,7 +17,7 @@ func TestMarkdownRender(t *testing.T) {
 		{"one line\nand its second", "<p>one line and its second</p>"},
 		{"a `flag` in text", "<p>a <code>flag</code> in text</p>"},
 		{"**bold** and *soft*", "<p><b>bold</b> and <i>soft</i></p>"},
-		{"[exe.dev](https://exe.dev)", `<a href="https://exe.dev" target="_blank" rel="noopener">exe.dev</a>`},
+		{"[the source](https://github.com/livid/exe)", `<a href="https://github.com/livid/exe" target="_blank" rel="noopener">the source</a>`},
 		{"[the page](/docs/ssh)", `<a href="/docs/ssh">the page</a>`},
 		{"- one\n- two", "<ul>\n<li>one</li>\n<li>two</li>\n</ul>"},
 		{"1. first\n2. second", "<ol>\n<li>first</li>\n<li>second</li>\n</ol>"},

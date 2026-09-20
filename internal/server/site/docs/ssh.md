@@ -1,7 +1,7 @@
 # SSH as an Interface (:2222)
 
-Like [exe.dev](https://exe.dev) (`ssh exe.dev`), the daemon speaks SSH on
-`:2222`. The SSH **username** picks where you land:
+The daemon speaks SSH on `:2222`, and the **username** picks where you
+land — the lobby, or a VM of your own:
 
 ```sh
 ssh -p 2222 exe@mac               # the lobby: an interactive REPL for VM lifecycle
