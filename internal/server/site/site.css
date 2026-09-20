@@ -32,7 +32,7 @@ code { font: 11px/1.45 Monaco, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
 .shot img { display: block; width: 100%; height: auto; aspect-ratio: 2088 / 1522; }
 /* the button row: its own row under the text, 12px from the frame's
    edges and between buttons, the default rightmost */
-.row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding: 8px 12px 12px; }
+.btnrow { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding: 8px 12px 12px; }
 /* a terminal, as the desktop draws one: black, and wrapping at its edge
    as a terminal does, so a phone hides none of the instructions and the
    page never scrolls sideways */
@@ -77,7 +77,7 @@ body.docs .doc a { color: var(--link); }
    two choices are at its right and are shown only where they do
    something (html.js, set by the head script) — from the first paint, so
    nothing appears late or moves. */
-.strip { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+.strip.tools, .strip.foot { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
   background: #ddd; color: #333; font-size: 11px;
   box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; }
 .strip.tools { border-bottom: 1px solid #262626; }
