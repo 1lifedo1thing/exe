@@ -117,6 +117,29 @@ body.docs .doc a { color: var(--link); }
 .strip .who .k { fill: currentColor; }
 .strip .here { display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
 .strip .here:hover { text-decoration: underline; }
+/* the contents: a button of the icon alone, the width of the bevel, as
+   the hub's bell is */
+.strip .btn.toc { min-width: 0; width: 20px; padding: 0; display: inline-flex;
+  align-items: center; justify-content: center; }
+.strip .btn.toc .ix { display: block; width: 11px; height: 10px; shape-rendering: crispEdges; }
+.strip .btn.toc .ix .k { fill: #262626; }
+.strip .btn.toc:active .ix .k { fill: #fff; }
+/* the directory it opens, over the page being read */
+.tocbox { padding: 0; border: 0; background: none; max-width: 92vw; width: 540px; }
+.tocbox::backdrop { background: rgba(38, 38, 38, .45); }
+.tocbox .window { margin: 0; max-width: none; }
+.tocbox .body { max-height: min(66vh, 560px); overflow-y: auto; }
+.tocbox .toc { margin-top: 0; }
+.tocbox .toc li a { min-width: 0; }
+.tocbox .toc li { padding: 4px 0; }
+/* the manual's chapters, a step in under the pages */
+.tocbox .sub { margin-top: 0; padding-left: 16px; }
+.tocbox .sub li { padding: 3px 0; border-top: 0; }
+.tocbox .sub li:last-child { border-bottom: 0; }
+.tocbox .sub li a { font-weight: normal; min-width: 0; }
+/* the page this was asked from, named rather than offered */
+.tocbox .toc a.at { color: var(--ink); text-decoration: none; cursor: default; }
+.tocbox .toc a.at:hover { text-decoration: none; }
 /* the way on is a push button, so it is pressable rather than a word in
    a line of text; on a phone the name goes and "Next" stays */
 .strip.foot .btn { font-family: inherit; }

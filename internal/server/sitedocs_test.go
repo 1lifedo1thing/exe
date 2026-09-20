@@ -275,3 +275,43 @@ func TestDocsFoot(t *testing.T) {
 		t.Error("a page with nobody reading it still draws the reader")
 	}
 }
+
+// The contents button opens the directory over the page being read: every
+// page, the manual's chapters under them, and the page asked from named
+// rather than offered. Without the script the same button is a link to
+// the index, which is that list on a page of its own.
+func TestDocsContents(t *testing.T) {
+	h := SiteHandler(nil)
+	_, body := getDoc(t, h, "/docs/using/the-hub")
+	for _, want := range []string{
+		`<a class="btn toc" href="/docs/" title="Contents"`, // a link first, a modal with script
+		`<svg class="ix" viewBox="0 0 11 10"`,               // the icon is drawn, not spelt
+		`<dialog class="tocbox"`,
+		`box.showModal()`,
+		`<a href="/docs/using/the-hub" class="at">The Hub</a>`, // where the reader is
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the contents has no %s", want)
+		}
+	}
+	// every page and every chapter is in it
+	dir := body[strings.Index(body, `<dialog class="tocbox"`):strings.Index(body, "</dialog>")]
+	for _, d := range siteDocs {
+		if !strings.Contains(dir, `href="/docs/`+d.Slug+`"`) {
+			t.Errorf("the directory is missing %s", d.Slug)
+		}
+	}
+	for _, c := range manualChapters {
+		if !strings.Contains(dir, `href="/docs/using/`+c.Slug+`"`) {
+			t.Errorf("the directory is missing the chapter %s", c.Slug)
+		}
+	}
+	if n := strings.Count(dir, "<li>"); n != len(siteDocs)+len(manualChapters) {
+		t.Errorf("the directory has %d lines, want %d", n, len(siteDocs)+len(manualChapters))
+	}
+	// the button sits before the way on
+	foot := body[strings.Index(body, `<div class="strip foot">`):]
+	if i, j := strings.Index(foot, `class="btn toc"`), strings.Index(foot, `>Next<`); i < 0 || j < 0 || i > j {
+		t.Error("the contents button does not come before the way on")
+	}
+}

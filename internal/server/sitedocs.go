@@ -120,9 +120,14 @@ type siteDocPage struct {
 	UpName string    // and what it is called on the status line
 	Crumbs []tocItem // the trail at the toolbar's left, this page apart
 	Crumb  string    // this page, ending the trail, compactly named
-	Next   *tocItem
-	Online int
-	Build  string // the stamp its stylesheet and icons are linked under
+	Here   string    // this page's own address, marked in the directory
+	// the directory the contents button opens: every page, and under it
+	// the manual's chapters
+	Dir      []tocItem
+	Chapters []tocItem
+	Next     *tocItem
+	Online   int
+	Build    string // the stamp its stylesheet and icons are linked under
 }
 
 // tocItem is one line of a contents list, or one step of the trail.
@@ -180,10 +185,24 @@ try {
     <div class="strip foot">
       <span>{{if .Online}}<a class="here" href="/stats" title="Who is reading the site now"><svg class="who" viewBox="0 0 7 8" width="7" height="8" aria-hidden="true"><path class="k" d="M2 0h3v3H2zM1 4h5v1H1zM0 5h7v3H0z"/></svg>{{.Online}} online</a>{{end}}</span>
       <span class="fill"></span>
+      <a class="btn toc" href="/docs/" title="Contents" aria-label="Contents"><svg class="ix" viewBox="0 0 11 10" width="11" height="10" aria-hidden="true"><path class="k" d="M0 0h2v2H0zM4 0h7v2H4zM0 4h2v2H0zM4 4h7v2H4zM0 8h2v2H0zM4 8h7v2H4z"/></svg></a>
       {{with .Next}}<a class="btn" href="{{.URL}}">Next<span class="t">: {{.Title}}</span></a>{{end}}
     </div>
   </div>
 </div>
+
+<dialog class="tocbox" aria-label="Contents">
+  <div class="window">
+    <div class="titlebar"><span class="tbox"><button class="x" aria-label="Close"></button></span><span class="stripe"></span><span class="title">Contents</span><span class="stripe"></span></div>
+    <div class="frame">
+      <div class="body doc">
+        <ul class="toc">{{$here := .Here}}{{range .Dir}}<li><a href="{{.URL}}"{{if eq .URL $here}} class="at"{{end}}>{{.Title}}</a></li>{{end}}</ul>
+        <ul class="toc sub">{{range .Chapters}}<li><a href="{{.URL}}"{{if eq .URL $here}} class="at"{{end}}>{{.Title}}</a></li>{{end}}</ul>
+      </div>
+      <div class="strip foot"><span class="fill"></span><button class="btn default x">Close</button></div>
+    </div>
+  </div>
+</dialog>
 
 <script>
 // The toolbar. Both choices are this browser's own: nothing is sent
@@ -209,7 +228,21 @@ try {
     smaller.disabled = v <= 0; bigger.disabled = v >= sizes - 1;
   }
   var smaller = document.getElementById("smaller"), bigger = document.getElementById("bigger"),
-      light = document.getElementById("light"), dark_ = document.getElementById("dark");
+      light = document.getElementById("light"), dark_ = document.getElementById("dark"),
+      toc = document.querySelector(".btn.toc"), box = document.querySelector(".tocbox");
+  // the contents: a modal over the page being read, so nothing is lost
+  // by looking. Without this the same button is a link to the index,
+  // which is the same list on a page of its own.
+  if (box && box.showModal) {
+    toc.onclick = function (e) {
+      e.preventDefault();
+      box.showModal();
+      var at = box.querySelector(".at"); // open where the reader is
+      if (at) at.scrollIntoView({ block: "center" });
+    };
+    box.querySelectorAll(".x").forEach(function (b) { b.onclick = function () { box.close(); }; });
+    box.onclick = function (e) { if (e.target === box) box.close(); }; // the desk around it
+  }
   smaller.onclick = function () { setSize(size() - 1); };
   bigger.onclick = function () { setSize(size() + 1); };
   light.onclick = function () { setTheme("light"); };
@@ -295,6 +328,13 @@ detail; the <a href="/">homepage</a> is the short version and the
 				n := siteDocs[found+1]
 				p.Next = &tocItem{URL: "/docs/" + n.Slug, Title: n.Title}
 			}
+		}
+		p.Here = r.URL.Path
+		for _, d := range siteDocs {
+			p.Dir = append(p.Dir, tocItem{URL: "/docs/" + d.Slug, Title: d.Title, Blurb: d.Blurb})
+		}
+		for _, c := range manualChapters {
+			p.Chapters = append(p.Chapters, tocItem{URL: "/docs/using/" + c.Slug, Title: c.Title})
 		}
 		p.Build = siteBuild
 		p.Online = siteOnline(an, r, "docs")
