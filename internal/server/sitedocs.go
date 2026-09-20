@@ -166,7 +166,7 @@ try {
 <body class="docs">
 
 <div class="window">
-  <div class="titlebar"><span class="tbox"><a href="{{.Up}}" title="{{.UpName}}"></a></span><span class="stripe"></span><span class="title">{{.Title}}</span><span class="stripe"></span></div>
+  <div class="titlebar"><a class="tbox" href="{{.Up}}" title="{{.UpName}}" aria-label="{{.UpName}}"></a><span class="stripe"></span><span class="title">{{.Title}}</span><span class="stripe"></span></div>
   <div class="frame">
     <div class="strip tools">
       <nav class="crumbs" aria-label="Breadcrumb">{{range .Crumbs}}<span class="crumb"><a href="{{.URL}}">{{.Title}}</a><svg class="sep" viewBox="0 0 4 7" width="4" height="7" aria-hidden="true"><path class="k" d="M0 0h1v1H0zM1 1h1v1H1zM2 2h1v1H2zM3 3h1v1H3zM2 4h1v1H2zM1 5h1v1H1zM0 6h1v1H0z"/></svg></span>{{end}}<b>{{.Crumb}}</b></nav>
@@ -193,7 +193,7 @@ try {
 
 <dialog class="tocbox" aria-label="Contents">
   <div class="window">
-    <div class="titlebar"><span class="tbox"><button class="x" aria-label="Close"></button></span><span class="stripe"></span><span class="title">Contents</span><span class="stripe"></span></div>
+    <div class="titlebar"><button class="tbox x" aria-label="Close"></button><span class="stripe"></span><span class="title">Contents</span><span class="stripe"></span></div>
     <div class="frame">
       <div class="body doc">
         <ul class="toc">{{$here := .Here}}{{range .Dir}}<li><a href="{{.URL}}"{{if eq .URL $here}} class="at"{{end}}>{{.Title}}</a></li>{{end}}</ul>
