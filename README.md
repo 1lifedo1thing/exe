@@ -274,6 +274,16 @@ persist and `exe start` boots them again.
   `~/.ssh/*.pub`, `~/.exe/ssh/authorized_clients`) — there is no
   first-come key adoption, so it's safe to leave on `:2222` on a LAN.
 
+## Homepage
+
+https://exe.v2core.com is [`site/`](site/index.html), a single static page,
+served the way exe serves anything: nginx in a VM, published with `exe
+expose`. `make site` ([`deploy/site/publish.sh`](deploy/site/publish.sh))
+uploads the tracked files through the SSH gate, switches the VM's `current`
+symlink to the new release and checks that the public URL returns the same
+bytes. The first run installs nginx and makes the route; `EXE_SITE_VM` and
+`EXE_SITE_SUB` pick another VM or subdomain.
+
 ## Roadmap / ideas
 
 - `exe unexpose` currently leaves the Cloudflare DNS record + ingress rule in place.

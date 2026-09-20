@@ -1,7 +1,7 @@
 BINARY := exe
 UNAME_S := $(shell uname -s)
 
-.PHONY: build cross install clean
+.PHONY: build cross install clean site
 
 build:
 	CGO_ENABLED=1 go build -o $(BINARY) ./cmd/exe
@@ -22,6 +22,11 @@ cross:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/exe-net-helper-linux-amd64 ./cmd/exe-net-helper
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/exe-linux-arm64 ./cmd/exe
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/exe-net-helper-linux-arm64 ./cmd/exe-net-helper
+
+# The project homepage: site/ goes to the VM that serves it, and the
+# public URL is checked (deploy/site/publish.sh says how).
+site:
+	deploy/site/publish.sh
 
 install: build
 	mkdir -p $(HOME)/bin
