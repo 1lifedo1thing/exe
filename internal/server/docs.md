@@ -207,8 +207,8 @@ sessions.
 The column is also an API, for tools that want a conversation you can
 watch: `GET /v1/agents/claude/sessions` lists the rows with their states,
 `POST /v1/agents/claude/sessions` opens a numbered session with a first
-message (and, for Claude Code, a session to resume or fork and a permission
-mode), `POST …/sessions/<name>/prompt` types a message into one, `DELETE
+message (and, for Claude Code, a session to resume or fork, a permission
+mode and a `model`), `POST …/sessions/<name>/prompt` types a message into one, `DELETE
 …/sessions/<name>` ends it. The message's `prompt` goes in as a paste, and
 Claude Code treats pasted text as material rather than as your words, so
 give the request a `say` as well: one line, typed ahead of the paste, that

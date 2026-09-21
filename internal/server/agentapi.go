@@ -22,7 +22,7 @@ import (
 //
 //	GET    /v1/agents/{app}/sessions                 the rows of the column, with their states; for Codex also
 //	                                                 "threads", the threads started elsewhere (codexthreads.go)
-//	POST   /v1/agents/{app}/sessions                 {prompt, resume, fork, session_id, permission_mode} → {name, number}
+//	POST   /v1/agents/{app}/sessions                 {prompt, resume, fork, session_id, permission_mode, model} → {name, number}
 //	                                                 (Codex: prompt and resume, a thread id, alone)
 //	POST   /v1/agents/{app}/sessions/{name}/prompt   {prompt, say}: one message, "say" typed and the prompt pasted after it
 //	DELETE /v1/agents/{app}/sessions/{name}          ends the session, as the column's Archive does
@@ -53,8 +53,9 @@ func (s *Server) handleAgentSessionsList(w http.ResponseWriter, r *http.Request)
 
 // agentLaunchRequest is what a session may start with: Claude Code's
 // resume (a fork of it, or the same conversation), a session id chosen
-// up front so the caller can find the transcript, a permission mode, and
-// the first message. Codex takes a thread to resume — one started in
+// up front so the caller can find the transcript, a permission mode, a
+// model (the hub watcher's second try on Opus when Fable is at its usage
+// limit), and the first message. Codex takes a thread to resume — one started in
 // the ChatGPT app, say (codexthreads.go) — and the message.
 type agentLaunchRequest struct {
 	Prompt         string `json:"prompt"`
@@ -62,7 +63,12 @@ type agentLaunchRequest struct {
 	Fork           bool   `json:"fork"`
 	SessionID      string `json:"session_id"`
 	PermissionMode string `json:"permission_mode"`
+	Model          string `json:"model"`
 }
+
+// agentModelPattern is an alias or a full name, with a context suffix:
+// "opus", "claude-opus-5", "claude-opus-5[1m]"
+var agentModelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}(\[[0-9a-z]{1,8}\])?$`)
 
 var claudePermissionModes = map[string]bool{"default": true, "acceptEdits": true, "plan": true, "auto": true}
 
@@ -92,8 +98,14 @@ func agentLaunchArgs(a hostAgent, req agentLaunchRequest) ([]string, error) {
 			}
 			args = append(args, "--permission-mode", req.PermissionMode)
 		}
+		if req.Model != "" {
+			if !agentModelPattern.MatchString(req.Model) {
+				return nil, errors.New("model: not a model name")
+			}
+			args = append(args, "--model", req.Model)
+		}
 	} else {
-		if req.Fork || req.SessionID != "" || req.PermissionMode != "" {
+		if req.Fork || req.SessionID != "" || req.PermissionMode != "" || req.Model != "" {
 			return nil, fmt.Errorf("%s sessions take only a prompt, or a thread to resume", a.title)
 		}
 		if req.Resume != "" {

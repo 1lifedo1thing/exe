@@ -116,6 +116,38 @@ func TestPickLastSession(t *testing.T) {
 	}
 }
 
+// A launch request becomes the CLI's arguments, the prompt last; a model
+// is checked like the ids are, since it lands on a command line.
+func TestAgentLaunchArgs(t *testing.T) {
+	claude, codex := hostAgents["claude"], hostAgents["codex"]
+	sid := "55d60159-76bf-4dbd-862a-6c02595708e3"
+	for _, c := range []struct {
+		a    hostAgent
+		req  agentLaunchRequest
+		want string // the arguments joined by spaces, or "error"
+	}{
+		{claude, agentLaunchRequest{Prompt: "go"}, "go"},
+		{claude, agentLaunchRequest{Prompt: "go", Resume: sid, Fork: true, SessionID: sid, PermissionMode: "auto", Model: "claude-opus-5[1m]"},
+			"--resume " + sid + " --fork-session --session-id " + sid + " --permission-mode auto --model claude-opus-5[1m] go"},
+		{claude, agentLaunchRequest{Model: "opus"}, "--model opus"},
+		{claude, agentLaunchRequest{Model: "opus --dangerously-skip-permissions"}, "error"},
+		{claude, agentLaunchRequest{Model: "-p"}, "error"},
+		{claude, agentLaunchRequest{Model: "opus[1m"}, "error"},
+		{claude, agentLaunchRequest{PermissionMode: "bypassPermissions"}, "error"},
+		{codex, agentLaunchRequest{Prompt: "go", Resume: sid}, "resume " + sid + " go"},
+		{codex, agentLaunchRequest{Model: "opus"}, "error"},
+	} {
+		args, err := agentLaunchArgs(c.a, c.req)
+		got := strings.Join(args, " ")
+		if err != nil {
+			got = "error"
+		}
+		if got != c.want {
+			t.Errorf("%s %+v: got %q (%v), want %q", c.a.app, c.req, got, err, c.want)
+		}
+	}
+}
+
 // The real thing on a tmux server of the test's own: a client on a pty,
 // a second session, the client moved between them, the column's open,
 // and the window closed and reopened, landing where it was.
