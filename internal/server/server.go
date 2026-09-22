@@ -309,6 +309,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/peer/file/{app}/{path...}", s.handlePeerFileGet)
 	mux.HandleFunc("PUT /v1/peer/file/{app}/{path...}", s.handlePeerFilePut)
 	mux.Handle("GET /apps/", s.appStatic())
+	// the shared Platinum blocks for the apps and sysapps this daemon
+	// serves: the pop-up menu button and the chrome, out of exe-stats, the
+	// same files the hub's pages embed — linked, never copied
+	mux.HandleFunc("GET /platinum/{file}", handlePlatinum)
 	mux.Handle("GET /ui/", uiStatic)
 	mux.HandleFunc("GET /sw.js", handleServiceWorker)
 	mux.HandleFunc("GET /", s.handleUI)
@@ -976,4 +980,24 @@ func (s *Server) handleRouteDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// handlePlatinum serves a shared Platinum block (docs/platinum.md): the
+// pop-up menu button, which the Weather app and Blue Pencil link, and
+// the chrome, out of github.com/livid/exe-stats, so one fix to a block
+// reaches every page that wears it.
+func handlePlatinum(w http.ResponseWriter, r *http.Request) {
+	var css string
+	switch r.PathValue("file") {
+	case "popup.css":
+		css = stats.PopupCSS()
+	case "chrome.css":
+		css = stats.ChromeCSS()
+	default:
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Write([]byte(css))
 }

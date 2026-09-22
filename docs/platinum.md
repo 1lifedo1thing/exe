@@ -85,10 +85,15 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - Text field: white, 1px `#262626`, no radius, 20px, padding `2px 5px`, the
   sunken frame as shadows `-1px -1px 0 #999` (top and left) and `1px 1px 0
   #fff` (bottom and right); focus is `outline: 2px solid #9999fe` at offset 0.
-- Pop-up menu button: Blue Pencil's `.popup` block, from HIG fig. 2-7: 19px
-  rounded black outline, white top and left, `#aaa` bottom, a 21px arrow
-  well on the right with its own bevel and two 7px triangles, and a
-  transparent native `<select>` inside. Never a bare select.
+- Pop-up menu button: one shared block, `popup.css` in
+  github.com/livid/exe-stats (from HIG fig. 2-7: 19px rounded black
+  outline, white top and left, `#aaa` bottom, a 21px arrow well on the
+  right with its own bevel and two 7px triangles, and a transparent native
+  `<select>` inside). Apps and sysapps link it, `<link rel="stylesheet"
+  href="/platinum/popup.css">` (Weather's units menu, Blue Pencil's
+  options), and the hub's pages take it as `{{popup}}`, the way both take
+  the chrome; the host gives the span its width. Never copy the block,
+  never a bare select.
 - A field that grows with its text (the Hub composer, `fitField`): it
   opens at its shallow height and takes whole lines as the writing needs
   them, up to a limit cut from the window (half its height, a whole number

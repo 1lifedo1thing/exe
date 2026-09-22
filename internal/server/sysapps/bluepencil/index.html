@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Blue Pencil</title>
+<link rel="stylesheet" href="/platinum/popup.css">
 <style>
 /* Platinum values match the exe desktop (same block as the Notes and Hub apps) */
 :root {
@@ -38,36 +39,8 @@ textarea { background: #fff; border: 1px solid var(--black); padding: 5px 7px; b
     1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff;
   user-select: text; cursor: text; resize: none; }
 textarea:focus { outline: none; }
-/* pop-up menu button, from the HIG's Figure 2-7 (Mac OS 8 HIG, "Pop-Up
-   Menu Buttons"): a rounded black outline; on the body a white top and
-   left highlight and a #aaa bottom shadow; on the right the raised arrow
-   well — #aaa separator, a 1px gap, its own white bevel, #aaa then #777
-   shadows, two 7px triangles. Every line is a CSS border on a nested
-   element rather than background art: borders paint as exactly one device
-   pixel at any display scale (Windows 150% included), where a sprite's
-   rows come out 1 or 2 pixels tall by turns and the arrows grow tails.
-   Only the triangles are art — crisp on the integer-scale grid, and
-   anti-aliased at fractional scales so the apex stays a clean point. The
-   list that opens is the browser's own. */
-.popup { position: relative; display: block; height: 19px; overflow: hidden;
-  border: 1px solid #000; border-radius: 3px; background: var(--g300); }
-.popup::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: calc(100% - 21px);
-  border-top: 1px solid #fff; border-left: 1px solid #fff; border-bottom: 1px solid #aaa; }
-.popup .well { position: absolute; right: 0; top: 1px; bottom: 0; width: 21px;
-  border-left: 1px solid #aaa; pointer-events: none; }
-.popup .well i { position: absolute; left: 1px; top: 0; right: 0; bottom: 0;
-  border-right: 1px solid #777; border-bottom: 1px solid #777; }
-.popup .well b { position: absolute; inset: 0;
-  border-top: 1px solid #fff; border-left: 1px solid #fff;
-  border-right: 1px solid #aaa; border-bottom: 1px solid #aaa;
-  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" shape-rendering="crispEdges"><path fill="black" d="M3 0h1v1H3zM2 1h3v1H2zM1 2h5v1H1zM0 3h7v1H0zM0 6h7v1H0zM1 7h5v1H1zM2 8h3v1H2zM3 9h1v1H3z"/></svg>') 4px 1px no-repeat; }
-@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
-  .popup .well b { background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" shape-rendering="geometricPrecision"><path fill="black" d="M3.5 0L7 4H0zM0 6h7l-3.5 4z"/></svg>'); }
-}
-.popup select { position: absolute; inset: 0; width: 100%; height: 100%; appearance: none;
-  background: transparent; border: 0; border-radius: 0; padding: 0 27px 0 6px; margin: 0;
-  color: #000; font: 12px/17px var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.popup select:focus { outline: none; }
+/* The pop-up menu button is the shared block the daemon serves
+   (/platinum/popup.css, exe-stats popup.css): linked above, never copied. */
 
 /* the drafts column beside the fields — the agent windows' session
    column (the desktop's .sess-col), copied: 160px of the window's grey
