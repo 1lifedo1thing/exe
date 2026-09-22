@@ -161,7 +161,12 @@ the cursor, quoted if it needs it, so "look at this" is all the prompt
 then needs; the agent reads the file from there (Claude Code shows an
 image it is given a path to). Several files arrive as several paths. A
 plain Terminal window takes a drop the same way; a VM's window does not,
-since a host path means nothing in the guest.
+since a host path means nothing in the guest. If the window's link is
+down when the upload lands — a laptop back from sleep, the daemon
+restarting — the file is in the Workspace all the same, and its path
+waits in a row under the terminal: **Insert** types it once the window
+is connected again, **Copy** puts it on the clipboard for another window,
+**Dismiss** forgets it. Nothing is uploaded twice.
 
 On a host with tmux, a Claude Code or Codex window lists the agent's
 sessions down its left, one row per tmux session, titled the way the CLI

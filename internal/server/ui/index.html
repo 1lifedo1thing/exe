@@ -493,6 +493,15 @@ body.mobile #cstrip { z-index: 5; }
 .term-window .hostterm-box { position: relative; }
 .term-window.drop .hostterm-box::after { content: ""; position: absolute; inset: 0; box-sizing: border-box;
   box-shadow: inset 0 0 0 2px var(--hl); pointer-events: none; z-index: 1; }
+/* a terminal window's held row (openHostTermWin): the paths of a file
+   dropped while the link was down wait here for Insert. Text left, the
+   three buttons right at HIG spacing (20px, 12px apart and from the
+   edges, one width per set); its top line is its one seam with the
+   terminal, the status bar's own top line the other */
+.held:not([hidden]) { display: flex; align-items: center; gap: 12px; padding: 12px;
+  border-top: 1px solid var(--black); background: var(--g300); }
+.held-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.held button { flex: none; width: 68px; padding-left: 0; padding-right: 0; }
 
 /* Get Info window, OS 9 style: icon + name header, groove rule, then
    right-aligned bold labels over a two-column grid */
@@ -6196,6 +6205,7 @@ function openHostTermWin(app, cmd, vm) {
       <div class="win-body" style="padding:0">${column
         ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">New</button></div><div class="sess-grip"></div></div><div class="hostterm-box"></div></div>`
         : `<div class="hostterm-box"></div>`}</div>
+      <div class="held" hidden><span class="held-text"></span><button class="ghost held-copy">Copy</button><button class="ghost held-drop">Dismiss</button><button class="ghost held-insert">Insert</button></div>
       <div class="statusbar"><span class="term-status">…</span><span class="term-usage" hidden></span></div>
       ${GROW_TILE}
     </div>`;
@@ -6404,13 +6414,41 @@ function openHostTermWin(app, cmd, vm) {
   // the shell would need that, a space after — "look at this" is all an
   // agent then needs to read a screenshot or a log. Not for a guest's
   // window: a host path means nothing over there.
+  // A drop whose upload lands while the link is down — the socket
+  // between reconnects with the daemon up, or closed while the file was
+  // on its way — keeps its paths in the held row under the terminal
+  // rather than in a toast gone in 3.5 s: Insert types them once the
+  // link is back (dead until then), Copy puts the line on the clipboard
+  // for another window, Dismiss forgets them. The file is in the
+  // Workspace either way; nothing is sent twice. Drops accumulate there.
+  const heldRow = w.querySelector(".held"), heldPaths = [];
+  const pathLine = ps => ps.map(shellQuote).join(" ") + " ";
+  const live = () => !!(ws && ws.readyState === 1);
+  const syncHeld = () => {
+    heldRow.hidden = !heldPaths.length;
+    const t = heldRow.querySelector(".held-text");
+    t.textContent = "Uploaded, not inserted: " + heldPaths.map(p => p.split("/").pop()).join(", ");
+    t.title = heldPaths.join("\n");
+    heldRow.querySelector(".held-insert").disabled = !live();
+  };
+  heldRow.querySelector(".held-insert").onclick = () => {
+    if (!live()) return;
+    term.paste(pathLine(heldPaths));
+    heldPaths.length = 0; syncHeld(); term.focus();
+  };
+  heldRow.querySelector(".held-copy").onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(pathLine(heldPaths).trimEnd());
+      toast(heldPaths.length === 1 ? "Copied the path" : "Copied " + heldPaths.length + " paths");
+    } catch (e) { toast("Couldn't write the clipboard"); }
+  };
+  heldRow.querySelector(".held-drop").onclick = () => { heldPaths.length = 0; syncHeld(); };
   if (!vm) wireTermDrop(w, box, async files => {
     const paths = await wsUpload("", files);
     if (!paths.length) return;
-    const line = paths.map(shellQuote).join(" ") + " ";
-    if (ws && ws.readyState === 1) term.paste(line);
-    else toast("Not connected — the file is at " + paths.join(", "));
-    term.focus();
+    if (live()) { term.paste(pathLine(paths)); term.focus(); return; }
+    for (const p of paths) if (!heldPaths.includes(p)) heldPaths.push(p);
+    syncHeld();
   });
   // the link's pulse, the browser's side: a {"ping":t} every 25 s, which
   // the daemon answers {"pong":t}. A beat that finds the last one
@@ -6470,6 +6508,7 @@ function openHostTermWin(app, cmd, vm) {
       clearInterval(hb);
       hb = setInterval(beat, 25000);
       status.textContent = vm ? "connected to " + vm : "connected";
+      if (heldPaths.length) syncHeld(); // Insert wakes with the link
       ws.send(JSON.stringify({ resize: [term.cols, term.rows] }));
       if (initial) term.focus(); // never steal focus on a background reconnect
       requestAnimationFrame(() => termSpacerFix(box, term));
@@ -6515,6 +6554,7 @@ function openHostTermWin(app, cmd, vm) {
     clearInterval(hb); hb = 0;
     clearTimeout(probe); probe = 0;
     usage.hidden = true; // the figures come back with the link
+    if (heldPaths.length) syncHeld(); // and so does Insert
     if (vm && code === 1000 && reason === "session ended") { closeWin(w); return; }
     if (agent && !(code === 1000 && reason === "session ended")) {
       if (!retry) term.write("\r\n\x1b[90m[" + (reason === "detached" ? "detached" : "connection lost") + " — reconnecting]\x1b[0m\r\n");

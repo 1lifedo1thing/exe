@@ -242,6 +242,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   cell travelled, that take the wheel's own road (tmux copy mode, or the
   CLI's mouse reports); a flick glides on with a per-ms decay of 0.995.
   The box carries `touch-action: none` so the page never pans instead.
+- A drop target's ring is a 2px `--hl` inset shadow: on the Finder's icon
+  area, the desktop, and over a terminal's screen as an `::after` overlay
+  (an inset shadow on the box itself hides under xterm's canvases). A
+  terminal window's held row (`.held`, the paths of a drop that landed
+  while the link was down) is a row of its own under the terminal, 12px
+  padding, its text ellipsised, three 68px buttons 12px apart at the
+  right, Insert dead until the socket is back; its top line is its seam
+  with the terminal and the status bar keeps its own.
 - A list beside a terminal (the agent windows' session column): a 160px
   sunken white list of 18px rows, the selected row `--hl` with white
   text, its one seam with the terminal the 1px line on its right — a 6px
