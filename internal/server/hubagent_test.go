@@ -46,7 +46,8 @@ type fakeHub struct {
 
 type hubThread struct {
 	Post    hubPost   `json:"post"`
-	Replies []hubPost `json:"replies"`
+	Replies []hubPost `json:"replies"`          // direct replies, as the hub sends them
+	Thread  []hubPost `json:"thread,omitempty"` // the nested tree; empty means an older hub
 }
 
 type hubEnvelope struct {
@@ -232,8 +233,8 @@ func TestHubAgentAnswersAnAllowedReply(t *testing.T) {
 	hub.events <- `{"type":"post.create","id":"r2","reply_to":"root1","author":"` + lividID + `"}`
 
 	e := expectPost(t, hub)
-	if e.Type != "post.create" || e.Author != ident.PubKey() || e.Body.ReplyTo != "root1" {
-		t.Fatalf("envelope: %+v", e)
+	if e.Type != "post.create" || e.Author != ident.PubKey() || e.Body.ReplyTo != "r2" {
+		t.Fatalf("envelope (the answer goes under the message it answers): %+v", e)
 	}
 	if e.Body.Text != "Because a feed you can only broadcast into is half a feed." {
 		t.Fatalf("reply text (label should be stripped): %q", e.Body.Text)
@@ -318,14 +319,14 @@ func TestHubAgentCatchUpSkipsAnsweredAndCappedThreads(t *testing.T) {
 	keyPath, ident, pub := agentKey(t)
 	hub := newFakeHub(t, pub)
 	answered := rootThread(ident.ID)
-	answered.Replies = append(answered.Replies, hubPost{ID: "mine", Author: ident.ID, Text: "Because.", ReplyTo: "root1"})
+	answered.Replies = append(answered.Replies, hubPost{ID: "mine", Author: ident.ID, Text: "Because.", ReplyTo: "root1", TS: 1788267000000})
 	hub.threads["root1"] = answered
 	capped := hubThread{
 		Post: hubPost{ID: "root2", Author: ident.ID, AuthorName: "Claude", Text: "Another post"},
 		Replies: []hubPost{
-			{ID: "c1", Author: lividID, AuthorName: "Livid", Text: "one"},
-			{ID: "c2", Author: ident.ID, Text: "reply one"},
-			{ID: "c3", Author: lividID, AuthorName: "Livid", Text: "two"},
+			{ID: "c1", Author: lividID, AuthorName: "Livid", Text: "one", TS: 1788266800000},
+			{ID: "c2", Author: ident.ID, Text: "reply one", TS: 1788266900000},
+			{ID: "c3", Author: lividID, AuthorName: "Livid", Text: "two", TS: 1788267000000},
 		},
 	}
 	hub.threads["root2"] = capped
@@ -345,8 +346,8 @@ func TestHubAgentCatchUpAnswersWhatItMissed(t *testing.T) {
 	hub := newFakeHub(t, pub)
 	th := rootThread(ident.ID)
 	th.Replies = append(th.Replies,
-		hubPost{ID: "mine", Author: ident.ID, Text: "Because.", ReplyTo: "root1"},
-		hubPost{ID: "r3", Author: lividID, AuthorName: "Livid", Text: "and then?", ReplyTo: "root1"})
+		hubPost{ID: "mine", Author: ident.ID, Text: "Because.", ReplyTo: "root1", TS: 1788267000000},
+		hubPost{ID: "r3", Author: lividID, AuthorName: "Livid", Text: "and then?", ReplyTo: "root1", TS: 1788267100000})
 	hub.threads["root1"] = th
 	hub.feed = []hubPost{{ID: "root1", Author: ident.ID, Replies: 4}}
 	bin, dir := fakeClaude(t, "Then it answers.")
@@ -355,12 +356,77 @@ func TestHubAgentCatchUpAnswersWhatItMissed(t *testing.T) {
 	defer cancel()
 	go s.RunHubAgent(ctx)
 	e := expectPost(t, hub)
-	if e.Body.Text != "Then it answers." || e.Body.ReplyTo != "root1" {
+	if e.Body.Text != "Then it answers." || e.Body.ReplyTo != "r3" {
 		t.Fatalf("envelope: %+v", e)
 	}
 	stdin, _ := os.ReadFile(filepath.Join(dir, "stdin"))
 	if !strings.Contains(string(stdin), "and then?") || !strings.Contains(string(stdin), "Because.") {
 		t.Fatalf("prompt should carry the whole thread:\n%s", stdin)
+	}
+}
+
+// A build or watcher session answers under Livid's reply itself, one
+// level down, where the hub's direct-replies list does not reach. The
+// tree under "thread" does, and an answer there is an answer: nothing to
+// re-answer on catch-up, however often the daemon restarts.
+func TestHubAgentCatchUpSeesAnswersNestedUnderTheReply(t *testing.T) {
+	fastAgent(t)
+	keyPath, ident, pub := agentKey(t)
+	hub := newFakeHub(t, pub)
+	th := rootThread(ident.ID)
+	nested := hubPost{ID: "mine", Author: ident.ID, Text: "Because, and here is how.", ReplyTo: "r2", TS: 1788267000000}
+	th.Thread = append(append([]hubPost(nil), th.Replies...), nested) // direct replies stay r1, r2
+	hub.threads["root1"] = th
+	hub.feed = []hubPost{{ID: "root1", Author: ident.ID, Replies: 3}}
+	bin, dir := fakeClaude(t, "should never be posted")
+	s := agentServer(t, hub, keyPath, bin, nil)
+	ctx, cancel := contextWithCancel(t)
+	defer cancel()
+	go s.RunHubAgent(ctx)
+	waitConnected(t, hub)
+	hub.events <- `{"type":"post.create","id":"r2","reply_to":"root1","author":"` + lividID + `"}` // a duplicate event, too
+	expectSilence(t, hub, dir)
+}
+
+// Livid answers the nested answer: the event names the agent's nested
+// reply, the thread under it is one message, and the answer goes under
+// that message.
+func TestHubAgentAnswersUnderANestedReply(t *testing.T) {
+	fastAgent(t)
+	keyPath, ident, pub := agentKey(t)
+	hub := newFakeHub(t, pub)
+	mine := hubPost{ID: "mine", Author: ident.ID, AuthorName: "Claude", Text: "Because, and here is how.", ReplyTo: "r2", TS: 1788267000000}
+	more := hubPost{ID: "r4", Author: lividID, AuthorName: "Livid", Text: "and in the browser?", ReplyTo: "mine", TS: 1788267100000}
+	hub.threads["mine"] = hubThread{Post: mine, Replies: []hubPost{more}, Thread: []hubPost{more}}
+	bin, dir := fakeClaude(t, "There too.")
+	s := agentServer(t, hub, keyPath, bin, nil)
+	ctx, cancel := contextWithCancel(t)
+	defer cancel()
+	go s.RunHubAgent(ctx)
+	waitConnected(t, hub)
+	hub.events <- `{"type":"post.create","id":"r4","reply_to":"mine","author":"` + lividID + `"}`
+	e := expectPost(t, hub)
+	if e.Body.Text != "There too." || e.Body.ReplyTo != "r4" {
+		t.Fatalf("envelope: %+v", e)
+	}
+	stdin, _ := os.ReadFile(filepath.Join(dir, "stdin"))
+	if !strings.Contains(string(stdin), "and in the browser?") || !strings.Contains(string(stdin), "Because, and here is how.") {
+		t.Fatalf("prompt should carry the thread under the nested reply:\n%s", stdin)
+	}
+}
+
+func TestHubAgentThread(t *testing.T) {
+	direct := []hubPost{{ID: "b", TS: 2}, {ID: "a", TS: 1}}
+	tree := []hubPost{{ID: "a", TS: 1}, {ID: "c", TS: 3}, {ID: "b", TS: 2}} // reading order, c nested under a
+	if got := hubAgentThread(direct, tree); len(got) != 3 || got[0].ID != "a" || got[1].ID != "b" || got[2].ID != "c" {
+		t.Fatalf("tree, oldest first: %+v", got)
+	}
+	skewed := []hubPost{{ID: "q", TS: 9, Received: 1}, {ID: "ans", TS: 5, Received: 2}} // a fast clock on the asker's side
+	if got := hubAgentThread(nil, skewed); got[0].ID != "q" || got[1].ID != "ans" {
+		t.Fatalf("the hub's clock orders the thread: %+v", got)
+	}
+	if got := hubAgentThread(direct, nil); len(got) != 2 || got[0].ID != "a" || got[1].ID != "b" {
+		t.Fatalf("direct replies when a hub sends no tree: %+v", got)
 	}
 }
 

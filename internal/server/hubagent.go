@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -82,6 +83,7 @@ type hubPost struct {
 	Text       string `json:"text"`
 	ReplyTo    string `json:"reply_to,omitempty"`
 	TS         int64  `json:"ts"`
+	Received   int64  `json:"received,omitempty"` // the hub's clock, which no poster's clock skews
 	Replies    int    `json:"replies"`
 }
 
@@ -277,8 +279,11 @@ func (s *Server) hubAgentFollow(ctx context.Context, set *hubAgentSetup) error {
 
 // hubAgentConsider looks at one thread and answers its latest unanswered
 // reply from an answered profile, if any. The thread is the only state:
-// a reply counts as answered once one of the agent's own follows it, so
-// restarts and duplicate events can't produce a second answer.
+// a reply counts as answered once one of the agent's own follows it
+// anywhere in the tree — under the reply itself, where the build and
+// watcher sessions answer, or under the root — so restarts and
+// duplicate events can't produce a second answer. The answer goes under
+// the message it answers.
 func (s *Server) hubAgentConsider(ctx context.Context, set *hubAgentSetup, root string) {
 	a := &s.hubAgent
 	a.mu.Lock()
@@ -288,7 +293,8 @@ func (s *Server) hubAgentConsider(ctx context.Context, set *hubAgentSetup, root 
 	}
 	var th struct {
 		Post    hubPost   `json:"post"`
-		Replies []hubPost `json:"replies"`
+		Replies []hubPost `json:"replies"` // direct replies only
+		Thread  []hubPost `json:"thread"`  // the whole tree, replies to replies included
 	}
 	if err := hubGetJSON(ctx, set.hub+"/v1/post/"+root+"?limit=100", &th); err != nil {
 		log.Printf("hub agent: thread %s: %v", hubShort(root), err)
@@ -297,7 +303,8 @@ func (s *Server) hubAgentConsider(ctx context.Context, set *hubAgentSetup, root 
 	if th.Post.Author != set.ident.ID {
 		return // conversations happen under the agent's own posts only
 	}
-	pending, mine := hubAgentPending(th.Replies, set.ident.ID, set.answer)
+	replies := hubAgentThread(th.Replies, th.Thread)
+	pending, mine := hubAgentPending(replies, set.ident.ID, set.answer)
 	if pending == nil || a.gaveUp[pending.ID] {
 		return
 	}
@@ -334,7 +341,7 @@ func (s *Server) hubAgentConsider(ctx context.Context, set *hubAgentSetup, root 
 	if err := hubGetJSON(ctx, set.hub+"/v1/profile/"+set.ident.ID+"/feed?limit=15", &recent); err != nil {
 		log.Printf("hub agent: own feed: %v", err) // context only; carry on without it
 	}
-	prompt := hubAgentPrompt(name, th.Post, th.Replies, pending, recent.Posts,
+	prompt := hubAgentPrompt(name, th.Post, replies, pending, recent.Posts,
 		hubAgentCommits(ctx, set.repos), set.answer, set.ident.ID)
 
 	text, err := s.hubAgentAsk(ctx, set.model, fmt.Sprintf(hubAgentSystem, name), prompt)
@@ -347,7 +354,7 @@ func (s *Server) hubAgentConsider(ctx context.Context, set *hubAgentSetup, root 
 		return
 	}
 
-	body, _ := json.Marshal(map[string]string{"text": text, "reply_to": root})
+	body, _ := json.Marshal(map[string]string{"text": text, "reply_to": pending.ID})
 	resp, err := hubSend(set.hub, set.ident, "post.create", body)
 	if err != nil {
 		log.Printf("hub agent: post: %v", err)
@@ -368,6 +375,26 @@ func (s *Server) hubAgentConsider(ctx context.Context, set *hubAgentSetup, root 
 	a.dayN++
 	a.lastAt = time.Now()
 	log.Printf("hub agent: answered %s in thread %s (%d bytes)", hubAgentName(*pending), hubShort(root), len(text))
+}
+
+// hubAgentThread is every reply in the thread, oldest first. The hub
+// answers a post with its direct replies and, since replies nest, the
+// whole tree in reading order under "thread"; the tree is the truth, and
+// direct replies stand in for it only when a hub does not send one.
+func hubAgentThread(direct, tree []hubPost) []hubPost {
+	all := tree
+	if len(all) == 0 {
+		all = direct
+	}
+	out := append([]hubPost(nil), all...)
+	at := func(p hubPost) int64 {
+		if p.Received > 0 {
+			return p.Received
+		}
+		return p.TS
+	}
+	sort.SliceStable(out, func(i, j int) bool { return at(out[i]) < at(out[j]) })
+	return out
 }
 
 // hubAgentPending finds the reply to answer: the latest one from an
