@@ -299,6 +299,58 @@ canvas.ava-big { image-rendering: pixelated; }
 #dlg .btns { display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px; }
 #dlg .btns .left { margin-right: auto; } /* secondary action, lower left (HIG) */
 #dlg .err { color: var(--red); font-size: 11px; min-height: 14px; margin-top: 6px; }
+/* an alert on the veil: the desktop's movable alert box (HIG OS 8 fig.
+   3-4) for an action that failed with words worth reading whole — a hub's
+   refusal, its ffmpeg's complaint — which the 15px status line can only
+   cut short. The window, title-bar stripe and alert-bar blocks are the
+   desktop's own (index.html, ui/offline.html), copied verbatim: change
+   them in all three. It holds only the caution icon, a bold label, the
+   plain narrative and OK; the narrative is selectable, so the message can
+   be copied entire. While it is up the dialog panel steps aside. */
+#veil.alert #dlg { display: none; }
+#veil:not(.alert) #alert { display: none; }
+.window {
+  position: relative; z-index: 10; min-width: 220px; width: 100%; max-width: 380px;
+  background: var(--g400); border: 1px solid var(--black);
+  box-shadow: 2px 2px 0 var(--black);
+}
+.window::before { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 4; box-sizing: border-box;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.5), inset -1px -1px 0 var(--g600), inset 1px 1px 0 #fff; }
+.titlebar { display: flex; align-items: center; gap: 4px; padding: 2px 4px;
+  background: var(--g400); user-select: none; }
+.titlebar .stripe { flex: 1; height: 12px; min-width: 8px; position: relative;
+  background-color: var(--g300);
+  background-image: linear-gradient(#fff, #fff 50%, #777 50%, #777);
+  background-size: 100% 2px; background-repeat: repeat; }
+.titlebar .stripe::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 1px; box-sizing: border-box;
+  background-image: linear-gradient(#fff, #fff 50%, #ccc 50%, #ccc);
+  background-size: 100% 2px; background-repeat: repeat; border-bottom: 1px solid #ccc; }
+.titlebar .stripe::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 1px; box-sizing: border-box;
+  background-image: linear-gradient(#ccc, #ccc 50%, #777 50%, #777);
+  background-size: 100% 2px; background-repeat: repeat; }
+/* Movable alert box title bar (HIG OS 8 fig. 3-4): nothing but red
+   stripes — no title, no boxes. */
+.titlebar.alert-bar { background: #fcc; }
+.titlebar.alert-bar .stripe { background-color: #fcc;
+  background-image: linear-gradient(#fff, #fff 50%, #f66 50%, #f66); }
+.titlebar.alert-bar .stripe::before {
+  background-image: linear-gradient(#fff, #fff 50%, #f99 50%, #f99);
+  border-bottom-color: #f99; }
+.titlebar.alert-bar .stripe::after {
+  background-image: linear-gradient(#f99, #f99 50%, #f66 50%, #f66); }
+.win-body { padding: 14px 14px 12px; }
+/* the alert's own layout, the desktop's confirm box's numbers: icon and
+   text 20px apart, 24px over the button row; a phone keeps 16px gutters */
+#alert { width: min(380px, calc(100vw - 32px)); }
+#alert .a-row { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 24px; }
+#alert .a-row svg { flex: none; }
+#alert .a-text { flex: 1; min-width: 0; user-select: text; cursor: text; }
+#a-msg { font-weight: bold; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+#a-detail { font-size: 11px; line-height: 1.45; margin-top: 7px; overflow-wrap: anywhere; white-space: pre-wrap; }
+#a-detail[hidden] { display: none; }
+#alert .btns { display: flex; justify-content: flex-end; margin: 0 0 2px; }
+/* OK and Cancel are 58px wide (HIG); a longer word keeps its own width */
+#dlg .btns button, #alert .btns button { min-width: 58px; }
 /* hub-info rows: right-aligned labels, selectable values */
 .irow { display: flex; gap: 8px; margin: 0 0 6px; align-items: baseline; }
 .ilab { width: 70px; flex: none; font-size: 11px; color: #555; text-align: right; }
@@ -482,6 +534,21 @@ body.mobile #status { padding-right: 8px; }
 <div id="at" class="dropdown" role="listbox" aria-label="Mention" hidden></div>
 <div id="veil">
   <div id="dlg"></div>
+  <div id="alert" class="window" role="alertdialog" aria-labelledby="a-msg" aria-describedby="a-detail">
+    <div class="titlebar alert-bar"><div class="stripe"></div></div>
+    <div class="win-body">
+      <div class="a-row">
+        <svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+          <path d="M16 2 L30.5 29.5 L1.5 29.5 Z" fill="#FFDD30" stroke="#000"/>
+          <path d="M16 6 L27 27 L5 27 Z" fill="#FFF3A0"/>
+          <rect x="14" y="11" width="4" height="10" fill="#000"/>
+          <rect x="14" y="23" width="4" height="3" fill="#000"/>
+        </svg>
+        <div class="a-text"><div id="a-msg"></div><div id="a-detail"></div></div>
+      </div>
+      <div class="btns"><button class="ghost default" id="a-ok">OK</button></div>
+    </div>
+  </div>
 </div>
 
 <!-- grow box sampled pixel-for-pixel from Mac OS 9 (Infinite Mac) -->
@@ -1961,9 +2028,18 @@ async function addFiles(files) {
       if (!r.ok) throw new Error(out.error || "HTTP " + r.status);
       attachments.push({ cid: out.cid, mime: out.mime, filename: f.name });
       say("");
-    } catch (err) { say(err.message, true); }
+    } catch (err) { await attachFailed(f, err); }
   }
   renderChips();
+}
+// a file the composer could not take: the status line keeps the short of
+// it, the alert carries the whole message (a hub's ffmpeg has a lot to
+// say, and the line under the field cuts it at the first button)
+function attachFailed(f, err) {
+  const m = err.message || String(err);
+  say("Could not attach " + f.name, true);
+  return alertBox("Could not attach \u201c" + f.name + "\u201d",
+    m.startsWith(f.name + ": ") ? m.slice(f.name.length + 2) : m);
 }
 $("#file").onchange = e => {
   const files = [...e.target.files];
@@ -2010,7 +2086,7 @@ async function doPost() {
     // said, tinted, instead of back at the head
     if (view.kind === "thread" && out.id) openThread(view.id, out.id);
     else refreshView();
-  } catch (e) { say(e.message, true); }
+  } catch (e) { say("Could not post", true); alertBox("Could not post", e.message); }
   updatePostBtn();
 }
 $("#post").onclick = doPost;
@@ -3007,6 +3083,41 @@ function dialog(children) {
   dlg.replaceChildren(...children);
   $("#veil").classList.add("on");
   return () => $("#veil").classList.remove("on");
+}
+
+// An alert: the desktop's movable alert box over the app, for an action
+// that failed with words worth reading whole. message is the bold label,
+// detail the plain narrative under it (the HIG's two-tier alert text).
+// OK, Return and Escape close it, and the promise settles then. A dialog
+// already on the veil keeps it: the alert takes the veil's front and
+// gives it back.
+let alertResolve = null;
+function alertBox(message, detail) {
+  const veil = $("#veil");
+  const had = veil.classList.contains("on");
+  $("#a-msg").textContent = message;
+  const d = $("#a-detail");
+  d.textContent = detail || "";
+  d.hidden = !detail;
+  veil.classList.add("on", "alert");
+  const done = () => {
+    document.removeEventListener("keydown", onKey, true);
+    veil.classList.remove("alert");
+    if (!had) veil.classList.remove("on");
+    const r = alertResolve;
+    alertResolve = null;
+    if (r) r();
+  };
+  const onKey = e => {
+    if (e.key !== "Enter" && e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    done();
+  };
+  document.addEventListener("keydown", onKey, true);
+  $("#a-ok").onclick = done;
+  setTimeout(() => $("#a-ok").focus(), 50);
+  return new Promise(res => { alertResolve = res; });
 }
 
 // the hub URL as the HTTP multiaddr another hub's admin would peer.add

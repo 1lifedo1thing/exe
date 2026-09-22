@@ -876,7 +876,10 @@ says so in Hub Info), the original goes to the hub's ffmpeg: the chip
 shows a progress bar while it converts, and **Post** waits for it. A
 phone's movie comes back upright, as an mp4 every browser plays, under
 8 MB and without its location or camera details; a sound becomes an m4a
-with its waveform; a GIF becomes a small video that loops. In the feed a
+with its waveform; a GIF becomes a small video that loops. A file the
+hub could not take, or a post it refused, opens an alert with the hub's
+whole message (select it to copy it); the status line under the field
+keeps only the short of it. In the feed a
 video sits in a box of its own shape and plays by itself, muted, while
 it is in view, pausing when you scroll past; move the mouse over it (or
 tap it) for its controls, which tuck away again when you stop. A video

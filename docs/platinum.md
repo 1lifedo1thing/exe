@@ -166,7 +166,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   holds only an icon, a bold label beside it, a plain narrative and buttons.
   `ui/offline.html`, the alert the service worker shows when the daemon does
   not answer, carries its own copy of the window, alert-bar and button
-  blocks (it must render with nothing else reachable): change them in both.
+  blocks (it must render with nothing else reachable), and the Hub app
+  (`sysapps/hub`) carries the window and alert-bar blocks for the alert it
+  raises over itself when the hub refuses a file or a post: change them in
+  all three. An app's alert sits on its dialog veil, 380px at most and
+  16px from a phone's edges, and holds the whole message, selectable.
 - Menu bar: 20px `#ddd`, inset white top and left, `#999` bottom and right,
   1px black bottom line; bold titles with 10px side padding; an open title
   inverts to `#333399`. Menus: `#eee`, 1px black, hard shadow `2px 2px 0
