@@ -59,12 +59,18 @@ button.ghost:active .gl .w, button.ghost.open .gl .w { fill: #666; }
 #find { display: inline-flex; align-items: center; gap: 5px; padding: 2px 12px 2px 9px; }
 #find .gl { display: block; }
 body.mobile #find { padding: 2px 8px; }
-/* the pencil's count is a button (#sugg): "3 Suggestions" in words, a
-   pencil and the figure on a phone. It stays pressed (.open, the pressed
-   look) while its layer is up, as a pop-up's button does. The icon rule
-   above would show a hidden one on a phone, so hidden is said again. */
+/* the pencil's count is a button (#sugg): the pencil glyph and the
+   figure, on every screen — "1 Suggestion" in words was the row's one
+   long label, and it broke onto a second line once the window was
+   narrow enough that the row had no slack. Laid out as Find… is (the
+   glyph 9px in, 5px to the figure, the figure's 12px to the right); a
+   phone closes it up as it does its other icon buttons. It stays pressed
+   (.open, the pressed look) while its layer is up, as a pop-up's button
+   does. The id outranks the icon rules above, so hidden is said again. */
+#sugg { display: inline-flex; align-items: center; gap: 5px; padding: 2px 12px 2px 9px; }
+#sugg .gl { display: block; }
+body.mobile #sugg { gap: 4px; padding: 2px 8px; }
 #sugg[hidden] { display: none; }
-body.mobile #sugg .n { margin-left: 4px; }
 @media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .gl { shape-rendering: geometricPrecision; } }
 
 input[type=text], textarea { font: inherit; color: var(--black); background: #fff;
@@ -455,7 +461,7 @@ body.mobile #status { padding-right: 8px; }
     <div id="c-row">
       <button class="ghost" id="attach">Attach&#8230;</button>
       <input type="file" id="file" hidden multiple>
-      <button class="ghost icon" id="sugg" hidden aria-haspopup="true"><svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M10 0h1v1h-1zM9 1h1v1h-1zM11 1h1v1h-1zM8 2h1v1h-1zM12 2h1v1h-1zM7 3h1v1h-1zM11 3h1v1h-1zM6 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h1v1h-1zM8 6h1v1h-1zM3 7h1v1h-1zM7 7h1v1h-1zM2 8h1v1h-1zM6 8h1v1h-1zM1 9h1v1h-1zM3 9h1v1h-1zM5 9h1v1h-1zM1 10h1v1h-1zM4 10h1v1h-1zM0 11h2v1h-2zM3 11h1v1h-1zM0 12h3v1h-3z"/><path class="w" d="M10 1h1v1h-1zM9 2h3v1h-3zM8 3h3v1h-3zM7 4h3v1h-3zM6 5h3v1h-3zM5 6h3v1h-3zM4 7h3v1h-3zM3 8h3v1h-3zM2 9h1v1h-1zM4 9h1v1h-1zM2 10h2v1h-2zM2 11h1v1h-1z"/></svg><b class="n"></b><span> Suggestions</span></button>
+      <button class="ghost icon" id="sugg" hidden aria-haspopup="true"><svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M10 0h1v1h-1zM9 1h1v1h-1zM11 1h1v1h-1zM8 2h1v1h-1zM12 2h1v1h-1zM7 3h1v1h-1zM11 3h1v1h-1zM6 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h1v1h-1zM8 6h1v1h-1zM3 7h1v1h-1zM7 7h1v1h-1zM2 8h1v1h-1zM6 8h1v1h-1zM1 9h1v1h-1zM3 9h1v1h-1zM5 9h1v1h-1zM1 10h1v1h-1zM4 10h1v1h-1zM0 11h2v1h-2zM3 11h1v1h-1zM0 12h3v1h-3z"/><path class="w" d="M10 1h1v1h-1zM9 2h3v1h-3zM8 3h3v1h-3zM7 4h3v1h-3zM6 5h3v1h-3zM5 6h3v1h-3zM4 7h3v1h-3zM3 8h3v1h-3zM2 9h1v1h-1zM4 9h1v1h-1zM2 10h2v1h-2zM2 11h1v1h-1z"/></svg><b class="n"></b></button>
       <span id="c-status"></span>
       <button class="ghost icon" id="find" aria-label="Find&#8230;"><svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M3 0h3v1h-3zM1 1h2v1h-2zM6 1h2v1h-2zM0 2h1v1h-1zM8 2h1v1h-1zM0 3h1v1h-1zM8 3h1v1h-1zM0 4h1v1h-1zM8 4h1v1h-1zM0 5h1v1h-1zM8 5h1v1h-1zM0 6h1v1h-1zM8 6h1v1h-1zM1 7h2v1h-2zM6 7h2v1h-2zM3 8h3v1h-3zM7 8h3v1h-3zM8 9h3v1h-3zM9 10h3v1h-3zM10 11h3v1h-3zM11 12h2v1h-2z"/><path class="w" d="M3 1h3v1h-3zM1 2h7v1h-7zM1 3h7v1h-7zM1 4h7v1h-7zM1 5h7v1h-7zM1 6h7v1h-7zM3 7h3v1h-3z"/></svg><span>Find&#8230;</span></button>
       <button class="ghost icon" id="refresh" aria-label="Refresh"><svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M8 0h1v1h-1zM8 1h2v1h-2zM5 2h6v1h-6zM3 3h2v1h-2zM8 3h2v1h-2zM2 4h1v1h-1zM8 4h1v1h-1zM2 5h1v1h-1zM1 6h1v1h-1zM11 6h1v1h-1zM1 7h1v1h-1zM11 7h1v1h-1zM1 8h1v1h-1zM11 8h1v1h-1zM2 9h1v1h-1zM10 9h1v1h-1zM2 10h1v1h-1zM10 10h1v1h-1zM3 11h2v1h-2zM8 11h2v1h-2zM5 12h3v1h-3z"/></svg><span>Refresh</span></button>
@@ -2415,12 +2421,12 @@ function pencilRender() {
   kids.push(v.slice(at) + "\u200b");
   marksEl.replaceChildren(...kids);
   syncMarks();
-  // the count is the button's name; the slot beside it keeps the rest
+  // the count is the button's name (the pencil and the figure; the words
+  // are its label); the slot beside it keeps the rest
   const n = pMarks.length;
   suggEl.hidden = !n;
   if (n) {
     suggEl.querySelector(".n").textContent = n;
-    suggEl.querySelector("span").textContent = n === 1 ? " Suggestion" : " Suggestions";
     suggEl.setAttribute("aria-label", n + (n === 1 ? " suggestion" : " suggestions"));
     suggEl.title = pencilTip;
   }
@@ -2869,8 +2875,10 @@ function sentenceMenu(m, x) {
 }
 
 // ---- the count is a button ----
-// Livid's shape for reviewing a post once it is written: "3 Suggestions"
-// is a push button where the count stood, and pressing it hangs a layer
+// Livid's shape for reviewing a post once it is written: the count (the
+// pencil and a figure — "3 Suggestions" in words at first, until the one
+// long label in the row wrapped in a narrow window) is a push button
+// where the count stood, and pressing it hangs a layer
 // under it with every sentence the pencil would change, complete and as
 // it will read, each with its choices. The layer is the marks spliced
 // into the field's own words — what Accept All would write, Ignores left

@@ -838,8 +838,8 @@ passes them over, and the rest of the post stays marked. A comma to add,
 or a missing word, rules the word it follows.
 
 To go through a post once it is written, press the count: beside
-**Attach…** the suggestions are a button, **3 Suggestions** (a pencil and
-the figure on a phone; hover it for the model). It hangs a layer under
+**Attach…** the suggestions are a button, a pencil and the figure (hover
+it for the model). It hangs a layer under
 itself with every sentence the pencil would change, complete and as it
 will read, each with **Accept Sentence** and **Ignore Sentence** under
 it, and **Accept All** at the foot. What it shows is exactly what those

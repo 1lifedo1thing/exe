@@ -128,8 +128,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   wider than a phone), set 10px left of the rows so a sentence's choices
   hang under it; such a layer is pinned where it opens (`.dropdown.pin`)
   and scrolls inside itself past the window's foot. A count that opens a
-  layer is a push button in the button row (the composer's `#sugg`, "3
-  Suggestions"; a glyph and the figure on a phone): it wears the pressed
+  layer is a push button in the button row (the composer's `#sugg`: the
+  pencil glyph and the figure, laid out as Find… is — a word there was
+  the row's one long label and wrapped in a narrow window): it wears the pressed
   look (`button.ghost.open`) while its layer is up, as a pop-up's button
   does, toggles it, and never takes the caret. It comes and goes inside
   the row's flexible text slot, so no other button moves. The pass mark
