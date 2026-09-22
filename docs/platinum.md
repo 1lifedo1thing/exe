@@ -140,8 +140,17 @@ restyling: `internal/server/ui/index.html` (the desktop),
   A grey "nothing found" reads as a shrug; say a pass as a pass.
 - Status bar: 15px total, a 1px black top border and a 14px `#ddd` face,
   11px `#333` text, `inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px
-  0 #aaa`. Text only. Buttons never sit on a status line; they get a row of
-  their own in the content area, laid out as above.
+  0 #aaa`, and `overflow: clip`. The clip is not decoration: on the body's
+  1.45 line height the text's line box is 16px, taller than the face, and
+  hangs a pixel past the bar and the window. In an app iframe that pixel
+  is scrollable overflow of the page — a `scrollIntoView` or a focus then
+  scrolls the page up a pixel while the fixed grow box stays, and the
+  status line no longer meets the tile (a doubled black line over the Hub
+  window's corner). Clipped, the overhang counts for nothing, and the text
+  keeps its pixels: a `line-height` that fits the face moves the text down
+  a pixel, out of line with the desktop's own status bars. Text only.
+  Buttons never sit on a status line; they get a row of their own in the
+  content area, laid out as above.
 - Grow box: the 15px SVG sampled from OS 9, at the window's bottom right;
   its black top row lands on the status bar's line. An app streams
   `{exe:"grow", dx, dy}` through the bridge and the desktop resizes. A

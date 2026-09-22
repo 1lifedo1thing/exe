@@ -412,9 +412,12 @@ canvas.ava-big { image-rendering: pixelated; }
   opacity: 0; transition: opacity .15s; pointer-events: none; max-width: 90vw; z-index: 20; }
 #toast.show { opacity: 1; }
 
+/* overflow: clip — the 11px text's line box is taller than the 14px face and
+   hangs a pixel past the bar; clipped, that pixel is no scrollable overflow of
+   the page (docs/platinum.md, status bar) */
 #status { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--black);
   background: var(--g300); font-size: 11px; color: #333; padding: 0 20px 0 8px; height: 15px;
-  box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; }
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; overflow: clip; }
 #st-hub { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #grow { position: fixed; right: 0; bottom: 0; width: 15px; height: 15px;
   touch-action: none; z-index: 6; }

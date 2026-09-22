@@ -71,9 +71,12 @@ button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; bor
 .popup select:focus { outline: none; }
 
 /* 15px Platinum status bar. */
+/* overflow: clip — the 11px text's line box is taller than the 14px face and
+   hangs a pixel past the bar; clipped, that pixel is no scrollable overflow of
+   the page (docs/platinum.md, status bar) */
 #status { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--black);
   background: var(--g300); font-size: 11px; color: #333; padding: 0 8px; height: 15px;
-  box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; }
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; overflow: clip; }
 
 /* Mac OS 9 scrollbars — the desktop's pixel-sampled spec, adapted for a
    document window: the host frame draws the outer black line, so bars are
