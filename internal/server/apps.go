@@ -440,7 +440,9 @@ func handleFilePut(w http.ResponseWriter, r *http.Request, root, rel string) boo
 		writeErr(w, http.StatusInternalServerError, err)
 		return false
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "saved", "path": rel, "size": len(body), "created": created})
+	// abs is where the file sits on this machine, for a caller that hands
+	// the path to a program running here (a file dropped on an agent window)
+	writeJSON(w, http.StatusOK, map[string]any{"status": "saved", "path": rel, "abs": p, "size": len(body), "created": created})
 	return true
 }
 

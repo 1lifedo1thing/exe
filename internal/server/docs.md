@@ -154,6 +154,15 @@ returns to the live screen first, so the keys reach Codex as in any
 terminal. Text selection is unchanged: drag in a Codex window, Shift+drag
 (Option+drag on a Mac) in a Claude Code window, which tracks the mouse.
 
+To hand the agent a file — a screenshot, a log, a document — drag it from
+your computer onto the window. It is uploaded to the Workspace root, the
+same as a drop on the desktop, and its path on this machine is typed at
+the cursor, quoted if it needs it, so "look at this" is all the prompt
+then needs; the agent reads the file from there (Claude Code shows an
+image it is given a path to). Several files arrive as several paths. A
+plain Terminal window takes a drop the same way; a VM's window does not,
+since a host path means nothing in the guest.
+
 On a host with tmux, a Claude Code or Codex window lists the agent's
 sessions down its left, one row per tmux session, titled the way the CLI
 titles its terminal — Claude Code keeps that on its current task, and
@@ -706,7 +715,9 @@ Right-click for Get Info and Download; right-click a window's empty space
 for New Folder, New Text File and Upload; **File → Upload to Workspace…**
 brings files in from this browser. Files can also be dragged from your
 computer onto the desktop (lands in the Workspace root), onto a Finder
-window (lands in its folder), or onto a folder icon (lands in that folder).
+window (lands in its folder), onto a folder icon (lands in that folder),
+or onto a Claude Code, Codex or Terminal window (lands in the root, and
+the path is typed into the window).
 New files brought in this way are announced on the Newsfeed, so every desk
 in the mesh sees them arrive; overwriting an existing file stays quiet.
 

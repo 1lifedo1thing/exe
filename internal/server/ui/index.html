@@ -488,6 +488,11 @@ body.mobile #cstrip { z-index: 5; }
 /* drag-and-drop upload targets */
 .finder-window.drop .finder-icons { box-shadow: inset 0 0 0 2px var(--hl); }
 #desktop.drop { box-shadow: inset 0 0 0 3px var(--hl); }
+/* a terminal window's ring rides over the screen (the xterm canvases
+   would paint over an inset shadow on the box itself) */
+.term-window .hostterm-box { position: relative; }
+.term-window.drop .hostterm-box::after { content: ""; position: absolute; inset: 0; box-sizing: border-box;
+  box-shadow: inset 0 0 0 2px var(--hl); pointer-events: none; z-index: 1; }
 
 /* Get Info window, OS 9 style: icon + name header, groove rule, then
    right-aligned bold labels over a two-column grid */
@@ -5807,7 +5812,7 @@ $("#up-go").onclick = async () => {
   if (!f) { toast("choose a file first"); return; }
   $("#up-go").disabled = true;
   $("#up-status").textContent = "uploading…";
-  const n = await wsUpload("", [f]);
+  const n = (await wsUpload("", [f])).length;
   $("#up-go").disabled = false;
   $("#up-status").textContent = "";
   if (n) closeWin($("#win-upload"));
@@ -5815,11 +5820,12 @@ $("#up-go").onclick = async () => {
 
 // ---- Drag-and-drop upload: a file dropped on the desktop lands in the
 // Workspace root, on a Finder window in its folder, on a folder icon in
-// that folder. Uploads PUT each file; toasts report skips and failures.
+// that folder, on a terminal window in the root with its path typed there
+// (wireTermDrop). Uploads PUT each file; toasts report skips and failures.
 // Genuinely new files (not overwrites) are announced on the Newsfeed. ----
 async function wsUpload(dir, files) {
   let done = 0, last = "";
-  const fresh = [];
+  const fresh = [], abs = [];
   for (const f of files) {
     if (f.size > 10 << 20) { toast(f.name + " exceeds 10 MB"); continue; }
     const rel = dir ? dir + "/" + f.name : f.name;
@@ -5827,6 +5833,7 @@ async function wsUpload(dir, files) {
       const r = await (await api(wsUrl(rel), { method: "PUT", body: f })).json();
       done++; last = f.name;
       if (r.created) fresh.push(rel);
+      abs.push(r.abs || rel);
     } catch (e) { toast(f.name + ": " + e.message); }
   }
   if (done) {
@@ -5840,7 +5847,7 @@ async function wsUpload(dir, files) {
       title: fresh.length === 1 ? "File added to Workspace" : fresh.length + " files added to Workspace",
       body: fresh.join(", "),
     }}).catch(() => {});
-  return done;
+  return abs; // where the daemon put each file that landed, in drop order
 }
 const dndHasFiles = e => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
 // dropped directories can't be read as bodies — filter them out with a toast
@@ -5903,6 +5910,27 @@ function wireFinderDrop(w) {
     wsUpload(t ? t.dataset.dropDir : w.dataset.path, dndDropFiles(e));
   });
 }
+// a terminal window as a drop target: the ring goes on the screen while a
+// file is over the window, the drop hands the files to onFiles
+function wireTermDrop(w, box, onFiles) {
+  w.addEventListener("dragover", e => {
+    if (!dndHasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    w.classList.add("drop");
+  });
+  w.addEventListener("dragleave", e => { if (!w.contains(e.relatedTarget)) w.classList.remove("drop"); });
+  w.addEventListener("drop", e => {
+    if (!dndHasFiles(e)) return;
+    e.preventDefault();
+    w.classList.remove("drop");
+    const files = dndDropFiles(e);
+    if (files.length) onFiles(files);
+  });
+}
+// a path as a shell (or an agent's prompt) takes it: bare when it is
+// plain, in single quotes otherwise
+const shellQuote = p => /^[\w./~:@%+=,-]+$/.test(p) ? p : "'" + p.replace(/'/g, "'\\''") + "'";
 
 // ---- vm detail ----
 function showPane(key) {
@@ -6370,6 +6398,20 @@ function openHostTermWin(app, cmd, vm) {
   const url = `${proto}://${location.host}${endpoint}${qs.size ? "?" + qs : ""}`;
   const enc = new TextEncoder();
   let ws = null, retry = 0, retryTimer = 0;
+  // A file dropped on the window is what a native terminal makes of one:
+  // it lands in the Workspace root (the same upload as a drop on the
+  // desktop) and its absolute path is typed at the cursor, quoted when
+  // the shell would need that, a space after — "look at this" is all an
+  // agent then needs to read a screenshot or a log. Not for a guest's
+  // window: a host path means nothing over there.
+  if (!vm) wireTermDrop(w, box, async files => {
+    const paths = await wsUpload("", files);
+    if (!paths.length) return;
+    const line = paths.map(shellQuote).join(" ") + " ";
+    if (ws && ws.readyState === 1) term.paste(line);
+    else toast("Not connected — the file is at " + paths.join(", "));
+    term.focus();
+  });
   // the link's pulse, the browser's side: a {"ping":t} every 25 s, which
   // the daemon answers {"pong":t}. A beat that finds the last one
   // unanswered has a link that died under a socket still saying open —
