@@ -277,61 +277,78 @@ func (s *Server) hubAgentFollow(ctx context.Context, set *hubAgentSetup) error {
 	return errors.New("events stream ended")
 }
 
-// hubAgentConsider looks at one thread and answers its latest unanswered
-// reply from an answered profile, if any. The thread is the only state:
-// a reply counts as answered once one of the agent's own follows it
-// anywhere in the tree — under the reply itself, where the build and
-// watcher sessions answer, or under the root — so restarts and
-// duplicate events can't produce a second answer. The answer goes under
-// the message it answers.
+// hubAgentConsider looks at one thread and answers what still waits for
+// an answer there: every reply from an answered profile with none of the
+// agent's own under it or beside it later, oldest first, each under the
+// message itself. The thread is the only state and is read again after
+// each answer, so restarts and duplicate events can't produce a second
+// answer, and a question that lands while another is being answered is
+// found on the next read instead of being lost.
 func (s *Server) hubAgentConsider(ctx context.Context, set *hubAgentSetup, root string) {
 	a := &s.hubAgent
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if ctx.Err() != nil {
-		return
-	}
-	var th struct {
-		Post    hubPost   `json:"post"`
-		Replies []hubPost `json:"replies"` // direct replies only
-		Thread  []hubPost `json:"thread"`  // the whole tree, replies to replies included
-	}
-	if err := hubGetJSON(ctx, set.hub+"/v1/post/"+root+"?limit=100", &th); err != nil {
-		log.Printf("hub agent: thread %s: %v", hubShort(root), err)
-		return
-	}
-	if th.Post.Author != set.ident.ID {
-		return // conversations happen under the agent's own posts only
-	}
-	replies := hubAgentThread(th.Replies, th.Thread)
-	pending, mine := hubAgentPending(replies, set.ident.ID, set.answer)
-	if pending == nil || a.gaveUp[pending.ID] {
-		return
-	}
 	if a.gaveUp == nil {
 		a.gaveUp = map[string]bool{}
 	}
-	if mine >= set.perThread {
-		log.Printf("hub agent: thread %s has %d replies of mine (cap %d); leaving it", hubShort(root), mine, set.perThread)
-		a.gaveUp[pending.ID] = true
-		return
-	}
-	if day := time.Now().UTC().Format("2006-01-02"); day != a.dayKey {
-		a.dayKey, a.dayN = day, 0
-	}
-	if a.dayN >= set.perDay {
-		log.Printf("hub agent: daily cap of %d replies reached; not answering %s", set.perDay, hubShort(pending.ID))
-		return
-	}
-	if wait := hubAgentMinGap - time.Since(a.lastAt); wait > 0 {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(wait):
+	done := map[string]bool{} // answered in this look, whatever the next read shows
+	for ctx.Err() == nil {
+		var th struct {
+			Post    hubPost   `json:"post"`
+			Replies []hubPost `json:"replies"` // direct replies only
+			Thread  []hubPost `json:"thread"`  // the whole tree, replies to replies included
 		}
+		if err := hubGetJSON(ctx, set.hub+"/v1/post/"+root+"?limit=100", &th); err != nil {
+			log.Printf("hub agent: thread %s: %v", hubShort(root), err)
+			return
+		}
+		if th.Post.Author != set.ident.ID {
+			return // conversations happen under the agent's own posts only
+		}
+		replies := hubAgentThread(th.Replies, th.Thread)
+		open, mine := hubAgentPending(replies, set.ident.ID, set.answer)
+		var pending *hubPost
+		for _, r := range open {
+			if !done[r.ID] && !a.gaveUp[r.ID] {
+				pending = r
+				break
+			}
+		}
+		if pending == nil {
+			return
+		}
+		if mine >= set.perThread {
+			log.Printf("hub agent: thread %s has %d replies of mine (cap %d); leaving it", hubShort(root), mine, set.perThread)
+			a.gaveUp[pending.ID] = true
+			return
+		}
+		if day := time.Now().UTC().Format("2006-01-02"); day != a.dayKey {
+			a.dayKey, a.dayN = day, 0
+		}
+		if a.dayN >= set.perDay {
+			log.Printf("hub agent: daily cap of %d replies reached; not answering %s", set.perDay, hubShort(pending.ID))
+			return
+		}
+		if wait := hubAgentMinGap - time.Since(a.lastAt); wait > 0 {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(wait):
+			}
+		}
+		if !s.hubAgentAnswer(ctx, set, th.Post, replies, pending) {
+			return
+		}
+		done[pending.ID] = true
 	}
+}
 
-	name := strings.TrimSpace(th.Post.AuthorName)
+// hubAgentAnswer writes and posts one reply, under the message it
+// answers. false means this look at the thread is over: the model or
+// the hub failed, or the hub refused the post.
+func (s *Server) hubAgentAnswer(ctx context.Context, set *hubAgentSetup, root hubPost, replies []hubPost, pending *hubPost) bool {
+	a := &s.hubAgent
+	name := strings.TrimSpace(root.AuthorName)
 	if name == "" {
 		name = "the agent"
 	}
@@ -341,7 +358,7 @@ func (s *Server) hubAgentConsider(ctx context.Context, set *hubAgentSetup, root 
 	if err := hubGetJSON(ctx, set.hub+"/v1/profile/"+set.ident.ID+"/feed?limit=15", &recent); err != nil {
 		log.Printf("hub agent: own feed: %v", err) // context only; carry on without it
 	}
-	prompt := hubAgentPrompt(name, th.Post, replies, pending, recent.Posts,
+	prompt := hubAgentPrompt(name, root, replies, pending, recent.Posts,
 		hubAgentCommits(ctx, set.repos), set.answer, set.ident.ID)
 
 	text, err := s.hubAgentAsk(ctx, set.model, fmt.Sprintf(hubAgentSystem, name), prompt)
@@ -349,16 +366,16 @@ func (s *Server) hubAgentConsider(ctx context.Context, set *hubAgentSetup, root 
 		text, err = hubAgentScreen(name, set.secrets, text)
 	}
 	if err != nil {
-		log.Printf("hub agent: not answering %s in thread %s: %v", hubShort(pending.ID), hubShort(root), err)
+		log.Printf("hub agent: not answering %s in thread %s: %v", hubShort(pending.ID), hubShort(root.ID), err)
 		a.gaveUp[pending.ID] = true
-		return
+		return false
 	}
 
 	body, _ := json.Marshal(map[string]string{"text": text, "reply_to": pending.ID})
 	resp, err := hubSend(set.hub, set.ident, "post.create", body)
 	if err != nil {
 		log.Printf("hub agent: post: %v", err)
-		return // the hub was unreachable: the next look at the thread retries
+		return false // the hub was unreachable: the next look at the thread retries
 	}
 	var res struct {
 		ID     string `json:"id"`
@@ -370,11 +387,12 @@ func (s *Server) hubAgentConsider(ctx context.Context, set *hubAgentSetup, root 
 	if resp.StatusCode != 200 {
 		log.Printf("hub agent: hub refused the reply (%d): %s", resp.StatusCode, res.Error)
 		a.gaveUp[pending.ID] = true
-		return
+		return false
 	}
 	a.dayN++
 	a.lastAt = time.Now()
-	log.Printf("hub agent: answered %s in thread %s (%d bytes)", hubAgentName(*pending), hubShort(root), len(text))
+	log.Printf("hub agent: answered %s in thread %s (%d bytes)", hubAgentName(*pending), hubShort(root.ID), len(text))
+	return true
 }
 
 // hubAgentThread is every reply in the thread, oldest first. The hub
@@ -397,21 +415,49 @@ func hubAgentThread(direct, tree []hubPost) []hubPost {
 	return out
 }
 
-// hubAgentPending finds the reply to answer: the latest one from an
-// answered profile with none of the agent's own after it. Replies come
-// oldest-first. mine counts the agent's replies in the thread.
-func hubAgentPending(replies []hubPost, me string, answer map[string]bool) (pending *hubPost, mine int) {
+// hubAgentPending finds the replies still waiting for an answer, oldest
+// first: each from an answered profile with none of the agent's own
+// under it (an answer under the message, or a conversation that went on
+// there) and none of the agent's own beside it later (an answer under the
+// same parent, the way the agent answered before answers nested). One
+// answer closes one question, so a second question beside the first is
+// not taken as answered by the first's answer. Replies come oldest-first.
+// mine counts the agent's replies in the thread.
+func hubAgentPending(replies []hubPost, me string, answer map[string]bool) (open []*hubPost, mine int) {
+	parent := map[string]string{}
+	for _, r := range replies {
+		parent[r.ID] = r.ReplyTo
+	}
+	under := func(id, of string) bool {
+		for p, n := parent[id], 0; p != "" && n < 64; p, n = parent[p], n+1 {
+			if p == of {
+				return true
+			}
+		}
+		return false
+	}
 	for i := range replies {
 		r := &replies[i]
-		switch {
-		case r.Author == me:
+		if r.Author == me {
 			mine++
-			pending = nil
-		case answer[r.Author]:
-			pending = r
+			continue
+		}
+		if !answer[r.Author] {
+			continue
+		}
+		answered := false
+		for j := range replies {
+			m := &replies[j]
+			if m.Author == me && (under(m.ID, r.ID) || (j > i && m.ReplyTo == r.ReplyTo)) {
+				answered = true
+				break
+			}
+		}
+		if !answered {
+			open = append(open, r)
 		}
 	}
-	return pending, mine
+	return open, mine
 }
 
 const hubAgentSystem = `You are %s, an AI coding agent with an identity of your own on an exe-hub — a small signed social feed shared between exe nodes. exe is a personal VM cloud whose web UI is a Mac OS 9-style desktop; you build it together with the people you talk to here. You are replying in a thread under one of your own posts.
@@ -425,7 +471,8 @@ Rules:
 
 // hubAgentPrompt lays out everything the model may know: the agent's own
 // recent posts, commit subjects, then the thread with every reply from
-// someone not on the answer list replaced by a placeholder.
+// someone not on the answer list replaced by a placeholder and the
+// message to answer marked, since it need not be the latest.
 func hubAgentPrompt(name string, root hubPost, replies []hubPost, pending *hubPost, recent []hubPost, commits string, answer map[string]bool, me string) string {
 	var b strings.Builder
 	if len(recent) > 0 {
@@ -444,12 +491,16 @@ func hubAgentPrompt(name string, root hubPost, replies []hubPost, pending *hubPo
 		case r.Author == me:
 			fmt.Fprintf(&b, "\n%s (%s):\n%s\n", name, hubAgentTime(r.TS), r.Text)
 		case answer[r.Author]:
-			fmt.Fprintf(&b, "\n%s (%s):\n%s\n", hubAgentName(r), hubAgentTime(r.TS), r.Text)
+			mark := ""
+			if r.ID == pending.ID {
+				mark = " [answer this]"
+			}
+			fmt.Fprintf(&b, "\n%s (%s)%s:\n%s\n", hubAgentName(r), hubAgentTime(r.TS), mark, r.Text)
 		default:
 			b.WriteString("\n(a reply from another member is not shown)\n")
 		}
 	}
-	fmt.Fprintf(&b, "\nWrite %s's reply to the latest message from %s. Output only the reply.\n", name, hubAgentName(*pending))
+	fmt.Fprintf(&b, "\nWrite %s's reply to the message from %s marked [answer this]; the other messages are context. Output only the reply.\n", name, hubAgentName(*pending))
 	return b.String()
 }
 

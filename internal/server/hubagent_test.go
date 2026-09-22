@@ -41,6 +41,8 @@ type fakeHub struct {
 	connected chan struct{}
 	posted    chan hubEnvelope
 	seq       int64
+	me        string // the agent's profile id; set, accepted posts join their thread as on the real hub
+	n         int
 	URL       string
 }
 
@@ -116,14 +118,46 @@ func newFakeHub(t *testing.T, pub ed25519.PublicKey) *fakeHub {
 		}
 		h.mu.Lock()
 		h.seq = e.Seq
+		id := "newpost"
+		if h.me != "" && e.Type == "post.create" {
+			h.n++
+			id = fmt.Sprintf("new%d", h.n)
+			h.file(hubPost{ID: id, Author: h.me, AuthorName: "Claude", Text: e.Body.Text, ReplyTo: e.Body.ReplyTo, TS: time.Now().UnixMilli()})
+		}
 		h.mu.Unlock()
 		h.posted <- e
-		json.NewEncoder(w).Encode(map[string]string{"id": "newpost", "status": "accepted"})
+		json.NewEncoder(w).Encode(map[string]string{"id": id, "status": "accepted"})
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	h.URL = srv.URL
 	return h
+}
+
+// file puts a new post into the thread that holds its parent: the tree
+// always, the direct replies when the parent is the root, or the direct
+// replies alone for a fixture written the older hub's way (no tree).
+// Caller holds h.mu.
+func (h *fakeHub) file(p hubPost) {
+	for k, th := range h.threads {
+		holds := th.Post.ID == p.ReplyTo
+		for _, r := range append(append([]hubPost(nil), th.Replies...), th.Thread...) {
+			holds = holds || r.ID == p.ReplyTo
+		}
+		if !holds {
+			continue
+		}
+		switch {
+		case len(th.Thread) > 0:
+			th.Thread = append(th.Thread, p)
+			if th.Post.ID == p.ReplyTo {
+				th.Replies = append(th.Replies, p)
+			}
+		default:
+			th.Replies = append(th.Replies, p)
+		}
+		h.threads[k] = th
+	}
 }
 
 // agentKey writes a fresh PKCS8 ed25519 PEM and returns its path, identity
@@ -154,6 +188,39 @@ func fakeClaude(t *testing.T, reply string) (bin, dir string) {
 		t.Fatal(err)
 	}
 	return bin, dir
+}
+
+// fakeClaudeGated is fakeClaude with a model that takes its time: the
+// script answers only once the gate file exists.
+func fakeClaudeGated(t *testing.T, reply string) (bin, dir, gate string) {
+	bin, dir = fakeClaude(t, reply)
+	gate = filepath.Join(dir, "gate")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + dir + "/args\nenv > " + dir + "/env\ncat > " + dir + "/stdin\nwhile [ ! -e " + gate + " ]; do sleep 0.05; done\ncat " + dir + "/reply\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin, dir, gate
+}
+
+// waitFile waits for the model to have been called (fakeClaude writes
+// its stdin first thing).
+func waitFile(t *testing.T, path string) {
+	for i := 0; i < 100; i++ {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("%s never appeared", path)
+}
+
+// expectNoMore fails if another post follows.
+func expectNoMore(t *testing.T, hub *fakeHub) {
+	select {
+	case e := <-hub.posted:
+		t.Fatalf("agent posted again: %+v", e)
+	case <-time.After(400 * time.Millisecond):
+	}
 }
 
 func agentServer(t *testing.T, hub *fakeHub, keyPath, bin string, tweak func(*config.HubAgentConfig)) *Server {
@@ -279,7 +346,7 @@ func TestHubAgentAnswersAnAllowedReply(t *testing.T) {
 
 	stdin, _ := os.ReadFile(filepath.Join(dir, "stdin"))
 	in := string(stdin)
-	for _, must := range []string{"why?", "Idea: reply to one of my posts", "(a reply from another member is not shown)", "Shipped: the Hub app renders inline code.", "reply to the latest message from Livid"} {
+	for _, must := range []string{"why?", "Idea: reply to one of my posts", "(a reply from another member is not shown)", "Shipped: the Hub app renders inline code.", "[answer this]:\nwhy?", "reply to the message from Livid marked [answer this]"} {
 		if !strings.Contains(in, must) {
 			t.Fatalf("prompt lacks %q:\n%s", must, in)
 		}
@@ -430,28 +497,114 @@ func TestHubAgentThread(t *testing.T) {
 	}
 }
 
+// Two questions side by side under one post, the first answered under
+// itself and the second not: catch-up answers the second, under it, with
+// the prompt marking which message that is. A duplicate event afterwards
+// answers nothing.
+func TestHubAgentCatchUpAnswersASiblingQuestionLeftOpen(t *testing.T) {
+	fastAgent(t)
+	keyPath, ident, pub := agentKey(t)
+	hub := newFakeHub(t, pub)
+	hub.me = ident.ID
+	th := rootThread(ident.ID) // r2 "why?" by Livid
+	r3 := hubPost{ID: "r3", Author: lividID, AuthorName: "Livid", Text: "and how fast?", ReplyTo: "root1", TS: 1788266950000}
+	ansA := hubPost{ID: "mine", Author: ident.ID, Text: "Because.", ReplyTo: "r2", TS: 1788267000000}
+	th.Replies = append(th.Replies, r3)
+	th.Thread = append(append([]hubPost(nil), th.Replies...), ansA)
+	hub.threads["root1"] = th
+	hub.feed = []hubPost{{ID: "root1", Author: ident.ID, Replies: 4}}
+	bin, dir := fakeClaude(t, "Fast.")
+	s := agentServer(t, hub, keyPath, bin, nil)
+	ctx, cancel := contextWithCancel(t)
+	defer cancel()
+	go s.RunHubAgent(ctx)
+	e := expectPost(t, hub)
+	if e.Body.Text != "Fast." || e.Body.ReplyTo != "r3" {
+		t.Fatalf("envelope: %+v", e)
+	}
+	stdin, _ := os.ReadFile(filepath.Join(dir, "stdin"))
+	in := string(stdin)
+	if !strings.Contains(in, "[answer this]:\nand how fast?") || strings.Contains(in, "[answer this]:\nwhy?") || !strings.Contains(in, "Because.") {
+		t.Fatalf("prompt should mark the open question and carry the answered one:\n%s", in)
+	}
+	waitConnected(t, hub)
+	hub.events <- `{"type":"post.create","id":"r3","reply_to":"root1","author":"` + lividID + `"}`
+	expectNoMore(t, hub)
+}
+
+// A second question lands while the first is being answered. Its event
+// waits on the agent's lock; by the time anything looks again, the thread
+// shows the first answer under the first question and the second still
+// open, so both get an answer, each under its own message, and nothing
+// answers twice.
+func TestHubAgentAnswersAQuestionThatLandsDuringAnAnswer(t *testing.T) {
+	fastAgent(t)
+	keyPath, ident, pub := agentKey(t)
+	hub := newFakeHub(t, pub)
+	hub.me = ident.ID
+	th := rootThread(ident.ID)
+	th.Thread = append([]hubPost(nil), th.Replies...)
+	hub.threads["root1"] = th
+	bin, dir, gate := fakeClaudeGated(t, "One answer each.")
+	s := agentServer(t, hub, keyPath, bin, nil)
+	ctx, cancel := contextWithCancel(t)
+	defer cancel()
+	go s.RunHubAgent(ctx)
+	waitConnected(t, hub)
+	hub.events <- `{"type":"post.create","id":"r2","reply_to":"root1","author":"` + lividID + `"}`
+	waitFile(t, filepath.Join(dir, "stdin")) // the model is writing the first answer
+	hub.mu.Lock()
+	r3 := hubPost{ID: "r3", Author: lividID, AuthorName: "Livid", Text: "and how fast?", ReplyTo: "root1", TS: 1788267000000}
+	th = hub.threads["root1"]
+	th.Replies = append(th.Replies, r3)
+	th.Thread = append(th.Thread, r3)
+	hub.threads["root1"] = th
+	hub.mu.Unlock()
+	hub.events <- `{"type":"post.create","id":"r3","reply_to":"root1","author":"` + lividID + `"}`
+	time.Sleep(200 * time.Millisecond) // r3's look is waiting on the lock
+	os.WriteFile(gate, nil, 0o644)
+	first, second := expectPost(t, hub), expectPost(t, hub)
+	if first.Body.ReplyTo != "r2" || second.Body.ReplyTo != "r3" {
+		t.Fatalf("answers went under %q and %q, want r2 then r3", first.Body.ReplyTo, second.Body.ReplyTo)
+	}
+	stdin, _ := os.ReadFile(filepath.Join(dir, "stdin"))
+	if in := string(stdin); !strings.Contains(in, "One answer each.") || !strings.Contains(in, "[answer this]:\nand how fast?") {
+		t.Fatalf("the second prompt should carry the first answer and mark the second question:\n%s", in)
+	}
+	expectNoMore(t, hub)
+}
+
 func TestHubAgentPending(t *testing.T) {
 	me, answer := "agent", map[string]bool{lividID: true}
+	L := func(id, to string) hubPost { return hubPost{ID: id, Author: lividID, ReplyTo: to} }
+	M := func(id, to string) hubPost { return hubPost{ID: id, Author: me, ReplyTo: to} }
+	S := func(id, to string) hubPost { return hubPost{ID: id, Author: strangerID, ReplyTo: to} }
 	cases := []struct {
+		name    string
 		replies []hubPost
 		want    string
 		mine    int
 	}{
-		{nil, "", 0},
-		{[]hubPost{{ID: "a", Author: lividID}}, "a", 0},
-		{[]hubPost{{ID: "a", Author: lividID}, {ID: "b", Author: me}}, "", 1},
-		{[]hubPost{{ID: "a", Author: lividID}, {ID: "b", Author: me}, {ID: "c", Author: lividID}, {ID: "d", Author: lividID}}, "d", 1},
-		{[]hubPost{{ID: "a", Author: strangerID}}, "", 0},
-		{[]hubPost{{ID: "a", Author: lividID}, {ID: "b", Author: strangerID}}, "a", 0},
+		{"nothing", nil, "", 0},
+		{"one question", []hubPost{L("a", "root")}, "a", 0},
+		{"answered under it", []hubPost{L("a", "root"), M("b", "a")}, "", 1},
+		{"answered beside it, the old way", []hubPost{L("a", "root"), M("b", "root")}, "", 1},
+		{"two questions, both open, oldest first", []hubPost{L("a", "root"), L("b", "root")}, "a,b", 0},
+		{"two questions, the first answered under it", []hubPost{L("a", "root"), L("b", "root"), M("c", "a")}, "b", 1},
+		{"two questions, one answer beside both", []hubPost{L("a", "root"), L("b", "root"), M("c", "root")}, "", 1},
+		{"an earlier answer beside it does not count", []hubPost{M("a", "root"), L("b", "root")}, "b", 1},
+		{"the conversation went on under it", []hubPost{L("a", "root"), L("b", "a"), M("c", "b")}, "", 1},
+		{"a stranger's reply is neither", []hubPost{S("a", "root"), L("b", "root"), S("c", "b")}, "b", 0},
+		{"a question under the agent's answer", []hubPost{L("a", "root"), M("b", "a"), L("c", "b")}, "c", 1},
 	}
-	for i, c := range cases {
-		p, mine := hubAgentPending(c.replies, me, answer)
-		got := ""
-		if p != nil {
-			got = p.ID
+	for _, c := range cases {
+		open, mine := hubAgentPending(c.replies, me, answer)
+		var got []string
+		for _, p := range open {
+			got = append(got, p.ID)
 		}
-		if got != c.want || mine != c.mine {
-			t.Errorf("case %d: pending %q mine %d, want %q %d", i, got, mine, c.want, c.mine)
+		if strings.Join(got, ",") != c.want || mine != c.mine {
+			t.Errorf("%s: open %q mine %d, want %q %d", c.name, strings.Join(got, ","), mine, c.want, c.mine)
 		}
 	}
 }
