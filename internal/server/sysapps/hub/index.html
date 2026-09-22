@@ -1282,18 +1282,20 @@ function threadNode(p, depth = p.depth || 1) {
 // setReplyTarget aims the composer at one post of the open thread; the
 // strip above the text names it and quotes its first words, and × (or
 // choosing the head) goes back to answering the head.
-function setReplyTarget(p) {
-  if (p.id === view.id) { clearReplyTarget(); $("#text").focus(); return; }
+function setReplyTarget(p, quiet) { // quiet: a draft put back, no focus taken
+  if (p.id === view.id) { clearReplyTarget(); if (!quiet) $("#text").focus(); return; }
   replyTarget = p;
   const cut = plainWords(p.text, p.mentions);
   $("#rt-label").replaceChildren("Replying to ", el("b", {}, p.author_name || p.author),
     cut ? " — " + (cut.length > 80 ? cut.slice(0, 80) + "…" : cut) : "");
   $("#reply-to").classList.add("on");
-  $("#text").focus();
+  if (!quiet) $("#text").focus();
+  saveDraft();
 }
 function clearReplyTarget() {
   replyTarget = null;
   $("#reply-to").classList.remove("on");
+  saveDraft();
 }
 $("#rt-clear").onclick = () => { clearReplyTarget(); $("#text").focus(); };
 
@@ -1319,8 +1321,10 @@ async function openThread(id, jumpTo) {
       if (n) { n.classList.add("focus"); n.scrollIntoView({ block: "center" }); }
       else headNode.classList.add("focus"); // the reply is gone: land as usual
     }
+    return true;
   } catch (e) {
     feedEl.replaceChildren(el("div", { class: "muted" }, "Load failed: " + e.message));
+    return false;
   }
 }
 
@@ -1656,13 +1660,29 @@ function renderChips() {
       chip.append(el("span", {}, a.filename), a.bar, x);
     } else {
       const thumb = a.poster || (a.mime.startsWith("image/") ? a.cid : "");
-      if (thumb) chip.append(el("img", { src: hurl("/v1/embed/" + thumb) }));
+      if (thumb) {
+        const img = el("img", { src: hurl("/v1/embed/" + thumb) });
+        // a picture put back from a draft: the hub sweeps an unposted
+        // upload after a day, and its thumbnail failing is how that shows
+        if (a.kept) {
+          img.onload = () => { a.kept = false; };
+          img.onerror = () => {
+            const i = attachments.indexOf(a);
+            if (i < 0) return;
+            attachments.splice(i, 1);
+            renderChips();
+            say("The hub no longer has a picture from your draft", true);
+          };
+        }
+        chip.append(img);
+      }
       chip.append(el("span", {}, (a.filename || a.mime) + (a.duration ? " · " + fmtLength(a.duration) : "")), x);
     }
     box.append(chip);
   }
   $("#attach").disabled = attachments.length >= 4;
   updatePostBtn();
+  saveDraft();
 }
 function updatePostBtn() {
   // a file still converting has nothing to embed yet
@@ -2065,7 +2085,60 @@ $("#text").addEventListener("input", e => {
   updatePostBtn();
   fitField(); // before the pencil: what it hangs or scrolls next reads the field's new box
   pencilInput(e);
+  saveDraft();
 });
+
+// ---- an unsent post survives a reload ----
+// What stands in the composer is kept in this browser — localStorage,
+// one key per hub — and put back when the app opens again: the words,
+// the thread and the reply they answer, the pictures the hub already
+// holds, and which @Names were picked as mentions. Every edit writes it;
+// a post sent, or the field emptied, removes it. The app then opens on
+// that thread instead of the feed, the composer aimed as it was, and
+// takes no focus (a phone would raise its keyboard). A file still
+// converting is not kept, and a picture the hub has swept since (an
+// unposted upload lasts a day there) drops out with a word in the slot.
+const draftKey = () => "exe-hub-draft:" + hub;
+let draftReady = false; // the stored draft is read before anything writes over it
+function readDraft() {
+  try { return JSON.parse(localStorage.getItem(draftKey()) || "null"); } catch (e) { return null; }
+}
+function saveDraft() {
+  if (!draftReady || !hub) return;
+  const text = $("#text").value;
+  const at = attachments.filter(a => a.cid).map(a => {
+    const e = {};
+    for (const k of ["cid", "mime", "filename", "poster", "width", "height", "duration", "loop"]) if (a[k] != null) e[k] = a[k];
+    return e;
+  });
+  try {
+    if (!text.trim() && !at.length) { localStorage.removeItem(draftKey()); return; }
+    const d = { text, at, picked: [...picked], t: Date.now() };
+    if (view.kind === "thread") {
+      d.thread = view.id;
+      if (replyTarget) d.reply = { id: replyTarget.id, author: replyTarget.author, author_name: replyTarget.author_name,
+        text: (replyTarget.text || "").slice(0, 200), mentions: replyTarget.mentions };
+    }
+    localStorage.setItem(draftKey(), JSON.stringify(d));
+  } catch (e) {}
+}
+// restoreDraft fills the composer from the draft read at connect time,
+// its thread already open; a field written in since (a hub changed under
+// a draft) is kept as it stands
+function restoreDraft(d) {
+  draftReady = true;
+  const ta = $("#text");
+  if (!d || ta.value.trim() || attachments.length) { saveDraft(); return; }
+  ta.value = d.text || "";
+  for (const [n, id] of d.picked || []) picked.set(n, id);
+  if (d.reply && view.kind === "thread" && view.id === d.thread) setReplyTarget(d.reply, true);
+  attachments = (d.at || []).map(a => ({ ...a, kept: true }));
+  renderChips();
+  updatePostBtn();
+  fitField();
+  pencilInput();
+  saveDraft();
+}
 
 // ---- the field grows with the writing ----
 // The composer opens shallow, room for a remark. Writing past what it
@@ -3106,8 +3179,12 @@ async function connected() {
   if (who) {
     try { myProfile = await hget("/v1/profile/" + who.id); } catch (e) {}
   }
-  showFeed();
+  // a draft written in a thread opens on that thread (the feed's late
+  // arrival would paint over a thread opened after it)
+  const draft = readDraft();
+  if (!(draft && draft.thread && await openThread(draft.thread))) showFeed();
   connectEvents();
+  restoreDraft(draft);
   if (!myProfile) say("No profile yet — set a display name via Profile…");
 }
 

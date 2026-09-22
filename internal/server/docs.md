@@ -813,6 +813,13 @@ you write it, and gives the lines back as you delete. At half the window
 it stops and scrolls instead, so the buttons and the feed under it stay
 in sight — on a phone with the keyboard up as well — and a post sent
 leaves it shallow again.
+What you have written and not yet sent is not lost to a reload, a
+closed browser or a restart of exe: the words, the thread and the reply
+they answer, the pictures already uploaded and the mentions you picked
+are kept in this browser, and the app opens again on that thread with
+the composer as you left it. Posting, or emptying the field, lets the
+draft go; a picture the hub has swept in the meantime (an unposted
+upload lasts a day there) drops out of the draft with a note.
 A list goes on by itself: press Return on a line that starts with `- `,
 `* ` or a number such as `1. ` and the next line opens with the same
 bullet, or the next number. Return on an item you have left empty ends
