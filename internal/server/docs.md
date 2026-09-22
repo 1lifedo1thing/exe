@@ -243,6 +243,8 @@ fullscreen, one at a time; a tapped icon swells and fades as its window
 comes up, and closing a window walks back through the stack like a
 phone's back button. In a Claude Code or Codex window a finger drag
 scrolls back through the session's history, and a flick keeps it going.
+In Todo and Weather a finger scrolls the list; to move a row, press and
+hold it for half a second until it tints, then drag it to its new place.
 
 Over HTTPS — a Tailscale Serve address, say — the desktop installs as an
 app: **Add to Home Screen** on an iPhone or iPad, the install button in

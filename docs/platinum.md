@@ -261,6 +261,13 @@ restyling: `internal/server/ui/index.html` (the desktop),
   cell travelled, that take the wheel's own road (tmux copy mode, or the
   CLI's mouse reports); a flick glides on with a per-ms decay of 0.995.
   The box carries `touch-action: none` so the page never pans instead.
+- A list whose rows drag to reorder (Todo, Weather) is the opposite case:
+  a finger must still scroll it, so the rows keep the default
+  `touch-action`. A mouse picks a row up after 4px; a touch only after
+  resting 500ms within 8px (the phone's long press), and from then a
+  non-passive `touchmove` on the list calls `preventDefault` so the
+  browser does not take the pan. Moving sooner is a scroll (the browser
+  sends `pointercancel`), a quick lift a tap.
 - A drop target's ring is a 2px `--hl` inset shadow: on the Finder's icon
   area, the desktop, and over a terminal's screen as an `::after` overlay
   (an inset shadow on the box itself hides under xterm's canvases). A
