@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -17,6 +18,31 @@ type Spec struct {
 	CPUs     int    `json:"cpus"`
 	MemoryMB int    `json:"memory_mb"`
 	DiskGB   int    `json:"disk_gb"`
+	// Image picks the base image: "" or ImageDebian for the configured
+	// default, ImageAlpine for the Alpine image. Recorded in the VM's
+	// metadata, so a later config change never touches an existing guest.
+	Image string `json:"image,omitempty"`
+}
+
+// The images a Spec may name. An empty Spec.Image means the default base
+// image (Debian on Linux).
+const (
+	ImageDebian = "debian"
+	ImageAlpine = "alpine"
+)
+
+// NormalizeImage folds a requested image name to its canonical value; ""
+// stays "" (the default image).
+func NormalizeImage(image string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(image)) {
+	case "":
+		return "", nil
+	case ImageDebian:
+		return ImageDebian, nil
+	case ImageAlpine:
+		return ImageAlpine, nil
+	}
+	return "", fmt.Errorf("unknown image %q (use %s or %s)", image, ImageDebian, ImageAlpine)
 }
 
 type Info struct {
@@ -27,6 +53,7 @@ type Info struct {
 	DiskGB    int       `json:"disk_gb"`
 	MAC       string    `json:"mac"`
 	IP        string    `json:"ip,omitempty"`
+	Image     string    `json:"image,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -64,6 +91,7 @@ type PortForwarder interface {
 type Options struct {
 	StateDir       string
 	ImageURL       string
+	AlpineImageURL string
 	SSHUser        string
 	AuthorizedKey  string
 	PrivateKeyPath string

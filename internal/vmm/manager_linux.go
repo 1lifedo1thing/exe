@@ -3,7 +3,9 @@
 package vmm
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
@@ -375,6 +377,11 @@ func (m *fcManager) Create(ctx context.Context, spec Spec) (*Info, error) {
 	if spec.DiskGB < 1 {
 		return nil, fmt.Errorf("disk must be at least 1 GB")
 	}
+	image, err := NormalizeImage(spec.Image)
+	if err != nil {
+		return nil, err
+	}
+	spec.Image = image
 
 	lock := m.vmLock(spec.Name)
 	lock.Lock()
@@ -390,7 +397,7 @@ func (m *fcManager) Create(ctx context.Context, spec Spec) (*Info, error) {
 		return nil, err
 	}
 
-	base, err := m.EnsureImage(ctx)
+	base, err := m.ensureImage(ctx, spec.Image)
 	if err != nil {
 		m.createMu.Unlock()
 		lock.Unlock()
@@ -451,7 +458,7 @@ func (m *fcManager) Create(ctx context.Context, spec Spec) (*Info, error) {
 		lock.Unlock()
 		return nil, err
 	}
-	if err := configureLinuxGuest(disk, spec.Name, m.opts.SSHUser, m.opts.AuthorizedKey, mac, network); err != nil {
+	if err := configureLinuxGuest(disk, spec.Name, m.opts.SSHUser, m.opts.AuthorizedKey, mac, spec.Image, network); err != nil {
 		m.createMu.Unlock()
 		lock.Unlock()
 		return nil, err
@@ -649,14 +656,37 @@ DNS=8.8.8.8
 `, mac, network.GuestIP, network.PrefixLen, network.HostIP)
 }
 
-func configureLinuxGuest(disk, hostname, user, authorizedKey, mac string, network *vmNetwork) error {
-	if err := writeExt4File(disk, "/etc/systemd/network/10-exe.network", systemdNetworkConfig(mac, network)); err != nil {
+// alpineInterfaces pins eth0 to the address the kernel's ip= already set,
+// so OpenRC's networking service never reaches for DHCP that isn't there.
+func alpineInterfaces(network *vmNetwork) string {
+	return fmt.Sprintf(`auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+	address %s/%d
+	gateway %s
+`, network.GuestIP, network.PrefixLen, network.HostIP)
+}
+
+func configureLinuxGuest(disk, hostname, user, authorizedKey, mac, image string, network *vmNetwork) error {
+	if image == ImageAlpine {
+		if err := replaceExt4File(disk, "/etc/network/interfaces", alpineInterfaces(network)); err != nil {
+			return fmt.Errorf("configure guest network: %w", err)
+		}
+		if err := replaceExt4File(disk, "/etc/resolv.conf", "nameserver 1.1.1.1\nnameserver 8.8.8.8\n"); err != nil {
+			return fmt.Errorf("configure guest DNS: %w", err)
+		}
+	} else if err := writeExt4File(disk, "/etc/systemd/network/10-exe.network", systemdNetworkConfig(mac, network)); err != nil {
 		return fmt.Errorf("configure guest network: %w", err)
 	}
 	if err := makeExt4Dir(disk, "/var/lib/exe-seed"); err != nil {
 		return fmt.Errorf("create guest NoCloud directory: %w", err)
 	}
 	userData, metaData := cloudinit.Documents(hostname, user, authorizedKey, false)
+	if image == ImageAlpine {
+		userData, metaData = cloudinit.AlpineDocuments(hostname, user, authorizedKey)
+	}
 	for path, data := range map[string]string{
 		"/var/lib/exe-seed/user-data": userData,
 		"/var/lib/exe-seed/meta-data": metaData,
@@ -666,6 +696,14 @@ func configureLinuxGuest(disk, hostname, user, authorizedKey, mac string, networ
 		}
 	}
 	return nil
+}
+
+// replaceExt4File writes target into the image, first dropping any
+// existing file: debugfs's write never overwrites an inode in place.
+func replaceExt4File(disk, target, data string) error {
+	// debugfs exits 0 either way; a missing file only prints to stderr.
+	_ = exec.Command("debugfs", "-w", "-R", "rm "+target, disk).Run()
+	return writeExt4File(disk, target, data)
 }
 
 func writeExt4File(disk, target, data string) error {
@@ -680,6 +718,11 @@ func writeExt4File(disk, target, data string) error {
 		return err
 	}
 	if err := file.Close(); err != nil {
+		return err
+	}
+	// debugfs copies the staged file's mode into the image, and CreateTemp
+	// makes 0600 — which hid /etc/resolv.conf from the guest's own users.
+	if err := os.Chmod(temp, 0o644); err != nil {
 		return err
 	}
 	request := "write " + temp + " " + target
@@ -1046,6 +1089,7 @@ func (m *fcManager) info(name string, mt *vmMeta) (*Info, error) {
 		MemoryMB:  mt.Spec.MemoryMB,
 		DiskGB:    mt.Spec.DiskGB,
 		MAC:       mt.MAC,
+		Image:     mt.Spec.Image,
 		CreatedAt: mt.CreatedAt,
 	}
 	if state == "running" || state == "starting" {
@@ -1055,14 +1099,33 @@ func (m *fcManager) info(name string, mt *vmMeta) (*Info, error) {
 }
 
 func (m *fcManager) EnsureImage(ctx context.Context) (string, error) {
+	base, err := m.ensureImage(ctx, "")
+	if err != nil {
+		return "", err
+	}
 	m.dlMu.Lock()
 	defer m.dlMu.Unlock()
-	base, err := m.ensureDownload(ctx, m.opts.ImageURL, "")
-	if err != nil {
-		return "", fmt.Errorf("base image: %w", err)
-	}
 	if _, err := m.ensureDownload(ctx, m.opts.Firecracker.KernelURL, "firecracker-"); err != nil {
 		return "", fmt.Errorf("kernel: %w", err)
+	}
+	return base, nil
+}
+
+// ensureImage downloads the base image the spec names, if it is not in
+// the cache already.
+func (m *fcManager) ensureImage(ctx context.Context, image string) (string, error) {
+	sourceURL := m.opts.ImageURL
+	if image == ImageAlpine {
+		sourceURL = m.opts.AlpineImageURL
+		if sourceURL == "" {
+			return "", errors.New("no Alpine image configured (alpine_image_url)")
+		}
+	}
+	m.dlMu.Lock()
+	defer m.dlMu.Unlock()
+	base, err := m.ensureDownload(ctx, sourceURL, "")
+	if err != nil {
+		return "", fmt.Errorf("base image: %w", err)
 	}
 	return base, nil
 }
@@ -1084,6 +1147,12 @@ func (m *fcManager) ensureDownload(ctx context.Context, sourceURL, prefix string
 	name := filepath.Base(parsed.Path)
 	if name == "." || name == "/" || name == "" {
 		return "", fmt.Errorf("URL has no filename: %s", sourceURL)
+	}
+	// A .raw.tar.gz (the shape Alpine ships its cloud images in) is
+	// unpacked as it downloads; the cache keeps only the raw disk.
+	unpackRaw := strings.HasSuffix(name, ".raw.tar.gz")
+	if unpackRaw {
+		name = strings.TrimSuffix(name, ".tar.gz")
 	}
 	dest := filepath.Join(m.opts.StateDir, "images", prefix+name)
 	if st, err := os.Stat(dest); err == nil && st.Size() > 0 {
@@ -1107,7 +1176,12 @@ func (m *fcManager) ensureDownload(ctx context.Context, sourceURL, prefix string
 	if err != nil {
 		return "", err
 	}
-	_, copyErr := io.Copy(file, resp.Body)
+	var copyErr error
+	if unpackRaw {
+		copyErr = extractRawTar(resp.Body, file)
+	} else {
+		_, copyErr = io.Copy(file, resp.Body)
+	}
 	closeErr := file.Close()
 	if copyErr != nil {
 		os.Remove(tmp)
@@ -1127,4 +1201,43 @@ func (m *fcManager) ensureDownload(ctx context.Context, sourceURL, prefix string
 	}
 	log.Printf("download ready: %s", dest)
 	return dest, nil
+}
+
+// extractRawTar streams the first .raw member of a gzipped tarball into
+// out, seeking over zero runs so the cached disk stays sparse.
+func extractRawTar(r io.Reader, out *os.File) error {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return errors.New("archive holds no .raw disk")
+		}
+		if err != nil {
+			return err
+		}
+		if hdr.Typeflag != tar.TypeReg || !strings.HasSuffix(hdr.Name, ".raw") {
+			continue
+		}
+		buf := make([]byte, 1<<20)
+		zero := make([]byte, sparseChunk)
+		for {
+			n, err := tr.Read(buf)
+			if n > 0 {
+				if writeErr := writeSparse(out, buf[:n], zero); writeErr != nil {
+					return writeErr
+				}
+			}
+			if err == io.EOF {
+				return out.Truncate(hdr.Size)
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
 }

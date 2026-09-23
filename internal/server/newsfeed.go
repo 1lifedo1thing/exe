@@ -125,7 +125,11 @@ func writeNewsFile(p string, b []byte) error {
 
 // vmNewsLine describes a VM for feed items.
 func vmNewsLine(spec vmm.Spec) string {
-	return fmt.Sprintf("%s — %d CPUs, %d MB RAM, %d GB disk", spec.Name, spec.CPUs, spec.MemoryMB, spec.DiskGB)
+	line := fmt.Sprintf("%s — %d CPUs, %d MB RAM, %d GB disk", spec.Name, spec.CPUs, spec.MemoryMB, spec.DiskGB)
+	if spec.Image == vmm.ImageAlpine {
+		line += ", Alpine"
+	}
+	return line
 }
 
 // handleNewsfeedGet merges every node's journal into one feed, newest first.

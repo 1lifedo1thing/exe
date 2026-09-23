@@ -401,6 +401,12 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	image, err := vmm.NormalizeImage(spec.Image)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	spec.Image = image
 	s.fillSpec(&spec)
 	info, err := s.VMs.Create(r.Context(), spec)
 	if err != nil {

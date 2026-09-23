@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="6.5" y="1.5" width="19" height="24" fill="%23DAD5CA" stroke="%23000"/><rect x="10.5" y="5.5" width="11" height="8" fill="%237FD67F" stroke="%23000"/><rect x="12" y="18" width="8" height="2" fill="%2355524B"/><rect x="9.5" y="25.5" width="13" height="3" fill="%23C8C3B8" stroke="%23000"/></svg>'>
 <link rel="stylesheet" href="/ui/vendor/xterm.css">
+<link rel="stylesheet" href="/platinum/popup.css">
 <script src="/ui/vendor/xterm.js"></script>
 <script src="/ui/vendor/xterm-addon-fit.js"></script>
 <script src="/ui/vendor/xterm-addon-web-links.js"></script>
@@ -1680,6 +1681,13 @@ body.mobile th.sorted {
             <label for="c-disk">Disk (GB)</label>
             <input id="c-disk" type="number" placeholder="20">
           </div>
+        </div>
+        <div class="field" style="margin-top:10px">
+          <label for="c-image">System</label>
+          <span class="popup" style="width:130px"><select id="c-image">
+            <option value="" selected>Debian 13</option>
+            <option value="alpine">Alpine 3.24</option>
+          </select><span class="well"><i><b></b></i></span></span>
         </div>
         <div class="muted" id="c-status" style="min-height:16px"></div>
         <div class="row" style="justify-content:flex-end; gap:11px; margin:10px 0 2px">
@@ -5796,8 +5804,11 @@ $("#c-go").onclick = async () => {
     const v = parseInt($(id).value, 10);
     if (v > 0) body[key] = v;
   }
+  if ($("#c-image").value) body.image = $("#c-image").value;
   $("#c-go").disabled = true;
-  $("#c-status").textContent = "creating… (usually ~10s; first ever run downloads a 3 GB image)";
+  $("#c-status").textContent = body.image === "alpine"
+    ? "creating… (usually ~10s; the first Alpine VM downloads a 93 MB image)"
+    : "creating… (usually ~10s; first ever run downloads a 3 GB image)";
   try {
     await j("/v1/vms", { method: "POST", json: body });
     $("#c-name").value = "";

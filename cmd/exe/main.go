@@ -133,6 +133,7 @@ func cmdServe() error {
 	mgr, err := vmm.New(vmm.Options{
 		StateDir:       stateDir,
 		ImageURL:       cfg.ImageURL,
+		AlpineImageURL: cfg.AlpineImageURL,
 		SSHUser:        cfg.SSHUser,
 		AuthorizedKey:  pubKey,
 		PrivateKeyPath: privKey,
@@ -643,6 +644,7 @@ func cmdCreate(args []string) error {
 	cpus := fs.Int("cpus", 0, "vCPUs")
 	mem := fs.Int("mem", 0, "memory MB")
 	disk := fs.Int("disk", 0, "disk GB")
+	image := fs.String("image", "", "base image: debian (default) or alpine")
 	fs.Parse(rest)
 	cfg, err := config.Load()
 	if err != nil {
@@ -650,7 +652,7 @@ func cmdCreate(args []string) error {
 	}
 	fmt.Printf("creating %s (first run may download the base image; watch `exe serve` logs)...\n", name)
 	resp, err := api(cfg, "POST", "/v1/vms",
-		vmm.Spec{Name: name, CPUs: *cpus, MemoryMB: *mem, DiskGB: *disk}, 45*time.Minute)
+		vmm.Spec{Name: name, CPUs: *cpus, MemoryMB: *mem, DiskGB: *disk, Image: *image}, 45*time.Minute)
 	if err != nil {
 		return err
 	}

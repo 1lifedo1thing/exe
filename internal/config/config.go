@@ -14,6 +14,8 @@ import (
 
 const defaultImageURLTmpl = "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-%s.raw"
 
+const defaultAlpineImageURLTmpl = "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/cloud/alpine-3.24.2-%s-cloudinit-r0.raw.tar.gz"
+
 const defaultFirecrackerKernelURLTmpl = "https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20260805-f2f43b669a02-0/%s/vmlinux-6.18.39"
 
 type OllamaConfig struct {
@@ -137,6 +139,10 @@ type Config struct {
 
 	SSHUser  string `json:"ssh_user"`
 	ImageURL string `json:"image_url"`
+	// AlpineImageURL is the Alpine base image the New VM dialog's System
+	// pop-up offers beside the default; a .raw.tar.gz is unpacked to the
+	// raw disk it holds.
+	AlpineImageURL string `json:"alpine_image_url"`
 
 	DefaultCPUs     int `json:"default_cpus"`
 	DefaultMemoryMB int `json:"default_memory_mb"`
@@ -191,6 +197,7 @@ func Default() *Config {
 		SSHListen:       ":2222",
 		SSHUser:         "dev",
 		ImageURL:        fmt.Sprintf(defaultImageURLTmpl, arch),
+		AlpineImageURL:  fmt.Sprintf(defaultAlpineImageURLTmpl, firecrackerArch),
 		DefaultCPUs:     2,
 		DefaultMemoryMB: 2048,
 		DefaultDiskGB:   20,

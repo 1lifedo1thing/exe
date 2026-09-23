@@ -65,6 +65,11 @@ func (m *vzManager) Create(ctx context.Context, spec Spec) (*Info, error) {
 	if err := ValidateName(spec.Name); err != nil {
 		return nil, err
 	}
+	if img, err := NormalizeImage(spec.Image); err != nil {
+		return nil, err
+	} else if img == ImageAlpine {
+		return nil, fmt.Errorf("image %q is not available on this backend", spec.Image)
+	}
 	dir := m.vmDir(spec.Name)
 	if _, err := os.Stat(dir); err == nil {
 		return nil, fmt.Errorf("vm %q already exists", spec.Name)

@@ -562,6 +562,13 @@ memory and a 20 GB disk. The very first VM downloads the Debian base image
 (~3 GB) once — later VMs clone it and boot in seconds. VMs persist: stopping
 one keeps its disk, starting boots it again, deleting destroys the disk too.
 
+The **System** pop-up picks the VM's Linux: **Debian 13**, the default, or
+**Alpine 3.24** — a ~93 MB download the first time, a lean guest for
+disposable experiments. An Alpine guest runs OpenRC and `apk`, not systemd
+and `apt`; its user's shell is `ash`, and prebuilt glibc binaries do not run
+on its musl libc. Features that install packages inside a guest (Publish,
+Chat's apt instructions) expect the Debian image.
+
 A node without a hypervisor — a NAS, a container without `/dev/kvm` — runs
 the desktop without VMs: the list stays empty and says why, About This
 Computer shows the same reason, and everything else works as usual.

@@ -329,6 +329,7 @@ func chatTools(pinned bool) []agent.Tool {
 		agent.MkTool("list_vms", "List all VMs with state, IP and specs.", map[string]any{}, nil),
 		agent.MkTool("create_vm", "Create and boot a new VM; unset specs use the configured defaults.", map[string]any{
 			"name": vm, "cpus": num("CPU count"), "memory_mb": num("memory in MB"), "disk_gb": num("disk in GB"),
+			"image": str("base image: debian (default, apt + systemd) or alpine (apk + OpenRC, no sudo)"),
 		}, []string{"name"}),
 		agent.MkTool("start_vm", "Start a stopped VM.", map[string]any{"name": vm}, []string{"name"}),
 		agent.MkTool("stop_vm", "Stop a running VM.", map[string]any{"name": vm}, []string{"name"}),
@@ -571,7 +572,7 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 	case "list_vms":
 		return asJSON(s.VMs.List(tctx))
 	case "create_vm":
-		spec := vmm.Spec{Name: str("name"), CPUs: num("cpus"), MemoryMB: num("memory_mb"), DiskGB: num("disk_gb")}
+		spec := vmm.Spec{Name: str("name"), CPUs: num("cpus"), MemoryMB: num("memory_mb"), DiskGB: num("disk_gb"), Image: str("image")}
 		s.fillSpec(&spec)
 		info, err := s.VMs.Create(tctx, spec)
 		if err == nil {

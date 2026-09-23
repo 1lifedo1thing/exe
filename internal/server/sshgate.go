@@ -616,6 +616,7 @@ func (g *SSHGate) lobbyNew(ctx context.Context, out io.Writer, rest []string, fa
 	cpus := fs.Int("cpus", 0, "vCPUs")
 	mem := fs.Int("mem", 0, "memory MB")
 	disk := fs.Int("disk", 0, "disk GB")
+	image := fs.String("image", "", "base image: debian (default) or alpine")
 	jsonOut := fs.Bool("json", false, "JSON output")
 	if err := fs.Parse(rest); err != nil {
 		return 1
@@ -632,7 +633,7 @@ func (g *SSHGate) lobbyNew(ctx context.Context, out io.Writer, rest []string, fa
 	if err := vmm.ValidateName(name); err != nil {
 		return fail("%v", err)
 	}
-	spec := vmm.Spec{Name: name, CPUs: *cpus, MemoryMB: *mem, DiskGB: *disk}
+	spec := vmm.Spec{Name: name, CPUs: *cpus, MemoryMB: *mem, DiskGB: *disk, Image: *image}
 	g.s.fillSpec(&spec)
 	if !*jsonOut {
 		fmt.Fprintf(out, "creating %s (%d cpu, %d MB, %d GB) — the first VM ever downloads the base image, which can take a while...\n",

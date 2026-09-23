@@ -3,7 +3,9 @@
 package vmm
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -378,5 +380,84 @@ func TestNewWithoutFirecrackerIsNoBackend(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "exe-test-no-such-firecracker") {
 		t.Fatalf("New() error %q does not name the missing binary", err)
+	}
+}
+
+func TestNormalizeImage(t *testing.T) {
+	for input, want := range map[string]string{
+		"": "", "debian": "debian", "Debian": "debian",
+		"alpine": "alpine", " Alpine ": "alpine",
+	} {
+		got, err := NormalizeImage(input)
+		if err != nil || got != want {
+			t.Fatalf("NormalizeImage(%q) = %q, %v; want %q", input, got, err, want)
+		}
+	}
+	if _, err := NormalizeImage("gentoo"); err == nil {
+		t.Fatal("NormalizeImage accepted an unknown image")
+	}
+}
+
+func TestExtractRawTar(t *testing.T) {
+	// A disk with content at both ends and a zero middle, packed the way
+	// Alpine ships cloud images: one disk.raw inside a gzipped tarball.
+	disk := make([]byte, 3*sparseChunk)
+	copy(disk, []byte("boot sector"))
+	copy(disk[len(disk)-16:], []byte("tail"))
+	var packed bytes.Buffer
+	gz := gzip.NewWriter(&packed)
+	tw := tar.NewWriter(gz)
+	if err := tw.WriteHeader(&tar.Header{Name: "disk.raw", Mode: 0o644, Size: int64(len(disk)), Typeflag: tar.TypeReg}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write(disk); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := os.Create(filepath.Join(t.TempDir(), "disk.raw"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := extractRawTar(&packed, out); err != nil {
+		t.Fatalf("extractRawTar: %v", err)
+	}
+	if err := out.Close(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(out.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, disk) {
+		t.Fatalf("extracted disk differs: %d bytes, want %d", len(got), len(disk))
+	}
+
+	var empty bytes.Buffer
+	gz = gzip.NewWriter(&empty)
+	tw = tar.NewWriter(gz)
+	tw.Close()
+	gz.Close()
+	out2, err := os.Create(filepath.Join(t.TempDir(), "none.raw"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out2.Close()
+	if err := extractRawTar(&empty, out2); err == nil {
+		t.Fatal("extractRawTar accepted an archive with no .raw disk")
+	}
+}
+
+func TestAlpineInterfaces(t *testing.T) {
+	got := alpineInterfaces(&vmNetwork{GuestIP: "172.30.0.2", HostIP: "172.30.0.1", PrefixLen: 30})
+	for _, want := range []string{"iface eth0 inet static", "address 172.30.0.2/30", "gateway 172.30.0.1"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("interfaces misses %q:\n%s", want, got)
+		}
 	}
 }

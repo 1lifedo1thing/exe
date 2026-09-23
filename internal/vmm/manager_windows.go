@@ -286,6 +286,11 @@ func (m *qemuManager) Create(ctx context.Context, spec Spec) (*Info, error) {
 	if err := ValidateName(spec.Name); err != nil {
 		return nil, err
 	}
+	if img, err := NormalizeImage(spec.Image); err != nil {
+		return nil, err
+	} else if img == ImageAlpine {
+		return nil, fmt.Errorf("image %q is not available on this backend", spec.Image)
+	}
 	if spec.CPUs < 1 || spec.CPUs > 32 {
 		return nil, fmt.Errorf("cpus must be between 1 and 32")
 	}
