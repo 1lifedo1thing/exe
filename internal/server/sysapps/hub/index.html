@@ -206,25 +206,24 @@ canvas.ava-big { image-rendering: pixelated; }
    past that scrolling sideways under the Platinum bar, since a code
    line is not for wrapping — and the Copy button 6px right of the box
    (the HIG's gap inside a group), its top 2px under the box's top, so a
-   one-line box, 25px, holds it: the push button as everywhere, both its
-   words stacked in it, the one not showing kept invisible, so it is as
-   wide as the wider and the swap to Copied (copyCode) moves nothing.
-   8px above and below the row, none on the side that opens (.first) or
-   ends (.last) the post. The hub's public pages carry the same
-   numbers. */
+   one-line box, 25px, holds it: a push button, 31px, wearing a 13px
+   pixel glyph (COPY_GLYPHS) 8px either side — a box on another, the
+   sheets of a copy — that is a check mark for the moment after a press
+   (copyCode). The words Copy and Copied are in the button for a screen
+   reader alone, the one that holds hidden. 8px above and below the
+   row, none on the side that opens (.first) or ends (.last) the post.
+   The hub's public pages carry the same numbers. */
 .p-text .p-code { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0; white-space: normal; }
 .p-text .p-code.last { margin-bottom: 2px; }
 .p-text pre { margin: 0; padding: 4px 6px; min-width: 0; box-sizing: border-box;
   overflow-x: auto; overflow-y: hidden; border: 1px solid var(--black); background: #fff; tab-size: 4;
   font: 11px/15px var(--mono); white-space: pre; overflow-wrap: normal; word-break: normal; overscroll-behavior-x: contain; }
-.p-code .copy { flex: none; margin: 2px 0 0; display: inline-grid; white-space: nowrap; user-select: none; cursor: default; }
-.p-code .copy span { grid-area: 1 / 1; }
+.p-code .copy { flex: none; margin: 2px 0 0; padding: 2px 8px; display: inline-flex; align-items: center; position: relative;
+  white-space: nowrap; user-select: none; cursor: default; }
+.p-code .copy span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .p-code .copy:not(.done) span:last-of-type, .p-code .copy.done span:first-of-type { visibility: hidden; }
-/* a phone (body.mobile, the .icon rule above): the word gives way to
-   the glyph (COPY_GLYPHS) — a box on another, the sheets of a copy, and
-   a check mark for the moment after a press — and the box beside it
-   gets the room back */
-body.mobile .p-code .copy:not(.done) .gl.ok, body.mobile .p-code .copy.done .gl.box { display: none; }
+.p-code .copy .gl { display: none; }
+.p-code .copy:not(.done) .gl.box, .p-code .copy.done .gl.ok { display: block; }
 /* a list (formatText/listAt: "- " or "* " items, or numbered ones): a
    block like a table — 8px above and below, none on the side that opens
    (.first) or ends (.last) the post — its items hung: the marker stands
@@ -856,17 +855,17 @@ function fenceAt(lines, i) {
   while (j < lines.length && !FENCE_CLOSE_RE.test(lines[j])) j++;
   return { info: m[1], code: lines.slice(i + 1, j).join("\n"), n: Math.min(j + 1, lines.length) - i };
 }
-// the Copy button's art for a phone, where the word gives way to a
-// glyph: a box on another — the sheets of a copy — and the check mark
-// it turns into for the moment after a press; 13px pixel glyphs like
-// the composer row's, black in currentColor, white faces that a pressed
-// button greys (the hub's pages carry the same, web.go webCopyGlyphs)
+// the Copy button's art: a box on another — the sheets of a copy — and
+// the check mark it turns into for the moment after a press; 13px pixel
+// glyphs like the composer row's, black in currentColor, white faces
+// that a pressed button greys (the hub's pages carry the same, web.go
+// webCopyGlyphs)
 const COPY_GLYPHS = '<svg class="gl box" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M0 0h9v1h-9zM0 1h1v1h-1zM8 1h1v1h-1zM0 2h1v1h-1zM8 2h1v1h-1zM0 3h1v1h-1zM8 3h1v1h-1zM0 4h1v1h-1zM4 4h9v1h-9zM0 5h1v1h-1zM4 5h1v1h-1zM12 5h1v1h-1zM0 6h1v1h-1zM4 6h1v1h-1zM12 6h1v1h-1zM0 7h1v1h-1zM4 7h1v1h-1zM12 7h1v1h-1zM0 8h5v1h-5zM12 8h1v1h-1zM4 9h1v1h-1zM12 9h1v1h-1zM4 10h1v1h-1zM12 10h1v1h-1zM4 11h1v1h-1zM12 11h1v1h-1zM4 12h9v1h-9z"/><path class="w" d="M1 1h7v1h-7zM1 2h7v1h-7zM1 3h7v1h-7zM1 4h3v1h-3zM1 5h3v1h-3zM5 5h7v1h-7zM1 6h3v1h-3zM5 6h7v1h-7zM1 7h3v1h-3zM5 7h7v1h-7zM5 8h7v1h-7zM5 9h7v1h-7zM5 10h7v1h-7zM5 11h7v1h-7z"/></svg><svg class="gl ok" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M11 2h2v1h-2zM10 3h2v1h-2zM9 4h2v1h-2zM8 5h2v1h-2zM1 6h2v1h-2zM7 6h2v1h-2zM2 7h2v1h-2zM6 7h2v1h-2zM3 8h4v1h-4zM4 9h2v1h-2z"/></svg>';
 // the block as a node: the row of a pre of the code, one text node and
-// nothing else, and the Copy button beside it — its glyphs and both its
-// words, the phone's and the desk's rules choosing
+// nothing else, and the Copy button beside it — its glyphs, and both its
+// words for a screen reader
 function formatFence(f, marks) {
-  const b = el("button", { class: "ghost icon copy", type: "button" });
+  const b = el("button", { class: "ghost copy", type: "button" });
   b.innerHTML = COPY_GLYPHS + "<span>Copy</span><span>Copied</span>";
   return el("div", { class: "p-code" + (marks || "") }, el("pre", {}, f.code), b);
 }
