@@ -46,15 +46,18 @@ func NormalizeImage(image string) (string, error) {
 }
 
 type Info struct {
-	Name      string    `json:"name"`
-	State     string    `json:"state"`
-	CPUs      int       `json:"cpus"`
-	MemoryMB  int       `json:"memory_mb"`
-	DiskGB    int       `json:"disk_gb"`
-	MAC       string    `json:"mac"`
-	IP        string    `json:"ip,omitempty"`
-	Image     string    `json:"image,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	Name     string `json:"name"`
+	State    string `json:"state"`
+	CPUs     int    `json:"cpus"`
+	MemoryMB int    `json:"memory_mb"`
+	DiskGB   int    `json:"disk_gb"`
+	MAC      string `json:"mac"`
+	IP       string `json:"ip,omitempty"`
+	Image    string `json:"image,omitempty"`
+	// DiskUsedBytes is what the VM's disk actually occupies on the host —
+	// allocated blocks, not the sparse file's apparent size.
+	DiskUsedBytes int64     `json:"disk_used_bytes,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type Manager interface {

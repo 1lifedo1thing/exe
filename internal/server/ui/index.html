@@ -6021,7 +6021,8 @@ async function refreshDetailHead() {
     const st = $("#d-state");
     st.className = "chip " + vm.state;
     st.textContent = vm.state;
-    $("#d-ip").textContent = vm.ip || "";
+    $("#d-ip").textContent = [vm.ip, vm.disk_used_bytes ? fmtBytes(vm.disk_used_bytes) + " on disk" : ""]
+      .filter(Boolean).join(" · ");
   } catch (e) { toast(e.message); }
 }
 

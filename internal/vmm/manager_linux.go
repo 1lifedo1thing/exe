@@ -1083,19 +1083,33 @@ func (m *fcManager) info(name string, mt *vmMeta) (*Info, error) {
 	}
 	m.mu.Unlock()
 	info := &Info{
-		Name:      name,
-		State:     state,
-		CPUs:      mt.Spec.CPUs,
-		MemoryMB:  mt.Spec.MemoryMB,
-		DiskGB:    mt.Spec.DiskGB,
-		MAC:       mt.MAC,
-		Image:     mt.Spec.Image,
-		CreatedAt: mt.CreatedAt,
+		Name:          name,
+		State:         state,
+		CPUs:          mt.Spec.CPUs,
+		MemoryMB:      mt.Spec.MemoryMB,
+		DiskGB:        mt.Spec.DiskGB,
+		MAC:           mt.MAC,
+		Image:         mt.Spec.Image,
+		DiskUsedBytes: diskUsage(filepath.Join(m.vmDir(name), "disk.raw")),
+		CreatedAt:     mt.CreatedAt,
 	}
 	if state == "running" || state == "starting" {
 		info.IP = mt.Network.GuestIP
 	}
 	return info, nil
+}
+
+// diskUsage is the space a disk file occupies on the host: its allocated
+// blocks, so a sparse clone reports what it really holds. 0 when unknown.
+func diskUsage(path string) int64 {
+	st, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	if sys, ok := st.Sys().(*syscall.Stat_t); ok {
+		return sys.Blocks * 512
+	}
+	return st.Size()
 }
 
 func (m *fcManager) EnsureImage(ctx context.Context) (string, error) {

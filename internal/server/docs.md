@@ -598,7 +598,10 @@ Right-click a running VM and choose **btop** to open its process monitor in
 an 80×24 terminal window. It runs the VM's installed `btop` over SSH; press
 **q** to quit and close the window. A failed launch leaves its error visible.
 
-Double-click a VM in the list to open its window. The tabs:
+Double-click a VM in the list to open its window. Its status line shows the
+state lamp, then the IP and how much disk the VM really holds on the host —
+allocated space, not the sparse file's nominal size — separated by a middot.
+The tabs:
 
 - **Services** — TCP ports listening inside the VM, with one-click links,
   plus the routes already published to the web. Servers must bind

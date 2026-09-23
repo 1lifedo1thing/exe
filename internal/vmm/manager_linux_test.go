@@ -461,3 +461,29 @@ func TestAlpineInterfaces(t *testing.T) {
 		}
 	}
 }
+
+func TestDiskUsage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "disk.raw")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A sparse gigabyte holds nothing; usage reports blocks, not size.
+	if err := f.Truncate(1 << 30); err != nil {
+		t.Fatal(err)
+	}
+	data := bytes.Repeat([]byte{7}, 1<<20)
+	if _, err := f.WriteAt(data, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	used := diskUsage(path)
+	if used < 1<<20 || used >= 1<<29 {
+		t.Fatalf("diskUsage = %d; want about the 1 MB written, far under the sparse 1 GB", used)
+	}
+	if diskUsage(filepath.Join(t.TempDir(), "absent")) != 0 {
+		t.Fatal("diskUsage of a missing file should be 0")
+	}
+}
