@@ -838,7 +838,9 @@ A post's first link unfurls into a card with the page's title, and the
 hub keeps a copy of that page in the Internet Archive's Wayback Machine:
 it uses the newest capture there, or asks for a new one. **Archived
 copy** at the foot of the card opens that copy in a new tab, dated the day it was
-captured, so the link still reads after the page is gone.
+captured, so the link still reads after the page is gone. A link to
+another post on the hub shows a post card instead: who wrote it, when,
+and its first lines, and the card opens that thread.
 A link to a picture on IPFS, a gateway address such as ipfs.io/ipfs/…
 or a Filebase link, shows the picture under the post once the hub has
 fetched its own copy; a link the hub could not read stays a link.

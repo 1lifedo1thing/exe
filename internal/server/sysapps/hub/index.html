@@ -294,6 +294,16 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-card .c-b { min-width: 0; padding: 4px 8px; display: flex; flex-direction: column; justify-content: center; }
 .p-card .c-t { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-card .c-d, .p-card .c-h { font-size: 10px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a post card: the first link is a post this hub holds, quoted in the
+   link card's box — the row head's face, name, id and time where the
+   title stood, up to three lines of its words under it, its picture at
+   the left when it shows one; the card opens that thread in the app */
+.p-quote .c-b { padding: 4px 8px 5px; }
+.p-quote .q-h { display: flex; align-items: center; gap: 6px; min-width: 0; height: 17px; line-height: 17px; }
+.p-quote .q-h b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-quote .q-h .p-id { flex: none; }
+.p-quote .q-t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  margin-top: 2px; line-height: 17px; overflow-wrap: anywhere; }
 /* the card's page kept in the Internet Archive: the card's foot, a quieter
    grey with no rule above it */
 .p-card .c-a { display: block; padding: 4px 8px 2px; background: var(--g200); font-size: 10px; color: var(--hl);
@@ -1323,6 +1333,22 @@ function renderPost(p, opts = {}) {
       card.append(el("a", { class: "c-a", href: p.card.archive, target: "_blank", rel: "noopener nofollow" },
         "Archived copy" + (day ? " · " + day.slice(1).join("-") : "")));
     }
+    node.append(card);
+  }
+  if (p.quote) { // the first link is a post this hub holds: quoted in the link card's place
+    const q = p.quote;
+    const card = el("div", { class: "p-card p-quote" });
+    const box = el("a", { class: "c-m", href: hub + "/p/" + q.id });
+    if (q.image) box.append(el("span", { class: "c-i" },
+      el("img", { src: hurl("/v1/embed/" + q.image), alt: "", loading: "lazy" })));
+    const body = el("span", { class: "c-b" }, el("span", { class: "q-h" },
+      avatarEl(q.author, q.avatar), el("b", {}, q.author_name || "—"), el("span", { class: "p-id" }, q.author), timeEl(q.received)));
+    let words = plainWords(q.text, p.mentions);
+    if (words.length > 300) words = words.slice(0, 300).replace(/\s+\S*$/, "") + "…";
+    if (words) body.append(el("span", { class: "q-t" }, words));
+    box.append(body);
+    box.onclick = e => { e.preventDefault(); e.stopPropagation(); openThread(q.id); };
+    card.append(box);
     node.append(card);
   }
   if ((p.embeds && p.embeds.length) || (p.pictures && p.pictures.length)) {
