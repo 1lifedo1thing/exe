@@ -381,6 +381,13 @@ host user's login shell; on Windows it runs in PowerShell. The terminal
 session ends when the command exits. To reach a VM's shell instead, use
 `vm <name> term`.
 
+A command's window opens at 80×31 characters at least — what btop needs
+with its GPU box, and room enough for any other tool — and cannot be
+dragged smaller. It remembers its size and position, so the next open of
+the same command puts it back where it was left. Choosing the item again
+while the command runs brings its window forward; after the command has
+exited, it runs it again in the same window's place.
+
 ### VM tabs
 
 Use these values as the optional second argument to `vm`. For example,
