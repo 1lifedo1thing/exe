@@ -93,3 +93,39 @@ func TestUIFilesRevalidate(t *testing.T) {
 		t.Errorf("unknown path got %d", rec.Code)
 	}
 }
+
+// The Services scan reads ss on Debian and busybox netstat on Alpine,
+// which has no ss; each fixture is its tool's real shape.
+func TestParsePorts(t *testing.T) {
+	ss := `State  Recv-Q Send-Q Local Address:Port  Peer Address:Port Process
+LISTEN 0      128        127.0.0.1:631        0.0.0.0:*
+LISTEN 0      128          0.0.0.0:22         0.0.0.0:*     users:(("sshd",pid=600,fd=3))
+LISTEN 0      511          0.0.0.0:8000       0.0.0.0:*     users:(("python3",pid=900,fd=5))
+LISTEN 0      4096   127.0.0.53%lo:53         0.0.0.0:*     users:(("systemd-resolve",pid=300,fd=14))
+LISTEN 0      128            [::1]:631           [::]:*
+`
+	got := parsePorts(ss)
+	if len(got) != 1 || got[0].Port != 8000 || got[0].Process != "python3" {
+		t.Fatalf("ss parse = %+v; want one 8000/python3", got)
+	}
+
+	netstat := `Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      614/sshd
+tcp        0      0 0.0.0.0:8080            0.0.0.0:*               LISTEN      1041/httpd
+tcp        0      0 127.0.0.1:6379          0.0.0.0:*               LISTEN      1100/redis-server
+tcp        0      0 ::1:9090                :::*                    LISTEN      1200/node
+tcp        0      0 :::22                   :::*                    LISTEN      614/sshd
+`
+	got = parsePorts(netstat)
+	if len(got) != 1 || got[0].Port != 8080 || got[0].Process != "httpd" {
+		t.Fatalf("netstat parse = %+v; want one 8080/httpd", got)
+	}
+
+	// Unprivileged netstat has no process column; the port still lists.
+	plain := "tcp        0      0 0.0.0.0:3000            0.0.0.0:*               LISTEN\n"
+	got = parsePorts(plain)
+	if len(got) != 1 || got[0].Port != 3000 || got[0].Process != "" {
+		t.Fatalf("plain netstat parse = %+v; want one bare 3000", got)
+	}
+}

@@ -182,6 +182,9 @@ func handleServiceWorker(w http.ResponseWriter, r *http.Request) {
 
 var ssProcessRE = regexp.MustCompile(`users:\(\("([^"]+)"`)
 
+// netstat names the listener as "PID/name" in its last column.
+var netstatProcessRE = regexp.MustCompile(`(?:^|\s)\d+/(\S+)\s*$`)
+
 type vmPort struct {
 	Port    int    `json:"port"`
 	Process string `json:"process,omitempty"`
@@ -197,13 +200,22 @@ func (s *Server) scanPorts(ctx context.Context, info *vmm.Info) ([]vmPort, error
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	target := s.vmTarget(info)
-	out, code, err := target.Run(ctx, `sudo -n ss -tlnp 2>/dev/null || ss -tln`, 65536)
+	// An Alpine guest has neither sudo nor ss; busybox netstat answers
+	// there, through doas for the listeners' names.
+	out, code, err := target.Run(ctx,
+		`sudo -n ss -tlnp 2>/dev/null || ss -tln 2>/dev/null || doas -n netstat -tlnp 2>/dev/null || netstat -tln`, 65536)
 	if err != nil {
 		return nil, err
 	}
 	if code != 0 {
-		return nil, fmt.Errorf("ss exited %d: %s", code, out)
+		return nil, fmt.Errorf("port scan exited %d: %s", code, out)
 	}
+	return parsePorts(out), nil
+}
+
+// parsePorts reads ss or netstat output: TCP ports listening on
+// non-loopback addresses, SSH excluded.
+func parsePorts(out string) []vmPort {
 	seen := map[int]string{}
 	for _, line := range strings.Split(out, "\n") {
 		if !strings.Contains(line, "LISTEN") {
@@ -223,12 +235,14 @@ func (s *Server) scanPorts(ctx context.Context, info *vmm.Info) ([]vmPort, error
 		if err != nil || port == 22 {
 			continue
 		}
-		if strings.HasPrefix(host, "127.") || strings.HasPrefix(host, "[::1]") ||
+		if strings.HasPrefix(host, "127.") || strings.HasPrefix(host, "[::1]") || host == "::1" ||
 			strings.Contains(host, "%lo") || strings.HasPrefix(host, "127.0.0.53%") {
 			continue
 		}
 		proc := ""
 		if m := ssProcessRE.FindStringSubmatch(line); m != nil {
+			proc = m[1]
+		} else if m := netstatProcessRE.FindStringSubmatch(line); m != nil {
 			proc = m[1]
 		}
 		if strings.HasPrefix(proc, "systemd-") {
@@ -243,7 +257,7 @@ func (s *Server) scanPorts(ctx context.Context, info *vmm.Info) ([]vmPort, error
 		services = append(services, vmPort{Port: port, Process: proc})
 	}
 	sort.Slice(services, func(i, j int) bool { return services[i].Port < services[j].Port })
-	return services, nil
+	return services
 }
 
 func (s *Server) handlePorts(w http.ResponseWriter, r *http.Request) {
