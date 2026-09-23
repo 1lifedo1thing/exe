@@ -585,8 +585,10 @@ The **System** pop-up picks the VM's Linux: **Debian 13**, the default, or
 **Alpine 3.24** — a ~93 MB download the first time, a lean guest for
 disposable experiments. An Alpine guest runs OpenRC and `apk`, not systemd
 and `apt`; its user's shell is `ash`, and prebuilt glibc binaries do not run
-on its musl libc. Features that install packages inside a guest (Publish,
-Chat's apt instructions) expect the Debian image.
+on its musl libc. Chat, a chat pinned to the VM and the Agent tab are told
+which system a VM runs — its recorded image opens their context — so on
+Alpine they reach for `apk` and `doas`; Publish installs with `apt` and
+expects the Debian image.
 
 A node without a hypervisor — a NAS, a container without `/dev/kvm` — runs
 the desktop without VMs: the list stays empty and says why, About This
@@ -642,7 +644,7 @@ needs one. Then:
 
 - The **Agent** tab in a VM window runs the agent inside that VM. It can
   install packages, write code and start services — it has passwordless
-  sudo *inside the VM*, and the VM is the sandbox boundary.
+  sudo (doas on Alpine) *inside the VM*, and the VM is the sandbox boundary.
 - The **Chat** icon and window appear once a chat backend is usable: a
   conversation that can see and drive your whole VM cloud. Replies run in
   the daemon, not in the browser: closing the tab (or losing the network)

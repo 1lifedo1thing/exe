@@ -12,6 +12,7 @@ import (
 
 	"exe/internal/chat"
 	"exe/internal/sshexec"
+	"exe/internal/vmm"
 )
 
 // Per-VM agent memory: a small model-maintained file beside the user's
@@ -57,6 +58,51 @@ func (s *Server) writeVMMemory(vm, content string) error {
 // the VM from scratch. selfID excludes the session being briefed from the
 // recent-sessions list (its own history is already in context). Sections
 // with nothing to say are omitted; on a stopped VM the live parts are.
+// guestSystem is what an agent working inside a VM has to know about the
+// Linux it runs, from the image recorded on the VM at create time. The
+// default image is Debian; Alpine differs in every tool an agent reaches
+// for first, so a guest left unnamed gets guessed as Debian and apt-get
+// fails (Livid's Alpine VM, 2026-09-23).
+type guestSystem struct {
+	Name    string // "Debian 13"
+	Elevate string // the passwordless root command: sudo, doas
+	Install string // how a package is installed
+	Service string // what keeps a service running
+	Facts   string // the one-line briefing
+}
+
+var (
+	guestDebian = guestSystem{Name: "Debian 13", Elevate: "sudo", Install: "sudo apt-get install -y", Service: "systemd",
+		Facts: "Debian 13 — sudo, apt-get, bash, systemd."}
+	guestAlpine = guestSystem{Name: "Alpine 3.24", Elevate: "doas", Install: "doas apk add",
+		Service: "OpenRC (a script in /etc/init.d, doas rc-update add, doas rc-service)",
+		Facts:   "Alpine 3.24 — doas, not sudo (there is no sudo); apk add, not apt-get; ash, no bash; OpenRC (rc-service, rc-update), not systemd; musl libc, so prebuilt glibc binaries do not run."}
+)
+
+// guestSystemOf is the system a VM's recorded image means; "" is the
+// default image.
+func guestSystemOf(image string) guestSystem {
+	if image == vmm.ImageAlpine {
+		return guestAlpine
+	}
+	return guestDebian
+}
+
+// withImages is a VM list for a model's eyes: every entry names its
+// image, the default one included, so the system is never left to a
+// guess. The manager's records are not touched.
+func withImages(list []*vmm.Info) []*vmm.Info {
+	out := make([]*vmm.Info, 0, len(list))
+	for _, info := range list {
+		c := *info
+		if c.Image == "" {
+			c.Image = vmm.ImageDebian
+		}
+		out = append(out, &c)
+	}
+	return out
+}
+
 func (s *Server) vmBriefing(ctx context.Context, vm, selfID string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "What you know about the VM %q (gathered automatically; live facts are current as of the start of this run):\n", vm)
@@ -67,6 +113,7 @@ func (s *Server) vmBriefing(ctx context.Context, vm, selfID string) string {
 			fmt.Fprintf(&b, ", IP %s", info.IP)
 		}
 		b.WriteString("\n")
+		fmt.Fprintf(&b, "System: %s\n", guestSystemOf(info.Image).Facts)
 		if info.State == "running" {
 			if ports, err := s.scanPorts(ctx, info); err == nil && len(ports) > 0 {
 				b.WriteString("Listening ports:")

@@ -265,7 +265,13 @@ func (s *Server) runChatLoop(ctx context.Context, cfg *config.Config, provider s
 	// A pinned run opens with the VM briefing — live state, the user's
 	// notes, the agent's saved memory, recent session summaries — built
 	// once at run start and injected ephemerally, never persisted.
-	prefix := []agent.Message{{Role: "system", Content: chatSystemPrompt(cfg.SSHUser, cfg.Cloudflare.Domain, sess.VM)}}
+	image := ""
+	if sess.VM != "" {
+		if info, err := s.VMs.Get(ctx, sess.VM); err == nil {
+			image = info.Image
+		}
+	}
+	prefix := []agent.Message{{Role: "system", Content: chatSystemPrompt(cfg.SSHUser, cfg.Cloudflare.Domain, sess.VM, image)}}
 	if sess.VM != "" {
 		prefix = append(prefix, agent.Message{Role: "system", Content: s.vmBriefing(ctx, sess.VM, sess.ID)})
 	}

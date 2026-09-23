@@ -34,13 +34,15 @@ const (
 	chatMaxToolOutput = sshexec.ReadCap
 )
 
-const chatSystemTmpl = `You are the operator of exe, a personal VM cloud running on this Mac. You manage Debian Linux VMs (Virtualization.framework) through tools; inside every running VM you act as user %s over SSH, with passwordless sudo.
-%s
+const chatSystemTmpl = `You are the operator of exe, a personal VM cloud running on this Mac. You manage Linux VMs (Virtualization.framework) through tools; inside every running VM you act as user %[1]s over SSH, with passwordless sudo — doas on Alpine.
+%[2]s
+
+Systems: a VM's list_vms entry names its image. debian, the default, runs %[3]s alpine runs %[4]s Check a VM's image before installing anything or setting up a service.
 
 Rules:
 - For a multi-step task, call plan first with a short markdown checklist ("- [ ] step"), and update it via plan with "- [x]" checkmarks as steps complete — the user watches it as a live checklist. Skip it for trivial requests.
 - VM names: lowercase letters, digits, hyphens, max 31 chars.
-- To inspect or change anything inside a VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones — read an exact region with read_file offset/limit or grep -n.
+- To inspect or change anything inside a VM, use bash (non-interactive commands only). Install packages with %[5]s on Debian, %[6]s on Alpine. Services you set up should bind 0.0.0.0 and run under systemd on Debian, OpenRC on Alpine, so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones — read an exact region with read_file offset/limit or grep -n.
 - delete_vm and unexpose run only after the user approves an in-app confirmation dialog; still call them only when the user asked for that. If the confirmation is declined or unanswered, do not retry — ask what the user wants instead.
 - Pushing to github.com: use github_push — VMs hold no GitHub credentials, so git push via bash always fails; never configure credentials or tokens inside a VM.
 - Each VM has a persistent memory for future sessions: recall reads it, remember replaces it. Save durable facts — where projects live, how services start, gotchas — when you learn them.
@@ -49,12 +51,14 @@ Rules:
 
 // The system prompt of a session pinned to one VM: same operator, but the
 // fleet is out of scope and the tools already target the pinned VM.
-const chatPinnedTmpl = `You are the operator of %q, one Debian Linux VM in exe, a personal VM cloud running on this Mac. All your tools act on this VM only — other VMs are out of scope for this conversation. Inside the VM you act as user %s over SSH, with passwordless sudo.
-%s
+const chatPinnedTmpl = `You are the operator of %[1]q, one Linux VM in exe, a personal VM cloud running on this Mac. All your tools act on this VM only — other VMs are out of scope for this conversation. Inside the VM you act as user %[2]s over SSH, with passwordless %[3]s.
+%[4]s
+
+The VM runs %[5]s
 
 Rules:
 - For a multi-step task, call plan first with a short markdown checklist ("- [ ] step"), and update it via plan with "- [x]" checkmarks as steps complete — the user watches it as a live checklist. Skip it for trivial requests.
-- To inspect or change anything inside the VM, use bash (non-interactive commands only). Install packages with sudo apt-get install -y. Services you set up should bind 0.0.0.0 and run under systemd so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones — read an exact region with read_file offset/limit or grep -n.
+- To inspect or change anything inside the VM, use bash (non-interactive commands only). Install packages with %[6]s. Services you set up should bind 0.0.0.0 and run under %[7]s so they survive. Change existing files with edit_file; write_file overwrites whole files, and read_file elides the middle of large ones — read an exact region with read_file offset/limit or grep -n.
 - unexpose runs only after the user approves an in-app confirmation dialog; still call it only when the user asked for that. If the confirmation is declined or unanswered, do not retry — ask what the user wants instead.
 - Pushing to github.com: use github_push — the VM holds no GitHub credentials, so git push via bash always fails; never configure credentials or tokens inside the VM.
 - The VM's saved memory and current state are in your context; when you learn something durable, save the complete updated memory with remember.
@@ -62,15 +66,19 @@ Rules:
 
 func (s *Server) chatDir() string { return filepath.Join(s.StateDir, "chat") }
 
-func chatSystemPrompt(sshUser, domain, vm string) string {
+// chatSystemPrompt is the operator's system prompt: for the fleet, or
+// pinned to one VM, whose recorded image names the system it runs so the
+// operator never guesses Debian on an Alpine guest.
+func chatSystemPrompt(sshUser, domain, vm, image string) string {
 	pub := "Publishing: cloudflare.domain is not configured, so expose only adds a local proxy route — suggest the Cloudflare wizard if the user wants public URLs."
 	if domain != "" {
 		pub = fmt.Sprintf("Publishing: expose makes a VM port reachable at https://<subdomain>.%s.", domain)
 	}
 	if vm != "" {
-		return fmt.Sprintf(chatPinnedTmpl, vm, sshUser, pub)
+		g := guestSystemOf(image)
+		return fmt.Sprintf(chatPinnedTmpl, vm, sshUser, g.Elevate, pub, g.Facts, g.Install, g.Service)
 	}
-	return fmt.Sprintf(chatSystemTmpl, sshUser, pub)
+	return fmt.Sprintf(chatSystemTmpl, sshUser, pub, guestDebian.Facts, guestAlpine.Facts, guestDebian.Install, guestAlpine.Install)
 }
 
 // ---- backend detection ----
@@ -326,10 +334,10 @@ func chatTools(pinned bool) []agent.Tool {
 	num := func(desc string) map[string]any { return map[string]any{"type": "integer", "description": desc} }
 	vm := str("VM name")
 	tools := []agent.Tool{
-		agent.MkTool("list_vms", "List all VMs with state, IP and specs.", map[string]any{}, nil),
+		agent.MkTool("list_vms", "List all VMs with state, IP, specs and image (debian or alpine: the system each one runs).", map[string]any{}, nil),
 		agent.MkTool("create_vm", "Create and boot a new VM; unset specs use the configured defaults.", map[string]any{
 			"name": vm, "cpus": num("CPU count"), "memory_mb": num("memory in MB"), "disk_gb": num("disk in GB"),
-			"image": str("base image: debian (default, apt + systemd) or alpine (apk + OpenRC, no sudo)"),
+			"image": str("base image: debian (default: apt-get, sudo, systemd) or alpine (apk, doas, OpenRC; no sudo, no bash)"),
 		}, []string{"name"}),
 		agent.MkTool("start_vm", "Start a stopped VM.", map[string]any{"name": vm}, []string{"name"}),
 		agent.MkTool("stop_vm", "Stop a running VM.", map[string]any{"name": vm}, []string{"name"}),
@@ -570,7 +578,11 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 
 	switch name {
 	case "list_vms":
-		return asJSON(s.VMs.List(tctx))
+		list, err := s.VMs.List(tctx)
+		if err != nil {
+			return asJSON(nil, err)
+		}
+		return asJSON(withImages(list), nil)
 	case "create_vm":
 		spec := vmm.Spec{Name: str("name"), CPUs: num("cpus"), MemoryMB: num("memory_mb"), DiskGB: num("disk_gb"), Image: str("image")}
 		s.fillSpec(&spec)
