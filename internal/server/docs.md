@@ -218,6 +218,18 @@ API takes the same: `POST /v1/agents/codex/sessions` with `{"resume":
 "<thread id>"}`, and `GET …/sessions` lists the threads beside the
 sessions.
 
+The Claude Code window's column lists Claude Code sessions started
+elsewhere on this machine the same way — `claude` run in a Terminal
+window, over SSH, in an IDE — the latest ten, titled as Claude Code
+titles them (your own `/rename` first), with the hollow dot; a green one
+while its CLI is still open there, or a turn runs there. A session whose
+window or shell died with it — a Terminal window closed, the daemon
+restarted — is right there to click: it continues in a session of the
+column's own, in the folder it was started in, as `claude --resume` would.
+Headless runs (`claude -p`, the hub watcher's turns) are not listed, nor
+are the column's own sessions. `POST /v1/agents/claude/sessions` with
+`{"resume": "<session id>"}` is the same from the API.
+
 The column is also an API, for tools that want a conversation you can
 watch: `GET /v1/agents/claude/sessions` lists the rows with their states,
 `POST /v1/agents/claude/sessions` opens a numbered session with a first

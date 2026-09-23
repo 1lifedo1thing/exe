@@ -943,10 +943,11 @@ a.svc:hover { text-decoration: underline; }
    output in the last few seconds — while the window shows another; the
    Chat list's streaming dot, so green means the same thing everywhere */
 .sess-live { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: cs-pulse 1.2s ease-in-out infinite; }
-/* threads started elsewhere — the ChatGPT app on a phone, the Codex app —
-   follow the sessions under a rule; the hollow dot says the thread is not
-   here yet, a click continues it in a session of its own (the row greys
-   while that opens) */
+/* conversations started elsewhere — Codex's threads from the ChatGPT app
+   on a phone or the Codex app, Claude Code's sessions from a Terminal
+   window or an SSH shell — follow the sessions under a rule; the hollow
+   dot says the conversation is not here yet, a click continues it in a
+   session of its own (the row greys while that opens) */
 .sess-sep { flex: none; height: 0; border-top: 1px solid var(--black); }
 .sess-away { flex: none; width: 7px; height: 7px; display: block; }
 .sess-away svg { display: block; }
@@ -6294,10 +6295,12 @@ function openHostTermWin(app, cmd, vm) {
   // frame says so — the browser keeps no note of its own
   const list = w.querySelector(".sess-list"), newBtn = w.querySelector(".sess-new");
   let sessions = [{ name: "", number: 1, title: "" }], current = "", shown = "";
-  // Codex: threads started elsewhere — in the ChatGPT app on a phone,
-  // the Codex app — from the daemon's "threads" (codexthreads.go); a
-  // click continues one here, in a session of its own, and pending is
-  // the one on its way, greyed until the next frame carries the session
+  // conversations started elsewhere — Codex's threads from the ChatGPT
+  // app on a phone or the Codex app (codexthreads.go), Claude Code's
+  // sessions from a Terminal window or an SSH shell (claudesessions.go)
+  // — from the daemon's "threads"; a click continues one here, in a
+  // session of its own, and pending is the one on its way, greyed until
+  // the next frame carries the session
   let threads = [], pending = "";
   const sessTitle = s => s.title ? s.title.replace(/^✳\s*/, "") : agent.title + " " + s.number;
   // when a session started, short enough for a menu line: the time alone
@@ -6338,8 +6341,10 @@ function openHostTermWin(app, cmd, vm) {
       // the hollow dot otherwise — it is not here yet
       const row = el("div", { class: "sess-row" + (t.title ? "" : " untitled") + (t.thread === pending ? " pending" : ""),
         title: threadTitle(t) + "\nstarted in " + t.origin + " " + sessWhen(t.created) + (t.cwd ? ", in " + t.cwd : "")
-          + (t.working ? "\nstill working there" : "") + "\nclick to continue it here, in a session of its own" });
-      row.append(t.working ? el("span", { class: "sess-live" }) : sessAway());
+          + (t.open ? "\nstill open in " + t.origin + (t.working ? ", working" : "") : t.working ? "\nstill working there" : "")
+          + "\nclick to continue it here, in a session of its own" });
+      // the green dot: a turn runs there, or (Claude Code) its CLI is still open there
+      row.append(t.working || t.open ? el("span", { class: "sess-live" }) : sessAway());
       row.append(el("span", { class: "t" }, threadTitle(t)));
       row.onclick = () => { resumeThread(t); term.focus(); };
       row.addEventListener("contextmenu", e => threadMenu(e, t));

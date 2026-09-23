@@ -298,7 +298,7 @@ func (c *agentColumn) follow(ctx context.Context) {
 		c.s.markAgentStates(c.a, list)
 		frame := map[string]any{"sessions": list, "current": c.current()}
 		if threads := c.s.agentThreads(c.a, list); threads != nil {
-			frame["threads"] = threads // Codex: threads started elsewhere (codexthreads.go)
+			frame["threads"] = threads // conversations started elsewhere (codexthreads.go, claudesessions.go)
 		}
 		msg, _ := json.Marshal(frame)
 		if string(msg) != last {
@@ -396,24 +396,42 @@ func (s *Server) nextAgentSession(a hostAgent) string {
 	return agentSessionName(a, n)
 }
 
-// resume continues a thread started elsewhere (codexthreads.go) in a
-// session of its own, in the thread's own folder when it still exists,
-// and moves the window there. The session is marked with the thread at
-// once (noteCodexThread), so the thread's row leaves the list as the
-// session's arrives.
+// resume continues a conversation started elsewhere — a Codex thread
+// (codexthreads.go), a Claude Code session (claudesessions.go) — in a
+// session of its own, in the folder it was started in when that still
+// exists, and moves the window there. The session is marked with the
+// conversation at once (noteCodexThread, noteClaudeSession), so its row
+// leaves the list as the session's arrives.
 func (c *agentColumn) resume(id string) error {
-	if !c.a.notify {
-		return fmt.Errorf("%s has no threads to continue here", c.a.title)
-	}
 	if !agentIDPattern.MatchString(id) {
 		return errors.New("resume: not a thread id")
 	}
 	name := c.s.nextAgentSession(c.a)
-	if err := c.s.newAgentSessionIn(c.a, name, codexThreadDir(id), "resume", id); err != nil {
+	if c.a.notify {
+		if err := c.s.newAgentSessionIn(c.a, name, codexThreadDir(id), "resume", id); err != nil {
+			return err
+		}
+		c.s.noteCodexThread(c.a, name, id)
+		return c.switchTo(name)
+	}
+	t := claudeSessionByID(claudeHome(), id)
+	if t == nil {
+		return fmt.Errorf("no %s session %s on this machine", c.a.title, id)
+	}
+	if err := c.s.newAgentSessionIn(c.a, name, existingDir(t.cwd), "--resume", id); err != nil {
 		return err
 	}
-	c.s.noteCodexThread(c.a, name, id)
+	c.s.noteClaudeSession(c.a, name, id, t.path)
 	return c.switchTo(name)
+}
+
+// existingDir is dir when it is a folder that still exists, "" otherwise
+// (a session then opens in the project folder, as any other).
+func existingDir(dir string) string {
+	if st, err := os.Stat(dir); dir != "" && err == nil && st.IsDir() {
+		return dir
+	}
+	return ""
 }
 
 // codexThreadDir is the folder a thread was started in, "" when it is
@@ -421,10 +439,7 @@ func (c *agentColumn) resume(id string) error {
 func codexThreadDir(id string) string {
 	for _, t := range codexAppThreads(codexHome(), nil, time.Now(), 0) {
 		if t.ID == id {
-			if st, err := os.Stat(t.Cwd); err == nil && st.IsDir() {
-				return t.Cwd
-			}
-			return ""
+			return existingDir(t.Cwd)
 		}
 	}
 	return ""

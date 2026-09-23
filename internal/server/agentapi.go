@@ -20,8 +20,8 @@ import (
 // first message, so the Claude Code window lists it while it works and
 // the conversation stays open there to be taken over or continued.
 //
-//	GET    /v1/agents/{app}/sessions                 the rows of the column, with their states; for Codex also
-//	                                                 "threads", the threads started elsewhere (codexthreads.go)
+//	GET    /v1/agents/{app}/sessions                 the rows of the column, with their states, and "threads", the
+//	                                                 conversations started elsewhere (codexthreads.go, claudesessions.go)
 //	POST   /v1/agents/{app}/sessions                 {prompt, resume, fork, session_id, permission_mode, model} → {name, number}
 //	                                                 (Codex: prompt and resume, a thread id, alone)
 //	POST   /v1/agents/{app}/sessions/{name}/prompt   {prompt, say}: one message, "say" typed and the prompt pasted after it
@@ -46,7 +46,7 @@ func (s *Server) handleAgentSessionsList(w http.ResponseWriter, r *http.Request)
 	s.markAgentStates(a, list)
 	out := map[string]any{"sessions": list}
 	if threads := s.agentThreads(a, list); threads != nil {
-		out["threads"] = threads // Codex: threads started elsewhere (codexthreads.go)
+		out["threads"] = threads // conversations started elsewhere (codexthreads.go, claudesessions.go)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

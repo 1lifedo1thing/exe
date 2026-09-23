@@ -377,8 +377,45 @@ func TestAgentSessionsLive(t *testing.T) {
 	if th := s.agentThreads(b, s.agentSessions(b)); len(th) != 0 {
 		t.Fatalf("threads after: %+v", th)
 	}
-	if th := s.agentThreads(a, s.agentSessions(a)); th != nil {
-		t.Fatalf("a hookless agent lists threads: %+v", th)
+	// a Claude Code session started elsewhere, continued here: a hookless
+	// agent (Claude-shaped, its binary the shell that ignores arguments)
+	// lists it from a transcript under the config folder; resume starts a
+	// numbered session in the session's own folder with `--resume <id>`
+	// on the line, notes the session on it at once, and the row leaves
+	// the list
+	c := hostAgent{app: "fc", bin: fake, title: "Fake Claude", session: "exe-test-fc"}
+	chome := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", chome)
+	cid := "81afe071-7e89-4ee7-9522-b7e0ca11f6b6"
+	cdir := t.TempDir()
+	writeClaudeTranscript(t, chome, "-tmp-x", cid, "cli", cdir, "hello from a terminal", time.Now())
+	if th := s.agentThreads(c, s.agentSessions(c)); len(th) != 1 || th[0].ID != cid || th[0].Title != "hello from a terminal" || th[0].Origin != "a terminal" {
+		t.Fatalf("claude sessions before: %+v", th)
+	}
+	sh3, session3, err := s.startAgent(c, 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sh3.Close()
+	go drain(sh3)
+	waitFor("the reopened client to attach", func() bool { return sh3.Current() == session3 })
+	col3 := newAgentColumn(s, c, sh3, session3, nil)
+	if err := col3.resume("ffffffff-0000-4000-8000-000000000000"); err == nil {
+		t.Fatal("resume of an unknown session succeeded")
+	}
+	if err := col3.resume(cid); err != nil {
+		t.Fatal(err)
+	}
+	waitFor("the client on the resumed Claude session", func() bool { return sh3.Current() == "exe-test-fc-2" })
+	out, _ = tmuxCmd("display-message", "-p", "-t", "exe-test-fc-2", "#{pane_start_command}\t#{pane_start_path}").Output()
+	if line := string(out); !strings.Contains(line, " '--resume' '"+cid+"'") || !strings.Contains(line, "\t"+cdir) {
+		t.Fatalf("resumed Claude session's command line: %q", line)
+	}
+	if got := readAgentThreadID(s.agentStatusFile(c, "exe-test-fc-2")); got != cid {
+		t.Fatalf("session noted on the session: %q", got)
+	}
+	if th := s.agentThreads(c, s.agentSessions(c)); len(th) != 0 {
+		t.Fatalf("claude sessions after: %+v", th)
 	}
 }
 

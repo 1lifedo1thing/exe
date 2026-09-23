@@ -26,15 +26,17 @@ import (
 // belong to their parent, nor threads a session of the column's already
 // carries (noteCodexThread).
 
-// codexThread is one such thread as the column shows it.
-type codexThread struct {
+// agentThread is one such conversation as the column shows it — a Codex
+// thread, or a Claude Code session started elsewhere (claudesessions.go).
+type agentThread struct {
 	ID       string `json:"thread"`
 	Title    string `json:"title"`
 	Origin   string `json:"origin"` // where it was started, in words
 	Cwd      string `json:"cwd"`
 	Created  int64  `json:"created"`
-	Activity int64  `json:"activity"` // the rollout's last write
+	Activity int64  `json:"activity"` // the transcript's last write
 	Working  bool   `json:"working"`  // written to in the last few seconds: a turn runs there
+	Open     bool   `json:"open,omitempty"` // Claude Code: a CLI process still holds the session
 }
 
 // codexThreadsShown caps the rows: the latest threads by activity.
@@ -190,8 +192,8 @@ func readCodexIndex(home string) map[string]string {
 // codexAppThreads lists the threads started elsewhere, latest activity
 // first, at most limit of them; live are thread ids the column's
 // sessions already carry, left out.
-func codexAppThreads(home string, live map[string]bool, now time.Time, limit int) []codexThread {
-	out := []codexThread{}
+func codexAppThreads(home string, live map[string]bool, now time.Time, limit int) []agentThread {
+	out := []agentThread{}
 	if home == "" {
 		return out
 	}
@@ -228,7 +230,7 @@ func codexAppThreads(home string, live map[string]bool, now time.Time, limit int
 		if title == "" {
 			title = r.prompt
 		}
-		out = append(out, codexThread{ID: r.id, Title: title, Origin: codexOrigin(r.originator), Cwd: r.cwd,
+		out = append(out, agentThread{ID: r.id, Title: title, Origin: codexOrigin(r.originator), Cwd: r.cwd,
 			Created: r.created, Activity: f.mtime.Unix(), Working: now.Sub(f.mtime) <= agentWorkingSeconds*time.Second})
 		if len(out) == limit {
 			break
@@ -237,19 +239,25 @@ func codexAppThreads(home string, live map[string]bool, now time.Time, limit int
 	return out
 }
 
-// readAgentThreadID is the thread a Codex session carries, from its
-// status file — the notify command's JSON, or noteCodexThread's stub —
-// "" before the first turn of a fresh conversation.
+// readAgentThreadID is the conversation a session carries, from its
+// status file: a Codex thread — the notify command's JSON, or
+// noteCodexThread's stub — or a Claude Code session — the status-line
+// hook's JSON, or noteClaudeSession's stub. "" before the first turn of
+// a fresh Codex conversation, or before Claude Code's hook has run.
 func readAgentThreadID(statusFile string) string {
 	b, err := os.ReadFile(statusFile)
 	if err != nil {
 		return ""
 	}
 	var h struct {
-		ThreadID string `json:"thread-id"`
+		ThreadID  string `json:"thread-id"`
+		SessionID string `json:"session_id"`
 	}
 	json.Unmarshal(b, &h)
-	return h.ThreadID
+	if h.ThreadID != "" {
+		return h.ThreadID
+	}
+	return h.SessionID
 }
 
 // noteCodexThread marks a session as carrying a thread from the start —
@@ -263,17 +271,19 @@ func (s *Server) noteCodexThread(a hostAgent, session, id string) {
 	os.WriteFile(file, b, 0o644)
 }
 
-// agentThreads is the column's list of threads started elsewhere: Codex
-// only, with the threads its sessions carry left out.
-func (s *Server) agentThreads(a hostAgent, list []agentSession) []codexThread {
-	if !a.notify {
-		return nil
-	}
+// agentThreads is the column's list of conversations started elsewhere
+// — Codex's threads, Claude Code's sessions (claudesessions.go) — with
+// the ones its sessions carry left out.
+func (s *Server) agentThreads(a hostAgent, list []agentSession) []agentThread {
 	live := map[string]bool{}
 	for _, l := range list {
 		if id := readAgentThreadID(s.agentStatusFile(a, l.Name)); id != "" {
 			live[id] = true
 		}
 	}
-	return codexAppThreads(codexHome(), live, time.Now(), codexThreadsShown)
+	if a.notify {
+		return codexAppThreads(codexHome(), live, time.Now(), codexThreadsShown)
+	}
+	home := claudeHome()
+	return claudeSessions(home, live, claudeOpenSessions(home), time.Now(), claudeSessionsShown)
 }
