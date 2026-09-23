@@ -2694,6 +2694,21 @@ const toolGeom = {}; // "win-tool-…" → { l, t, w, h, … }
 
 // a window the user can resize: a grow corner, edge grips, or both
 const winResizable = w => w.classList.contains("grow") || w.classList.contains("edge-grow") || !!w._edge;
+// winClampPos keeps a window's title bar reachable at the width it has
+// now — at least 60px of it inside the viewport on either side, its top
+// on screen — the bounds a title-bar drag keeps. It goes after any width
+// set from a snapshot, never before: the saved width may have been
+// narrowed to this viewport, or raised to the window's floor, and a left
+// edge clamped against the saved width could leave the whole window off
+// screen — and, saved from there, off every other desk's screen too.
+// width is the figure to judge by when the window's own cannot be read
+// (hidden: offsetWidth is 0); a window with no position set keeps it
+function winClampPos(w, width) {
+  width = parseInt(w.style.width) || width || w.offsetWidth || 220;
+  const l = parseInt(w.style.left), t = parseInt(w.style.top);
+  if (!isNaN(l)) w.style.left = Math.min(window.innerWidth - 60, Math.max(60 - width, l)) + "px";
+  if (!isNaN(t)) w.style.top = Math.min(window.innerHeight - 46, Math.max(0, t)) + "px";
+}
 function winSnapshot() {
   const st = {};
   // Metadata may still be loading when another window triggers a save.
@@ -2791,7 +2806,6 @@ function applyWinState(st) {
     for (const [id, v] of Object.entries(st)) {
       const w = document.getElementById(id);
       if (!w || w === winDragging) continue;
-      const width = v.w || w.offsetWidth || 220;
       // floor at the window's wired minimum: a snapshot saved by a narrow
       // viewport (the innerWidth clamp below persists via winSave) must not
       // pin a resizable window below the width its own drags enforce. A
@@ -2799,8 +2813,13 @@ function applyWinState(st) {
       // width its markup declares: a saved width would pin it to whatever
       // an older build's markup said, and nothing could ever resize it back
       if (v.w && winResizable(w)) w.style.width = Math.max(w._edge ? w._edge.minW : 0, Math.min(window.innerWidth - 24, v.w)) + "px";
-      if (v.l !== undefined) w.style.left = Math.min(window.innerWidth - 60, Math.max(60 - width, v.l)) + "px";
-      if (v.t !== undefined) w.style.top = Math.min(window.innerHeight - 46, Math.max(0, v.t)) + "px";
+      // the position is clamped against the width as applied above, not
+      // the saved one (winClampPos): a wide desk's window narrowed to this
+      // viewport would otherwise keep a left edge that put all of it off
+      // screen. A hidden window reads no width of its own: the saved one
+      if (v.l !== undefined) w.style.left = v.l + "px";
+      if (v.t !== undefined) w.style.top = v.t + "px";
+      winClampPos(w, v.w);
       if (v.z) { w.style.zIndex = v.z; maxZ = Math.max(maxZ, v.z); }
       w.classList.toggle("shaded", !!v.shaded);
       if (id === "win-log" && v.h) $("#log-out").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
@@ -6228,12 +6247,16 @@ function openHostTermWin(app, cmd, vm) {
   w.style.width = column ? "800px" : "640px";
   const geom = agent ? agentGeom[app] : toolId ? toolGeom[toolId] : null;
   if (geom) {
-    // last saved geometry, same clamps as applyWinState pass 2
+    // last saved geometry, same clamps as applyWinState pass 2: the
+    // width first, to this viewport, then the position against that
+    // width (winClampPos) — a tool window's is clamped once more below,
+    // when its 80×31 floor has had its say
     const v = geom;
     // a column window keeps at least 80 terminal columns beside the list
     if (v.w) w.style.width = Math.max(column ? 760 : 400, Math.min(window.innerWidth - 24, v.w)) + "px";
-    if (v.l !== undefined) w.style.left = Math.min(window.innerWidth - 60, Math.max(60 - (v.w || 640), v.l)) + "px";
-    if (v.t !== undefined) w.style.top = Math.min(window.innerHeight - 46, Math.max(0, v.t)) + "px";
+    if (v.l !== undefined) w.style.left = v.l + "px";
+    if (v.t !== undefined) w.style.top = v.t + "px";
+    winClampPos(w);
   }
   w.innerHTML = `<div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
     <div class="title"></div>
@@ -6283,6 +6306,7 @@ function openHostTermWin(app, cmd, vm) {
     minW = need.w; minH = need.h;
     w.style.width = Math.max(need.w, geom && geom.w ? parseInt(w.style.width) : 0) + "px";
     box.style.height = Math.max(need.h, geom && geom.h ? parseInt(box.style.height) : 0) + "px";
+    winClampPos(w); // the title bar stays reachable at the final width
     winSave(); // the snapshot openWin took read the size before the floor
   }
   fit.fit();
