@@ -1338,6 +1338,7 @@ function renderPost(p, opts = {}) {
   if (p.quote) { // the first link is a post this hub holds: quoted in the link card's place
     const q = p.quote;
     const card = el("div", { class: "p-card p-quote" });
+    card.dataset.quote = q.id; // a live delete of the quoted post takes the card off
     const box = el("a", { class: "c-m", href: hub + "/p/" + q.id });
     if (q.image) box.append(el("span", { class: "c-i" },
       el("img", { src: hurl("/v1/embed/" + q.image), alt: "", loading: "lazy" })));
@@ -1791,6 +1792,9 @@ function connectEvents() {
       gone.add(m.id);
       const cur = seen(m.id);
       if (cur) holdPlace(() => cur.remove());
+      // every post card quoting it comes off: the link stays a link,
+      // as the hub now serves it
+      for (const c of feedEl.querySelectorAll(".p-quote")) if (c.dataset.quote === m.id) holdPlace(() => c.remove());
       return;
     }
     if (m.type === "post.card") { // the post's link card landed: redraw it in place
