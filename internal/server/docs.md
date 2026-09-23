@@ -816,7 +816,8 @@ numbered one, which counts on from its first number; one item a line,
 and a blank line or a line of prose ends the list. A line of three
 backticks opens a code block and the next one closes it: the lines
 between show exactly as typed, spaces and all, in a box that scrolls
-sideways when a line is long, and nothing inside it is read as Markdown.
+sideways when a line is long, and nothing inside it is read as Markdown;
+the Copy button beside the box puts the code on the clipboard as typed.
 A mention names a person: a post holds `@` and their profile id, the 16
 characters that never change, and the app shows `@` and the name they go
 by today (hover for the id), so a rename shows in every post already

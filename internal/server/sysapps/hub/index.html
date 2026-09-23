@@ -199,18 +199,27 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-tbl .c { text-align: center; }
 .p-tbl .r { text-align: right; }
 .p-tbl td.r { white-space: nowrap; }
-/* a fenced code block (```, formatText/fenceAt): the code as typed,
-   spaces and blank lines and all, in the code span's Monaco, inside a
-   white box with one black line round it like a table's — as wide as
-   its longest line and never wider than the post, past that scrolling
-   sideways under the Platinum bar, since a code line is not for
-   wrapping. 8px above and below, none on the side that opens (.first)
-   or ends (.last) the post. The hub's public pages carry the same
+/* a fenced code block (```, formatText/fenceAt): a .p-code row — the
+   code as typed, spaces and blank lines and all, in the code span's
+   Monaco, inside a white box with one black line round it like a
+   table's, as wide as its longest line and never wider than the room,
+   past that scrolling sideways under the Platinum bar, since a code
+   line is not for wrapping — and the Copy button 6px right of the box
+   (the HIG's gap inside a group), its top 2px under the box's top, so a
+   one-line box, 25px, holds it: the push button as everywhere, both its
+   words stacked in it, the one not showing kept invisible, so it is as
+   wide as the wider and the swap to Copied (copyCode) moves nothing.
+   8px above and below the row, none on the side that opens (.first) or
+   ends (.last) the post. The hub's public pages carry the same
    numbers. */
-.p-text pre { margin: 8px 0; padding: 4px 6px; width: fit-content; max-width: 100%; box-sizing: border-box;
+.p-text .p-code { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0; white-space: normal; }
+.p-text .p-code.last { margin-bottom: 2px; }
+.p-text pre { margin: 0; padding: 4px 6px; min-width: 0; box-sizing: border-box;
   overflow-x: auto; overflow-y: hidden; border: 1px solid var(--black); background: #fff; tab-size: 4;
   font: 11px/15px var(--mono); white-space: pre; overflow-wrap: normal; word-break: normal; overscroll-behavior-x: contain; }
-.p-text pre.last { margin-bottom: 2px; }
+.p-code .copy { flex: none; margin: 2px 0 0; display: inline-grid; white-space: nowrap; user-select: none; cursor: default; }
+.p-code .copy span { grid-area: 1 / 1; }
+.p-code .copy:not(.done) span:last-child, .p-code .copy.done span:first-child { visibility: hidden; }
 /* a list (formatText/listAt: "- " or "* " items, or numbered ones): a
    block like a table — 8px above and below, none on the side that opens
    (.first) or ends (.last) the post — its items hung: the marker stands
@@ -842,9 +851,39 @@ function fenceAt(lines, i) {
   while (j < lines.length && !FENCE_CLOSE_RE.test(lines[j])) j++;
   return { info: m[1], code: lines.slice(i + 1, j).join("\n"), n: Math.min(j + 1, lines.length) - i };
 }
-// the block as a node: a pre of the code, one text node and nothing else
+// the block as a node: the row of a pre of the code, one text node and
+// nothing else, and the Copy button beside it
 function formatFence(f, marks) {
-  return el("pre", marks ? { class: marks.slice(1) } : {}, f.code);
+  return el("div", { class: "p-code" + (marks || "") }, el("pre", {}, f.code),
+    el("button", { class: "ghost copy", type: "button" }, el("span", {}, "Copy"), el("span", {}, "Copied")));
+}
+// The Copy button beside a fenced code block puts the pre's text — the
+// code exactly as typed, which the browser gives back with its spaces
+// and blank lines — on the clipboard and reads Copied for a moment. A
+// plain-http address (the desk on its Tailscale IP) has no clipboard
+// API, so there a hidden textarea and the copy command do it, as the
+// desktop's own copyText does; when neither can, the code is selected
+// instead, for the reader's own Copy. One listener on the document:
+// posts are drawn and drawn again.
+document.addEventListener("click", e => {
+  const b = e.target instanceof Element && e.target.closest(".p-code .copy");
+  if (b) copyCode(b);
+});
+async function copyCode(b) {
+  const pre = b.parentNode.querySelector("pre"), text = pre.textContent;
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; }
+  catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.top = "-1000px";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { ok = document.execCommand("copy"); } catch (e2) {}
+    ta.remove();
+  }
+  if (!ok) { getSelection().selectAllChildren(pre); return; }
+  b.classList.add("done");
+  clearTimeout(b.tick);
+  b.tick = setTimeout(() => b.classList.remove("done"), 1500);
 }
 function formatText(text, names) {
   mentionNames = names || null; // for linkify, down the pipeline; the whole call is one turn
