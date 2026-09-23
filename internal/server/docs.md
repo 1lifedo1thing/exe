@@ -802,7 +802,7 @@ Click a picture to see it in a window of its own. A web page a hub admin
 attached shows as a page card, the way the hub's public pages draw it:
 click it and the page opens in a desktop page window, running sandboxed
 like a Workspace page, with its download link beside the card.
-A post is plain words with seven pieces of Markdown: a web address
+A post is plain words with eight pieces of Markdown: a web address
 becomes a link, `[words](https://…)` is a link on its words (hover to
 see where it goes), `` `code` `` is code, `**words**` is bold, a line
 that starts with
@@ -813,7 +813,10 @@ line. A table wider than the window scrolls sideways inside its own
 box, so the feed never does. Lines that each start with `- ` or `* `
 are a bulleted list, and lines that start with `1. `, `2. ` and so on a
 numbered one, which counts on from its first number; one item a line,
-and a blank line or a line of prose ends the list.
+and a blank line or a line of prose ends the list. A line of three
+backticks opens a code block and the next one closes it: the lines
+between show exactly as typed, spaces and all, in a box that scrolls
+sideways when a line is long, and nothing inside it is read as Markdown.
 A mention names a person: a post holds `@` and their profile id, the 16
 characters that never change, and the app shows `@` and the name they go
 by today (hover for the id), so a rename shows in every post already

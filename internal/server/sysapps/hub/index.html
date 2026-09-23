@@ -199,6 +199,18 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-tbl .c { text-align: center; }
 .p-tbl .r { text-align: right; }
 .p-tbl td.r { white-space: nowrap; }
+/* a fenced code block (```, formatText/fenceAt): the code as typed,
+   spaces and blank lines and all, in the code span's Monaco, inside a
+   white box with one black line round it like a table's — as wide as
+   its longest line and never wider than the post, past that scrolling
+   sideways under the Platinum bar, since a code line is not for
+   wrapping. 8px above and below, none on the side that opens (.first)
+   or ends (.last) the post. The hub's public pages carry the same
+   numbers. */
+.p-text pre { margin: 8px 0; padding: 4px 6px; width: fit-content; max-width: 100%; box-sizing: border-box;
+  overflow-x: auto; overflow-y: hidden; border: 1px solid var(--black); background: #fff; tab-size: 4;
+  font: 11px/15px var(--mono); white-space: pre; overflow-wrap: normal; word-break: normal; overscroll-behavior-x: contain; }
+.p-text pre.last { margin-bottom: 2px; }
 /* a list (formatText/listAt: "- " or "* " items, or numbered ones): a
    block like a table — 8px above and below, none on the side that opens
    (.first) or ends (.last) the post — its items hung: the marker stands
@@ -813,6 +825,27 @@ const CODE_RE = /(`{1,2})(?!`)(.+?)(?<!`)\1(?!`)/g;
 // writing ("2 ** 3", a lone "**") stay the characters they were.
 const BOLD_RE = /\*\*([^\s*](?:[^*\n]*[^\s*])?)\*\*/g;
 const HEADING_RE = /^(#{1,3}) +(\S.*?) *$/;
+// A fenced code block, read exactly as the hub reads it (exe-hub
+// internal/card/fence.go; its testdata/fences.json holds the cases both
+// parsers are run against): a line of three backticks opens it — the
+// info string after them, Markdown's language name, is read and not
+// shown — and the next line of backticks alone closes it; the lines
+// between are the code as typed, nothing in them a heading, an item, a
+// row or a span. The backticks stand at the start of the line, so the
+// ``` of a sentence about fences is no fence, and neither is a `code`
+// span; a fence never closed runs to the end of the post.
+const FENCE_OPEN_RE = /^```+ *([^`]*?) *$/, FENCE_CLOSE_RE = /^```+ *$/;
+function fenceAt(lines, i) {
+  const m = FENCE_OPEN_RE.exec(lines[i]);
+  if (!m) return null;
+  let j = i + 1;
+  while (j < lines.length && !FENCE_CLOSE_RE.test(lines[j])) j++;
+  return { info: m[1], code: lines.slice(i + 1, j).join("\n"), n: Math.min(j + 1, lines.length) - i };
+}
+// the block as a node: a pre of the code, one text node and nothing else
+function formatFence(f, marks) {
+  return el("pre", marks ? { class: marks.slice(1) } : {}, f.code);
+}
 function formatText(text, names) {
   mentionNames = names || null; // for linkify, down the pipeline; the whole call is one turn
   const out = [];
@@ -827,8 +860,13 @@ function formatText(text, names) {
   };
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    const m = HEADING_RE.exec(lines[i]), t = m ? null : tableAt(lines, i), l = m || t ? null : listAt(lines, i);
-    if (m) {
+    const f = fenceAt(lines, i), m = f ? null : HEADING_RE.exec(lines[i]), t = f || m ? null : tableAt(lines, i), l = f || m || t ? null : listAt(lines, i);
+    if (f) {
+      block();
+      i += f.n - 1;
+      const last = !lines.slice(i + 1).join("").trim();
+      out.push(formatFence(f, (out.length ? "" : " first") + (last ? " last" : "")));
+    } else if (m) {
       block();
       out.push(el("h" + m[1].length, out.length ? {} : { class: "first" }, ...formatInline(m[2])));
     } else if (t) {
@@ -1001,14 +1039,34 @@ function formatCoded(text, links) {
   if (last < text.length) out.push(...plain(text.slice(last)));
   return out;
 }
-// a post's words plain: a table back to its cells' words, " · " between
-// them and the delimiter row gone (the hub's card.Untable), a Markdown
-// link back to its words, then a bold stretch to its own (card.Unbold:
-// asterisks inside a code span stay); a bulleted item's marker becomes a
-// bullet (card.Unlist), since the lines are run together and "- one -
-// two" would not read
+// a post's words plain: a fenced block's lines gone and its code kept as
+// typed (the hub's card.Unfence — only the words outside the fences go
+// through the rest, so a "- " or "**" inside the code is left the code
+// it is), a table back to its cells' words, " · " between them and the
+// delimiter row gone (card.Untable), a Markdown link back to its words,
+// then a bold stretch to its own (card.Unbold: asterisks inside a code
+// span stay); a bulleted item's marker becomes a bullet (card.Unlist),
+// since the lines are run together and "- one - two" would not read
 function plainWords(text, names) {
   text = nameMentions(text || "", names);
+  const out = [];
+  if (text.includes("```")) {
+    const lines = text.split("\n");
+    let run = [];
+    const flush = () => { if (run.length) out.push(plainRun(run.join("\n"))); run = []; };
+    for (let i = 0; i < lines.length; i++) {
+      const f = fenceAt(lines, i);
+      if (!f) { run.push(lines[i]); continue; }
+      flush();
+      if (f.code) out.push(f.code);
+      i += f.n - 1;
+    }
+    flush();
+  } else out.push(plainRun(text));
+  return out.join("\n").replace(/\s+/g, " ").trim();
+}
+// the words outside any fence, plain
+function plainRun(text) {
   if (text.includes("|")) {
     const lines = text.split("\n"), out = [];
     for (let i = 0; i < lines.length; i++) {
@@ -1022,9 +1080,8 @@ function plainWords(text, names) {
   text = text.split("\n").map(line => { const m = LIST_BULLET_RE.exec(line); return m ? "\u2022 " + m[1] : line; }).join("\n");
   text = text.replace(MDLINK_RE, "$1");
   const codes = codeSpans(text);
-  text = text.replace(BOLD_RE, (all, words, at) =>
+  return text.replace(BOLD_RE, (all, words, at) =>
     codes.some(([c0, c1]) => c0 < at + all.length && c1 > at && !(c0 >= at + 2 && c1 <= at + all.length - 2)) ? all : words);
-  return text.replace(/\s+/g, " ").trim();
 }
 function linkify(text) {
   const out = [];
