@@ -599,9 +599,11 @@ an 80×24 terminal window. It runs the VM's installed `btop` over SSH; press
 **q** to quit and close the window. A failed launch leaves its error visible.
 
 Double-click a VM in the list to open its window. Its status line shows the
-state lamp, then the IP and how much disk the VM really holds on the host —
-allocated space, not the sparse file's nominal size — separated by a middot.
-The tabs:
+state lamp, then middot-separated: the IP, how much disk the VM really holds
+on the host — allocated space, not the sparse file's nominal size — and the
+guest's system with its version, read from the guest itself. At the line's
+right edge, its load average over one, five and fifteen minutes, refreshed
+every five seconds while the window is open. The tabs:
 
 - **Services** — TCP ports listening inside the VM, with one-click links,
   plus the routes already published to the web. Servers must bind

@@ -129,3 +129,19 @@ tcp        0      0 :::22                   :::*                    LISTEN      
 		t.Fatalf("plain netstat parse = %+v; want one bare 3000", got)
 	}
 }
+
+func TestParseGuestStat(t *testing.T) {
+	st := parseGuestStat("load 0.13 0.09 0.04\nos alpine 3.24.2\n")
+	if st.OS != "alpine" || st.Version != "3.24.2" ||
+		len(st.Load) != 3 || st.Load[0] != "0.13" || st.Load[2] != "0.04" {
+		t.Fatalf("parseGuestStat = %+v", st)
+	}
+	// A guest without os-release still answers its load.
+	st = parseGuestStat("load 1.00 0.50 0.25\n")
+	if st.OS != "" || len(st.Load) != 3 {
+		t.Fatalf("load-only parse = %+v", st)
+	}
+	if st = parseGuestStat("load \n"); st.Load != nil {
+		t.Fatalf("empty loadavg should stay nil, got %+v", st)
+	}
+}

@@ -209,6 +209,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/site/publish", s.handleSitePublish)
 	mux.HandleFunc("POST /v1/routes/redirect", s.handleRedirectPublish)
 	mux.HandleFunc("GET /v1/vms/{name}/ports", s.handlePorts)
+	mux.HandleFunc("GET /v1/vms/{name}/stat", s.handleVMStat)
 	mux.HandleFunc("GET /v1/vms/{name}/terminal", s.handleTerminal)
 	mux.HandleFunc("GET /v1/host/terminal", s.handleHostTerminal)
 	mux.HandleFunc("GET /v1/vms/{name}/transcripts", s.handleTranscripts)

@@ -260,6 +260,55 @@ func parsePorts(out string) []vmPort {
 	return services
 }
 
+// guestStat is the VM window's status-line reading: the guest's OS and
+// version from os-release, and its load average, one SSH round trip.
+type guestStat struct {
+	OS      string   `json:"os,omitempty"`
+	Version string   `json:"version,omitempty"`
+	Load    []string `json:"load,omitempty"`
+}
+
+// The command tags each line so the parse does not lean on order; cut and
+// the dot-source both exist in busybox, so Alpine answers like Debian.
+const guestStatCmd = `echo "load $(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)"; . /etc/os-release 2>/dev/null && echo "os $ID $VERSION_ID"`
+
+func parseGuestStat(out string) guestStat {
+	var st guestStat
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		switch {
+		case len(fields) == 4 && fields[0] == "load":
+			st.Load = fields[1:]
+		case len(fields) >= 2 && fields[0] == "os":
+			st.OS = fields[1]
+			if len(fields) >= 3 {
+				st.Version = fields[2]
+			}
+		}
+	}
+	return st
+}
+
+func (s *Server) handleVMStat(w http.ResponseWriter, r *http.Request) {
+	info, err := s.runningVM(r.Context(), r.PathValue("name"))
+	if err != nil {
+		writeErr(w, http.StatusConflict, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	out, code, err := s.vmTarget(info).Run(ctx, guestStatCmd, 4096)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	if code != 0 {
+		writeErr(w, http.StatusBadGateway, fmt.Errorf("guest stat exited %d: %s", code, out))
+		return
+	}
+	writeJSON(w, http.StatusOK, parseGuestStat(out))
+}
+
 func (s *Server) handlePorts(w http.ResponseWriter, r *http.Request) {
 	info, err := s.runningVM(r.Context(), r.PathValue("name"))
 	if err != nil {

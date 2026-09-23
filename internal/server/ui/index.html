@@ -1440,6 +1440,7 @@ body.mobile th.sorted {
         <div class="row" style="margin-bottom:10px">
           <span class="chip" id="d-state"></span>
           <span class="mono muted" id="d-ip"></span>
+          <span class="mono muted" id="d-load" style="margin-left:auto"></span>
         </div>
 
         <div class="tabbar">
@@ -6003,28 +6004,66 @@ async function openVM(name, tab) {
   if (currentVM !== name) closeTerm();
   flushNotes();
   currentVM = name;
+  headVM = null; headStat = null;
+  $("#d-ip").textContent = "";
+  $("#d-load").textContent = "";
   $("#d-title").textContent = name;
   $("#e-result").textContent = "";
   showPane("svc");
   openWin("#win-detail");
   loadNotes().catch(() => {});
   await refreshDetailHead();
+  pollVMStat().catch(() => {});
   // deep-links wait for the fresh state: the Terminal tab's auto-connect
   // reads #d-state, which still shows the previous VM until here
   if (tab) showPane(tab);
   loadPorts().catch(() => {});
   loadVMSessions().catch(e => toast(e.message));
 }
+// The head's two sources: the VM's metadata, and a reading from inside
+// the guest (OS and load) that lands a moment later and then refreshes.
+let headVM = null, headStat = null;
+const capWord = s => s.charAt(0).toUpperCase() + s.slice(1);
+function renderDetailHead() {
+  if (!headVM) return;
+  const os = headStat && headStat.os
+    ? capWord(headStat.os) + (headStat.version ? " " + headStat.version : "")
+    : capWord(headVM.image || "debian");
+  $("#d-ip").textContent = [
+    headVM.ip,
+    headVM.disk_used_bytes ? fmtBytes(headVM.disk_used_bytes) + " on disk" : "",
+    os,
+  ].filter(Boolean).join(" · ");
+  $("#d-load").textContent = headStat && headStat.load ? "load " + headStat.load.join(" ") : "";
+}
 async function refreshDetailHead() {
   try {
     const vm = await j("/v1/vms/" + currentVM);
+    if (vm.name !== currentVM) return;
     const st = $("#d-state");
     st.className = "chip " + vm.state;
     st.textContent = vm.state;
-    $("#d-ip").textContent = [vm.ip, vm.disk_used_bytes ? fmtBytes(vm.disk_used_bytes) + " on disk" : ""]
-      .filter(Boolean).join(" · ");
+    headVM = vm;
+    renderDetailHead();
   } catch (e) { toast(e.message); }
 }
+// The guest reading refreshes every five seconds while the window is up
+// and the VM runs; a failed poll keeps the OS but drops the stale load.
+async function pollVMStat() {
+  const name = currentVM;
+  if (!name || $("#win-detail").hidden || document.hidden ||
+      $("#d-state").textContent !== "running") return;
+  try {
+    const st = await j(`/v1/vms/${name}/stat`);
+    if (name !== currentVM) return;
+    headStat = st;
+  } catch (e) {
+    if (name !== currentVM) return;
+    if (headStat) headStat = { os: headStat.os, version: headStat.version };
+  }
+  renderDetailHead();
+}
+setInterval(pollVMStat, 5000);
 
 // ---- terminal ----
 let term = null, termWS = null, fitAddon = null;
