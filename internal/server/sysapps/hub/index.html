@@ -341,6 +341,29 @@ canvas.ava-big { image-rendering: pixelated; }
 #back { display: inline-flex; align-items: center; gap: 5px; padding: 2px 12px 2px 9px; }
 #back .gl { display: block; }
 #thread-head.on { display: flex; }
+/* the title gives way before the buttons do: a long name ellipsizes */
+#thread-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Summary, at the head row's right end, only while the open thread has
+   one (Livid, 2026-09-24: "use the right blank space in the return to
+   Feed row"): the sparkles glyph on the desktop too, laid out as Find…
+   is, a phone the glyph alone. The glyph is the one coloured one —
+   yellow stars with black points — so a pressed button inverts the
+   points alone. It stays pressed (.open) while the summary is up. */
+#summary { display: inline-flex; align-items: center; gap: 5px; padding: 2px 12px 2px 9px; margin-left: auto; }
+#summary .gl { display: block; }
+#summary[hidden] { display: none; }
+body.mobile #summary { padding: 2px 8px; }
+.gl .y { fill: #ffcc00; }
+/* the summary itself, above the thread's head while the button is
+   pressed: laid out as a post is — the sparkles in the avatar's place,
+   Summary where the name goes, what it read and who wrote it in the
+   id's grey, the time at the right — so the column's lines all hold;
+   the words hang at the text's 20px. A cite is the reply's number in
+   the hub page's grey: a click lands on that reply. */
+.summary { padding: 7px 10px 8px; border-bottom: 1px solid #efefef; }
+.summary .s-gl { flex: none; align-self: center; margin-right: -1px; }
+.summary .s-meta { font-size: 10px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.summary .cite { color: #666; text-decoration: none; font-size: 11px; }
 
 /* onboarding / profile dialog: a Platinum panel over everything */
 #veil { position: fixed; inset: 0; background: rgba(0,0,0,.12); display: none;
@@ -563,6 +586,7 @@ body.mobile #status { padding-right: 8px; }
   <div id="thread-head">
     <button class="ghost" id="back"><svg class="gl" viewBox="0 0 11 9" width="11" height="9" aria-hidden="true"><path class="k" d="M4 0h1v1h-1zM3 1h2v1h-2zM2 2h3v1h-3zM1 3h10v1h-10zM0 4h11v1h-11zM1 5h10v1h-10zM2 6h3v1h-3zM3 7h2v1h-2zM4 8h1v1h-1z"/></svg><span>Feed</span></button>
     <span class="muted" style="padding:0" id="thread-title">Thread</span>
+    <button class="ghost icon" id="summary" hidden aria-pressed="false" aria-label="Summary"><svg class="gl" viewBox="0 0 15 13" width="15" height="13" aria-hidden="true"><path class="k" d="M5 2h1v2h-1zM4 4h1v2h-1zM6 4h1v2h-1zM3 6h1v1h-1zM7 6h1v1h-1zM0 7h3v1h-3zM8 7h3v1h-3zM3 8h1v1h-1zM7 8h1v1h-1zM4 9h1v2h-1zM6 9h1v2h-1zM5 11h1v2h-1zM12 0h1v1h-1zM11 1h1v1h-1zM13 1h1v1h-1zM10 2h1v1h-1zM14 2h1v1h-1zM11 3h1v1h-1zM13 3h1v1h-1zM12 4h1v1h-1z"/><path class="y" d="M5 4h1v2h-1zM4 6h3v1h-3zM3 7h5v1h-5zM4 8h3v1h-3zM5 9h1v2h-1zM12 1h1v3h-1zM11 2h1v1h-1zM13 2h1v1h-1z"/></svg><span>Summary</span></button>
   </div>
   <div id="composer">
     <div id="reply-to"><span class="rt-q" id="rt-label"></span><button class="ghost sm" id="rt-clear" aria-label="Answer the thread head instead">×</button></div>
@@ -1586,13 +1610,18 @@ function clearReplyTarget() {
 $("#rt-clear").onclick = () => { clearReplyTarget(); $("#text").focus(); };
 
 async function openThread(id, jumpTo) {
+  // the same thread opened again (Refresh, a reply sent) keeps its
+  // summary up; another thread starts with it down
+  if (!(view.kind === "thread" && view.id === id)) summaryOpen = false;
   view = { kind: "thread", id };
   clearReplyTarget();
+  setSummary(null);
   $("#thread-head").classList.add("on");
   $("#text").placeholder = "Write a reply…";
   feedEl.replaceChildren(placeholders(3));
   try {
     const out = await hget("/v1/post/" + id);
+    if (view.kind !== "thread" || view.id !== id) return true; // the reader moved on meanwhile: theirs stands
     // jumping to one reply, that reply wears the tint, not the head
     const headNode = renderPost(out.post, { inThread: true, focus: !jumpTo });
     headNode.dataset.depth = 0;
@@ -1602,6 +1631,7 @@ async function openThread(id, jumpTo) {
     for (const p of out.thread || out.replies) feedEl.append(threadNode(p));
     $("#thread-title").textContent = "Thread — " +
       (out.post.author_name || out.post.author);
+    setSummary(out.summary || null);
     if (jumpTo) {
       const n = feedEl.querySelector(`[data-id="${CSS.escape(jumpTo)}"]`);
       if (n) { n.classList.add("focus"); n.scrollIntoView({ block: "center" }); }
@@ -1612,6 +1642,81 @@ async function openThread(id, jumpTo) {
     feedEl.replaceChildren(el("div", { class: "muted" }, "Load failed: " + e.message));
     return false;
   }
+}
+
+// ---- the thread's summary (exe-hub PLAN.md, Thread summaries) ----
+// A thread of ten replies or more has a quick read of it by the hub's
+// model, GET /v1/post/{id}'s summary: the newest step's, in the post's
+// language. The head row's Summary button shows while the open thread
+// has one, and pressing it lays the summary above the thread's head;
+// pressing it again takes it down. A cite ([#n]) in the words is the
+// reply it points at: a click lands on that reply, tinted, as a jump
+// from the feed does. A newer step that lands while the thread is open
+// (the catch-up, or the hub's post.summary) redraws it in place.
+let summary = null;      // the open thread's, as the hub gave it
+let summaryOpen = false; // the reader pressed the button
+function setSummary(sum) {
+  const same = JSON.stringify(sum) === JSON.stringify(summary);
+  summary = sum;
+  $("#summary").hidden = !sum;
+  if (!sum || (summaryOpen && (!same || !feedEl.querySelector(".summary")))) drawSummary();
+}
+$("#summary").onclick = () => {
+  summaryOpen = !summaryOpen && !!summary;
+  if (summaryOpen) { drawSummary(); feedEl.scrollTop = 0; }
+  else holdPlace(drawSummary);
+};
+function summaryNode(sum) {
+  const gl = $("#summary .gl").cloneNode(true);
+  gl.classList.add("s-gl");
+  const head = el("div", { class: "p-head" }, gl, el("span", { class: "p-name" }, "Summary"),
+    el("span", { class: "s-meta" }, "the first " + sum.replies + " replies · " + sum.model), timeEl(sum.ts));
+  const node = el("div", { class: "summary", lang: sum.lang }, head);
+  const text = el("div", { class: "p-text" }, ...formatText(sum.text, null, null));
+  // [#3] and [#1, #2] as the model writes them: each number a link to
+  // its reply, the brackets dropped, as the hub's page draws them
+  const cites = sum.cites || {};
+  const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT);
+  const found = [];
+  for (let t; (t = walker.nextNode());) if (/\[#\d+(?:\s*,\s*#\d+)*\]/.test(t.data)) found.push(t);
+  for (const t of found) {
+    if (t.parentNode.closest("a, code, pre")) continue;
+    const parts = t.data.split(/(\[#\d+(?:\s*,\s*#\d+)*\])/);
+    if (parts.length < 2) continue;
+    const frag = document.createDocumentFragment();
+    for (const part of parts) {
+      const m = part.match(/^\[(#\d+(?:\s*,\s*#\d+)*)\]$/);
+      if (!m || !m[1].match(/\d+/g).every(n => cites[n])) { if (part) frag.append(part); continue; }
+      m[1].match(/\d+/g).forEach((n, i) => {
+        if (i) frag.append(", ");
+        const a = el("a", { class: "cite", href: "#", "data-at": cites[n] }, "#" + n);
+        a.onclick = e => { e.preventDefault(); e.stopPropagation(); landOn(cites[n]); };
+        frag.append(a);
+      });
+    }
+    t.replaceWith(frag);
+  }
+  node.append(text);
+  return node;
+}
+// landOn brings one post of the open thread into view, tinted as the
+// post jumped to from the feed is
+function landOn(id) {
+  const n = feedEl.querySelector(`.post[data-id="${CSS.escape(id)}"]`);
+  if (!n) return;
+  for (const f of feedEl.querySelectorAll(".focus")) f.classList.remove("focus");
+  n.classList.add("focus");
+  n.scrollIntoView({ block: "center" });
+}
+// drawSummary makes the list say what summaryOpen and summary say: the
+// panel above the head, or none; the button pressed while it is up
+function drawSummary() {
+  const cur = feedEl.querySelector(".summary");
+  const want = summaryOpen && summary && view.kind === "thread";
+  if (cur) cur.remove();
+  if (want) feedEl.prepend(summaryNode(summary));
+  $("#summary").classList.toggle("open", !!want);
+  $("#summary").setAttribute("aria-pressed", want ? "true" : "false");
 }
 
 // holdPlace keeps the reader where they are through a change to the
@@ -1650,6 +1755,7 @@ async function syncThread() {
     if (view.kind !== "thread" || view.id !== id || !drawn(id)) return;
     const want = out.thread || out.replies, ids = new Set(want.map(p => p.id));
     holdPlace(() => {
+      setSummary(out.summary || null);
       for (const n of [...feedEl.querySelectorAll(".post")])
         if (n.dataset.id !== id && was.has(n.dataset.id) && !ids.has(n.dataset.id)) n.remove();
       let at = drawn(id);
@@ -1679,6 +1785,7 @@ function wake() {
 function showFeed() {
   view = { kind: "feed" };
   clearReplyTarget();
+  summaryOpen = false; setSummary(null);
   $("#thread-head").classList.remove("on");
   $("#text").placeholder = "What's happening?";
   loadFeed();
@@ -1705,6 +1812,7 @@ async function openSearch(q, more) {
   } else {
     view = { kind: "search", q, oldest: "" };
     clearReplyTarget();
+    summaryOpen = false; setSummary(null);
     lastQuery = q;
     $("#thread-head").classList.add("on");
     $("#thread-title").textContent = "Find \u201c" + q + "\u201d";
@@ -1852,6 +1960,10 @@ function connectEvents() {
         head.querySelector(".p-name").textContent = prof.name || "—";
       }
       if (who && m.author === who.id) myProfile = prof; // Profile… reopens fresh
+      return;
+    }
+    if (m.type === "post.summary") { // the open thread's summary landed, or a newer step: the catch-up brings it
+      if (view.kind === "thread" && view.id === (m.root || m.id)) syncThread();
       return;
     }
     if (m.type === "post.mark") { // a box of a shown post changed: flip it in place, the pressed one too
