@@ -14,6 +14,14 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
 - Commit on `main`. No branches, no PRs. First line `Area: what changed`
   (Desktop:, Daemon:, Hub:, Docs:), body says why. Never commit `output/`
   or other scratch.
+- The repo is public: no real email address in code, test fixtures (swap
+  the ones in CLI or API output you copy in), docs, commit messages, hub
+  posts or screenshots. Use a reserved example (`someone@example.com`).
+  `.githooks` refuses a commit whose added lines or message hold one;
+  enable it once per checkout with `git config core.hooksPath .githooks`,
+  and skip it (`--no-verify`) only with Livid's say-so. The daemon's logs
+  mask addresses, but a screenshot of an account, settings or log view is
+  looked over for one first, or taken on a scratch daemon.
 - For publicly shareable build artifacts under 20 MB, pin them in Kubo and
   record the CID, a working download URL and SHA-256 in the relevant doc.
   Verify the pin and a fresh download; keep the binaries out of Git.

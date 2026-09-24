@@ -20,7 +20,7 @@ const tsFixStatus = `{
    "TailscaleIPs": ["100.116.32.57", "fd7a:115c:a1e0::7337:2039"], "Online": true, "ExitNode": false, "ExitNodeOption": false,
    "KeyExpiry": "2026-11-07T18:57:38Z"},
  "Health": [], "MagicDNSSuffix": "tailnet-ac29.ts.net",
- "CurrentTailnet": {"Name": "v2ex.livid@me.com", "MagicDNSSuffix": "tailnet-ac29.ts.net", "MagicDNSEnabled": true},
+ "CurrentTailnet": {"Name": "someone@example.com", "MagicDNSSuffix": "tailnet-ac29.ts.net", "MagicDNSEnabled": true},
  "ExitNodeStatus": null,
  "Peer": {
   "a": {"ID": "1", "HostName": "entropy", "DNSName": "entropy.tailnet-ac29.ts.net.", "OS": "linux", "TailscaleIPs": ["100.72.115.50", "fd7a::1"], "Online": true, "ExitNode": false, "ExitNodeOption": true, "LastSeen": "0001-01-01T00:00:00Z"},

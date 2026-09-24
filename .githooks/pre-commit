@@ -1,0 +1,22 @@
+#!/bin/sh
+# Refuses a commit whose added lines hold an email address (emails.sh).
+# Only what the commit adds is read, so vendored code that already carries
+# its authors' addresses (*/vendor/*, the Mac OS 9 app's core/) is skipped.
+. "$(dirname "$0")/emails.sh"
+
+out=$(git diff --cached --no-color --no-ext-diff -U0 --diff-filter=ACMR |
+	awk '
+		# git ends a path holding spaces with a tab, and quotes an unusual one
+		/^\+\+\+ / { file = substr($0, 5); sub(/\t$/, "", file); gsub(/^"|"$/, "", file); sub(/^b\//, "", file); next }
+		/^@@ / { split($3, h, ","); line = substr(h[1], 2); next }
+		/^\+/ {
+			if (file !~ /(^|\/)vendor\// && file !~ /^internal\/server\/sysapps\/macos9\/core\//)
+				printf "%s:%d\t%s\n", file, line, substr($0, 2)
+			line++
+		}
+	' | email_scan) || {
+	echo "Staged changes:" >&2
+	printf '%s\n' "$out" >&2
+	email_refuse "the commit"
+	exit 1
+}

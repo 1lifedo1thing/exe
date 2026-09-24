@@ -1,0 +1,11 @@
+#!/bin/sh
+# Refuses a commit message that holds an email address (emails.sh); git's
+# own "#" comment lines are not part of the message and are skipped.
+. "$(dirname "$0")/emails.sh"
+
+out=$(grep -v '^#' "$1" | awk '{ printf "message line %d\t%s\n", NR, $0 }' | email_scan) || {
+	echo "Commit message:" >&2
+	printf '%s\n' "$out" >&2
+	email_refuse "the commit message"
+	exit 1
+}
