@@ -7146,7 +7146,7 @@ const LOGS = {
   daemon: { url: "/v1/logs", out: $("#log-daemon"), view: $("#log-view-daemon"), find: $("#log-find-daemon") },
   access: { url: "/v1/logs/access", out: $("#log-access"), view: $("#log-view-access"), find: $("#log-find-access") },
 };
-for (const lg of Object.values(LOGS)) Object.assign(lg, { abort: null, retry: null, status: "…", text: "", part: "", lines: 0, hits: 0, match: null });
+for (const lg of Object.values(LOGS)) Object.assign(lg, { abort: null, retry: null, status: "…", text: "", part: "", lines: 0, hits: 0, match: null, mark: null, markTimer: null });
 let logTab = "daemon";
 // a filter is words a line must all hold, in any case; "-word" leaves out
 // the lines that hold it
@@ -7165,7 +7165,10 @@ function logStatus(key, text) {
   LOGS[key].status = text;
   logShowStatus(key);
 }
-// redraw a printout from its kept text: on a filter change and a trim
+// redraw a printout from its kept text: on a filter change, a trim and a
+// reconnect. Where the view ends up is the caller's business: a filter
+// change goes to the tail (logTail), a trim keeps the reader's line
+// (logAppend), a reconnect finds it again (logSeek).
 function logRender(key) {
   const lg = LOGS[key];
   const lines = lg.text.split("\n");
@@ -7178,40 +7181,97 @@ function logRender(key) {
   } else {
     lg.out.textContent = lg.text;
   }
-  lg.out.scrollTop = lg.out.scrollHeight;
   logShowStatus(key);
+}
+function logTail(key) {
+  LOGS[key].out.scrollTop = LOGS[key].out.scrollHeight;
+}
+// the printout is one text node, so a line can be found by its offset
+function logText(out, s) {
+  if (out.firstChild) out.firstChild.appendData(s);
+  else out.append(s);
 }
 function logAppend(key, chunk) {
   const lg = LOGS[key], out = lg.out;
-  // stick to the bottom only if the user hasn't scrolled up
-  const stick = out.scrollHeight - out.scrollTop - out.clientHeight < 4;
+  // stick to the bottom only if the user hasn't scrolled up (an emptied
+  // printout waiting for its reader's line is not at the bottom)
+  const stick = !lg.mark && out.scrollHeight - out.scrollTop - out.clientHeight < 4;
   lg.text += chunk;
-  if (lg.text.length > 400000) {
-    const cut = lg.text.slice(-300000);
-    lg.text = cut.slice(cut.indexOf("\n") + 1);
-    logRender(key);
-    return;
-  }
   const lines = (lg.part + chunk).split("\n");
   lg.part = lines.pop();
   lg.lines += lines.length;
   if (lg.match) {
     const hits = lines.filter(lg.match);
     lg.hits += hits.length;
-    if (hits.length) out.append(hits.join("\n") + "\n");
+    if (hits.length) logText(out, hits.join("\n") + "\n");
     logShowStatus(key);
   } else {
-    out.append(chunk);
+    logText(out, chunk);
   }
-  if (stick) out.scrollTop = out.scrollHeight;
+  if (lg.text.length > 400000) {
+    // drop the oldest quarter. Everything removed sits above the reader,
+    // so the printout's lost height is exactly how far their line moved
+    // up: put it back under the same pixel, filter on or off
+    const cut = lg.text.slice(-300000);
+    lg.text = cut.slice(cut.indexOf("\n") + 1);
+    const top = out.scrollTop, before = out.scrollHeight;
+    logRender(key);
+    if (!stick) out.scrollTop = Math.max(0, top - (before - out.scrollHeight));
+  }
+  if (stick) logTail(key);
+  else if (lg.mark) logSeek(key);
+}
+// The reader's place through a reconnect. The daemon resends its backlog
+// into an emptied printout, so an offset cannot carry over: logMark keeps
+// the topmost line in view (with the two after it, since a daemon log
+// repeats itself within a second) and how far down its top sits; logSeek
+// looks for those lines as the backlog streams in and puts them back
+// under the same pixel. A line the ring no longer holds is never found,
+// and the view goes to the tail once the backlog has had its moment.
+function logLineTop(out, off) {
+  const r = document.createRange();
+  r.setStart(out.firstChild, off);
+  r.setEnd(out.firstChild, Math.min(off + 1, out.firstChild.length));
+  return r.getBoundingClientRect().top - (out.getBoundingClientRect().top + out.clientTop);
+}
+function logMark(key) {
+  const lg = LOGS[key], out = lg.out;
+  if (lg.mark) return; // a reconnect that failed keeps the place it was given
+  if (!out.firstChild || out.scrollHeight - out.scrollTop - out.clientHeight < 4) return;
+  out.normalize();
+  const text = out.firstChild.data, starts = [0];
+  for (let i = text.indexOf("\n"); i >= 0 && i < text.length - 1; i = text.indexOf("\n", i + 1)) starts.push(i + 1);
+  // the first line whose top is inside the view (their tops only grow)
+  let lo = 0, hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (logLineTop(out, starts[mid]) < -0.5) lo = mid + 1; else hi = mid;
+  }
+  const end = lo + 3 < starts.length ? starts[lo + 3] : text.length;
+  lg.mark = { block: text.slice(starts[lo], end), dy: logLineTop(out, starts[lo]) };
+}
+function logSeek(key) {
+  const lg = LOGS[key], out = lg.out;
+  if (!out.firstChild) return;
+  const p = ("\n" + out.firstChild.data).indexOf("\n" + lg.mark.block);
+  if (p < 0) return;
+  out.scrollTop += logLineTop(out, p) - lg.mark.dy;
+  logUnmark(key);
+}
+function logUnmark(key) {
+  const lg = LOGS[key];
+  lg.mark = null;
+  clearTimeout(lg.markTimer);
+  lg.markTimer = null;
 }
 for (const [key, lg] of Object.entries(LOGS)) {
-  lg.find.addEventListener("input", () => { lg.match = logMatcher(lg.find.value); logRender(key); });
+  // a new filter replaces the printout wholesale: the view goes to the tail
+  const refilter = () => { lg.match = logMatcher(lg.find.value); logUnmark(key); logRender(key); logTail(key); };
+  lg.find.addEventListener("input", refilter);
   lg.find.addEventListener("keydown", e => {
     if (e.key !== "Escape" || !lg.find.value) return;
     lg.find.value = "";
-    lg.match = null;
-    logRender(key);
+    refilter();
   });
 }
 function showLogTab(key) {
@@ -7223,23 +7283,29 @@ function showLogTab(key) {
 document.querySelectorAll("#log-tabs .tab").forEach(t =>
   t.addEventListener("click", () => showLogTab(t.dataset.log)));
 function stopLogStream() {
-  for (const lg of Object.values(LOGS)) {
+  for (const [key, lg] of Object.entries(LOGS)) {
     clearTimeout(lg.retry);
     lg.retry = null;
     if (lg.abort) { lg.abort.abort(); lg.abort = null; }
+    logUnmark(key);
   }
 }
 function openLogWin() {
   openWin("#win-log");
   for (const key of Object.keys(LOGS)) if (!LOGS[key].abort) streamLog(key);
 }
-async function streamLog(key) {
+// again: a reconnect, which keeps the reader's place; a fresh open does not
+async function streamLog(key, again) {
   const lg = LOGS[key];
   clearTimeout(lg.retry);
   lg.retry = null;
   if (lg.abort) lg.abort.abort();
   const ac = lg.abort = new AbortController();
-  // the daemon sends its backlog again: start the printout over
+  // the daemon sends its backlog again: start the printout over, keeping
+  // the reader's place in mind (logMark) if they had scrolled up
+  if (again) logMark(key);
+  clearTimeout(lg.markTimer);
+  lg.markTimer = null;
   lg.text = "";
   lg.hits = 0;
   logRender(key);
@@ -7249,6 +7315,10 @@ async function streamLog(key) {
     const resp = await api(lg.url, { signal: ac.signal });
     connected = true;
     logStatus(key, "streaming");
+    if (lg.mark) {
+      clearTimeout(lg.markTimer);
+      lg.markTimer = setTimeout(() => { if (lg.mark) { logUnmark(key); logTail(key); } }, 2000);
+    }
     const rd = resp.body.getReader();
     const dec = new TextDecoder();
     for (;;) {
@@ -7265,7 +7335,7 @@ async function streamLog(key) {
   // keep retrying quietly while the window is open
   lg.abort = null;
   logStatus(key, why);
-  lg.retry = setTimeout(() => streamLog(key), 3000);
+  lg.retry = setTimeout(() => streamLog(key, true), 3000);
 }
 wireGrow($("#log-grow"), $("#win-log"), $("#log-box"), 380, { stickEl: () => LOGS[logTab].out });
 

@@ -167,7 +167,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   line, its last arrow the 14px borderless cell on the frame's bottom
   line. Tabs whose panes should keep their scroll place stack the panes
   in one box and hide the others with `visibility: hidden` — Chrome drops
-  a `display: none` element's scroll offset.
+  a `display: none` element's scroll offset. A printout that fills while
+  it is read never moves the reader's line: an append goes below it; a
+  trim of the oldest lines takes the height it removed off `scrollTop`
+  (exact, since everything removed sat above the reader); a reconnect,
+  which empties the printout and takes the backlog again, remembers the
+  topmost line in view (with the two after it, as a log repeats itself)
+  and how far down it sat, and finds it again as the backlog streams in.
+  Only a wholesale change of content — a new filter — goes to the tail.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`

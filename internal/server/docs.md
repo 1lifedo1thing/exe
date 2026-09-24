@@ -1072,5 +1072,10 @@ only the lines holding every word you type, in any case, and a word
 starting with `-` leaves out the lines holding it (`GET -healthz`); new
 lines pass through it as they arrive, the status line counts the
 matches, and Escape clears it. Each tab keeps its own filter and its own
-place while you look at the other. This page lives at `/docs.md`, and
-the machine-readable counterpart for agents at `/skill.md`.
+place while you look at the other, and a line you have scrolled up to
+stays under your eye while the log keeps filling: through the trim that
+drops the oldest lines once the printout is long, and through the
+reconnect that follows a daemon restart, which resends the recent lines
+and looks yours up again (a line the daemon no longer holds sends you to
+the tail). This page lives at `/docs.md`, and the machine-readable
+counterpart for agents at `/skill.md`.
