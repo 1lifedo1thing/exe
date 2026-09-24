@@ -417,7 +417,7 @@ func cmdServe() error {
 		}()
 	}
 
-	shutdown := func() {
+	shutdownNow := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		srv.DrainChatRuns(ctx, "stopped: the daemon is shutting down") // detached replies persist and end cleanly
@@ -432,6 +432,12 @@ func cmdServe() error {
 		}
 		srvMu.Unlock()
 	}
+	// shutdown runs once, whoever asks first: on Linux a signal runs it in
+	// wait and serveWait runs it again after stopping the VMs (its only run
+	// on the error path), and a second eng.Stop panicked on the closed
+	// channel, so every stop exited 2.
+	var shutdownOnce sync.Once
+	shutdown := func() { shutdownOnce.Do(shutdownNow) }
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	// Swallow SIGHUP instead of inheriting whatever came before: a daemon
