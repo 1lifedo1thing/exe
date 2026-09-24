@@ -341,12 +341,12 @@ function el(tag, attrs = {}, ...kids) {
   n.append(...kids);
   return n;
 }
-function toast(msg) {
+function toast(msg, ms = 3500) {
   const b = $("#toast");
   b.textContent = msg;
   b.classList.add("show");
   clearTimeout(b._t);
-  b._t = setTimeout(() => b.classList.remove("show"), 3500);
+  b._t = setTimeout(() => b.classList.remove("show"), ms);
 }
 async function copyText(text, label) {
   let ok = false;
@@ -740,6 +740,14 @@ $("#accept").addEventListener("click", () => {
 // two desks cannot fight over it.
 const list = $("#list"), col = $(".sess-col");
 let docLoaded = false, docT = null, docSaving = false, docAgain = false, docFailed = false, migrated = false, shown = "";
+// seen holds the disk's version of each draft as this window last read it
+// or sent it — the words this desk has had before its eyes. A version on
+// disk past that one, arriving while the field here has moved on from it,
+// is two edits of the same words that never met: a keystroke's stamp is
+// no reason to throw the other desk's away (reloadFromDisk).
+const seen = new Map(); // id → {text, updated}
+const see = d => { if (d.deleted) seen.delete(d.id); else seen.set(d.id, { text: d.text, updated: d.updated }); };
+let reloading = 0; // reads of the drafts in flight: a save waits for them
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 function mkDraft(text, checked, at, id) {
   const now = at || Date.now();
@@ -793,7 +801,14 @@ const nextSeq = () => (lastSeq = Math.max(Date.now(), lastSeq + 1));
 async function saveDoc(flush) {
   clearTimeout(docT);
   docT = null;
+  // a save waits for a read of the drafts in flight: words typed on waking
+  // must not reach the disk over a version this window has not read yet
+  if (!flush && reloading) { docT = setTimeout(saveDoc, 100); return; }
   const body = docJSON();
+  // what this window sends is what it has seen on disk, from the moment it
+  // goes: a read answered with this very snapshot is then no news, even
+  // while the next words are still being typed
+  for (const d of JSON.parse(body).drafts) see(d);
   // X-Exe-Seq is a content timestamp: the daemon drops a PUT older than one
   // it already stored, so an in-flight save can't land stale over the flush.
   const headers = { "Content-Type": "application/json",
@@ -844,6 +859,7 @@ async function loadDoc() {
     if (r.ok) {
       const d = await r.json();
       if (d && Array.isArray(d.drafts)) doc.drafts = d.drafts.filter(x => x && x.id).map(normDraft);
+      for (const x of doc.drafts) see(x);
     } else if (r.status === 404) {
       const l = await api(LEGACY_URL);
       if (l.ok) {
@@ -886,8 +902,18 @@ function adoptText(v) {
   while (suf < n - pre && old[old.length - 1 - suf] === v[v.length - 1 - suf]) suf++;
   src.setRangeText(v.slice(pre, v.length - suf), pre, old.length - suf, "preserve");
 }
+// A read is not a lock: the field stays typable while it is out, and the
+// answer may hold a version of the open draft this window has never seen
+// — written on another desk while this page slept, or since its last
+// read. Words typed here meanwhile carry the newer stamp, and by the
+// stamp alone would take the record and erase that version unread. So a
+// draft whose disk version is past the one last seen here, while the
+// local one has moved from it too, is settled without loss: the disk's
+// version takes the record and the field, and what was typed here goes
+// into a draft of its own, the way words typed before the first load do.
 async function reloadFromDisk() {
   if (composing) { reloadHeld = true; return; }
+  reloading++;
   try {
     const r = await api(DRAFTS_URL);
     if (!r.ok) return;
@@ -898,15 +924,24 @@ async function reloadFromDisk() {
     const byId = new Map(disk);
     let ahead = false; // we hold something disk lacks: push it back
     let typed = false; // text came in that was typed elsewhere
+    const forks = []; // drafts made of words typed over an unread version
     for (const l of doc.drafts) {
-      const dv = byId.get(l.id);
+      const dv = byId.get(l.id), s = seen.get(l.id);
+      if (dv && !dv.deleted && !l.deleted && s && dv.updated > s.updated && dv.text !== s.text
+        && l.text !== s.text && l.text !== dv.text) { forks.push(mkDraft(l.text)); continue; }
       if (!dv || l.updated > dv.updated) { byId.set(l.id, l); ahead = true; }
       else if (!dv.deleted && dv.text !== l.text) typed = true;
     }
     for (const [id, dv] of disk) { // or a draft started elsewhere
       if (!dv.deleted && !doc.drafts.some(l => l.id === id)) typed = true;
     }
+    for (const f of forks) byId.set(f.id, f);
+    if (forks.length) {
+      ahead = true;
+      toast("Another desk changed this draft before your words were saved — what you typed is in a draft of its own, at the top of the column", 8000);
+    }
     doc.drafts = [...byId.values()];
+    for (const [id, dv] of disk) if (byId.get(id) === dv) see(dv); // the disk's versions adopted here
     sortDrafts();
     for (const x of doc.drafts) adoptChecked(x);
     for (const id of [...unseen]) { // a draft edited elsewhere is no longer finished
@@ -924,17 +959,19 @@ async function reloadFromDisk() {
       selectDraft(live().length ? live()[0].id : newDraft(), false);
     } else {
       adoptText(c.text);
+      if (forks.length) src.setSelectionRange(c.text.length, c.text.length); // the field is another desk's words now: the caret goes to their end
       // text typed elsewhere waits out the same quiet as typing here, from
       // when it arrived: the window being typed in asks first, and this
       // one joins its call instead of racing it on every pause. Nothing
       // that arrives cuts the quiet short — another desk's save landing
       // mid-sentence must not send the half-typed paragraph to the model.
-      if (typed) lastInput = Date.now();
+      if (typed || forks.length) lastInput = Date.now();
       render();
       kick();
     }
     if (ahead) scheduleSave();
   } catch (e) {}
+  finally { reloading--; }
 }
 async function reloadCfg() {
   if (!loaded) return;

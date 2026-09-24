@@ -1007,7 +1007,11 @@ is this browser's own. With a draft open on two desks at once, the text
 belongs to the desk you type in: a check that finishes on the other desk
 adds its corrections and never changes your words, and text that does
 arrive from another desk waits for a word still being composed (an IME, a
-phone keyboard) and leaves the caret where it was.
+phone keyboard) and leaves the caret where it was. Words typed into a
+draft that another desk has changed since this window last read it — on
+waking, or before a slow read comes back — are never traded for that
+desk's: the draft takes the other desk's version, what you typed goes
+into a draft of its own at the top of the column, and a note says so.
 
 The check runs on the Ollama endpoint in **Configuration**
 (`ollama.base_url`, `ollama.model`) unless the options point it at
