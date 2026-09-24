@@ -145,7 +145,7 @@ Tools
   Newsfeed           winnews
   Search…            search
   Icon Editor        winicons
-  Daemon Log         winlog
+  Log Viewer         winlog
   Configuration      winconfig
   Trash              trash
 Cloudflare

@@ -10,8 +10,8 @@ import (
 
 // LogBuffer is an io.Writer for the standard logger: it keeps a ring of
 // recent lines and fans new ones out to live subscribers (the web UI's
-// Daemon Log window). main tees it with stderr via io.MultiWriter, so the
-// terminal log is unchanged. With Persist it is also backed by a file, so
+// Log Viewer; the access log keeps one too). main tees it with stderr via
+// io.MultiWriter, so the terminal log is unchanged. With Persist it is also backed by a file, so
 // the ring survives daemon restarts.
 type LogBuffer struct {
 	mu    sync.Mutex

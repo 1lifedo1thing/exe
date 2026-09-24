@@ -18,7 +18,7 @@ The menu bar works like the classic Mac it resembles:
 - **Apple menu** — About This Computer (see below).
 - **File** — New VM…, Upload to Workspace…, Close Window, Refresh.
 - **Windows** — reopen the core windows: Virtual Machines, Chat, Newsfeed,
-  Icon Editor, Configuration, Daemon Log.
+  Icon Editor, Configuration, Log Viewer.
 - **Special** — Mac OS 9, Join… (pair another exe machine), Cloudflare Status and
   Setup Wizard, Set API Token….
 - **Help** — this page, and the Agent Skill Guide for handing exe to a
@@ -385,7 +385,7 @@ needs a label before it, as in `My terminal<TAB>terminal`.
 | `winnews` | Open the Newsfeed. |
 | `winicons` | Open the Icon Editor. |
 | `winconfig` | Open Configuration. |
-| `winlog` | Open the Daemon Log. |
+| `winlog` | Open the Log Viewer. |
 | `search` | Open desktop Search. |
 | `trash` | Open the Trash. |
 | `join` | Open the Join dialog to pair another exe node. |
@@ -1059,11 +1059,12 @@ restart. Highlights:
 - `ollama.*`, `chat_provider`, `openai.model`, `cloudflare.*` — the agent
   and publishing sections above.
 
-**Windows → Daemon Log** streams the daemon's own log when something needs
-a closer look. Requests to the API (this UI included) go to a file of
-their own, `~/.exe/access.log`: one line each with the time, the caller's
-address, the request, its status, size and duration, and for Tailscale
-Serve the tailnet login. API tokens in the URL are written as `redacted`.
-It moves to `access.log.1` at 64 MB, so the two keep about a fortnight.
-This page lives at `/docs.md`, and the machine-readable counterpart for
+**Windows → Log Viewer** streams two logs live, a tab each, when something
+needs a closer look. **Daemon Log** is the daemon's own log. **Access Log**
+is every request to the API (this UI included), also kept in
+`~/.exe/access.log`: one line each with the time, the caller's address,
+the request, its status, size and duration, and for Tailscale Serve the
+tailnet login. API tokens in the URL are written as `redacted`. The file
+moves to `access.log.1` at 64 MB, so the two keep about a fortnight. Each
+tab keeps its own place while you look at the other. This page lives at `/docs.md`, and the machine-readable counterpart for
 agents at `/skill.md`.

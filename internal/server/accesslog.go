@@ -2,7 +2,9 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -23,10 +25,10 @@ import (
 // client cannot make up. Tailscale Serve forwards from 127.0.0.1, so its
 // requests carry xff= (the client's address) and ts= (the tailnet login);
 // on any other remote those two are only what the client sent. A `token`
-// query parameter is
-// written as "redacted". A WebSocket is logged when it upgrades (101),
-// not when it closes, so a terminal left open still leaves its line.
-// Past accessLogMax bytes the file moves to access.log.1 and starts over.
+// query parameter is written as "redacted". A WebSocket is logged when it
+// upgrades (101), not when it closes, so a terminal left open still
+// leaves its line. Past accessLogMax bytes the file moves to access.log.1
+// and starts over.
 type AccessLog struct {
 	mu   sync.Mutex
 	path string
@@ -34,6 +36,10 @@ type AccessLog struct {
 	size int64
 	max  int64
 	now  func() time.Time
+
+	// Ring holds the latest lines for GET /v1/logs/access (the Log
+	// Viewer's Access Log tab): the file's tail at open, then each line.
+	Ring *LogBuffer
 }
 
 // Two desks polling write about 10 MB a day, so this file and .1 hold
@@ -41,11 +47,38 @@ type AccessLog struct {
 const accessLogMax = 64 << 20
 
 func OpenAccessLog(path string) (*AccessLog, error) {
-	a := &AccessLog{path: path, max: accessLogMax, now: time.Now}
+	a := &AccessLog{path: path, max: accessLogMax, now: time.Now, Ring: NewLogBuffer(1000)}
 	if err := a.open(); err != nil {
 		return nil, err
 	}
+	if tail := fileTail(path, 512<<10); len(tail) > 0 {
+		a.Ring.Write(tail)
+	}
 	return a, nil
+}
+
+// fileTail reads up to the last n bytes of path, starting at a line.
+func fileTail(path string, n int64) []byte {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil
+	}
+	off := max(st.Size()-n, 0)
+	b := make([]byte, st.Size()-off)
+	if _, err := f.ReadAt(b, off); err != nil && err != io.EOF {
+		return nil
+	}
+	if off > 0 {
+		if i := bytes.IndexByte(b, '\n'); i >= 0 {
+			b = b[i+1:]
+		}
+	}
+	return b
 }
 
 func (a *AccessLog) open() error {
@@ -65,6 +98,7 @@ func (a *AccessLog) open() error {
 func (a *AccessLog) write(line string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.Ring.Write([]byte(line))
 	if a.f == nil {
 		return
 	}

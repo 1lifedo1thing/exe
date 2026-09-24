@@ -48,8 +48,10 @@ type Server struct {
 	StateDir   string
 
 	// Logs, when set by main, holds the daemon log ring that GET /v1/logs
-	// streams to the web UI.
-	Logs *LogBuffer
+	// streams to the web UI; AccessLogs the access log's, for
+	// GET /v1/logs/access (the Log Viewer's second tab).
+	Logs       *LogBuffer
+	AccessLogs *LogBuffer
 
 	// Site counts the homepage's readers and draws them at /stats on the
 	// site's own hostname (site.go); nil counts nothing.
@@ -302,6 +304,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/routes/{host}", s.handleRouteDelete)
 	mux.HandleFunc("GET /v1/appicons/{host}", s.handleAppIcon)
 	mux.HandleFunc("GET /v1/logs", s.handleLogs)
+	mux.HandleFunc("GET /v1/logs/access", s.handleAccessLogs)
 	mux.HandleFunc("GET /v1/ui/state", s.handleUIStateGet)
 	mux.HandleFunc("PUT /v1/ui/state", s.handleUIStatePut)
 	mux.HandleFunc("GET /v1/ui/events", s.handleUIStateEvents)
@@ -960,11 +963,20 @@ func (s *Server) removeRoute(ctx context.Context, host string) (map[string]any, 
 // handleLogs streams the daemon log as plain text: the buffered backlog
 // first, then live lines until the client disconnects.
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
-	if s.Logs == nil {
+	streamLogBuffer(w, r, s.Logs)
+}
+
+// handleAccessLogs streams access.log the same way.
+func (s *Server) handleAccessLogs(w http.ResponseWriter, r *http.Request) {
+	streamLogBuffer(w, r, s.AccessLogs)
+}
+
+func streamLogBuffer(w http.ResponseWriter, r *http.Request, buf *LogBuffer) {
+	if buf == nil {
 		writeErr(w, http.StatusNotFound, errors.New("log streaming not available"))
 		return
 	}
-	backlog, ch, cancel := s.Logs.Subscribe()
+	backlog, ch, cancel := buf.Subscribe()
 	defer cancel()
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("X-Accel-Buffering", "no")

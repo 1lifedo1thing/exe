@@ -418,7 +418,7 @@ body.mobile #cstrip { z-index: 5; }
 /* ---- OS 9 grow box corner, a small framework any window can reuse ----
    Add class "grow" to a .window and put a 15×15 grow tile at the frame's
    bottom-right: desktop windows drop in a class="grow-box" SVG (see the
-   Daemon Log window); app windows declare window.grow in app.json and draw
+   Log Viewer window); app windows declare window.grow in app.json and draw
    the tile inside their iframe. The tile carries its own black top/left
    separator lines (they continue the scrollbar/statusbar frame lines), and
    the rules below stop the frame's black border and white bevel along the
@@ -460,7 +460,7 @@ body.mobile #cstrip { z-index: 5; }
 .doc-scroll::-webkit-scrollbar-button:horizontal:end:increment:enabled { width: 14px; border-left: 0; border-right: 0; }
 .doc-scroll::-webkit-scrollbar-button:vertical:disabled { border-right: 0; }
 .doc-scroll::-webkit-scrollbar-button:horizontal:disabled { border-bottom: 0; }
-/* vertical-only flush scroller (Daemon Log text, Terminal viewports):
+/* vertical-only flush scroller (Terminal viewports):
    content runs edge to edge, so the 15px bar's trailing line is the
    win-frame border and the enabled end pair shares the statusbar's top
    line — every seam stays a single 1px line */
@@ -865,15 +865,25 @@ pre.out { background: #10120f; color: #cfe3cf; border: 1px solid var(--black); p
   margin: 10px 0 0; font-family: var(--mono); font-size: 11px; max-height: 380px; overflow: auto;
   white-space: pre-wrap; word-break: break-word; user-select: text;
   box-shadow: -1px -1px 0 var(--g600), 1px 1px 0 #fff; }
-/* Daemon Log and Chat windows: resizable via the shared grow box corner
+/* Log Viewer and Chat windows: resizable via the shared grow box corner
    (.grow + .grow-box); the bottom strip is a plain status area like
    classic IE/Netscape. 15px total (border-box) so the strip's border-top
    is the same line as the grow box tile's top separator row. */
 #win-log .statusbar, #win-chat .statusbar, #win-news .statusbar, #win-docs .statusbar, .term-window .statusbar { height: 15px; padding: 0 25px 0 8px; }
 /* edge to edge in the frame: the win-frame draws the outline, the pre
    keeps only its inner text padding, and only a vertical bar renders */
-#log-out { margin: 0; height: 380px; max-height: none; border: 0; box-shadow: none;
-  overflow-y: scroll; overflow-x: hidden; }
+/* Log Viewer: a tab control whose pane holds the printout box; the two
+   logs are stacked in it and the hidden one only made invisible, so each
+   keeps its scroll place (display:none would drop it) and keeps filling.
+   The box is a framed scroller like .listbox: the bar is always there,
+   its own black edge is the frame's right line and its last arrow the
+   14px borderless cell over the frame's bottom line. */
+#win-log .win-body { display: flex; flex-direction: column; }
+#log-panel { min-height: 0; flex: 1 0 auto; display: flex; flex-direction: column; }
+#log-box { position: relative; height: 380px; flex: 1 0 auto; }
+#log-box > .log-pane { position: absolute; inset: 0; margin: 0; max-height: none;
+  border-right: 0; overflow-y: scroll; overflow-x: hidden; }
+#log-box > .log-pane.off { visibility: hidden; }
 /* Newsfeed: one entry per event on paper, split by single hairlines (only
    between items — the statusbar draws the bottom frame line); the small
    gray last line is the byline: which node posted it, and when */
@@ -1004,7 +1014,8 @@ td .mono, td.mono { user-select: text; }
    top line is the first arrow's border, its bottom line is the frame's
    border-bottom, and the glyph stays integer-centered in the 14px face */
 .chat-msgs::-webkit-scrollbar-button:vertical:end:increment:enabled,
-.listbox::-webkit-scrollbar-button:vertical:end:increment:enabled {
+.listbox::-webkit-scrollbar-button:vertical:end:increment:enabled,
+.log-pane::-webkit-scrollbar-button:vertical:end:increment:enabled {
   height: 14px; border-top: 0; border-bottom: 0; }
 .msg { margin: 0 0 10px; }
 .msg.user { background: var(--lav); border: 1px solid #99c; padding: 5px 9px; margin-left: 48px;
@@ -1242,7 +1253,8 @@ body.mobile .win-frame > .ed-text,
 body.mobile .win-frame > .iv-box,
 body.mobile .win-frame > .mv-box,
 body.mobile .win-frame > .pv-box { flex: 1; min-height: 0; height: auto !important; }
-body.mobile #log-out { height: 100% !important; }
+body.mobile #log-panel { flex: 1 1 auto; }
+body.mobile #log-box { flex: 1 1 auto; height: auto !important; }
 body.mobile #news-list { height: 100% !important; }
 body.mobile #docs-body { height: 100% !important; }
 body.mobile .term-window .hostterm-box { height: 100%; }
@@ -1339,7 +1351,7 @@ body.mobile th.sorted {
   <div class="dd-item" data-act="winnews">Newsfeed</div>
   <div class="dd-item" data-act="winicons">Icon Editor</div>
   <div class="dd-item" data-act="winconfig">Configuration</div>
-  <div class="dd-item" data-act="winlog">Daemon Log</div>
+  <div class="dd-item" data-act="winlog">Log Viewer</div>
 </div>
 <div class="dropdown" id="dd-special" hidden>
   <div class="dd-item" data-act="macos9">Mac OS 9</div>
@@ -1554,14 +1566,23 @@ body.mobile th.sorted {
     </div>
   </div>
 
-  <!-- Daemon log -->
+  <!-- Log Viewer: the daemon log and the API access log, one tab each -->
   <div class="window grow" id="win-log" style="left:110px; top:90px; width:640px;" hidden>
     <div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
-      <div class="title">Daemon Log</div>
+      <div class="title">Log Viewer</div>
       <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
     <div class="win-frame">
-      <div class="win-body" style="padding:0">
-        <pre class="out vflush" id="log-out"></pre>
+      <div class="win-body">
+        <div class="tabbar" id="log-tabs">
+          <div class="tab active" data-log="daemon">Daemon Log</div>
+          <div class="tab" data-log="access">Access Log</div>
+        </div>
+        <div class="tabpanel" id="log-panel">
+          <div id="log-box">
+            <pre class="out log-pane" id="log-daemon"></pre>
+            <pre class="out log-pane off" id="log-access"></pre>
+          </div>
+        </div>
       </div>
       <div class="statusbar">
         <span id="log-status">…</span>
@@ -2573,7 +2594,7 @@ function wireEdges(w, body, minW, opts = {}) {
       const { body, minW, opts } = w._edge;
       const sw = w.offsetWidth, sl = w.offsetLeft, sh = body.offsetHeight;
       const sx = e.clientX, sy = e.clientY;
-      const st = opts.stickEl;
+      const st = typeof opts.stickEl === "function" ? opts.stickEl() : opts.stickEl;
       const stick = st && st.scrollHeight - st.scrollTop - st.clientHeight < 4;
       winDragging = w;
       document.body.classList.add("win-drag");
@@ -2613,7 +2634,7 @@ function wireGrow(grip, w, body, minW, opts = {}) {
     e.preventDefault(); e.stopPropagation();
     focusWin(w);
     const sw = w.offsetWidth, sh = body.offsetHeight, sx = e.clientX, sy = e.clientY;
-    const st = opts.stickEl;
+    const st = typeof opts.stickEl === "function" ? opts.stickEl() : opts.stickEl;
     const stick = st && st.scrollHeight - st.scrollTop - st.clientHeight < 4;
     winDragging = w;
     document.body.classList.add("win-drag"); // frames go inert, or one under the pointer would take the drag
@@ -2762,7 +2783,7 @@ function winSnapshot() {
   // and a live Terminal session's window, which may be open elsewhere
   for (const id of Object.keys(st)) if (isTermSessWin(id)) termGeom[id] = st[id];
   for (const [id, g] of Object.entries(termGeom)) if (!st[id] && !document.getElementById(id)) st[id] = { ...g };
-  st["win-log"].h = parseInt($("#log-out").style.height) || $("#log-out").offsetHeight || 380;
+  st["win-log"].h = parseInt($("#log-box").style.height) || $("#log-box").offsetHeight || 380;
   st["win-news"].h = parseInt($("#news-list").style.height) || $("#news-list").offsetHeight || 380;
   st["win-docs"].h = parseInt($("#docs-body").style.height) || $("#docs-body").offsetHeight || 420;
   // VM list height only once edge-resized — otherwise it sizes to its rows
@@ -2847,7 +2868,7 @@ function applyWinState(st) {
       winClampPos(w, v.w);
       if (v.z) { w.style.zIndex = v.z; maxZ = Math.max(maxZ, v.z); }
       w.classList.toggle("shaded", !!v.shaded);
-      if (id === "win-log" && v.h) $("#log-out").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
+      if (id === "win-log" && v.h) $("#log-box").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-news" && v.h) $("#news-list").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-docs" && v.h) $("#docs-body").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-myapps" && v.h) $("#ma-icons").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
@@ -3754,7 +3775,7 @@ let DOC_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering=
   <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
   <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
 </svg>`;
-// Daemon Log: a tractor-feed printout — the wide sheet with its perforated
+// Log Viewer: a tractor-feed printout — the wide sheet with its perforated
 // sprocket strips torn along dotted lines, and the log's lines inside,
 // each a dark timestamp then a grayer message of its own length
 let LOG_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
@@ -4231,7 +4252,7 @@ const ICON_DEFS = [
   { key: "page", label: "Web Page", size: 32, get: () => PAGE_ICON, set: s => PAGE_ICON = s },
   { key: "movie", label: "Movie File", size: 32, get: () => MOVIE_ICON, set: s => MOVIE_ICON = s },
   { key: "archive", label: "Archive", size: 32, get: () => ARCHIVE_ICON, set: s => ARCHIVE_ICON = s },
-  { key: "log", label: "Daemon Log", size: 32, get: () => LOG_ICON, set: s => LOG_ICON = s },
+  { key: "log", label: "Log Viewer", size: 32, get: () => LOG_ICON, set: s => LOG_ICON = s },
   { key: "app", label: "App", size: 32, get: () => APP_FALLBACK_ICON, set: s => APP_FALLBACK_ICON = s },
   { key: "news", label: "Newsfeed", size: 32, dom: "#news-icon svg" },
   { key: "chat", label: "Chat", size: 32, dom: "#chat-icon svg" },
@@ -5133,7 +5154,7 @@ function deskGen(kind) {
 // the small icon for an open window in the Windows lists: the desktop
 // art of whatever the window shows, at 16px — a VM (screen tinted by its
 // state), an app's own icon, a folder, document or image, a Terminal or
-// agent session, Chat, Newsfeed, the Trash, the Daemon Log's printout;
+// agent session, Chat, Newsfeed, the Trash, the Log Viewer's printout;
 // text-bearing windows (the documentation, the menu editor) get the
 // document, and windows
 // with no art of their own the Platinum window. One set of icons, all
@@ -7105,26 +7126,52 @@ async function loadPorts() {
       tbody)));
 }
 
-// ---- daemon log ----
-let logAbort = null, logRetry = null;
+// ---- Log Viewer: the daemon log and the access log, a tab each ----
+// Both stream while the window is open, each into its own printout; the
+// tab only picks which one shows (and whose state the status line reads),
+// so a switch never refetches or loses a place.
+const LOGS = {
+  daemon: { url: "/v1/logs", out: $("#log-daemon"), abort: null, retry: null, status: "…" },
+  access: { url: "/v1/logs/access", out: $("#log-access"), abort: null, retry: null, status: "…" },
+};
+let logTab = "daemon";
+function logStatus(key, text) {
+  LOGS[key].status = text;
+  if (key === logTab) $("#log-status").textContent = text;
+}
+function showLogTab(key) {
+  logTab = key;
+  document.querySelectorAll("#log-tabs .tab").forEach(t => t.classList.toggle("active", t.dataset.log === key));
+  for (const [k, lg] of Object.entries(LOGS)) lg.out.classList.toggle("off", k !== key);
+  $("#log-status").textContent = LOGS[key].status;
+}
+document.querySelectorAll("#log-tabs .tab").forEach(t =>
+  t.addEventListener("click", () => showLogTab(t.dataset.log)));
 function stopLogStream() {
-  clearTimeout(logRetry);
-  logRetry = null;
-  if (logAbort) { logAbort.abort(); logAbort = null; }
+  for (const lg of Object.values(LOGS)) {
+    clearTimeout(lg.retry);
+    lg.retry = null;
+    if (lg.abort) { lg.abort.abort(); lg.abort = null; }
+  }
 }
 function openLogWin() {
   openWin("#win-log");
-  if (!logAbort) streamLog();
+  for (const key of Object.keys(LOGS)) if (!LOGS[key].abort) streamLog(key);
 }
-async function streamLog() {
-  stopLogStream();
-  const ac = logAbort = new AbortController();
-  const out = $("#log-out"), st = $("#log-status");
+async function streamLog(key) {
+  const lg = LOGS[key];
+  clearTimeout(lg.retry);
+  lg.retry = null;
+  if (lg.abort) lg.abort.abort();
+  const ac = lg.abort = new AbortController();
+  const out = lg.out;
   out.textContent = "";
-  st.textContent = "connecting…";
+  logStatus(key, "connecting…");
+  let connected = false, why = "disconnected — reconnecting…";
   try {
-    const resp = await api("/v1/logs", { signal: ac.signal });
-    st.textContent = "streaming";
+    const resp = await api(lg.url, { signal: ac.signal });
+    connected = true;
+    logStatus(key, "streaming");
     const rd = resp.body.getReader();
     const dec = new TextDecoder();
     for (;;) {
@@ -7138,14 +7185,16 @@ async function streamLog() {
     }
   } catch (e) {
     if (ac.signal.aborted) return;
+    // the daemon answered and refused (a TypeError is the network)
+    if (!connected && !(e instanceof TypeError)) why = e.message + " — retrying…";
   }
   // stream ended or errored without an abort (e.g. daemon restart):
   // keep retrying quietly while the window is open
-  logAbort = null;
-  st.textContent = "disconnected — reconnecting…";
-  logRetry = setTimeout(streamLog, 3000);
+  lg.abort = null;
+  logStatus(key, why);
+  lg.retry = setTimeout(() => streamLog(key), 3000);
 }
-wireGrow($("#log-grow"), $("#win-log"), $("#log-out"), 380, { stickEl: $("#log-out") });
+wireGrow($("#log-grow"), $("#win-log"), $("#log-box"), 380, { stickEl: () => LOGS[logTab].out });
 
 // ---- agent: the tab is a launcher — the prompt becomes the first message
 // of a fresh chat session pinned to this VM, and the Chat window opens to

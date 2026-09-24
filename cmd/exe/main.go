@@ -239,6 +239,7 @@ func cmdServe() error {
 		log.Printf("access.log: %v (API requests go unlogged)", err)
 	} else {
 		apiHandler = al.Wrap(apiHandler)
+		srv.AccessLogs = al.Ring
 	}
 	proxyHandler := px.Handler()
 	errc := make(chan error, 4)

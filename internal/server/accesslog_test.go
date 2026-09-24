@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -165,5 +167,74 @@ func TestAccessLogRotates(t *testing.T) {
 	}
 	if st, _ := os.Stat(path); st.Size() > al.max {
 		t.Fatalf("current file %d bytes over max %d", st.Size(), al.max)
+	}
+}
+
+// The Access Log tab's ring starts from the file's tail (a whole line
+// first, even when the cut falls mid-line) and takes each new request.
+func TestAccessLogRing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "access.log")
+	var old strings.Builder
+	for i := 0; i < 5000; i++ {
+		fmt.Fprintf(&old, "2026-09-24 01:00:00 127.0.0.1:1 GET /old/%d 200 0 0s \"x\"\n", i)
+	}
+	os.WriteFile(path, []byte(old.String()), 0o600)
+	al, err := OpenAccessLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backlog, _, cancel := al.Ring.Subscribe()
+	cancel()
+	if len(backlog) != 1000 || !strings.Contains(backlog[999], " GET /old/4999 ") || !strings.HasPrefix(backlog[0], "2026-09-24 ") {
+		t.Fatalf("seeded ring: %d lines, first %q, last %q", len(backlog), backlog[0], backlog[len(backlog)-1])
+	}
+	ts := httptest.NewServer(al.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
+	defer ts.Close()
+	_, ch, cancel := al.Ring.Subscribe()
+	defer cancel()
+	res, err := http.Get(ts.URL + "/v1/vms?token=s3cret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	select {
+	case ln := <-ch:
+		if !strings.Contains(ln, " GET /v1/vms?token=redacted 200 ") {
+			t.Fatalf("live line %q", ln)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no live line")
+	}
+}
+
+// GET /v1/logs/access streams the ring: backlog, then live lines.
+func TestAccessLogStream(t *testing.T) {
+	buf := NewLogBuffer(10)
+	buf.Write([]byte("one\ntwo\n"))
+	s := &Server{AccessLogs: buf}
+	ts := httptest.NewServer(http.HandlerFunc(s.handleAccessLogs))
+	defer ts.Close()
+	res, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	rd := bufio.NewReader(res.Body)
+	buf.Write([]byte("three\n"))
+	for _, want := range []string{"one", "two", "three"} {
+		ln, err := rd.ReadString('\n')
+		if err != nil || strings.TrimSpace(ln) != want {
+			t.Fatalf("want %q, got %q (%v)", want, ln, err)
+		}
+	}
+	none := httptest.NewServer(http.HandlerFunc((&Server{}).handleAccessLogs))
+	defer none.Close()
+	res2, err := http.Get(none.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res2.Body.Close()
+	if res2.StatusCode != http.StatusNotFound {
+		t.Fatalf("no ring: status %d", res2.StatusCode)
 	}
 }

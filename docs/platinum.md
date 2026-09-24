@@ -159,6 +159,15 @@ restyling: `internal/server/ui/index.html` (the desktop),
   like the Mac OS 9 app) it has no tile, and an app says `"grow": false`
   in app.json so the desktop adds no edge grips either. On a phone every
   app hides its grow box; the window fills the screen there.
+- Tab control (`.tabbar` of `.tab`s over a `.tabpanel`, as Configuration,
+  the VM window and the Log Viewer draw it): the active tab runs 3px down
+  into the pane, over its border and bevel. A scroller inside the pane
+  (the Log Viewer's printouts) is framed like `.listbox`: always a bar,
+  the frame's right border dropped because the bar's black edge is that
+  line, its last arrow the 14px borderless cell on the frame's bottom
+  line. Tabs whose panes should keep their scroll place stack the panes
+  in one box and hide the others with `visibility: hidden` — Chrome drops
+  a `display: none` element's scroll offset.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`
