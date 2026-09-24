@@ -45,8 +45,9 @@ seconds after the daemon is back, at once in a tab you are not looking at.
 It waits while you are typing or clicking, while a menu or dialog is up, and
 for as long as there is unsaved work: text typed into a field and still
 there (in a closed window too), an editor with unsaved changes, unsaved
-Icon Editor pixels. While work holds it, the Apple menu shows **Reload for
-Update** to take the update anyway. A restart that changes nothing the
+Icon Editor pixels. Blue Pencil saves its drafts as you type, so its text
+never holds an update. While work holds it, the Apple menu shows **Reload
+for Update** to take the update anyway. A restart that changes nothing the
 browser runs leaves your windows alone.
 
 Right-click the desktop (long-press on a phone) for the **desktop menu**: a

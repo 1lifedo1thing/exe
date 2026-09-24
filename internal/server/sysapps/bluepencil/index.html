@@ -247,7 +247,9 @@ body.mobile .sess-grip { display: none; }
     <div class="sess-grip" id="grip"></div>
   </div>
   <div id="wrap">
-    <textarea id="src" placeholder="Type or paste your text here." spellcheck="false"></textarea>
+    <!-- data-autosave: the drafts save as you type, so the desktop does not
+         hold its update reload for this field's text -->
+    <textarea id="src" placeholder="Type or paste your text here." spellcheck="false" data-autosave></textarea>
     <div id="out"></div>
     <div id="actions">
       <button class="ghost" id="clear" disabled>Clear</button>
@@ -323,8 +325,12 @@ const SYSTEM = [
 ].join("\n");
 const ask = text => "Passage:\n" + text + "\nCorrected:";
 
-// daemon API (same origin, token-guarded)
+// daemon API (same origin, token-guarded). Nothing it answers is the
+// browser's to keep: a drafts.json read out of the HTTP cache is another
+// desk's words missed, and typing on top of it takes them. The daemon says
+// no-store too; this also skips copies a browser cached before it did.
 async function api(url, opts = {}) {
+  opts.cache = "no-store";
   opts.headers = Object.assign({}, opts.headers);
   if (TOKEN) opts.headers["Authorization"] = "Bearer " + TOKEN;
   return fetch(url, opts);
@@ -733,7 +739,7 @@ $("#accept").addEventListener("click", () => {
 // open is this browser's own, in localStorage and never in the doc, so
 // two desks cannot fight over it.
 const list = $("#list"), col = $(".sess-col");
-let docLoaded = false, docT = null, docSaving = false, docAgain = false, migrated = false, shown = "";
+let docLoaded = false, docT = null, docSaving = false, docAgain = false, docFailed = false, migrated = false, shown = "";
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 function mkDraft(text, checked, at, id) {
   const now = at || Date.now();
@@ -803,12 +809,24 @@ async function saveDoc(flush) {
   try {
     const r = await api(DRAFTS_URL, { method: "PUT", headers, body });
     if (!r.ok) throw new Error("HTTP " + r.status);
-  } catch (e) { toast("Drafts not saved: " + e.message); }
+    docFailed = false;
+  } catch (e) {
+    // the daemon away (a restart) or refusing: the save goes again until it
+    // lands — without a next keystroke nothing else would send it, and a
+    // window closed meanwhile flushes it, since a save is still pending
+    if (!docFailed) toast("Drafts not saved: " + e.message + " — trying again");
+    docFailed = true;
+    docT = setTimeout(saveDoc, 3000);
+  }
   docSaving = false;
   if (docAgain) { docAgain = false; saveDoc(); }
 }
+// A page out of sight may have missed change events (a phone's page is
+// frozen in the background, a laptop sleeps): coming back, it reads the
+// drafts before anything is typed on top of an old copy.
 addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden" && (docT || docSaving)) saveDoc(true);
+  else if (document.visibilityState === "visible" && docLoaded) reloadFromDisk();
 });
 addEventListener("pagehide", () => { if (docT || docSaving) saveDoc(true); });
 
@@ -918,20 +936,28 @@ async function reloadFromDisk() {
     if (ahead) scheduleSave();
   } catch (e) {}
 }
-window.addEventListener("message", async e => {
-  if (e.origin !== location.origin || !e.data || e.data.exe !== "data-changed") return;
-  if (e.data.client && e.data.client === CLIENT) return; // our own write
-  if (e.data.path === "config.json") {
-    if (!loaded) return;
-    const was = backendKey(cfg);
-    await loadCfg();
-    syncBackend();
-    if (backendKey(cfg) !== was) { forget(); lastInput = 0; render(); kick(); }
-    modelLabel();
-    render();
+async function reloadCfg() {
+  if (!loaded) return;
+  const was = backendKey(cfg);
+  await loadCfg();
+  syncBackend();
+  if (backendKey(cfg) !== was) { forget(); lastInput = 0; render(); kick(); }
+  modelLabel();
+  render();
+}
+window.addEventListener("message", e => {
+  if (e.origin !== location.origin || !e.data) return;
+  // the desktop's change stream reopened after a gap (a daemon restart):
+  // whatever was written meanwhile was never announced, so read it all
+  if (e.data.exe === "data-resync") {
+    reloadCfg();
+    if (docLoaded) reloadFromDisk();
     return;
   }
-  if (e.data.path === "drafts.json" && docLoaded) reloadFromDisk();
+  if (e.data.exe !== "data-changed") return;
+  if (e.data.client && e.data.client === CLIENT) return; // our own write
+  if (e.data.path === "config.json") reloadCfg();
+  else if (e.data.path === "drafts.json" && docLoaded) reloadFromDisk();
 });
 // another model, or another thinking budget, is another opinion: every
 // draft goes back to the pencil, the open one first
@@ -1297,12 +1323,24 @@ stModel.addEventListener("click", options);
   try { sel = localStorage.getItem(SEL_KEY); } catch (e) {}
   if (!cur()) sel = live().length ? live()[0].id : null;
   if (!sel) { const d = mkDraft(); doc.drafts.unshift(d); sel = d.id; } // a blank draft, ready to type into
-  const c = cur();
-  src.value = c.text;
-  src.focus();
-  src.setSelectionRange(c.text.length, c.text.length);
+  let c = cur();
+  const early = src.value;
+  if (early) {
+    // words typed or pasted before the drafts came (a slow link, a key
+    // pressed as the window opened) went into what looked like an empty
+    // field: they become a draft of their own, never written over
+    if (c.text.trim()) { c = mkDraft(); doc.drafts.unshift(c); sel = c.id; }
+    c.text = early;
+    c.updated = stamp(c);
+    try { localStorage.setItem(SEL_KEY, sel); } catch (e) {}
+    scheduleSave();
+  } else {
+    src.value = c.text;
+    src.focus();
+    src.setSelectionRange(c.text.length, c.text.length);
+  }
   if (migrated) scheduleSave();
-  lastInput = 0;
+  lastInput = early ? Date.now() : 0;
   render();
   kick(); // a draft cut off mid-check picks up where it left off
 })();

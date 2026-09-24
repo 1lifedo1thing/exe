@@ -2253,9 +2253,12 @@ function buildNote(e) {
   buildInputAt = performance.now();
   if (e.type !== "input") return;
   const t = e.target;
-  // a terminal's helper textarea is a keyboard sink, never a draft, and the
-  // desk's own editors keep a dirty flag that knows about Save
-  if (t && (t.tagName === "TEXTAREA" || t.isContentEditable) && !t.matches(".xterm-helper-textarea, .ed-text")) buildTyped.add(t);
+  // a terminal's helper textarea is a keyboard sink, never a draft, the
+  // desk's own editors keep a dirty flag that knows about Save, and an
+  // app's field marked data-autosave (Blue Pencil) is saved as it is typed
+  // — the app flushes on unload. Counting that last kind kept a desk on an
+  // old Blue Pencil for days, since its field is never empty.
+  if (t && (t.tagName === "TEXTAREA" || t.isContentEditable) && !t.matches(".xterm-helper-textarea, .ed-text, [data-autosave]")) buildTyped.add(t);
 }
 function buildWatch(doc) {
   for (const t of ["keydown", "pointerdown", "pointerup", "pointermove", "input"]) doc.addEventListener(t, buildNote, true);
@@ -9624,7 +9627,7 @@ $("#join-go").onclick = async () => {
 // When the sync engine lands a peer's change on disk, the daemon announces
 // it over SSE; forward it into the matching app's iframe so an open window
 // reloads/merges instead of clobbering the synced-in doc with stale memory.
-let appES = null, appEST = 0;
+let appES = null, appEST = 0, appESOpened = false;
 function appDataSubscribe() {
   if (appES) appES.close();
   clearTimeout(appEST);
@@ -9632,6 +9635,16 @@ function appDataSubscribe() {
   appES = new EventSource("/v1/apps/events" + tok);
   // reopen after an HTTP error, as winSubscribe does
   appES.onerror = () => { if (appES.readyState === 2) appEST = setTimeout(appDataSubscribe, 3000); };
+  // Every open after the first follows a gap (a daemon restart, a sleep)
+  // whose changes were never announced: each app window hears
+  // data-resync and reads its files again, so none is left typing on an
+  // old copy.
+  appES.onopen = () => {
+    if (appESOpened) document.querySelectorAll(".app-window .app-frame").forEach(fr => {
+      if (fr.contentWindow) fr.contentWindow.postMessage({ exe: "data-resync" }, location.origin);
+    });
+    appESOpened = true;
+  };
   appES.onmessage = e => {
     let ev;
     try { ev = JSON.parse(e.data); } catch (err) { return; }
