@@ -1064,7 +1064,13 @@ needs a closer look. **Daemon Log** is the daemon's own log. **Access Log**
 is every request to the API (this UI included), also kept in
 `~/.exe/access.log`: one line each with the time, the caller's address,
 the request, its status, size and duration, and for Tailscale Serve the
-tailnet login. API tokens in the URL are written as `redacted`. The file
-moves to `access.log.1` at 64 MB, so the two keep about a fortnight. Each
-tab keeps its own place while you look at the other. This page lives at `/docs.md`, and the machine-readable counterpart for
-agents at `/skill.md`.
+tailnet login. API tokens in the URL are written as `redacted`, and in
+both logs every email address is masked to its first letter and domain
+(`someone@example.com` shows as `s***@example.com`). The file moves to `access.log.1` at 64 MB, so the two keep
+about a fortnight. Each tab has a **Filter** field at its top: it shows
+only the lines holding every word you type, in any case, and a word
+starting with `-` leaves out the lines holding it (`GET -healthz`); new
+lines pass through it as they arrive, the status line counts the
+matches, and Escape clears it. Each tab keeps its own filter and its own
+place while you look at the other. This page lives at `/docs.md`, and
+the machine-readable counterpart for agents at `/skill.md`.

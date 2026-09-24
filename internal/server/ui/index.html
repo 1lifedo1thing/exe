@@ -872,18 +872,22 @@ pre.out { background: #10120f; color: #cfe3cf; border: 1px solid var(--black); p
 #win-log .statusbar, #win-chat .statusbar, #win-news .statusbar, #win-docs .statusbar, .term-window .statusbar { height: 15px; padding: 0 25px 0 8px; }
 /* edge to edge in the frame: the win-frame draws the outline, the pre
    keeps only its inner text padding, and only a vertical bar renders */
-/* Log Viewer: a tab control whose pane holds the printout box; the two
-   logs are stacked in it and the hidden one only made invisible, so each
-   keeps its scroll place (display:none would drop it) and keeps filling.
-   The box is a framed scroller like .listbox: the bar is always there,
-   its own black edge is the frame's right line and its last arrow the
-   14px borderless cell over the frame's bottom line. */
+/* Log Viewer: a tab control whose pane holds the two logs' views, each a
+   filter field over its printout. The views are stacked and the hidden
+   one only made invisible, so each keeps its scroll place (display:none
+   would drop it) and keeps filling. The printout is a framed scroller
+   like .listbox: the bar is always there, its own black edge is the
+   frame's right line and its last arrow the 14px borderless cell over the
+   frame's bottom line. */
 #win-log .win-body { display: flex; flex-direction: column; }
 #log-panel { min-height: 0; flex: 1 0 auto; display: flex; flex-direction: column; }
 #log-box { position: relative; height: 380px; flex: 1 0 auto; }
-#log-box > .log-pane { position: absolute; inset: 0; margin: 0; max-height: none;
+#log-box > .log-view { position: absolute; inset: 0; display: flex; flex-direction: column; }
+#log-box > .log-view.off { visibility: hidden; }
+.log-find { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.log-find input { flex: 1; min-width: 0; }
+#log-box .log-pane { flex: 1; min-height: 0; margin: 0; max-height: none;
   border-right: 0; overflow-y: scroll; overflow-x: hidden; }
-#log-box > .log-pane.off { visibility: hidden; }
 /* Newsfeed: one entry per event on paper, split by single hairlines (only
    between items — the statusbar draws the bottom frame line); the small
    gray last line is the byline: which node posted it, and when */
@@ -1579,8 +1583,14 @@ body.mobile th.sorted {
         </div>
         <div class="tabpanel" id="log-panel">
           <div id="log-box">
-            <pre class="out log-pane" id="log-daemon"></pre>
-            <pre class="out log-pane off" id="log-access"></pre>
+            <div class="log-view" id="log-view-daemon">
+              <div class="log-find"><label for="log-find-daemon">Filter:</label><input type="text" id="log-find-daemon" autocomplete="off" spellcheck="false" placeholder="words every line must hold; -word leaves lines out"></div>
+              <pre class="out log-pane" id="log-daemon"></pre>
+            </div>
+            <div class="log-view off" id="log-view-access">
+              <div class="log-find"><label for="log-find-access">Filter:</label><input type="text" id="log-find-access" autocomplete="off" spellcheck="false" placeholder="words every line must hold; -word leaves lines out"></div>
+              <pre class="out log-pane" id="log-access"></pre>
+            </div>
           </div>
         </div>
       </div>
@@ -7129,21 +7139,86 @@ async function loadPorts() {
 // ---- Log Viewer: the daemon log and the access log, a tab each ----
 // Both stream while the window is open, each into its own printout; the
 // tab only picks which one shows (and whose state the status line reads),
-// so a switch never refetches or loses a place.
+// so a switch never refetches or loses a place. Each view keeps the text
+// it was sent, so its filter can redraw from it and let new lines through
+// as they arrive.
 const LOGS = {
-  daemon: { url: "/v1/logs", out: $("#log-daemon"), abort: null, retry: null, status: "…" },
-  access: { url: "/v1/logs/access", out: $("#log-access"), abort: null, retry: null, status: "…" },
+  daemon: { url: "/v1/logs", out: $("#log-daemon"), view: $("#log-view-daemon"), find: $("#log-find-daemon") },
+  access: { url: "/v1/logs/access", out: $("#log-access"), view: $("#log-view-access"), find: $("#log-find-access") },
 };
+for (const lg of Object.values(LOGS)) Object.assign(lg, { abort: null, retry: null, status: "…", text: "", part: "", lines: 0, hits: 0, match: null });
 let logTab = "daemon";
+// a filter is words a line must all hold, in any case; "-word" leaves out
+// the lines that hold it
+function logMatcher(q) {
+  const words = q.toLowerCase().split(/\s+/).filter(w => w && w !== "-");
+  if (!words.length) return null;
+  const want = words.filter(w => w[0] !== "-"), not = words.filter(w => w[0] === "-").map(w => w.slice(1));
+  return ln => { const l = ln.toLowerCase(); return want.every(w => l.includes(w)) && !not.some(w => l.includes(w)); };
+}
+function logShowStatus(key) {
+  if (key !== logTab) return;
+  const lg = LOGS[key];
+  $("#log-status").textContent = lg.match ? `${lg.status} — ${lg.hits} of ${lg.lines} lines` : lg.status;
+}
 function logStatus(key, text) {
   LOGS[key].status = text;
-  if (key === logTab) $("#log-status").textContent = text;
+  logShowStatus(key);
+}
+// redraw a printout from its kept text: on a filter change and a trim
+function logRender(key) {
+  const lg = LOGS[key];
+  const lines = lg.text.split("\n");
+  lg.part = lines.pop(); // not yet ended by a newline
+  lg.lines = lines.length;
+  if (lg.match) {
+    const hits = lines.filter(lg.match);
+    lg.hits = hits.length;
+    lg.out.textContent = hits.length ? hits.join("\n") + "\n" : "";
+  } else {
+    lg.out.textContent = lg.text;
+  }
+  lg.out.scrollTop = lg.out.scrollHeight;
+  logShowStatus(key);
+}
+function logAppend(key, chunk) {
+  const lg = LOGS[key], out = lg.out;
+  // stick to the bottom only if the user hasn't scrolled up
+  const stick = out.scrollHeight - out.scrollTop - out.clientHeight < 4;
+  lg.text += chunk;
+  if (lg.text.length > 400000) {
+    const cut = lg.text.slice(-300000);
+    lg.text = cut.slice(cut.indexOf("\n") + 1);
+    logRender(key);
+    return;
+  }
+  const lines = (lg.part + chunk).split("\n");
+  lg.part = lines.pop();
+  lg.lines += lines.length;
+  if (lg.match) {
+    const hits = lines.filter(lg.match);
+    lg.hits += hits.length;
+    if (hits.length) out.append(hits.join("\n") + "\n");
+    logShowStatus(key);
+  } else {
+    out.append(chunk);
+  }
+  if (stick) out.scrollTop = out.scrollHeight;
+}
+for (const [key, lg] of Object.entries(LOGS)) {
+  lg.find.addEventListener("input", () => { lg.match = logMatcher(lg.find.value); logRender(key); });
+  lg.find.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || !lg.find.value) return;
+    lg.find.value = "";
+    lg.match = null;
+    logRender(key);
+  });
 }
 function showLogTab(key) {
   logTab = key;
   document.querySelectorAll("#log-tabs .tab").forEach(t => t.classList.toggle("active", t.dataset.log === key));
-  for (const [k, lg] of Object.entries(LOGS)) lg.out.classList.toggle("off", k !== key);
-  $("#log-status").textContent = LOGS[key].status;
+  for (const [k, lg] of Object.entries(LOGS)) lg.view.classList.toggle("off", k !== key);
+  logShowStatus(key);
 }
 document.querySelectorAll("#log-tabs .tab").forEach(t =>
   t.addEventListener("click", () => showLogTab(t.dataset.log)));
@@ -7164,8 +7239,10 @@ async function streamLog(key) {
   lg.retry = null;
   if (lg.abort) lg.abort.abort();
   const ac = lg.abort = new AbortController();
-  const out = lg.out;
-  out.textContent = "";
+  // the daemon sends its backlog again: start the printout over
+  lg.text = "";
+  lg.hits = 0;
+  logRender(key);
   logStatus(key, "connecting…");
   let connected = false, why = "disconnected — reconnecting…";
   try {
@@ -7177,11 +7254,7 @@ async function streamLog(key) {
     for (;;) {
       const { done, value } = await rd.read();
       if (done) break;
-      // stick to the bottom only if the user hasn't scrolled up
-      const stick = out.scrollHeight - out.scrollTop - out.clientHeight < 4;
-      out.textContent += dec.decode(value, { stream: true });
-      if (out.textContent.length > 400000) out.textContent = out.textContent.slice(-300000);
-      if (stick) out.scrollTop = out.scrollHeight;
+      logAppend(key, dec.decode(value, { stream: true }));
     }
   } catch (e) {
     if (ac.signal.aborted) return;

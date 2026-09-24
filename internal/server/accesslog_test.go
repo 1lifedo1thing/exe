@@ -238,3 +238,58 @@ func TestAccessLogStream(t *testing.T) {
 		t.Fatalf("no ring: status %d", res2.StatusCode)
 	}
 }
+
+func TestMaskEmails(t *testing.T) {
+	for in, want := range map[string]string{
+		"ts=first.last@example.net \"UA\"":           "ts=f***@example.net \"UA\"",
+		"GET /v1/x?to=a.b%40example.co.uk 200":       "GET /v1/x?to=a***%40example.co.uk 200",
+		"two: x@y.io, Some.One+tag@mail.example.org": "two: x***@y.io, S***@mail.example.org",
+		"f***@example.net stays":                     "f***@example.net stays",
+		"push @workspace/a.png to peer":              "push @workspace/a.png to peer",
+		"mention @fa0fd0d0cbc2e8d1 and livid@github": "mention @fa0fd0d0cbc2e8d1 and livid@github",
+		"no address here":                            "no address here",
+	} {
+		if got := MaskEmails(in); got != want {
+			t.Errorf("MaskEmails(%q) = %q, want %q", in, got, want)
+		}
+	}
+	var b strings.Builder
+	n, err := EmailMasker(&b).Write([]byte("hub: signed in as someone@example.com\n"))
+	if err != nil || n != 38 || b.String() != "hub: signed in as s***@example.com\n" {
+		t.Fatalf("EmailMasker wrote %q (n %d, err %v)", b.String(), n, err)
+	}
+}
+
+// Neither the file nor the ring holds an address: not from a request,
+// and not from lines an older daemon left in the file.
+func TestAccessLogMasksEmails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "access.log")
+	os.WriteFile(path, []byte("2026-09-24 01:00:00 127.0.0.1:1 GET /old 200 0 0s xff=100.1.2.3 ts=first.last@example.net \"x\"\n"), 0o600)
+	al, err := OpenAccessLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(al.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
+	defer ts.Close()
+	req, _ := http.NewRequest("GET", ts.URL+"/v1/workspace/notes@home.example.com.txt", nil)
+	req.Header.Set("Tailscale-User-Login", "first.last@example.net")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	lines := accessLines(t, path, 2)
+	if len(lines) != 2 || !strings.Contains(lines[1], "/v1/workspace/n***@home.example.com.txt") || !strings.Contains(lines[1], " ts=f***@example.net ") {
+		t.Fatalf("file lines %q", lines)
+	}
+	backlog, _, cancel := al.Ring.Subscribe()
+	cancel()
+	for _, l := range backlog {
+		if strings.Contains(l, "last@") || strings.Contains(l, "notes@") {
+			t.Fatalf("ring holds an address: %q", l)
+		}
+	}
+	if len(backlog) != 2 || !strings.Contains(backlog[0], " ts=f***@example.net ") {
+		t.Fatalf("ring %q", backlog)
+	}
+}

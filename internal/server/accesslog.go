@@ -25,7 +25,8 @@ import (
 // client cannot make up. Tailscale Serve forwards from 127.0.0.1, so its
 // requests carry xff= (the client's address) and ts= (the tailnet login);
 // on any other remote those two are only what the client sent. A `token`
-// query parameter is written as "redacted". A WebSocket is logged when it
+// query parameter is written as "redacted", and an email address anywhere
+// in the line is masked (MaskEmails). A WebSocket is logged when it
 // upgrades (101), not when it closes, so a terminal left open still
 // leaves its line. Past accessLogMax bytes the file moves to access.log.1
 // and starts over.
@@ -52,7 +53,7 @@ func OpenAccessLog(path string) (*AccessLog, error) {
 		return nil, err
 	}
 	if tail := fileTail(path, 512<<10); len(tail) > 0 {
-		a.Ring.Write(tail)
+		a.Ring.Write([]byte(MaskEmails(string(tail))))
 	}
 	return a, nil
 }
@@ -96,6 +97,7 @@ func (a *AccessLog) open() error {
 }
 
 func (a *AccessLog) write(line string) {
+	line = MaskEmails(line)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.Ring.Write([]byte(line))

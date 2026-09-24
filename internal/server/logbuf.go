@@ -2,8 +2,10 @@ package server
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -45,7 +47,7 @@ func (b *LogBuffer) Persist(path string) error {
 	}
 	var restored []string
 	if len(data) > 0 {
-		restored = strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+		restored = strings.Split(strings.TrimRight(MaskEmails(string(data)), "\n"), "\n")
 		if n := len(restored) - b.max; n > 0 {
 			restored = restored[n:]
 		}
@@ -104,4 +106,31 @@ func (b *LogBuffer) Subscribe() (backlog []string, ch chan string, cancel func()
 		b.mu.Unlock()
 	}
 	return backlog, ch, cancel
+}
+
+// emailRe finds an email address, "@" written plainly or as a URL's %40.
+var emailRe = regexp.MustCompile(`([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*(@|%40)([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})`)
+
+// MaskEmails hides the name of every email address in s, keeping its
+// first letter and its domain (first.last@example.com → f***@example.com): the
+// logs still tell one person from another without holding the address.
+// A masked address is left as it is.
+func MaskEmails(s string) string {
+	if !strings.ContainsAny(s, "@%") {
+		return s
+	}
+	return emailRe.ReplaceAllString(s, "${1}***${2}${3}")
+}
+
+// EmailMasker wraps the daemon's log output so every line it writes, to
+// the terminal, the journal and daemon.log alike, has its addresses masked.
+func EmailMasker(w io.Writer) io.Writer { return emailMasker{w} }
+
+type emailMasker struct{ w io.Writer }
+
+func (m emailMasker) Write(p []byte) (int, error) {
+	if _, err := io.WriteString(m.w, MaskEmails(string(p))); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }

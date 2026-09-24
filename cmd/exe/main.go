@@ -114,7 +114,8 @@ func cmdServe() error {
 	// Tee the daemon log into a ring buffer so the web UI can stream it
 	// (GET /v1/logs); the terminal still gets everything on stderr.
 	logs := server.NewLogBuffer(1000)
-	log.SetOutput(io.MultiWriter(os.Stderr, logs))
+	// Addresses are masked on the way out, in every copy (MaskEmails).
+	log.SetOutput(server.EmailMasker(io.MultiWriter(os.Stderr, logs)))
 	cfg, err := config.Load()
 	if err != nil {
 		return err
