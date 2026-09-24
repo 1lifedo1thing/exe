@@ -89,7 +89,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   github.com/livid/exe-stats (from HIG fig. 2-7: 19px rounded black
   outline, white top and left, `#aaa` bottom, a 21px arrow well on the
   right with its own bevel and two 7px triangles, and a transparent native
-  `<select>` inside). Apps and sysapps link it, `<link rel="stylesheet"
+  `<select>` inside). The figure is one row short: the HIG's layout
+  chapter gives the pop-up the push button's 20 pixels, and a real Mac
+  OS 9 draws 20 rows (the Monitors panel's Show pop-up, sampled from
+  `~/.exe/mac-os9/modes-control-panel.png`, 2026-09-24: black, white,
+  sixteen of face, `#aaa`, black, the triangles on rows 5–8 and 11–14).
+  The hub sizes its menu to 20 (`.popup.lang`, triangles at `4px 3px`)
+  beside its 20px buttons; the block itself is due the same move, for
+  Weather and Blue Pencil. Apps and sysapps link it, `<link rel="stylesheet"
   href="/platinum/popup.css">` (Weather's units menu, Blue Pencil's
   options), and the hub's pages take it as `{{popup}}`, the way both take
   the chrome; the host gives the span its width. Never copy the block,
