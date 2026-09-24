@@ -22,6 +22,7 @@ func TestSiteHandler(t *testing.T) {
 		{"/screenshot.png", "image/png", "max-age=14400", "PNG"},
 		{"/icon.svg", "image/svg+xml", "max-age=14400", "<svg"},
 		{"/icon-192.png", "image/png", "max-age=14400", "PNG"},
+		{"/robots.txt", "text/plain; charset=utf-8", "max-age=14400", "Disallow: /stats\nDisallow: /v1/stats\n"},
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", "http://exe.example.com"+tc.path, nil))

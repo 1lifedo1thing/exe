@@ -84,12 +84,20 @@ type siteFile struct {
 // and TestSiteChromeFollowsTheDesktop holds it to what the desktop says.
 var siteCSS = []byte(stats.ChromeCSS() + "\n" + string(mustSiteFile("site/site.css")))
 
+// siteRobots is the site's robots.txt: the page and the documentation
+// are open to crawlers, the stats desk and its JSON are not — every
+// filter, range and view there is a link, an endless space, and on
+// 2026-09-24 one GPTBot address fetched those two paths some 3,000 times
+// an hour for a day (the hub, which draws the same desk, saw twice that).
+var siteRobots = []byte("User-agent: *\nDisallow: /stats\nDisallow: /v1/stats\n")
+
 var siteFiles = map[string]siteFile{
 	"/":               {fs: siteFS, name: "site/index.html", kind: "text/html; charset=utf-8", maxAge: "no-cache"},
 	"/site.css":       {bytes: siteCSS, kind: "text/css; charset=utf-8", maxAge: "no-cache"},
 	"/screenshot.png": {fs: siteFS, name: "site/screenshot.png", kind: "image/png", maxAge: "max-age=14400"},
 	"/icon.svg":       {name: "ui/icon.svg", kind: "image/svg+xml", maxAge: "max-age=14400", fromUI: true},
 	"/icon-192.png":   {name: "ui/icon-192.png", kind: "image/png", maxAge: "max-age=14400", fromUI: true},
+	"/robots.txt":     {bytes: siteRobots, kind: "text/plain; charset=utf-8", maxAge: "max-age=14400"},
 }
 
 // SiteStats opens the homepage's own analytics — github.com/livid/exe-stats,
