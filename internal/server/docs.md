@@ -1060,5 +1060,10 @@ restart. Highlights:
   and publishing sections above.
 
 **Windows → Daemon Log** streams the daemon's own log when something needs
-a closer look. This page lives at `/docs.md`, and the machine-readable
-counterpart for agents at `/skill.md`.
+a closer look. Requests to the API (this UI included) go to a file of
+their own, `~/.exe/access.log`: one line each with the time, the caller's
+address, the request, its status, size and duration, and for Tailscale
+Serve the tailnet login. API tokens in the URL are written as `redacted`.
+It moves to `access.log.1` at 64 MB, so the two keep about a fortnight.
+This page lives at `/docs.md`, and the machine-readable counterpart for
+agents at `/skill.md`.

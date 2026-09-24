@@ -233,6 +233,13 @@ func cmdServe() error {
 	go srv.RunRain(context.Background())
 
 	apiHandler := srv.Handler()
+	// Every API request, each listener, goes to access.log beside
+	// daemon.log: who reached the API, what they asked, what they got.
+	if al, err := server.OpenAccessLog(filepath.Join(stateDir, "access.log")); err != nil {
+		log.Printf("access.log: %v (API requests go unlogged)", err)
+	} else {
+		apiHandler = al.Wrap(apiHandler)
+	}
 	proxyHandler := px.Handler()
 	errc := make(chan error, 4)
 	serveHTTP := func(h http.Handler, lns ...net.Listener) *http.Server {
