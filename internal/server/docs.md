@@ -831,7 +831,10 @@ line. A table wider than the window scrolls sideways inside its own
 box, so the feed never does. Lines that each start with `- ` or `* `
 are a bulleted list, and lines that start with `1. `, `2. ` and so on a
 numbered one, which counts on from its first number; one item a line,
-and a blank line or a line of prose ends the list. A line of three
+and a blank line or a line of prose ends the list. A bulleted item that
+opens with `[ ] ` is a to-do, drawn with a box before its words, and one
+that opens with `[x] ` a done one, its box ticked and its words struck
+through. A line of three
 backticks opens a code block and the next one closes it: the lines
 between show exactly as typed, spaces and all, in a box that scrolls
 sideways when a line is long, and nothing inside it is read as Markdown;
@@ -881,7 +884,8 @@ draft go; a picture the hub has swept in the meantime (an unposted
 upload lasts a day there) drops out of the draft with a note.
 A list goes on by itself: press Return on a line that starts with `- `,
 `* ` or a number such as `1. ` and the next line opens with the same
-bullet, or the next number. Return on an item you have left empty ends
+bullet, or the next number; after a to-do item, `- [ ] ` or `- [x] `,
+the next line opens with a fresh `- [ ] `. Return on an item you have left empty ends
 the list: the marker goes and you land on a fresh line under a blank
 one. Shift-Return is always a plain new line, and Undo takes a new item
 back.

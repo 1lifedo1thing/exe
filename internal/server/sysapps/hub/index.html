@@ -250,6 +250,18 @@ canvas.ava-big { image-rendering: pixelated; }
 .p-text ol > li::before { width: 13px; content: counter(item) "."; }
 .p-text ol.w2 > li::before { width: 20px; }
 .p-text ol.w3 > li::before { width: 27px; }
+/* a to-do item ("- [ ] words" or "- [x] words": li.box, .done when
+   ticked): the box stands where the bullet would, and is the Chat plan's
+   box from the desktop (.plan-box), copied — a 12px square, black
+   border, white, a one-pixel shadow, the tick inside once done — 5px off
+   the words as the bullet is; the done words are struck through in
+   grey. The box is out of the line's flow, so the strike never crosses
+   it. The hub's public pages carry the same block. */
+.p-text li.box { padding-left: 19px; }
+.p-text li.box::before { top: 1px; width: 12px; height: 12px; border: 1px solid #000; background: #fff; box-shadow: 1px 1px 0 #999;
+  font-size: 11px; line-height: 10px; text-align: center; color: #000; content: ""; }
+.p-text li.box.done { color: #777; text-decoration: line-through; }
+.p-text li.box.done::before { content: "\2713"; }
 /* flex-start, not the default stretch: a stretched flex line would pull every
    picture in it to the tallest sibling's height and distort its shape */
 .p-embeds { margin: 6px 0 0 20px; display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
@@ -962,28 +974,40 @@ function formatText(text, names) {
 // list runs while the lines are items of its own kind: a blank line or
 // a line of prose ends it (no continuation lines, no nesting), and a
 // numbered line under bullets begins a list of its own. A numbered list
-// counts on from its first number whatever the lines under it say.
-const LIST_BULLET_RE = /^[-*] +(\S.*?) *$/, LIST_NUMBER_RE = /^(\d{1,3})[.)] +(\S.*?) *$/;
+// counts on from its first number whatever the lines under it say. A
+// to-do item is a bulleted one whose words open with a box, "[ ] " still
+// to do or "[x] " done ("[X]" too), with words after the space, as
+// GitHub reads them: boxes holds one entry an item (" ", "x" or "") and
+// is null when no item has one; "- [ ]" alone, "- [ ]word" and a
+// numbered item keep the brackets as words.
+const LIST_BULLET_RE = /^[-*] +(\S.*?) *$/, LIST_NUMBER_RE = /^(\d{1,3})[.)] +(\S.*?) *$/, LIST_BOX_RE = /^\[([ xX])\] +(\S.*)$/;
 function listItem(line) {
   let m = LIST_BULLET_RE.exec(line);
-  if (m) return { ordered: false, num: 0, words: m[1] };
+  if (m) {
+    const b = LIST_BOX_RE.exec(m[1]);
+    return b ? { ordered: false, num: 0, box: b[1].toLowerCase(), words: b[2] } : { ordered: false, num: 0, box: "", words: m[1] };
+  }
   m = LIST_NUMBER_RE.exec(line);
-  return m ? { ordered: true, num: +m[1], words: m[2] } : null;
+  return m ? { ordered: true, num: +m[1], box: "", words: m[2] } : null;
 }
 function listAt(lines, i) {
   const first = listItem(lines[i]);
   if (!first) return null;
-  const l = { ordered: first.ordered, start: first.num, items: [first.words], n: 1 };
+  const l = { ordered: first.ordered, start: first.num, items: [first.words], boxes: null, n: 1 };
+  const boxes = [first.box];
   for (; i + l.n < lines.length; l.n++) {
     const it = listItem(lines[i + l.n]);
     if (!it || it.ordered !== first.ordered) break;
     l.items.push(it.words);
+    boxes.push(it.box);
   }
+  if (boxes.some(b => b)) l.boxes = boxes;
   return l;
 }
 // the list as nodes: a ul, or an ol whose counter begins at --n, one
 // under its first number, with w2/w3 for the digits of its widest marker;
-// each item through the inline pipeline
+// each item through the inline pipeline, a to-do item as li.box, .done
+// when its box is ticked
 function formatList(l, marks) {
   const attrs = {};
   let cls = marks;
@@ -993,7 +1017,7 @@ function formatList(l, marks) {
     if (l.start !== 1) attrs.style = "--n:" + (l.start - 1);
   }
   if (cls) attrs.class = cls.slice(1);
-  return el(l.ordered ? "ol" : "ul", attrs, ...l.items.map(w => el("li", {}, ...formatInline(w))));
+  return el(l.ordered ? "ol" : "ul", attrs, ...l.items.map((w, k) => el("li", l.boxes && l.boxes[k] ? { class: "box" + (l.boxes[k] === "x" ? " done" : "") } : {}, ...formatInline(w))));
 }
 // A table — Markdown's pipe table, GFM's form, read exactly as the hub
 // reads it (exe-hub internal/card/table.go; its testdata/tables.json
@@ -1113,7 +1137,8 @@ function formatCoded(text, links) {
 // delimiter row gone (card.Untable), a Markdown link back to its words,
 // then a bold stretch to its own (card.Unbold: asterisks inside a code
 // span stay); a bulleted item's marker becomes a bullet (card.Unlist),
-// since the lines are run together and "- one - two" would not read
+// since the lines are run together and "- one - two" would not read,
+// and a to-do item's box stays as typed, "• [ ] words"
 function plainWords(text, names) {
   text = nameMentions(text || "", names);
   const out = [];
@@ -2259,16 +2284,21 @@ $("#text").addEventListener("keydown", e => {
 // ---- a list goes on by itself ----
 // Return on a list line opens the next item: the same bullet, or the
 // number after this one with its own "." or ")", and the spaces the
-// line's marker had; what stood right of the caret goes down with it.
-// Return on an item with no words yet ends the list instead: the marker
+// line's marker had — and after a to-do item, "- [ ] " or "- [x] ", a
+// fresh open box with the spaces the line's box had; what stood right
+// of the caret goes down with it.
+// Return on an item with no words yet, "- " or "- [ ] ", ends the list
+// instead: the marker
 // goes, and the Return still breaks the line — the emptied line stays as
 // the blank line under the list and the caret stands on a fresh one
 // below it, ready for prose (Livid's rule; leaving the caret on the
 // emptied line cost a second Return).
 // The lines are read as posts are (listAt: the marker at the start of the
-// line, up to three digits), but an item may still be empty here, since
+// line, up to three digits, a box on a bullet only), but an item may
+// still be empty here, since
 // it is being written. A plain Return is left alone wherever this does
-// not apply: a line that is no item, the caret still inside the marker,
+// not apply: a line that is no item, the caret still inside the marker
+// or its box,
 // a number past 999 (its next line would be no item), Shift-Return, and
 // a Return that ends an input method's composition (Chinese, Japanese).
 // It is beforeinput, not keydown, that says "a line break is coming" on
@@ -2277,18 +2307,18 @@ $("#text").addEventListener("keydown", e => {
 // takes it back and the field's own input event does the rest — the
 // growing field, the byte cap, the pencil. The hub's public composer
 // carries the same function (exe-hub web.html): change both.
-const LIST_LINE_RE = /^(?:([-*])|(\d{1,3})([.)]))( +)(.*)$/;
+const LIST_LINE_RE = /^(?:([-*])( +)(?:(\[[ xX]\])( +|$))?|(\d{1,3})([.)])( +))(.*)$/;
 function listReturn(ta) {
   const v = ta.value, from = ta.selectionStart, to = ta.selectionEnd;
   const ls = v.lastIndexOf("\n", from - 1) + 1;
   let le = v.indexOf("\n", from);
   if (le < 0) le = v.length;
   const m = LIST_LINE_RE.exec(v.slice(ls, le));
-  if (!m || from < ls + m[0].length - m[5].length) return false; // no item, or the caret in its marker
+  if (!m || from < ls + m[0].length - m[8].length) return false; // no item, or the caret in its marker or box
   let put, a = from, b = to;
-  if (!m[5].trim() && from === to) { put = "\n"; a = ls; b = le; } // an empty item: its marker goes, the line break stays
-  else if (m[1]) put = "\n" + m[1] + m[4];
-  else if (+m[2] < 999) put = "\n" + (+m[2] + 1) + m[3] + m[4];
+  if (!m[8].trim() && from === to) { put = "\n"; a = ls; b = le; } // an empty item: its marker goes, the line break stays
+  else if (m[1]) put = "\n" + m[1] + m[2] + (m[3] ? "[ ]" + m[4] : "");
+  else if (+m[5] < 999) put = "\n" + (+m[5] + 1) + m[6] + m[7];
   else return false;
   ta.setSelectionRange(a, b);
   if (!document.execCommand("insertText", false, put)) {
