@@ -326,6 +326,33 @@ func TestAppDataSeqIsPerClient(t *testing.T) {
 	}
 }
 
+// An app's read of its data is never the browser's to answer: a response
+// with a Last-Modified and no Cache-Control is heuristically fresh, and a
+// desk that had not written since kept reading its old copy.
+func TestAppDataReadsAreNeverCached(t *testing.T) {
+	a := newTestNode(t)
+	a.installBundle(t, "Paint")
+	req, _ := http.NewRequest("PUT", a.ts.URL+"/v1/apps/Paint/data/canvas.png", strings.NewReader("pixels"))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	for _, u := range []string{"/v1/apps/Paint/data/canvas.png", "/v1/apps/Paint/data"} {
+		resp, err := http.Get(a.ts.URL + u)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s: HTTP %d", u, resp.StatusCode)
+		}
+		if cc := resp.Header.Get("Cache-Control"); cc != "no-store" {
+			t.Fatalf("%s: Cache-Control = %q, want no-store", u, cc)
+		}
+	}
+}
+
 func TestConcurrentDeleteVsLivePreservesData(t *testing.T) {
 	// The hello scenario end-to-end: node B independently deleted a file that
 	// node A has real data for. The versions are concurrent (they were never

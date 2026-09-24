@@ -475,10 +475,18 @@ func (s *Server) withAppData(w http.ResponseWriter, r *http.Request, fn func(roo
 	fn(root)
 }
 
+// App data is live state that other windows, desks and peers rewrite, so a
+// browser must never answer an app's read out of its own cache. With only
+// a Last-Modified to go on, Chrome kept a file that had sat idle for hours
+// "fresh" for a tenth of that age, unasked: a desk that had not saved since
+// went on reading its old copy of Blue Pencil's drafts after every change
+// event, and typing there took the words written on another desk.
 func (s *Server) handleAppDataList(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	s.withAppData(w, r, func(root string) { handleFileList(w, root) })
 }
 func (s *Server) handleAppDataGet(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	s.withAppData(w, r, func(root string) { handleFileGet(w, r, root, r.PathValue("path")) })
 }
 func (s *Server) handleAppDataPut(w http.ResponseWriter, r *http.Request) {
