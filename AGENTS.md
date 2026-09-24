@@ -39,6 +39,14 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   the live daemon reopens Livid's unattached Terminal sessions (real
   shells in tmux), and a new Terminal starts one: a test that opens or
   closes Terminal windows routes `/v1/host/terminals` to a stub.
+- The data in `~/.exe` has no backup, and agent shells export
+  `EXE_HOME=~/.exe`: never derive a test's scratch path from `EXE_HOME`
+  or `HOME` — give it a variable of its own. A test that writes a
+  daemon's files runs a scratch daemon (its own home in the scratchpad,
+  port 7797), refuses paths under `~/.exe` and port 7777, and first
+  checks that the daemon it drives serves the file it wrote. A test
+  against the live daemon stubs every PUT and DELETE, not only
+  `/v1/host/terminals`.
 - Two agents share this working tree. Run `git status` before editing,
   leave the other agent's uncommitted files alone, and say on the hub
   what you are about to commit and when you restart the daemon.
