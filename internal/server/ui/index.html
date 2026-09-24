@@ -3193,16 +3193,25 @@ async function aboutTick() {
   if ($("#win-about").hidden) return;
   try { aboutInfo = await j("/v1/hostinfo"); renderAbout(); } catch (e) {}
 }
-async function copyText(text, label) {
-  let ok = false;
-  try { await navigator.clipboard.writeText(text); ok = true; }
-  catch (e) { // plain-http origins have no clipboard API — fall back to execCommand
+// clipWrite puts text on the clipboard, true if it got there. Plain-http
+// origins have no clipboard API: execCommand on a scratch field instead,
+// which takes the focus for the moment, so it goes back where it was
+async function clipWrite(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (e) {
+    const had = document.activeElement;
     const ta = document.createElement("textarea");
     ta.value = text; ta.style.position = "fixed"; ta.style.top = "-1000px";
     document.body.appendChild(ta); ta.focus(); ta.select();
+    let ok = false;
     try { ok = document.execCommand("copy"); } catch (e2) {}
     ta.remove();
+    if (had && had.focus) had.focus();
+    return ok;
   }
+}
+async function copyText(text, label) {
+  const ok = await clipWrite(text);
   toast(ok ? "Copied " + (label || text) : "Copy failed — select and copy " + text);
 }
 const copyIP = ip => copyText(ip, "IP " + ip);
@@ -6245,6 +6254,26 @@ function newTerm() {
     linkHandler: { activate: (e, uri) => openTermLink(uri) },
   });
   term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => openTermLink(uri)));
+  // OSC 52 is a program setting the clipboard. Claude Code copies its own
+  // selection that way as a drag ends — it draws that highlight itself,
+  // so xterm holds no selection of its own — and under tmux it goes
+  // through load-buffer -w, which tmux hands on to its client, this
+  // terminal. The text goes onto the computer's clipboard as it would
+  // from a terminal app, and the menu's Copy keeps it until the next
+  // press or key (wireTermMenu), for a browser that refuses a write with
+  // no click behind it. Write only: a query ("?") is never answered, so
+  // nothing in the terminal reads the clipboard back.
+  term.parser.registerOscHandler(52, data => {
+    const i = data.indexOf(";");
+    const b64 = data.slice(i + 1).replace(/\s/g, "");
+    if (i < 0 || !b64 || b64 === "?") return true;
+    let text;
+    try { text = new TextDecoder().decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0))); }
+    catch (e) { return true; }
+    term._clip = text;
+    clipWrite(text).then(ok => toast(ok ? "Copied selection" : "Couldn't reach the clipboard — right-click and choose Copy"));
+    return true;
+  });
   return term;
 }
 // a blank tab first, its opener cut, then the navigation: the linked page
@@ -6311,10 +6340,31 @@ let termSeq = 0;
 // never reach xterm (they open the menu instead), and hover moves are
 // swallowed while something is selected. Clicks, keys and the wheel still
 // clear it as before, and the app sees every other event unchanged.
+// A plain drag is Claude Code's own selection, which it copies over OSC
+// 52 (newTerm): with nothing selected in xterm, Copy takes that text —
+// until the next press or key, which clears Claude Code's highlight too.
+// The modifier drag itself: xterm keeps its press from the app but still
+// reports its release, and that report, being input, cleared the
+// selection the drag had just made. So the release of a forced drag goes
+// to xterm's selection alone, whose listener is on the document, and
+// never through the terminal to the app, which saw no press either.
 // termOf returns the box's current Terminal: the VM console box outlives
 // its Terminal (Open creates a new one each time), so it is wired once.
 function wireTermMenu(w, box, termOf) {
-  box.addEventListener("mousedown", e => { if (e.button === 2) e.stopPropagation(); }, true);
+  const unclip = () => { const term = termOf(); if (term) term._clip = ""; };
+  let forced = false;
+  box.addEventListener("mousedown", e => {
+    const term = termOf();
+    forced = !!term && e.button === 0 && term.modes.mouseTrackingMode !== "none" && (IS_MAC ? e.altKey : e.shiftKey);
+    if (e.button === 2) e.stopPropagation(); else unclip();
+  }, true);
+  box.addEventListener("mouseup", e => {
+    if (!forced) return;
+    forced = false;
+    e.stopPropagation();
+    document.dispatchEvent(new MouseEvent("mouseup", e));
+  }, true);
+  box.addEventListener("keydown", unclip, true);
   box.addEventListener("mousemove", e => {
     const term = termOf();
     if (term && !e.buttons && term.hasSelection()) e.stopPropagation();
@@ -6327,7 +6377,7 @@ function wireTermMenu(w, box, termOf) {
     // keys go to the menu while it is up (Escape must dismiss it, not reach
     // the app); the terminal gets focus back however the menu closes
     term.blur();
-    const sel = term.getSelection();
+    const sel = term.getSelection() || term._clip;
     showCtxMenu(e.clientX, e.clientY, [
       { label: "Copy", dis: !sel, act: async () => { await copyText(sel, "selection"); term.focus(); } },
       { label: "Paste", act: () => termPaste(term) },

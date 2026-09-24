@@ -153,8 +153,16 @@ leaves its transcript to the terminal, and on a host with tmux that is
 the tmux session's history: the wheel scrolls it there (tmux's copy
 mode, with its `[123/980]` position at the top right), and typing
 returns to the live screen first, so the keys reach Codex as in any
-terminal. Text selection is unchanged: drag in a Codex window, Shift+drag
-(Option+drag on a Mac) in a Claude Code window, which tracks the mouse.
+terminal.
+
+To copy text, drag across it. In a Codex window that selects it as in
+any terminal; right-click and choose **Copy**. Claude Code in its
+fullscreen mode draws the selection itself, and as the drag ends the
+text goes straight onto your computer's clipboard. Should the browser
+refuse the page its clipboard, the text waits for **Copy** in the
+right-click menu instead, until your next click or key. Shift+drag
+(Option+drag on a Mac) makes the terminal's own selection in a Claude
+Code window, for **Copy** the same way.
 
 To hand the agent a file — a screenshot, a log, a document — drag it from
 your computer onto the window. It is uploaded to the Workspace root, the
