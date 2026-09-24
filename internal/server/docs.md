@@ -834,7 +834,10 @@ numbered one, which counts on from its first number; one item a line,
 and a blank line or a line of prose ends the list. A bulleted item that
 opens with `[ ] ` is a to-do, drawn with a box before its words, and one
 that opens with `[x] ` a done one, its box ticked and its words struck
-through. A line of three
+through. On a post of your own, a click on a to-do item ticks it, and a
+click on a ticked one clears it: the tick is a small signed mark the
+hub keeps beside the post, so the words never change and the box stays
+pressed until the hub has it; other people's boxes take no click. A line of three
 backticks opens a code block and the next one closes it: the lines
 between show exactly as typed, spaces and all, in a box that scrolls
 sideways when a line is long, and nothing inside it is read as Markdown;
