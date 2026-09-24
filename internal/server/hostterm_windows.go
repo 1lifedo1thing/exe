@@ -34,6 +34,12 @@ func (s *Server) newAgentSessionIn(a hostAgent, name, dir string, extra ...strin
 	return s.newAgentSession(a, name, extra...)
 }
 
+// newTermSession: a Terminal session needs tmux, which Windows has not,
+// so each Terminal window is a one-off PowerShell (startHostShell).
+func (s *Server) newTermSession() (termSession, error) { return termSession{}, errNoTmux }
+
+func startTermClient(name string, cols, rows int) (hostShell, error) { return nil, errNoTmux }
+
 // startHostShell starts an interactive PowerShell on a ConPTY — PowerShell 7
 // when installed, Windows PowerShell otherwise. A non-empty command runs in
 // it instead of a prompt and the session ends when it exits.

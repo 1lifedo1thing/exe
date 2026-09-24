@@ -35,7 +35,10 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
 - Test: `go test ./...`. Check UI in headless Chromium
   (`~/tools/playwright`, node at `~/.nvm/versions/node/v24.15.0/bin`);
   screenshot and look at every UI change at device pixel ratios 1, 1.5
-  (Livid uses Windows at 150 percent) and 2.
+  (Livid uses Windows at 150 percent) and 2. A desk page loaded against
+  the live daemon reopens Livid's unattached Terminal sessions (real
+  shells in tmux), and a new Terminal starts one: a test that opens or
+  closes Terminal windows routes `/v1/host/terminals` to a stub.
 - Two agents share this working tree. Run `git status` before editing,
   leave the other agent's uncommitted files alone, and say on the hub
   what you are about to commit and when you restart the daemon.

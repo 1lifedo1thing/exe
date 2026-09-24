@@ -56,7 +56,8 @@ tools. Choose **Customize…** to edit it. The
 chapter covers the format, every supported action and examples.
 
 Desktop icons: **Workspace** (shared files), **Terminal** (a shell on this
-host machine), **Claude Code** and **Codex** (each appears when its CLI is
+host machine, which on a host with tmux outlives a reload or a closed
+browser — below), **Claude Code** and **Codex** (each appears when its CLI is
 installed on this host; one persistent session per agent, so closing the
 window and reopening it returns to the same conversation), one icon per VM,
 one per installed app, plus **Newsfeed**, **Chat** (appears when Ollama is
@@ -204,6 +205,22 @@ agent's last session has ended does it stop and say so: close and reopen
 it for a fresh conversation. The same session can be open in more than
 one window at once — a phone beside the desktop — and the terminal takes
 the size of whichever was attached, typed in or resized last.
+
+A Terminal window keeps its shell the same way on a host with tmux: each
+one is a tmux session of its own (`exe-term-1`, `exe-term-2`, … — `tmux
+attach -t exe-term-2` picks one up over SSH), so reloading the page,
+closing the browser by accident, the laptop sleeping or the daemon
+restarting only takes the window away from the shell, never the shell.
+The window reconnects on its own, and the next time the desktop loads in
+this browser the Terminal windows it had come back where they were, with
+whatever ran in them still running; so does any Terminal no window shows
+anywhere, one left on a phone say. A Terminal another desk is showing
+stays there. The close box ends the shell, as in any terminal app, and so
+does `exit`: the window closes with it. tmux stays out of the way in
+these sessions — no status line, no prefix key, so Ctrl+B reaches the
+shell, and `tmux` run inside works as it would anywhere — and the wheel
+scrolls back through the session's history as in a Codex window. On a
+host without tmux a Terminal is a one-off shell that ends with its window.
 
 A Codex thread started elsewhere on this machine — in the ChatGPT app on
 your phone (its remote Codex runs here), the Codex app, VS Code — is a

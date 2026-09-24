@@ -293,18 +293,79 @@ func (s *unixShell) Switch(session string) error {
 	return nil
 }
 
+// loginShell is the user's shell: $SHELL, else the system's default.
+func loginShell() string {
+	if shell := os.Getenv("SHELL"); shell != "" {
+		return shell
+	}
+	if runtime.GOOS == "darwin" {
+		return "/bin/zsh"
+	}
+	return "/bin/sh"
+}
+
+// newTermSession starts a Terminal session for a new window, detached,
+// under the lowest number free: a login shell in the home folder, as a
+// one-off Terminal runs (startHostShell), with TMUX unset in it and
+// tmux's own status line and prefix key off (termsessions.go). The
+// window attaches with startTermClient and sizes the session to itself.
+func (s *Server) newTermSession() (termSession, error) {
+	s.termMu.Lock()
+	defer s.termMu.Unlock()
+	used := map[int]bool{}
+	for _, t := range s.termSessions() {
+		used[t.Number] = true
+	}
+	n := 1
+	for used[n] {
+		n++
+	}
+	name := termSessionName(n)
+	args := []string{"new-session", "-d", "-s", name, "-x", "80", "-y", "24"}
+	home, err := os.UserHomeDir()
+	if err == nil {
+		args = append(args, "-c", home)
+	}
+	args = append(args, "exec env -u TMUX -u TMUX_PANE "+shQuote(loginShell())+" -l",
+		";", "set-option", "-t", name, "status", "off",
+		";", "set-option", "-t", name, "prefix", "None",
+		";", "set-option", "-t", name, "prefix2", "None")
+	cmd := tmuxCmd(args...)
+	if cmd == nil {
+		return termSession{}, errNoTmux
+	}
+	cmd.Dir = home
+	cmd.Env = termEnv()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return termSession{}, fmt.Errorf("tmux new-session: %s", strings.TrimSpace(string(out)))
+	}
+	delete(s.termClosed, name) // a number used before starts over
+	return termSession{Name: name, Number: n, Created: time.Now().Unix()}, nil
+}
+
+// startTermClient attaches a window's tmux client to a Terminal session.
+// Closing it (unixShell.Close) only detaches: the shell lives on.
+func startTermClient(name string, cols, rows int) (hostShell, error) {
+	cmd := tmuxCmd("attach-session", "-t", "="+name)
+	if cmd == nil {
+		return nil, errNoTmux
+	}
+	cmd.Env = termEnv()
+	if home, err := os.UserHomeDir(); err == nil {
+		cmd.Dir = home
+	}
+	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+	if err != nil {
+		return nil, err
+	}
+	return &unixShell{f: f, cmd: cmd}, nil
+}
+
 // startHostShell starts the user's login shell on a pty; a non-empty command
 // runs in it instead of a prompt (-l so the profile's PATH applies — the
 // daemon's own is often slim), and the session ends when it exits.
 func startHostShell(command string, cols, rows int) (hostShell, error) {
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		if runtime.GOOS == "darwin" {
-			shell = "/bin/zsh"
-		} else {
-			shell = "/bin/sh"
-		}
-	}
+	shell := loginShell()
 	cmd := exec.Command(shell, "-l")
 	if command != "" {
 		cmd = exec.Command(shell, "-l", "-c", command)

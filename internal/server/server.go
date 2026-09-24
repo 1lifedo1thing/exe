@@ -73,6 +73,12 @@ type Server struct {
 	agentLastMu sync.Mutex
 	agentLast   map[string]string
 
+	// termMu serializes new Terminal sessions (each takes the lowest free
+	// number) and guards termClosed: the sessions a close box ended, so
+	// their other windows hear "closed" (termsessions.go).
+	termMu     sync.Mutex
+	termClosed map[string]bool
+
 	// One message typed into a session at a time (handleAgentSessionPrompt):
 	// tmux's paste buffers belong to the server, not to a session.
 	agentPromptMu sync.Mutex
@@ -212,6 +218,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/vms/{name}/stat", s.handleVMStat)
 	mux.HandleFunc("GET /v1/vms/{name}/terminal", s.handleTerminal)
 	mux.HandleFunc("GET /v1/host/terminal", s.handleHostTerminal)
+	mux.HandleFunc("GET /v1/host/terminals", s.handleTermSessions)
+	mux.HandleFunc("POST /v1/host/terminals", s.handleTermSessionNew)
+	mux.HandleFunc("DELETE /v1/host/terminals/{n}", s.handleTermSessionEnd)
 	mux.HandleFunc("GET /v1/vms/{name}/transcripts", s.handleTranscripts)
 	mux.HandleFunc("GET /v1/vms/{name}/transcripts/{id}", s.handleTranscript)
 	mux.HandleFunc("GET /v1/vms/{name}/notes", s.handleNotesGet)

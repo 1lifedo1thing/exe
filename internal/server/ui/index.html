@@ -921,6 +921,7 @@ a.svc:hover { text-decoration: underline; }
 .agent-wrap { display: flex; align-items: stretch; }
 .agent-wrap .hostterm-box { flex: 1; min-width: 0;
   touch-action: none; } /* a finger drag scrolls the pane's history (openHostTermWin), never the page */
+.hostterm-box.tmux { touch-action: none; } /* a Terminal's tmux session, likewise */
 /* contain: size — the column takes the terminal's height and its list
    scrolls; without it, a long list is what the wrap stretches to, and the
    window grows row by row */
@@ -2350,10 +2351,12 @@ function mobileSwapIn(w) {
 }
 // Mobile UI state survives reloads via its own localStorage key — phone-
 // local only, never mixed into the shared desktop layout snapshot. Live
-// terminals and transient dialogs don't restore; win-detail needs the VM
-// name, carried alongside.
+// one-off terminals and transient dialogs don't restore; a Terminal with a
+// tmux session behind it does (its window reattaches, or closes quietly
+// when the session ended meanwhile); win-detail needs the VM name,
+// carried alongside.
 const MOB_RESTORE = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-detail", "win-docs", "win-myapps", "win-icons", "win-menu"]);
-const mobRestorable = id => MOB_RESTORE.has(id)
+const mobRestorable = id => MOB_RESTORE.has(id) || isTermSessWin(id)
   || id.startsWith("win-app-") || id.startsWith("win-ws-") || id.startsWith("win-ed-") || id.startsWith("win-iv-") || id.startsWith("win-pv-") || id.startsWith("win-mv-") || id.startsWith("win-ic-");
 function mobSave() {
   const vis = [...document.querySelectorAll("#desktop .window")].find(w => !w.hidden && !MOB_DIALOG.has(w.id));
@@ -2410,6 +2413,7 @@ function mobRestore() {
     else if (id.startsWith("win-pv-")) openPageWin(decodeURIComponent(id.slice(7)));
     else if (id.startsWith("win-mv-")) openMovieWin(decodeURIComponent(id.slice(7)));
     else if (id.startsWith("win-ic-")) openIconEditor(id.slice(7));
+    else if (isTermSessWin(id)) openHostTermWin(null, null, null, { number: +id.slice(9), restore: true });
     else (WIN_OPENERS[id] || (() => openWin("#" + id)))();
   }
 }
@@ -2435,7 +2439,7 @@ function openWin(sel) {
 }
 function closeWin(w) {
   if (showAllOn) showAllExit();
-  const wasFront = w.classList.contains("front");
+  const wasFront = w.classList.contains("front"), wasHidden = w.hidden;
   w.hidden = true;
   tellApp(w, "hide");
   // a hidden movie window must fall silent; reopening resumes where it was
@@ -2453,7 +2457,10 @@ function closeWin(w) {
   // an explicit close means this tab no longer restores the agent on reload
   if (agentOfWin(w.id)) sessionStorage.removeItem("exe_" + agentOfWin(w.id) + "_open");
   if (IS_MOBILE) {
-    if (!MOB_DIALOG.has(w.id)) {
+    // a window closed from under the one on screen — a Terminal whose
+    // session a desk closed — leaves the back stack, and the screen as it is
+    mobileStack = mobileStack.filter(id => id !== w.id);
+    if (!MOB_DIALOG.has(w.id) && !wasHidden) {
       const prev = document.getElementById(mobileStack.pop() || "");
       if (prev) { prev.hidden = false; focusWin(prev); }
     }
@@ -2692,6 +2699,13 @@ const agentGeom = {}; // app → { l, t, w, h, … }
 // command puts it back. Never auto-opened: the command runs only while a
 // window holds it, and a reload must not run it again unasked
 const toolGeom = {}; // "win-tool-…" → { l, t, w, h, … }
+// and of each Terminal window with a tmux session behind it ("win-term-"
+// + its number): opened here or not, a live session's geometry rides
+// the snapshot, so a desk that pushes before it has that window (the
+// load's restore still under way, or the session started on another
+// desk) keeps its place for it. Dropped when the session ends
+const termGeom = {}; // "win-term-N" → { l, t, w, h, … }
+const isTermSessWin = id => /^win-term-\d+$/.test(id);
 
 // a window the user can resize: a grow corner, edge grips, or both
 const winResizable = w => w.classList.contains("grow") || w.classList.contains("edge-grow") || !!w._edge;
@@ -2716,9 +2730,9 @@ function winSnapshot() {
   // Carry delayed editors forward until their DOM windows can be created.
   for (const [key, layout] of icxPending) st["win-ic-" + key] = {...(layout || {open: true})};
   document.querySelectorAll("#desktop .window").forEach(w => {
-    // Terminal windows are one-off live sessions under ephemeral ids — only
-    // the agent windows (one persistent session each, stable ids) are saved
-    if (w.id.startsWith("win-term-")) return;
+    // a one-off Terminal (no tmux) is gone with its link, and a dead one
+    // (its shell exited) has nothing to come back to — neither is saved
+    if (w.id.startsWith("win-term-") && (!isTermSessWin(w.id) || w._dead)) return;
     // style.*, not offset*: hidden windows are display:none, which reads 0
     st[w.id] = {
       l: parseInt(w.style.left) || 0, t: parseInt(w.style.top) || 0,
@@ -2742,6 +2756,9 @@ function winSnapshot() {
   // a tool window likewise
   for (const id of Object.keys(st)) if (id.startsWith("win-tool-")) toolGeom[id] = st[id];
   for (const [id, g] of Object.entries(toolGeom)) if (!st[id]) st[id] = { ...g, open: false };
+  // and a live Terminal session's window, which may be open elsewhere
+  for (const id of Object.keys(st)) if (isTermSessWin(id)) termGeom[id] = st[id];
+  for (const [id, g] of Object.entries(termGeom)) if (!st[id] && !document.getElementById(id)) st[id] = { ...g };
   st["win-log"].h = parseInt($("#log-out").style.height) || $("#log-out").offsetHeight || 380;
   st["win-news"].h = parseInt($("#news-list").style.height) || $("#news-list").offsetHeight || 380;
   st["win-docs"].h = parseInt($("#docs-body").style.height) || $("#docs-body").offsetHeight || 420;
@@ -2764,6 +2781,10 @@ function applyWinState(st) {
   // one: connecting takes the tmux session over from whichever browser has it
   for (const app of Object.keys(AGENT_APPS)) if (st["win-" + app]) agentGeom[app] = st["win-" + app];
   for (const id of Object.keys(st)) if (id.startsWith("win-tool-")) toolGeom[id] = st[id];
+  // a Terminal's likewise: the load's restoreTerms opens the windows, never
+  // a snapshot — attaching elsewhere would take the session's size away
+  // from the desk in use (tmux sizes it to the client attached last)
+  for (const id of Object.keys(st)) if (isTermSessWin(id)) termGeom[id] = st[id];
   winApplying = true;
   try {
     // pass 1: open/close (openers bump z and .front; geometry fixes that after)
@@ -2843,7 +2864,7 @@ function applyWinState(st) {
         const fr = w.querySelector(".app-frame");
         if (fr) fr.style.height = Math.max(120, Math.min(window.innerHeight - 120, v.h)) + "px";
       }
-      if (agentOfWin(id) || id.startsWith("win-tool-")) {
+      if (agentOfWin(id) || id.startsWith("win-tool-") || isTermSessWin(id)) {
         // the height floor is the window's own (wireGrow's minH): a tool
         // window's is its 80×31 cells, which a remote drag cannot undercut
         if (v.h) {
@@ -2929,7 +2950,57 @@ function winRestore() {
       localStorage.setItem("exe_winstate", JSON.stringify(r.state));
       applyWinState(r.state);
     }
-  }).catch(() => {}).finally(winSubscribe);
+  }).catch(() => {}).finally(() => { winSubscribe(); restoreTerms(); });
+}
+// the Terminal sessions this browser shows, as "number:started" — the
+// start tells a session from a later one under the same number — kept in
+// localStorage, so a reload or a browser closed and reopened brings them
+// back here (restoreTerms)
+const TERMS_KEY = "exe_terms";
+function termsMine() {
+  try { return new Set(JSON.parse(localStorage.getItem(TERMS_KEY) || "[]")); } catch (e) { return new Set(); }
+}
+function termsKeep(keys) {
+  try { localStorage.setItem(TERMS_KEY, JSON.stringify([...keys])); } catch (e) {}
+}
+function termsNote(key, on) {
+  const s = termsMine();
+  if (on) s.add(key); else s.delete(key);
+  termsKeep(s);
+}
+// restoreTerms gives the Terminal sessions their windows back when the desk
+// loads: the ones this browser showed — after a reload, or the browser
+// closed by accident and opened again — and any that no window shows
+// anywhere, a phone's or another browser's left behind, so no shell goes
+// on unseen. A session another desk is showing stays there: two windows
+// of one session fight over its size (tmux sizes it to the one used last),
+// and a browser that never had it — another device, a test's — has no
+// business taking it over. Each window opens at the place and in the stack
+// the layout kept for it (termGeom; one without cascades as a new window
+// does): bottom of the stack first, then its saved z, so a Terminal that
+// was behind the Finder comes back behind it. None takes the keys by
+// itself — a click does that. The daemon's list is the truth: a session
+// that ended while the desk was away gets no window, and is forgotten
+function restoreTerms() {
+  j("/v1/host/terminals").then(r => {
+    const live = r.terminals || [], mine = termsMine(), key = t => t.number + ":" + t.created;
+    termsKeep(live.map(key).filter(k => mine.has(k)));
+    const ids = new Set(live.map(t => "win-term-" + t.number));
+    for (const id of Object.keys(termGeom)) if (!ids.has(id)) delete termGeom[id];
+    const z = t => (termGeom["win-term-" + t.number] || {}).z || 0;
+    const todo = live.filter(t => !document.getElementById("win-term-" + t.number) && (mine.has(key(t)) || !t.attached))
+      .sort((a, b) => z(a) - z(b));
+    if (!todo.length) return;
+    for (const t of todo) {
+      const w = openHostTermWin(null, null, null, { number: t.number, created: t.created, restore: true });
+      if (w && z(t)) { w.style.zIndex = z(t); zTop = Math.max(zTop, z(t)); }
+    }
+    if (zTop >= Z_CEIL) zCompact();
+    const wins = [...document.querySelectorAll("#desktop .window")].filter(x => !x.hidden);
+    wins.sort((a, b) => (+b.style.zIndex || 0) - (+a.style.zIndex || 0));
+    document.querySelectorAll("#desktop .window").forEach(x => x.classList.toggle("front", x === wins[0]));
+    winSave();
+  }).catch(() => {});
 }
 
 // ---- menus ----
@@ -6185,9 +6256,15 @@ $("#term-open").onclick = () => {
 };
 
 // ---- host Terminal windows: every double-click opens a fresh login shell
-// in its own window, like a real terminal app. Terminal windows are live
-// sessions, so they are never restored from the layout snapshot, and
-// closing one ends its shell and removes the window for good. ----
+// in its own window, like a real terminal app. On a host with tmux the
+// shell lives in a tmux session of its own ("exe-term-N", termsessions.go)
+// and the window is its view, "win-term-N": losing the window's link —
+// a reload, a closed browser, the daemon restarted — only detaches, the
+// window reconnects on its own, and a desk that loads opens a window for
+// every session still alive, where its layout left it (restoreTerms).
+// The close box ends the shell and removes the window for good. Without
+// tmux each window is a one-off shell that ends with its link, never
+// restored, numbered by termSeq under "win-term-x" ids of its own. ----
 let termSeq = 0;
 
 // ---- terminal contextual menu: Copy / Paste / Select All ----
@@ -6257,8 +6334,19 @@ async function termPaste(term) {
 // with its GPU box, and room enough for any other tool — never shrinks
 // below that, and remembers its size and position (toolGeom). With vm,
 // the command runs over SSH in that guest, opens at 80×24, and a
-// successful exit closes its window.
-function openHostTermWin(app, cmd, vm) {
+// successful exit closes its window. With none of the three it is a plain
+// Terminal: newHostTerm asks the daemon for a tmux session and comes back
+// with it as termSess, { number, created } — the window is then "win-term-" +
+// number, titled "Terminal" for 1 and "Terminal N" after, reconnects like
+// an agent window, remembers its geometry (termGeom) and this browser
+// remembers it (termsNote), and it closes when its shell exits; its close
+// box ends the session. termSess.restore marks a window reopened on a session
+// that was already there (restoreTerms, mobRestore), which never takes
+// the keys by itself. termSess 0 is a one-off shell, the host having no tmux.
+// Returns the window
+function openHostTermWin(app, cmd, vm, termSess) {
+  if (!app && !cmd && !vm && termSess === undefined) { newHostTerm(); return null; }
+  const sess = termSess ? termSess.number : 0, restore = !!(termSess && termSess.restore);
   const agent = app ? AGENT_APPS[app] : null;
   // the column needs tmux on the host, which hostinfo reports — but a
   // reload restores the window before that fetch answers, so the tab
@@ -6276,16 +6364,27 @@ function openHostTermWin(app, cmd, vm) {
     // one session, one window: reopening the icon just brings it forward
     // (a disconnected window is closed first, then reopened to reconnect)
     const old = document.getElementById("win-" + app);
-    if (old) { openWin(old); return; }
+    if (old) { openWin(old); return old; }
     sessionStorage.setItem("exe_" + app + "_open", column ? "col" : "1"); // this tab restores it on reload
   }
-  const n = agent || toolId ? 0 : ++termSeq;
-  const w = el("div", { class: "window grow term-window", id: agent ? "win-" + app : toolId || "win-term-" + n });
+  if (sess) {
+    // one session, one window here too
+    const old = document.getElementById("win-term-" + sess);
+    if (old) { openWin(old); return old; }
+  }
+  // a Terminal with a tmux session behind it: its link comes back after a
+  // drop, and its history is tmux's, scrolled as an agent window's is
+  const durable = !!(agent || sess), tmuxed = column || !!sess;
+  const n = agent || toolId ? 0 : sess || ++termSeq;
+  const w = el("div", { class: "window grow term-window", id: agent ? "win-" + app : toolId || (sess ? "win-term-" + n : "win-term-x" + n) });
   const open = document.querySelectorAll("#desktop .term-window").length;
   w.style.left = (150 + open * 26) + "px";
   w.style.top = (100 + open * 22) + "px";
   w.style.width = column ? "800px" : "640px";
-  const geom = agent ? agentGeom[app] : toolId ? toolGeom[toolId] : null;
+  const geom = agent ? agentGeom[app] : toolId ? toolGeom[toolId] : sess ? termGeom[w.id] : null;
+  // this browser shows the session now, and brings it back after a reload
+  const memo = sess && termSess.created ? sess + ":" + termSess.created : "";
+  if (memo) termsNote(memo, true);
   if (geom) {
     // last saved geometry, same clamps as applyWinState pass 2: the
     // width first, to this viewport, then the position against that
@@ -6304,7 +6403,7 @@ function openHostTermWin(app, cmd, vm) {
     <div class="win-frame">
       <div class="win-body" style="padding:0">${column
         ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">New</button></div><div class="sess-grip"></div></div><div class="hostterm-box"></div></div>`
-        : `<div class="hostterm-box"></div>`}</div>
+        : `<div class="hostterm-box${sess ? " tmux" : ""}"></div>`}</div>
       <div class="held" hidden><span class="held-text"></span><button class="ghost held-copy">Copy</button><button class="ghost held-drop">Dismiss</button><button class="ghost held-insert">Insert</button></div>
       <div class="statusbar"><span class="term-status">…</span><span class="term-usage" hidden></span></div>
       ${GROW_TILE}
@@ -6512,6 +6611,7 @@ function openHostTermWin(app, cmd, vm) {
   if (tokenInput.value) qs.set("token", tokenInput.value);
   if (app) qs.set("app", app);
   if (cmd) qs.set("cmd", cmd);
+  if (sess) qs.set("term", sess);
   const endpoint = vm ? `/v1/vms/${encodeURIComponent(vm)}/terminal` : "/v1/host/terminal";
   const url = `${proto}://${location.host}${endpoint}${qs.size ? "?" + qs : ""}`;
   const enc = new TextEncoder();
@@ -6590,7 +6690,7 @@ function openHostTermWin(app, cmd, vm) {
   // waiting its turn goes at once, an open socket gets a ping and five
   // seconds to answer it
   const onVisible = () => {
-    if (document.hidden || !agent) return;
+    if (document.hidden || !durable) return;
     if (retryTimer) { clearTimeout(retryTimer); retryTimer = 0; connect(false); return; }
     if (!ws || ws.readyState !== 1) return;
     pinged = 0; // a beat from before the tab went away is not held against the link
@@ -6618,7 +6718,8 @@ function openHostTermWin(app, cmd, vm) {
       status.textContent = vm ? "connected to " + vm : "connected";
       if (heldPaths.length) syncHeld(); // Insert wakes with the link
       ws.send(JSON.stringify({ resize: [term.cols, term.rows] }));
-      if (initial) term.focus(); // never steal focus on a background reconnect
+      // never steal focus on a background reconnect, nor on a restore
+      if (initial && !restore) term.focus();
       requestAnimationFrame(() => termSpacerFix(box, term));
     };
     // binary frames are the terminal; a text frame is the daemon's figures
@@ -6655,8 +6756,13 @@ function openHostTermWin(app, cmd, vm) {
   // beside it rather than kicked, so the two never fight for it. Only
   // the daemon's word that the agent's last session ended is final —
   // the CLI exited, or Archive took it — as a reconnect there could only
-  // start a conversation nobody asked for. Terminal windows lose their
-  // shell with the link, so a reconnect could only offer a stranger.
+  // start a conversation nobody asked for. A Terminal with a tmux session
+  // is won back the same way; its shell's exit closes the window, as a
+  // terminal app's does (tmux has taken the last screen with it), and so
+  // does "closed": a close box ended the session — this desk's other
+  // window of it, another desk's — or it ended before a restored window
+  // got to it. A one-off Terminal loses its shell with the link, so a
+  // reconnect could only offer a stranger.
   function lost(code, reason) {
     ws = null;
     clearInterval(hb); hb = 0;
@@ -6664,7 +6770,8 @@ function openHostTermWin(app, cmd, vm) {
     usage.hidden = true; // the figures come back with the link
     if (heldPaths.length) syncHeld(); // and so does Insert
     if (vm && code === 1000 && reason === "session ended") { closeWin(w); return; }
-    if (agent && !(code === 1000 && reason === "session ended")) {
+    if (sess && code === 1000 && (reason === "session ended" || reason === "closed")) { w._dead = true; closeWin(w); return; }
+    if (durable && !(code === 1000 && reason === "session ended")) {
       if (!retry) term.write("\r\n\x1b[90m[" + (reason === "detached" ? "detached" : "connection lost") + " — reconnecting]\x1b[0m\r\n");
       clearTimeout(retryTimer);
       retryTimer = setTimeout(() => { retryTimer = 0; connect(false); }, Math.min(1000 * 2 ** retry, 5000));
@@ -6705,7 +6812,7 @@ function openHostTermWin(app, cmd, vm) {
     pend -= n;
     if (n) { sendScroll(n); lastScroll = performance.now(); }
   };
-  if (column) box.addEventListener("wheel", e => {
+  if (tmuxed) box.addEventListener("wheel", e => {
     if (term.modes.mouseTrackingMode !== "none") return;
     e.preventDefault(); e.stopPropagation();
     const scr = box.querySelector(".xterm-screen");
@@ -6723,9 +6830,9 @@ function openHostTermWin(app, cmd, vm) {
   // with the mouse tracked (Claude Code) — into xterm's own wheel
   // report, one per notch. A lift with speed keeps the lines
   // coming a little, slowing as a native list does; the next touch stops
-  // it. Two fingers are the desk menu's, and a plain Terminal keeps
+  // it. Two fingers are the desk menu's, and a one-off Terminal keeps
   // xterm's scrollback and touch scrolling of its own
-  if (column) {
+  if (tmuxed) {
     let tx = 0, ty = 0, tAt = 0, acc = 0, vel = 0, fling = 0;
     const cellH = () => {
       const scr = box.querySelector(".xterm-screen");
@@ -6783,7 +6890,29 @@ function openHostTermWin(app, cmd, vm) {
     clearTimeout(probe);
     if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
     term.dispose();
+    if (!sess) return;
+    // the close box ends the shell, link or no link; a session already
+    // gone (the window closed on its end) is not asked again. Should the
+    // daemon be away, the shell lives on and its window comes back with
+    // the next load — the toast says so
+    delete termGeom[w.id];
+    if (memo) termsNote(memo, false);
+    if (!w._dead) api("/v1/host/terminals/" + sess, { method: "DELETE" }).catch(e => {
+      if (!e.message.startsWith("no Terminal session")) toast("Couldn't end " + w.querySelector(".title").textContent + ": " + e.message + " — its shell runs on");
+    });
   };
+  return w;
+}
+
+// newHostTerm opens a new Terminal: the daemon starts its tmux session
+// first, so the window opens with its number — id and title — already
+// known, nothing renamed later. A host without tmux answers 501, and the
+// window is a one-off shell as before; so it is when the daemon cannot
+// be reached, and that window says so itself
+function newHostTerm() {
+  j("/v1/host/terminals", { method: "POST" })
+    .then(t => { delete termGeom["win-term-" + t.number]; openHostTermWin(null, null, null, t); })
+    .catch(() => openHostTermWin(null, null, null, 0));
 }
 
 // termCellsPx is the window width and terminal-box height that hold

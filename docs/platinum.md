@@ -256,8 +256,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   covers it and the tile resets unseen (`launchIcon`). That, and the 200ms
   flight of Show All Windows, is all the motion on the desktop; both honour
   `prefers-reduced-motion`.
-- A tmux-backed terminal (the agent windows) has no scrollback of its
-  own, so a finger drag there turns into synthetic wheel notches, one per
+- A tmux-backed terminal (the agent windows, and a Terminal on a host
+  with tmux) has no scrollback of its own, so a finger drag there turns
+  into synthetic wheel notches, one per
   cell travelled, that take the wheel's own road (tmux copy mode, or the
   CLI's mouse reports); a flick glides on with a per-ms decay of 0.995.
   The box carries `touch-action: none` so the page never pans instead.

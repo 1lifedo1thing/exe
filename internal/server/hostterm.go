@@ -61,7 +61,24 @@ func tmuxCmd(args ...string) *exec.Cmd {
 	if tmuxSocket != "" {
 		args = append([]string{"-L", tmuxSocket}, args...)
 	}
-	return exec.Command(tmux, args...)
+	cmd := exec.Command(tmux, args...)
+	cmd.Env = withoutTMUX(os.Environ())
+	return cmd
+}
+
+// withoutTMUX is env less TMUX and TMUX_PANE. A daemon started inside
+// tmux (a scratch one, run from an agent's session) has them, and tmux
+// follows $TMUX to that server's socket whatever TMUX_TMPDIR says — so
+// the commands that set their own environment and those that do not
+// would talk to two servers — and refuses an attach there as nesting.
+func withoutTMUX(env []string) []string {
+	var out []string
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, "TMUX=") && !strings.HasPrefix(kv, "TMUX_PANE=") {
+			out = append(out, kv)
+		}
+	}
+	return out
 }
 
 // hostAgent is an agent CLI the desktop opens in a window of its own: app
@@ -154,10 +171,11 @@ func cliPATH(bin string) string {
 	return dir + string(os.PathListSeparator) + path
 }
 
-// cliEnv is the daemon's environment with TERM set and PATH as cliPATH.
+// cliEnv is the daemon's environment with TERM set, PATH as cliPATH and
+// no TMUX (withoutTMUX).
 func cliEnv(bin string) []string {
 	env := []string{"TERM=xterm-256color", "PATH=" + cliPATH(bin)}
-	for _, kv := range os.Environ() {
+	for _, kv := range withoutTMUX(os.Environ()) {
 		if !strings.HasPrefix(kv, "PATH=") && !strings.HasPrefix(kv, "TERM=") {
 			env = append(env, kv)
 		}
@@ -204,13 +222,20 @@ func shQuote(s string) string {
 // the window reconnects to them.
 // ?cmd=<command line> runs that one command in a login shell — the desktop
 // menu's "terminal <command>" shortcut to a CLI tool; the session ends
-// with the command.
+// with the command. ?term=<n> attaches to Terminal number n's tmux
+// session (termsessions.go), started by POST /v1/host/terminals: the
+// link's close says "detached" while the session lives on, "closed"
+// when a close box ended it and "session ended" when its shell exited —
+// or at once, without a client, when there is no such session. The
+// wheel's {"scroll":n} works there as in an agent window. With neither,
+// the window is a one-off shell that ends with its link.
 func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 	var sh hostShell
 	var err error
 	var agent *hostAgent
 	var ash agentShell
 	var session string // the agent session the window opens on
+	var termName string
 	if app := r.URL.Query().Get("app"); app != "" {
 		a, ok := hostAgents[app]
 		if !ok {
@@ -221,6 +246,24 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 			sh = ash
 		}
 		agent = &a
+	} else if t := r.URL.Query().Get("term"); t != "" {
+		n := termSessionNumber(termSessionPrefix + t)
+		if n == 0 {
+			writeErr(w, http.StatusBadRequest, fmt.Errorf("not a Terminal number: %q", t))
+			return
+		}
+		termName = termSessionName(n)
+		if !s.termAlive(termName) {
+			// a window restored from a layout, or reconnecting, to a
+			// session gone meanwhile: the close says why, and the
+			// window never sees tmux's own complaint
+			c, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: []string{"*"}})
+			if err == nil {
+				c.Close(websocket.StatusNormalClosure, s.termEndReason(termName))
+			}
+			return
+		}
+		sh, err = startTermClient(termName, 80, 24)
 	} else {
 		sh, err = startHostShell(r.URL.Query().Get("cmd"), 80, 24)
 	}
@@ -249,6 +292,8 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 		reason := "session ended"
 		if agent != nil && len(s.agentSessions(*agent)) > 0 {
 			reason = "detached"
+		} else if termName != "" {
+			reason = s.termEndReason(termName)
 		}
 		c.Close(websocket.StatusNormalClosure, reason)
 		cancel()
@@ -324,10 +369,10 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 			if len(msg.Resize) == 2 {
 				sh.Resize(msg.Resize[0], msg.Resize[1])
 			}
-			if msg.Scroll != nil && ash != nil {
+			if sc, ok := sh.(interface{ Scroll(int) error }); ok && msg.Scroll != nil {
 				// a failed scroll is not worth a toast on every wheel
 				// notch; the window simply stays where it is
-				ash.Scroll(*msg.Scroll)
+				sc.Scroll(*msg.Scroll)
 			}
 			if col == nil || (msg.Switch == "" && !msg.New && msg.Archive == "" && msg.Resume == "") {
 				continue
