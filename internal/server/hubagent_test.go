@@ -627,6 +627,8 @@ func TestHubAgentScreen(t *testing.T) {
 	ok("  Plain answer.\n", "Plain answer.")
 	ok("Claude: labelled answer", "labelled answer")
 	ok("Version 2.1.3 of the CLI works", "Version 2.1.3 of the CLI works")
+	ok("Two things:\n- one\n- two", "Two things:\n- one\n- two")
+	ok("an empty `[ ]` in prose", "an empty `[ ]` in prose")
 	bad("", "empty")
 	bad("the token is top-secret-token", "secret")
 	bad("-----BEGIN PRIVATE KEY-----", "PRIVATE KEY")
@@ -634,6 +636,9 @@ func TestHubAgentScreen(t *testing.T) {
 	bad("see ~/.exe/config.json", "~/.")
 	bad("the hub is at 100.116.32.57:7788", "IP address")
 	bad(strings.Repeat("x", hubAgentReplyMax+1), "cap")
+	bad("On it. The plan:\n\n- [ ] paging\n- [ ] summaries", "to-do box")
+	bad("Done so far:\n* [x] paging", "to-do box")
+	bad("  - [X] indented", "to-do box")
 }
 
 // TestHubAgentLive runs the real Claude Code CLI once, the way the daemon
