@@ -38,3 +38,17 @@ func TestLoadPreservesFirecrackerDefaultsForExistingConfig(t *testing.T) {
 		t.Fatalf("kernel URL %q does not select %s", config.Firecracker.KernelURL, wantArch)
 	}
 }
+
+// Service names are lower-cased and trimmed; empty entries vanish.
+func TestNormalizeServices(t *testing.T) {
+	c := &Config{Services: map[string]string{" Planet ": " http://127.0.0.1:7799 ", "": "http://x", "gone": " "}}
+	c.Normalize()
+	if len(c.Services) != 1 || c.Services["planet"] != "http://127.0.0.1:7799" {
+		t.Fatalf("services: %v", c.Services)
+	}
+	c = &Config{}
+	c.Normalize()
+	if c.Services != nil {
+		t.Fatalf("empty services became %v", c.Services)
+	}
+}

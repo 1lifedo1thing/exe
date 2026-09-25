@@ -56,10 +56,10 @@ func hubURL(raw string) (string, error) {
 	return u.Scheme + "://" + u.Host, nil
 }
 
-// hubRelayTransport gives up on a hub that does not pick up well before
+// relayTransport, shared with the service relay, gives up on a hub that does not pick up well before
 // the app's own patience runs out, and puts no clock on the body: the
 // relay carries /v1/events, which never ends.
-var hubRelayTransport = &http.Transport{
+var relayTransport = &http.Transport{
 	Proxy:                 http.ProxyFromEnvironment,
 	DialContext:           (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 	TLSHandshakeTimeout:   5 * time.Second,
@@ -98,7 +98,7 @@ func (s *Server) handleHubRelay(w http.ResponseWriter, r *http.Request) {
 	q.Del("hub")
 	q.Del("token")
 	proxy := &httputil.ReverseProxy{
-		Transport:     hubRelayTransport,
+		Transport:     relayTransport,
 		FlushInterval: -1,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.Out.URL.Scheme, pr.Out.URL.Host = target.Scheme, target.Host

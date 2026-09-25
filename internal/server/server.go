@@ -216,6 +216,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/vms/{name}/expose", s.handleExpose)
 	mux.HandleFunc("POST /v1/site/publish", s.handleSitePublish)
 	mux.HandleFunc("POST /v1/routes/redirect", s.handleRedirectPublish)
+	mux.HandleFunc("POST /v1/routes", s.handleRoutePublish)
 	mux.HandleFunc("GET /v1/vms/{name}/ports", s.handlePorts)
 	mux.HandleFunc("GET /v1/vms/{name}/stat", s.handleVMStat)
 	mux.HandleFunc("GET /v1/vms/{name}/terminal", s.handleTerminal)
@@ -235,6 +236,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/hub/avatar", s.handleHubUpload)
 	mux.HandleFunc("POST /v1/hub/media", s.handleHubMedia)
 	mux.HandleFunc("GET /v1/hub/relay/{path...}", s.handleHubRelay)
+	// Per method: a method-less pattern would tie with the desktop's
+	// "GET /" catch-all and the mux refuses the ambiguity.
+	for _, m := range []string{"GET", "POST", "PUT", "PATCH", "DELETE"} {
+		mux.HandleFunc(m+" /v1/svc/{name}", s.handleServiceRelay)
+		mux.HandleFunc(m+" /v1/svc/{name}/{path...}", s.handleServiceRelay)
+	}
 	mux.HandleFunc("GET /v1/macos9", s.handleMacOS9Status)
 	mux.HandleFunc("POST /v1/macos9/start", s.handleMacOS9Start)
 	mux.HandleFunc("POST /v1/macos9/cancel", s.handleMacOS9Cancel)

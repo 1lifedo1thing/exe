@@ -136,6 +136,12 @@ type Config struct {
 	// addition to ~/.exe/apps — e.g. a separate git repo of experimental
 	// apps. A leading ~ expands to the daemon user's home.
 	AppsDirs []string `json:"apps_dirs,omitempty"`
+	// Services names local HTTP services the desktop reaches through the
+	// daemon, e.g. {"planet": "http://127.0.0.1:7799"}: a request to
+	// /v1/svc/<name>/<path> is relayed to <url>/<path> with the API token
+	// checked here, so a browser that cannot reach the machine's loopback
+	// (the desk opened over Tailscale Serve, a phone) still talks to it.
+	Services map[string]string `json:"services,omitempty"`
 
 	SSHUser  string `json:"ssh_user"`
 	ImageURL string `json:"image_url"`
@@ -330,6 +336,18 @@ func (c *Config) Normalize() {
 		}
 	}
 	c.AppsDirs = dirs
+	var services map[string]string
+	for name, u := range c.Services {
+		name, u = strings.ToLower(strings.TrimSpace(name)), strings.TrimSpace(u)
+		if name == "" || u == "" {
+			continue
+		}
+		if services == nil {
+			services = map[string]string{}
+		}
+		services[name] = u
+	}
+	c.Services = services
 	c.Firecracker.Binary = strings.TrimSpace(c.Firecracker.Binary)
 	c.Firecracker.KernelURL = strings.TrimSpace(c.Firecracker.KernelURL)
 	c.Firecracker.NetworkHelper = strings.TrimSpace(c.Firecracker.NetworkHelper)

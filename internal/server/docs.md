@@ -738,6 +738,35 @@ Redirect**, preserving each request's path and query string. For example,
 the client follows the redirect. `exe routes` lists these routes as
 `redirect:https://…`; `exe unexpose <host>` removes one.
 
+A hostname can also route to a service on this machine that is not a VM,
+such as a daemon on the loopback address:
+
+```sh
+exe expose charts.example.com -backend http://127.0.0.1:7799
+```
+
+The backend is an HTTP(S) origin with no path; every request's own path
+and query reach it, with the hostname in `Host`, so one backend can serve
+several names. The same DNS record, tunnel ingress and proxy route are
+created, and `exe unexpose <host>` removes them. The API form is `POST
+/v1/routes` with `host` and `backend`.
+
+### Local services
+
+A daemon on this machine's loopback, such as `127.0.0.1:7799`, is out of a
+browser's reach when the desk is opened over Tailscale Serve or from a
+phone. Name it in `~/.exe/config.json` and the daemon relays to it:
+
+```json
+"services": { "planet": "http://127.0.0.1:7799" }
+```
+
+`/v1/svc/planet/<path>` then reaches `http://127.0.0.1:7799/<path>` with
+the method, body and query unchanged. The API token is checked here and
+never forwarded, nor are the desk's cookies; the service's cookies and
+CORS headers stay behind. A change to `services` through **PUT
+/v1/config** takes effect at once.
+
 ## Publishing to GitHub
 
 Right-click a running VM and choose **Publish to GitHub…** to turn a

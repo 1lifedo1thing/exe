@@ -882,15 +882,19 @@ func cmdExpose(args []string) error {
 	port := fs.Int("port", 0, "VM port to publish (required)")
 	sub := fs.String("sub", "", "subdomain (default: vm name)")
 	redirect := fs.String("redirect", "", "redirect this full hostname to an HTTP(S) origin (no VM needed)")
+	backend := fs.String("backend", "", "route this full hostname to a local HTTP(S) origin such as http://127.0.0.1:7799 (no VM needed)")
 	fs.Parse(rest)
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	if *redirect != "" && (*port != 0 || *sub != "") {
-		return fmt.Errorf("-redirect cannot be combined with -port or -sub")
+	if *redirect != "" && *backend != "" {
+		return fmt.Errorf("-redirect and -backend are exclusive")
 	}
-	if *redirect == "" && (*port < 1 || *port > 65535) {
-		return fmt.Errorf("-port (1-65535) or -redirect is required")
+	if (*redirect != "" || *backend != "") && (*port != 0 || *sub != "") {
+		return fmt.Errorf("-redirect and -backend cannot be combined with -port or -sub")
+	}
+	if *redirect == "" && *backend == "" && (*port < 1 || *port > 65535) {
+		return fmt.Errorf("-port (1-65535), -redirect or -backend is required")
 	}
 	cfg, err := config.Load()
 	if err != nil {
@@ -901,6 +905,10 @@ func cmdExpose(args []string) error {
 	if *redirect != "" {
 		path = "/v1/routes/redirect"
 		body = map[string]any{"host": name, "target": *redirect}
+	}
+	if *backend != "" {
+		path = "/v1/routes"
+		body = map[string]any{"host": name, "backend": *backend}
 	}
 	resp, err := api(cfg, "POST", path, body, 2*time.Minute)
 	if err != nil {
