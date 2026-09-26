@@ -160,8 +160,12 @@ restyling: `internal/server/ui/index.html` (the desktop),
   content area, laid out as above.
 - Grow box: the 15px SVG sampled from OS 9, at the window's bottom right;
   its black top row lands on the status bar's line. An app streams
-  `{exe:"grow", dx, dy}` through the bridge and the desktop resizes. A
-  fixed-size window needs no grow box: if the window cannot be resized
+  `{exe:"grow", dx, dy}` through the bridge and the desktop resizes. The
+  desktop tells the frame from `grow-start` and holds it until `grow-end`,
+  never from each grow's `source`: Safari on iPadOS stamps messages posted
+  from a pointer-captured pointermove handler with a source that is no app
+  frame's window (the trackpad grow moved nothing there until 2026-09-26,
+  `exe-app-grow-source-test.js`). A fixed-size window needs no grow box: if the window cannot be resized
   (a dialog, an About box, a guest display shown at whole-number scales
   like the Mac OS 9 app) it has no tile, and an app says `"grow": false`
   in app.json so the desktop adds no edge grips either. On a phone every

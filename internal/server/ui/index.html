@@ -4016,7 +4016,14 @@ window.addEventListener("resize", () => {
 let appGrow = null; // { win, frame, w, h } captured at grow-start
 window.addEventListener("message", e => {
   if (e.origin !== location.origin || !e.data || typeof e.data.exe !== "string") return;
-  const fr = [...document.querySelectorAll(".app-frame")].find(f => f.contentWindow === e.source);
+  let fr = [...document.querySelectorAll(".app-frame")].find(f => f.contentWindow === e.source);
+  // Safari (iPadOS 26 with a trackpad) stamps the grow stream with a source
+  // that is no app frame's window: grow-start, posted from the tile's
+  // pointerdown, names the frame, but every grow posted from the pointer-
+  // captured pointermove handler arrives with a source that matches
+  // nothing, and the window never moved. One grow is in flight at a time,
+  // so its frame is the one grow-start named (same-origin messages only).
+  if (!fr && appGrow && (e.data.exe === "grow" || e.data.exe === "grow-end")) fr = appGrow.frame;
   if (!fr) return;
   const w = fr.closest(".window");
   if (e.data.exe === "focus") {
