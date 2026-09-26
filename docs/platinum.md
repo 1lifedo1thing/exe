@@ -365,7 +365,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - One `index.html`, vanilla JS, inline CSS, no frameworks or CDNs; the
   bundle folder is the app's identity; `app.json` sizes the window.
 - The desktop bridge: `{exe:"focus"}` on pointerdown, `grow-start / grow /
-  grow-end`, `hide` and `show` (pause loops and timers), `data-changed`.
+  grow-end`, `hide` and `show` (pause loops and timers), `data-changed`,
+  `workspace-changed` (a Workspace file moved: `path`, `deleted`, `client`).
+  An app opens another with `{exe:"open-app", app, path}`: the desk opens
+  that app's window with `?path=` on a first open, or posts `{exe:"open",
+  path}` into the window already there (Planet hands a post to the Writer).
 - State goes through `/v1/apps/<Name>/data/<file>` under the sync contract
   in `/www/exe-apps/CLAUDE.md`: debounced serialized whole-document PUT
   with `X-Exe-Seq` and `X-Exe-Client`, keepalive flush on pagehide, a

@@ -828,6 +828,15 @@ one and reopen its window, no rebuild. Each app gets private storage under
 `~/.exe/appdata` plus the shared Workspace. Apps are a good thing to ask a
 coding agent to build for you.
 
+Two apps come with exe-planet, the site builder that runs beside exe (its
+`apps` folder goes in `apps_dirs`). Writer edits any Markdown file in the
+Workspace: the text on the left, the page it makes on the right, saved as
+you type; an edit made elsewhere reloads a clean file and leaves an unsaved
+one alone. Planet is three columns like the Mac app: your sites, the chosen
+site's posts, pages and drafts as a list view, and the chosen article's
+built page. New Post and Edit open the article in Writer; right-click a
+site or an article for the rest.
+
 ## Joining desks together
 
 **Special → Join…** pairs this exe with another one (say, your laptop's)

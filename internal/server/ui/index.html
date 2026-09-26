@@ -2402,6 +2402,12 @@ function mobSave() {
 }
 // System app IDs used display names in older layouts, menus and icon edits.
 // Normalize only those aliases; user app names remain case-sensitive.
+// workspaceRelPath accepts a path relative to the Workspace root: no
+// leading slash, no backslash, no "." or ".." segment, no empty segment.
+function workspaceRelPath(p) {
+  if (typeof p !== "string" || !p || p.length > 1024 || p.startsWith("/") || p.includes("\\")) return false;
+  return p.split("/").every(seg => seg && seg !== "." && seg !== "..");
+}
 function canonicalAppName(name) {
   switch (name) {
     case "Mac OS 9": return "macos9";
@@ -3936,10 +3942,17 @@ async function loadApps() {
     if (a.window && a.window.height && !fr.style.height) fr.style.height = a.window.height + "px";
   }
 }
-function openAppWin(name) {
+// openAppWin opens or raises an app's window. args (the Writer's path)
+// ride the frame's query when the window is made and reach an open
+// window as an {exe:"open", …} message, so an app is told either way.
+function openAppWin(name, args) {
   name = canonicalAppName(name);
   const id = "win-app-" + name;
   let w = document.getElementById(id);
+  if (w && args) {
+    const fr = w.querySelector(".app-frame");
+    if (fr && fr.contentWindow) fr.contentWindow.postMessage({ exe: "open", ...args }, location.origin);
+  }
   if (!w) {
     const app = appsList.find(a => a.name === name) || {};
     w = el("div", { class: "window app-window", id });
@@ -3960,6 +3973,7 @@ function openAppWin(name) {
     const q = new URLSearchParams();
     if (tokenInput.value) q.set("token", tokenInput.value);
     if (IS_MOBILE) q.set("mobile", "1");
+    for (const [k, v] of Object.entries(args || {})) if (typeof v === "string") q.set(k, v);
     const qs = q.toString(); // not .size: iOS 16 Safari lacks it
     fr.src = "/apps/" + encodeURIComponent(name) + "/" + (qs ? "?" + qs : "");
     $("#desktop").append(w);
@@ -4017,6 +4031,15 @@ window.addEventListener("message", e => {
     // apps have no window chrome of their own, so a clicked picture (a hub
     // embed, say) opens in a desktop PictureViewer window via the bridge
     openImageWin(e.data.url, w, typeof e.data.name === "string" ? e.data.name : "");
+  } else if (e.data.exe === "open-app" && typeof e.data.app === "string") {
+    // an app asks for another app on a Workspace file: Planet hands a
+    // post's index.md to the Writer. The app must be one the desk lists
+    // and the path one inside the Workspace.
+    const name = canonicalAppName(e.data.app);
+    if (!appsList.some(a => a.name === name)) return;
+    const path = typeof e.data.path === "string" ? e.data.path : "";
+    if (path && !workspaceRelPath(path)) return;
+    openAppWin(name, path ? { path } : undefined);
   } else if (e.data.exe === "view-page" && isWebURL(e.data.url || "")) {
     // a page (an admin's HTML embed on the hub) opens the same way, in a
     // desktop page window, sandboxed like a Workspace page
@@ -9891,7 +9914,17 @@ function appDataSubscribe() {
     let ev;
     try { ev = JSON.parse(e.data); } catch (err) { return; }
     if (!ev || !ev.app) return;
-    if (ev.app === "@workspace") { workspaceChanged(ev.path, !!ev.deleted, ev.client || ""); return; }
+    if (ev.app === "@workspace") {
+      workspaceChanged(ev.path, !!ev.deleted, ev.client || "");
+      // apps that edit Workspace files (the Writer, Planet) hear every
+      // change, under a name of its own so an app's data-changed
+      // handler never mistakes a Workspace file for its own document
+      for (const fr of document.querySelectorAll(".app-frame")) {
+        if (fr.contentWindow) fr.contentWindow.postMessage(
+          { exe: "workspace-changed", path: ev.path, deleted: !!ev.deleted, client: ev.client || "" }, location.origin);
+      }
+      return;
+    }
     // a feed item landed (posted here or synced in) — refresh an open window
     if (ev.app === "Newsfeed") { if (!$("#win-news").hidden) loadNews().catch(() => {}); return; }
     // custom system icons changed in another window or synced from a peer
