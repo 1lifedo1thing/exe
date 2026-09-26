@@ -841,6 +841,16 @@ and tunnel rule a VM's Expose makes), or send every changed build to
 IPFS under a key this node keeps, or both. Both are off until you turn
 them on, and Export… bundles the site with its key for another node.
 
+The same sheet can put an exposed site on an exe hub. Turn on **Announce**
+and give the hub's address: this node invites the site's own key there
+(the site's key is also its IPNS name and a Solana address), and from then
+on each post you publish — a draft moved into Posts — announces itself on
+the hub under the site's name, with a link back. Under the post on your
+site, a Reply window and a Replies window show the answers it gets, live;
+a reader replies with a Solana wallet that meets the hub's gate, signing
+a message and never a transaction. Posts published before you turned it
+on stay put; right-click one and choose **Announce on Hub** to send it.
+
 ## Joining desks together
 
 **Special → Join…** pairs this exe with another one (say, your laptop's)
