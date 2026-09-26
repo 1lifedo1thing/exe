@@ -163,9 +163,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   `{exe:"grow", dx, dy}` through the bridge and the desktop resizes. The
   desktop tells the frame from `grow-start` and holds it until `grow-end`,
   never from each grow's `source`: Safari on iPadOS stamps messages posted
-  from a pointer-captured pointermove handler with a source that is no app
-  frame's window (the trackpad grow moved nothing there until 2026-09-26,
-  `exe-app-grow-source-test.js`). A fixed-size window needs no grow box: if the window cannot be resized
+  from a pointer-captured pointermove handler with the desk's own window as
+  their source, not the app frame (the trackpad grow moved nothing there
+  until 2026-09-26, `exe-app-grow-source-test.js`). A fixed-size window needs no grow box: if the window cannot be resized
   (a dialog, an About box, a guest display shown at whole-number scales
   like the Mac OS 9 app) it has no tile, and an app says `"grow": false`
   in app.json so the desktop adds no edge grips either. On a phone every
