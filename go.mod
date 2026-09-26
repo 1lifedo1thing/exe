@@ -43,8 +43,6 @@ require (
 )
 
 require (
-	github.com/livid/exe-stats v0.0.0
+	github.com/livid/exe-stats v0.1.0
 	modernc.org/sqlite v1.59.0
 )
-
-replace github.com/livid/exe-stats => /www/exe-stats
