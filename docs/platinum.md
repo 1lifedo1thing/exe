@@ -37,6 +37,20 @@ restyling: `internal/server/ui/index.html` (the desktop),
   uneven pixels at Windows' 150% setting. Keep the viewer's input scale in
   sync, refit on density changes, and compare rendered pixels with the raw
   framebuffer, not just the window chrome. Shrink only if 1× cannot fit.
+- Bitmap art in a bordered box (the Hub app's drawings, `docs/hub-drawing.md`):
+  give the picture a whole number of device pixels a source pixel, its CSS
+  size rounded **up** to the next 1/64px — layout keeps sixty-fourths and
+  cuts the rest, and 256 pixels at 125 percent came out 255.996 wide. A
+  panel centred on a veil is then moved onto the device grid (the canvas's
+  rect times the density, rounded; the veil is fixed at the frame's corner
+  and the browser sets a frame on a whole device pixel, so the frame's own
+  place is left out). In a scrolling list the box can still stand between
+  two device pixels: the picture's pixels are even blocks, its outermost
+  rows and columns blend with the border. Neither of these is a way out:
+  Chromium takes any border width under 1px as 1px, and an outline lies
+  half over the picture. Measure on a screenshot of the whole viewport; one
+  clipped to an element that stands between device pixels is resampled and
+  shows blends the screen does not have.
 - Where two bevels of different colours meet at a corner, the browser
   splits the corner pixel; when the original leaves that pixel as face
   colour, give each L its own box (the Control Strip's wells and tiles).

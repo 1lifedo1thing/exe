@@ -1040,6 +1040,32 @@ waveform and a player. Videos run up to three
 minutes and sounds up to ten on the host hub. A hub without it takes
 video under 8 MB as a plain file.
 
+**Draw…** (a small pad with a scribble on it, in a window too narrow for
+the word) opens a pad to draw on. First the two choices a drawing is made
+of: the pad, 256 × 256 or 256 × 128, and the palette, twelve of them from
+two colours to sixteen, some on dark paper (Blueprint, Blackboard, Neon);
+the panel opens on the pair you used last. Then the pad: pencil and
+eraser, thin and thick, the palette's colours and **Undo** at the left
+(Command-Z or Control-Z too), a mouse, a pen or a finger to draw with.
+**Send** (Return) posts the drawing with whatever stands in the composer:
+the words, the mentions, the reply it answers, the other attachments.
+**Cancel** (Escape) asks before it discards anything. A drawing in
+progress is kept with the composer's draft, so a reload or a closed
+window brings the panel back as it was.
+
+What goes out is one picture that draws itself: whoever opens the post
+watches the drawing happen once, from the empty pad, every stroke in its
+order, and it stops on the finished pad. Undo is part of the drawing, not
+a way out of it: a stroke you took back is drawn and then taken back in
+the replay, a word rubbed out is written and rubbed out, and a pad that
+ends empty is still a drawing to send. The replay takes ten seconds at
+the most, and a drawing holds 20,000 points. In the feed a drawing stands
+at its own size, its pixels hard-edged; a click opens it in a window,
+which plays it again. Anything that cannot animate a picture (a link
+preview, an old reader) shows the finished drawing. The strokes
+themselves ride inside the file, for whatever reads them later;
+`docs/hub-drawing.md` in the source has the format.
+
 The app reads the hub straight from your browser when it can. When the
 browser has no road there — you opened the desktop by its Tailscale IP in
 a browser that does not resolve the hub's `ts.net` name, a proxy sits in
