@@ -673,9 +673,12 @@ support it, or `off` to disable thinking). A local signed-in Ollama at `http://1
 use cloud models like `glm-5.2:cloud` with no API key; `https://ollama.com`
 needs one. Then:
 
-- The **Agent** tab in a VM window runs the agent inside that VM. It can
-  install packages, write code and start services — it has passwordless
-  sudo (doas on Alpine) *inside the VM*, and the VM is the sandbox boundary.
+- The **Agent** tab in a VM window starts the agent on that VM: **Run
+  Agent** opens a new chat pinned to the VM, your prompt its first
+  message, and the Chat window streams the run and takes what you say
+  next. It can install packages, write code and start services — it has
+  passwordless sudo (doas on Alpine) *inside the VM*, and the VM is the
+  sandbox boundary.
 - The **Chat** icon and window appear once a chat backend is usable: a
   conversation that can see and drive your whole VM cloud. Replies run in
   the daemon, not in the browser: closing the tab (or losing the network)
@@ -693,7 +696,11 @@ listens on all interfaces there, so when it runs on another machine swap
 into the tab's paste field. Tokens live in `~/.exe/openai.json` and refresh themselves.
 While signed in the tab also shows the subscription's rate-limit usage —
 the rolling 5-hour and weekly windows, with their reset times — and any
-credit balance. The per-VM Agent tab stays on Ollama.
+credit balance. A VM's Agent tab follows the same choice, since what it
+starts is a chat: with `chat_provider` set to `openai` its runs are on
+the ChatGPT subscription too. What stays on Ollama whatever is chosen is
+`exe code` on the command line, and the `POST /v1/vms/{name}/agent` call
+behind it.
 
 Prefer your own agent? See **Help → Agent Skill Guide**: exe serves a
 `/skill.md` file that teaches Claude Code, Codex or any other coding agent

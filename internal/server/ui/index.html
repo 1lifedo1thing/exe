@@ -8373,7 +8373,7 @@ const CONFIG_FIELDS = [
     { path: "ollama.effort", options: ["", "off", "low", "medium", "high", "max"], hint: "thinking effort for models that support it (Ollama's think option); off disables thinking" },
   ]},
   { group: "OpenAI", fields: [
-    { path: "chat_provider", options: ["ollama", "openai"], hint: "which backend the Chat window uses — openai runs on your ChatGPT subscription" },
+    { path: "chat_provider", options: ["ollama", "openai"], hint: "which backend Chat and a VM's Agent tab use — openai runs on your ChatGPT subscription" },
     { path: "openai.model", models: "openai", hint: "listed live from the ChatGPT backend once signed in" },
     { path: "openai.effort", options: ["", "none", "minimal", "low", "medium", "high", "xhigh", "max"], hint: "reasoning effort — empty uses the model's default; a level the model rejects falls back to its default" },
   ]},

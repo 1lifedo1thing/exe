@@ -1,8 +1,14 @@
 package server
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"exe/internal/config"
 )
 
 // The operator is told the system a VM runs from its recorded image: a
@@ -38,5 +44,42 @@ func TestChatSystemPromptNamesTheSystem(t *testing.T) {
 	}
 	if strings.Contains(fleet, "%!") || strings.Contains(alpine, "%!") || strings.Contains(debian, "%!") {
 		t.Error("a prompt has an unfilled verb")
+	}
+}
+
+// A VM window's Agent tab is a launcher: its prompt is the first message
+// of a new chat pinned to that VM (POST /v1/chat/send with "vm"), so the
+// run takes the backend Configuration has selected, as any chat does. With
+// chat_provider "openai" and nobody signed in, the pinned send is refused
+// for ChatGPT's reason and the Ollama that is configured and answering
+// beside it is never asked; with Ollama selected, it is Ollama's reason.
+func TestChatSendPinnedToVMTakesTheSelectedProvider(t *testing.T) {
+	var asked atomic.Int32
+	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked.Add(1)
+		fmt.Fprintln(w, `{"message":{"role":"assistant","content":"hello"},"done":true}`)
+	}))
+	defer ollama.Close()
+
+	send := func(cfg *config.Config) (int, string) {
+		s := New(cfg, nil, nil, "", t.TempDir())
+		rec := httptest.NewRecorder()
+		s.handleChatSend(rec, httptest.NewRequest("POST", "/v1/chat/send",
+			strings.NewReader(`{"session":"","message":"build a guestbook on port 8000","vm":"demo"}`)))
+		return rec.Code, rec.Body.String()
+	}
+
+	code, body := send(&config.Config{ChatProvider: "openai",
+		Ollama: config.OllamaConfig{BaseURL: ollama.URL, Model: "m"}})
+	if code != http.StatusConflict || !strings.Contains(body, "not signed in to ChatGPT") {
+		t.Errorf("chat_provider openai, signed out: %d %s, want 409 for ChatGPT's reason", code, body)
+	}
+	if n := asked.Load(); n != 0 {
+		t.Errorf("chat_provider openai: Ollama was asked %d times, want 0", n)
+	}
+
+	code, body = send(&config.Config{Ollama: config.OllamaConfig{Model: "m"}})
+	if code != http.StatusConflict || !strings.Contains(body, "ollama.base_url is not configured") {
+		t.Errorf("chat_provider unset, no Ollama: %d %s, want 409 for Ollama's reason", code, body)
 	}
 }
