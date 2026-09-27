@@ -106,6 +106,27 @@ where the row is narrower than the pad, and a reader without script is
 shown the picture by its hub address. The two scripts are copies: a
 change to one is a change to both.
 
+## Drawn there too
+
+Since 2026-09-27 (exe-hub 1643ed5) the pages have the pad as well: Draw…
+in the Post and Reply windows, for a wallet signed in with Solana. The
+engine from `DRAW_KEY` down to `drawScale` is this app's text copied into
+`internal/api/web.html`, so a drawing made there is the same file as one
+made here — change both. What differs is only what a wallet imposes:
+
+- **Two signatures.** The first authorizes the file (`POST /v1/upload`,
+  the text a profile picture signs: the time and the file's SHA-256),
+  the second is the post's. The panel says which is being asked for.
+  Here the desk signs as the node and Send is one step.
+- **A post declined keeps everything** — the panel, the drawing, the
+  words, the reply target and the file the hub already holds — and Send
+  then asks for the post alone.
+- **A finger's release is a press.** A stroke that ends in a flick
+  leaves Chromium a fling to stop, and the tap that stops it gets no
+  click, so Undo after a quick stroke did nothing. The pad's buttons
+  there hear the release, wait 80 ms for the click, and take whichever
+  comes. This app's pad has no such guard yet.
+
 The file must reach the hub as it is. A re-encode through a canvas (the
 composer's `prepareImage`, for photographs) keeps the finished picture and
 drops both the replay and the record.
@@ -117,6 +138,10 @@ drops both the replay and the record.
 
 `~/tools/playwright/exe-hub-page-draw-test.js`: the public pages, on a
 scratch hub of its own (`BIN`, `HUB_SCRATCH`, `DPR`, `PHONE`, `ENGINE`).
+
+`~/tools/playwright/exe-hub-page-pad-test.js`: the pad on the public
+pages, on a scratch hub with a mock Wallet Standard wallet — the two
+signatures, a post declined and sent again, a drawing with no words.
 
 `~/tools/playwright/exe-hub-draw-reload-test.js`: the reload, in Chromium and
 WebKit, over a real server with the hub's cache headers (a routed request

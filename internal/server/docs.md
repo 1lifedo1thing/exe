@@ -1065,7 +1065,9 @@ view, again every time the page is loaded afresh, in Safari too;
 **Replay from Start**, the small button under it, draws it again
 from the empty pad as often as you press it. A click on the drawing opens
 it in a window, which plays it too. The hub's public pages show a drawing
-the same way, the button under it included. Anything that cannot animate a picture (a link
+the same way, the button under it included, and have the pad themselves:
+whoever signs in there with a Solana wallet gets the same Draw…, at the
+cost of two signatures, one for the file and one for the post. Anything that cannot animate a picture (a link
 preview, an old reader) shows the finished drawing. The strokes
 themselves ride inside the file, for whatever reads them later;
 `docs/hub-drawing.md` in the source has the format.
