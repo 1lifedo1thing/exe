@@ -117,7 +117,7 @@ func TestPickLastSession(t *testing.T) {
 }
 
 // A launch request becomes the CLI's arguments, the prompt last; a model
-// is checked like the ids are, since it lands on a command line.
+// and a name are checked like the ids are, since they land on a command line.
 func TestAgentLaunchArgs(t *testing.T) {
 	claude, codex := hostAgents["claude"], hostAgents["codex"]
 	sid := "55d60159-76bf-4dbd-862a-6c02595708e3"
@@ -134,8 +134,15 @@ func TestAgentLaunchArgs(t *testing.T) {
 		{claude, agentLaunchRequest{Model: "-p"}, "error"},
 		{claude, agentLaunchRequest{Model: "opus[1m"}, "error"},
 		{claude, agentLaunchRequest{PermissionMode: "bypassPermissions"}, "error"},
+		{claude, agentLaunchRequest{Prompt: "go", Model: "opus", Name: "Draw a reply: “stroke” replay"}, "--model opus --name Draw a reply: “stroke” replay go"},
+		{claude, agentLaunchRequest{Name: "-p"}, "error"},
+		{claude, agentLaunchRequest{Name: "two\nlines"}, "error"},
+		{claude, agentLaunchRequest{Name: " padded"}, "error"},
+		{claude, agentLaunchRequest{Name: strings.Repeat("x", 81)}, "error"},
+		{claude, agentLaunchRequest{Name: strings.Repeat("字", 80)}, "--name " + strings.Repeat("字", 80)},
 		{codex, agentLaunchRequest{Prompt: "go", Resume: sid}, "resume " + sid + " go"},
 		{codex, agentLaunchRequest{Model: "opus"}, "error"},
+		{codex, agentLaunchRequest{Name: "a title"}, "error"},
 	} {
 		args, err := agentLaunchArgs(c.a, c.req)
 		got := strings.Join(args, " ")
