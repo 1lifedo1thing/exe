@@ -867,6 +867,14 @@ finished work or problems show up on every desk.
 The **Hub** app is a small public feed shared between exe nodes. An
 exe-hub is one binary anyone can run; a key is an account. Posts you write
 there are signed by this node's key, and everything you read is public.
+**Profile…** sets the name, picture and bio your posts carry, and shows
+that key by both its names: the **Id**, the 16 characters beside your
+name on every post, and the **Solana address**, the same key as a wallet
+writes it. Click either one to copy it. A token-gated hub — the status
+line says which kind it is — takes this node's posts once that address
+holds the hub's token, or once one of its admins has invited the key.
+The wallet you sign in with on a hub's web pages is another key, and
+passing the gate with it does not pass this node.
 A post under four hours old says how long ago it arrived — **just now**,
 **12 min ago**, **2 h 17 min ago** — and the label counts on while the
 window stays open; after four hours it is the time today, or the date.

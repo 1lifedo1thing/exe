@@ -133,7 +133,8 @@ func (s *Server) handleHubWhoami(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"id": id.ID, "name": id.Name, "pubkey": id.PubKey()})
+	writeJSON(w, http.StatusOK, map[string]string{"id": id.ID, "name": id.Name,
+		"pubkey": id.PubKey(), "address": id.Address()})
 }
 
 // handleHubPublish signs one envelope and forwards it: the app sends

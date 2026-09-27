@@ -436,6 +436,11 @@ body.mobile #summary { padding: 2px 8px; }
 .ival.mono { font: 10px/1.5 var(--mono); }
 .ival.copy { color: var(--hl); cursor: pointer; text-decoration: underline; }
 .ival.copy:active { color: #000; }
+/* the profile's own key, under its fields: the id and the Solana address,
+   each a line of the mono under its label, as wide as its words so the
+   click that copies it is a click on it */
+#dlg .row .ival { flex: none; align-self: flex-start; max-width: 100%; }
+#dlg .note { font-size: 11px; color: #555; }
 
 /* a contextual menu, the desktop's Finder one (index.html .dropdown and
    #ctx-menu) in the app — Blue Pencil's block: #ddd face, 1px black
@@ -3558,6 +3563,21 @@ function hubDialog(firstRun, onCancel, note) {
   return { close, input, go };
 }
 
+// The key this node posts with, as the two names a hub knows it by: the
+// id (the fingerprint on every post) and the Solana address (the key
+// itself in base58, where a token-gated hub looks for its token). Whole,
+// selectable, and a click copies it — it is what one pastes into a wallet
+// or hands an admin.
+function keyRow(label, val, copyAs) {
+  const v = el("span", { class: "ival mono" }, val || "—");
+  if (val) {
+    v.classList.add("copy");
+    v.title = "Click to copy";
+    v.onclick = () => { if (getSelection().isCollapsed) copyText(val, copyAs); };
+  }
+  return el("div", { class: "row" }, el("label", {}, label), v);
+}
+
 function profileDialog(needName) {
   let avatarCid = myProfile ? (myProfile.avatar || "") : "";
   const name = el("input", { type: "text", maxlength: 64,
@@ -3602,8 +3622,13 @@ function profileDialog(needName) {
     el("div", { class: "row" }, el("label", {}, "Picture"), avaBox),
     el("div", { class: "row" }, el("label", {}, "Display name"), name),
     el("div", { class: "row" }, el("label", {}, "Bio"), bio),
-    el("div", { style: "font-size:11px;color:#555" },
-      "Your id here is this node's key fingerprint" + (who ? ": " + who.id : ".")),
+    keyRow("Id", who && who.id, "id"),
+    keyRow("Solana address", who && who.address, "Solana address"),
+    el("div", { class: "note" },
+      "Both are this node's key, which signs your posts here." +
+      (hubInfo && hubInfo.gate && hubInfo.gate.mode === "token"
+        ? " This hub is token-gated: it takes them once this address holds its token, or an admin has invited the key."
+        : "")),
     err,
     el("div", { class: "btns" }, cancel, save)]);
   cancel.onclick = close;

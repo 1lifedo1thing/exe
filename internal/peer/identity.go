@@ -16,6 +16,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
+	"math/big"
 	"os"
 	"path/filepath"
 )
@@ -96,6 +97,37 @@ func Fingerprint(pub ed25519.PublicKey) string {
 // PubKey is the base64 raw public key, the wire form stored in peers.json.
 func (id *Identity) PubKey() string {
 	return base64.StdEncoding.EncodeToString(id.pub)
+}
+
+// Address is the same public key as a Solana wallet writes one: its 32
+// bytes in base58. A token-gated hub looks for its token at this
+// address, so it is what the node's owner funds, or hands an admin to be
+// invited by.
+func (id *Identity) Address() string { return Base58(id.pub) }
+
+const b58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+// Base58 is Bitcoin's base58, the one Solana addresses are in: the bytes
+// as one big number, and a "1" for every leading zero byte.
+func Base58(b []byte) string {
+	n := new(big.Int).SetBytes(b)
+	radix := big.NewInt(58)
+	mod := new(big.Int)
+	var out []byte
+	for n.Sign() > 0 {
+		n.DivMod(n, radix, mod)
+		out = append(out, b58Alphabet[mod.Int64()])
+	}
+	for _, c := range b {
+		if c != 0 {
+			break
+		}
+		out = append(out, '1')
+	}
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return string(out)
 }
 
 func (id *Identity) Sign(msg []byte) string {
