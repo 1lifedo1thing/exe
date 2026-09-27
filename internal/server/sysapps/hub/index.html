@@ -286,6 +286,10 @@ canvas.ava-big { image-rendering: pixelated; }
    border is not taken out of the picture. */
 .p-embeds img.p-draw { box-sizing: content-box; max-width: none; max-height: none;
   image-rendering: pixelated; background: #fff; }
+/* and under it, at its left edge, the small button that draws it again
+   (drawReplay): there with the post, so nothing moves when the picture
+   comes */
+.p-embeds .p-drawing { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
 .p-file { font-size: 11px; border: 1px solid var(--black); background: var(--g200); padding: 2px 8px; }
 /* a video: a box of its final size from the embed's facts, set before the
    file loads (mediaBox), black behind the frame, with the poster and
@@ -1539,13 +1543,17 @@ function renderPost(p, opts = {}) {
     for (const em of p.embeds || []) {
       if ((em.mime || "").startsWith("image/")) {
         const img = el("img", { src: hurl("/v1/embed/" + em.cid), alt: em.alt || "", loading: "lazy" });
+        img.onclick = e => { e.stopPropagation(); viewImage(em); };
         if (isDrawing(em)) { // Draw…'s: the pad's pixels, its box standing before the picture loads
           img.className = "p-draw";
           img.dataset.w = em.width;
           img.dataset.h = em.height;
           drawFit(img);
+          const again = el("button", { class: "ghost sm" }, "Replay from Start");
+          again.onclick = e => { e.stopPropagation(); drawReplay(img); };
+          box.append(el("div", { class: "p-drawing" }, img, again));
+          continue;
         }
-        img.onclick = e => { e.stopPropagation(); viewImage(em); };
         box.append(img);
       } else if ((em.mime || "").startsWith("video/")) {
         box.append(videoEl(em));
@@ -2474,6 +2482,30 @@ function drawFit(img) {
   const dpr = window.devicePixelRatio || 1, k = Math.max(1, Math.round(dpr)) / dpr;
   img.style.width = drawCss(img.dataset.w * k);
   img.style.height = drawCss(img.dataset.h * k);
+}
+// Replay from Start: a drawing plays once, as its picture loads, and a
+// picture tag has no way to be told to play again. It is given a fresh
+// address instead, a blob of the same bytes (the browser has them, the
+// hub says they never change): Chromium would replay the old address in
+// a new tag, WebKit replays only an address it has not played. The blob
+// is let go once the picture has it.
+async function drawReplay(img) {
+  if (img.dataset.busy) return;
+  img.dataset.busy = "1";
+  try {
+    const r = await fetch(img.dataset.src || (img.dataset.src = img.src));
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const url = URL.createObjectURL(await r.blob());
+    const free = () => {
+      URL.revokeObjectURL(url);
+      img.removeEventListener("load", free);
+      img.removeEventListener("error", free);
+    };
+    img.addEventListener("load", free);
+    img.addEventListener("error", free);
+    img.src = url;
+  } catch (e) { say("Could not replay the drawing", true); }
+  delete img.dataset.busy;
 }
 // a move between monitors, or the browser's zoom, changes the density
 // without a resize: every drawing in the feed, and the pad, are fitted again

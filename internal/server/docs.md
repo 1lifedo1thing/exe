@@ -1060,8 +1060,10 @@ a way out of it: a stroke you took back is drawn and then taken back in
 the replay, a word rubbed out is written and rubbed out, and a pad that
 ends empty is still a drawing to send. The replay takes ten seconds at
 the most, and a drawing holds 20,000 points. In the feed a drawing stands
-at its own size, its pixels hard-edged; a click opens it in a window,
-which plays it again. Anything that cannot animate a picture (a link
+at its own size, its pixels hard-edged, and plays once as it comes into
+view; **Replay from Start**, the small button under it, draws it again
+from the empty pad as often as you press it. A click on the drawing opens
+it in a window, which plays it too. Anything that cannot animate a picture (a link
 preview, an old reader) shows the finished drawing. The strokes
 themselves ride inside the file, for whatever reads them later;
 `docs/hub-drawing.md` in the source has the format.

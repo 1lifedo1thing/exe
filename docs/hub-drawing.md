@@ -75,9 +75,14 @@ pixel a whole number of device pixels (two at 150 percent), `image-rendering:
 pixelated`, its box standing before the picture loads. Pictures attached the
 ordinary way declare no size.
 
-A picture tag replays a drawing when it loads. WebKit replays only a fresh
-address: a second picture of an address already played shows the finished pad.
-The desktop's viewer loads a picture as a blob of its own, which is one.
+A picture tag replays a drawing when it loads, and has no way to be told to
+play again. WebKit replays only a fresh address: a second picture of an
+address already played shows the finished pad. So Replay from Start, the small
+button under a drawing in the Hub app's feed (`drawReplay`), gives the same
+picture tag a blob of the same bytes for its address, and lets the blob go once
+the picture has loaded it; both engines start again, press after press. The
+desktop's viewer loads a picture as a blob of its own, which is a fresh address
+too.
 
 The file must reach the hub as it is. A re-encode through a canvas (the
 composer's `prepareImage`, for photographs) keeps the finished picture and
