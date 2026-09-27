@@ -877,9 +877,11 @@ there are signed by this node's key, and everything you read is public.
 **Profile…** sets the name, picture and bio your posts carry, and shows
 that key by both its names: the **Id**, the 16 characters beside your
 name on every post, and the **Solana address**, the same key as a wallet
-writes it. Click either one to copy it. A token-gated hub — the status
-line says which kind it is — takes this node's posts once that address
-holds the hub's token, or once one of its admins has invited the key.
+writes it. Click either one to copy it; the button at the end of the
+address shows it as a QR code, for a phone's wallet to scan. A
+token-gated hub — the status line says which kind it is — takes this
+node's posts once that address holds the hub's token, or once one of its
+admins has invited the key.
 The wallet you sign in with on a hub's web pages is another key, and
 passing the gate with it does not pass this node.
 A post under four hours old says how long ago it arrived — **just now**,

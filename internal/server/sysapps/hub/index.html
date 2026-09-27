@@ -441,6 +441,24 @@ body.mobile #summary { padding: 2px 8px; }
    click that copies it is a click on it */
 #dlg .row .ival { flex: none; align-self: flex-start; max-width: 100%; }
 #dlg .note { font-size: 11px; color: #555; }
+/* the Solana address ends in a button that shows it as a QR code: the
+   address and the button share one 20px line, the button at the row's
+   right edge, where the fields' edges are. 25px wide leaves the 13px
+   glyph 5px on either side. */
+#dlg .row .kv { display: flex; align-items: center; gap: 8px; }
+#dlg .row .kv .ival { flex: 0 1 auto; min-width: 0; align-self: center; line-height: 20px; }
+button.ghost.qrb { flex: none; margin-left: auto; width: 25px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center; }
+button.ghost.qrb .gl { display: block; }
+/* the QR panel: the code on white in the sunken field's frame, 4px a
+   module with the standard's four modules of quiet around it, and the
+   address in words under it */
+#dlg .qrbox { width: 166px; margin: 2px auto 10px; background: #fff; border: 1px solid var(--black);
+  box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
+    1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
+#dlg .qrbox svg { display: block; shape-rendering: crispEdges; }
+#dlg .qrtext { text-align: center; }
+#dlg .qrtext .ival { display: inline-block; max-width: 100%; }
 
 /* a contextual menu, the desktop's Finder one (index.html .dropdown and
    #ctx-menu) in the app — Blue Pencil's block: #ddd face, 1px black
@@ -3568,14 +3586,188 @@ function hubDialog(firstRun, onCancel, note) {
 // itself in base58, where a token-gated hub looks for its token). Whole,
 // selectable, and a click copies it — it is what one pastes into a wallet
 // or hands an admin.
-function keyRow(label, val, copyAs) {
+// onQR, when the row has one, puts a QR code button at the row's right end.
+const QR_GLYPH = `<svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M0 0h5v1h-5zM6 0h1v1h-1zM8 0h5v1h-5zM0 1h1v1h-1zM4 1h1v1h-1zM8 1h1v1h-1zM12 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM8 2h1v1h-1zM10 2h1v1h-1zM12 2h1v1h-1zM0 3h1v1h-1zM4 3h1v1h-1zM8 3h1v1h-1zM12 3h1v1h-1zM0 4h5v1h-5zM6 4h1v1h-1zM8 4h5v1h-5zM0 6h1v1h-1zM2 6h1v1h-1zM4 6h1v1h-1zM6 6h2v1h-2zM9 6h1v1h-1zM11 6h2v1h-2zM0 8h5v1h-5zM6 8h1v1h-1zM8 8h2v1h-2zM11 8h1v1h-1zM0 9h1v1h-1zM4 9h1v1h-1zM8 9h1v1h-1zM10 9h3v1h-3zM0 10h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM6 10h1v1h-1zM9 10h1v1h-1zM11 10h1v1h-1zM0 11h1v1h-1zM4 11h1v1h-1zM7 11h2v1h-2zM10 11h1v1h-1zM12 11h1v1h-1zM0 12h5v1h-5zM6 12h1v1h-1zM8 12h1v1h-1zM10 12h3v1h-3z"/></svg>`;
+function keyRow(label, val, copyAs, onQR) {
   const v = el("span", { class: "ival mono" }, val || "—");
   if (val) {
     v.classList.add("copy");
     v.title = "Click to copy";
     v.onclick = () => { if (getSelection().isCollapsed) copyText(val, copyAs); };
   }
-  return el("div", { class: "row" }, el("label", {}, label), v);
+  if (!val || !onQR) return el("div", { class: "row" }, el("label", {}, label), v);
+  const b = el("button", { class: "ghost qrb", "aria-label": "Show as QR Code", title: "Show as QR Code" });
+  b.innerHTML = QR_GLYPH;
+  b.onclick = onQR;
+  return el("div", { class: "row" }, el("label", {}, label), el("div", { class: "kv" }, v, b));
+}
+
+// ---- QR code: just enough of ISO/IEC 18004 to write a short line of
+// text — a Solana address — as a symbol a phone's wallet can scan. Byte
+// mode, error correction level M, versions 1 to 6 (up to 106 bytes), the
+// mask chosen by the standard's penalty score. qrMatrix answers the
+// modules as rows of booleans, true = dark, without the quiet zone.
+const QR_EC = [null, [10, 1], [16, 1], [26, 1], [18, 2], [24, 2], [16, 4]]; // level M: EC codewords a block, blocks
+const QR_TOTAL = [0, 26, 44, 70, 100, 134, 172];                             // codewords in the symbol
+function qrMatrix(text, minVersion = 1) {
+  const bytes = [...new TextEncoder().encode(text)];
+  let ver = minVersion;
+  const room = v => QR_TOTAL[v] - QR_EC[v][0] * QR_EC[v][1];
+  while (ver <= 6 && bytes.length > room(ver) - 2) ver++; // 4 + 8 bits of head, 4 of terminator
+  if (ver > 6) throw new Error("too long for a QR code here");
+  const [ecLen, blocks] = QR_EC[ver], dataLen = room(ver), size = 17 + 4 * ver;
+  // the bit stream: mode 0100, the count, the bytes, a terminator, pad bytes
+  const bits = [];
+  const put = (v, n) => { for (let i = n - 1; i >= 0; i--) bits.push(v >>> i & 1); };
+  put(4, 4); put(bytes.length, 8);
+  for (const b of bytes) put(b, 8);
+  put(0, Math.min(4, dataLen * 8 - bits.length));
+  while (bits.length % 8) bits.push(0);
+  for (let pad = 0xec; bits.length < dataLen * 8; pad ^= 0xec ^ 0x11) put(pad, 8);
+  const data = [];
+  for (let i = 0; i < bits.length; i += 8) data.push(bits.slice(i, i + 8).reduce((a, b) => a << 1 | b, 0));
+  // Reed-Solomon over GF(256), x^8 + x^4 + x^3 + x^2 + 1
+  const exp = [], log = [];
+  for (let i = 0, x = 1; i < 255; i++) { exp[i] = x; log[x] = i; x <<= 1; if (x & 256) x ^= 0x11d; }
+  const mul = (a, b) => a && b ? exp[(log[a] + log[b]) % 255] : 0;
+  let gen = [1];
+  for (let i = 0; i < ecLen; i++) {
+    const next = gen.concat(0);
+    for (let j = 0; j < gen.length; j++) next[j + 1] ^= mul(gen[j], exp[i]);
+    gen = next;
+  }
+  const ecOf = block => {
+    const rem = new Array(ecLen).fill(0);
+    for (const b of block) {
+      const f = b ^ rem.shift();
+      rem.push(0);
+      for (let j = 0; j < ecLen; j++) rem[j] ^= mul(gen[j + 1], f);
+    }
+    return rem;
+  };
+  // level M's blocks are of one length in these versions; interleave them
+  const per = dataLen / blocks, parts = [], ecs = [];
+  for (let b = 0; b < blocks; b++) { parts.push(data.slice(b * per, (b + 1) * per)); ecs.push(ecOf(parts[b])); }
+  const words = [];
+  for (let i = 0; i < per; i++) for (const p of parts) words.push(p[i]);
+  for (let i = 0; i < ecLen; i++) for (const e of ecs) words.push(e[i]);
+  // the function patterns
+  const m = Array.from({ length: size }, () => new Array(size).fill(false));
+  const fn = Array.from({ length: size }, () => new Array(size).fill(false));
+  const set = (r, c, dark) => { if (r >= 0 && r < size && c >= 0 && c < size) { m[r][c] = dark; fn[r][c] = true; } };
+  const finder = (r0, c0) => {
+    for (let r = -1; r <= 7; r++) for (let c = -1; c <= 7; c++) {
+      const ring = Math.max(Math.abs(r - 3), Math.abs(c - 3));
+      set(r0 + r, c0 + c, ring !== 2 && ring <= 3);
+    }
+  };
+  finder(0, 0); finder(0, size - 7); finder(size - 7, 0);
+  for (let i = 8; i < size - 8; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+  if (ver > 1) {
+    const a = size - 7; // one alignment pattern in versions 2 to 6
+    for (let r = -2; r <= 2; r++) for (let c = -2; c <= 2; c++)
+      set(a + r, a + c, Math.max(Math.abs(r), Math.abs(c)) !== 1);
+  }
+  const format = mask => {
+    let rem = mask; // level M is 00
+    for (let i = 0; i < 10; i++) rem = rem << 1 ^ (rem >>> 9) * 0x537;
+    const f = (mask << 10 | rem) ^ 0x5412, bit = i => (f >>> i & 1) === 1;
+    for (let i = 0; i <= 5; i++) set(i, 8, bit(i));
+    set(7, 8, bit(6)); set(8, 8, bit(7)); set(8, 7, bit(8));
+    for (let i = 9; i < 15; i++) set(8, 14 - i, bit(i));
+    for (let i = 0; i < 8; i++) set(8, size - 1 - i, bit(i));
+    for (let i = 8; i < 15; i++) set(size - 15 + i, 8, bit(i));
+    set(size - 8, 8, true);
+  };
+  format(0); // reserves the cells
+  // the codewords, in the zigzag from the lower right
+  let n = 0;
+  for (let right = size - 1; right >= 1; right -= 2) {
+    if (right === 6) right = 5;
+    for (let v = 0; v < size; v++) for (let j = 0; j < 2; j++) {
+      const c = right - j, r = (right + 1 & 2) === 0 ? size - 1 - v : v;
+      if (fn[r][c] || n >= words.length * 8) continue;
+      m[r][c] = (words[n >>> 3] >>> 7 - (n & 7) & 1) === 1;
+      n++;
+    }
+  }
+  const MASKS = [
+    (r, c) => (r + c) % 2 === 0, (r, c) => r % 2 === 0, (r, c) => c % 3 === 0, (r, c) => (r + c) % 3 === 0,
+    (r, c) => ((r >> 1) + Math.floor(c / 3)) % 2 === 0, (r, c) => r * c % 2 + r * c % 3 === 0,
+    (r, c) => (r * c % 2 + r * c % 3) % 2 === 0, (r, c) => ((r + c) % 2 + r * c % 3) % 2 === 0];
+  const flip = k => { for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) if (!fn[r][c] && MASKS[k](r, c)) m[r][c] = !m[r][c]; };
+  const penalty = () => {
+    let p = 0, dark = 0;
+    const line = at => { // runs of five or more, and the finder's 1:1:3:1:1 beside four light
+      let run = 1;
+      for (let i = 1; i <= size; i++) {
+        if (i < size && at(i) === at(i - 1)) run++;
+        else { if (run >= 5) p += run - 2; run = 1; }
+      }
+      for (let i = 0; i + 11 <= size; i++) {
+        const s = Array.from({ length: 11 }, (_, k) => at(i + k) ? "1" : "0").join("");
+        if (s === "10111010000" || s === "00001011101") p += 40;
+      }
+    };
+    for (let r = 0; r < size; r++) { line(i => m[r][i]); line(i => m[i][r]); }
+    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
+      if (m[r][c]) dark++;
+      if (r + 1 < size && c + 1 < size && m[r][c] === m[r][c + 1] && m[r][c] === m[r + 1][c] && m[r][c] === m[r + 1][c + 1]) p += 3;
+    }
+    return p + Math.floor(Math.abs(dark * 20 - size * size * 10) / (size * size)) * 10;
+  };
+  let best = 0, least = Infinity;
+  for (let k = 0; k < 8; k++) {
+    flip(k); format(k);
+    const p = penalty();
+    if (p < least) { least = p; best = k; }
+    flip(k);
+  }
+  flip(best); format(best);
+  return m;
+}
+
+// the symbol as crispEdges SVG, each run of dark modules one rectangle:
+// px CSS pixels a module, and the four modules of quiet the standard asks
+// for on every side
+function qrSvg(text, minVersion, px = 4) {
+  const m = qrMatrix(text, minVersion), n = m.length + 8;
+  let d = "";
+  m.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) {
+      if (!row[c]) continue;
+      const c0 = c;
+      while (c + 1 < row.length && row[c + 1]) c++;
+      d += "M" + (c0 + 4) + " " + (r + 4) + "h" + (c - c0 + 1) + "v1h-" + (c - c0 + 1) + "z";
+    }
+  });
+  return `<svg viewBox="0 0 ${n} ${n}" width="${n * px}" height="${n * px}" role="img" aria-label="QR code"><path fill="#000" d="${d}"/></svg>`;
+}
+// The QR panel takes the dialog's place and gives it back: back() puts the
+// panel it came from on the veil again, its fields as they were. The
+// address is a version 4 symbol at the least (33 modules), so every
+// address draws the same 164px square. OK, Return and Escape go back.
+function qrDialog(title, text, copyAs, back) {
+  const box = el("div", { class: "qrbox" });
+  box.innerHTML = qrSvg(text, 4);
+  const v = el("span", { class: "ival mono copy", title: "Click to copy" }, text);
+  v.onclick = () => { if (getSelection().isCollapsed) copyText(text, copyAs); };
+  const ok = el("button", { class: "ghost default" }, "OK");
+  dialog([
+    el("h2", {}, title),
+    box,
+    el("div", { class: "qrtext" }, v),
+    el("div", { class: "btns" }, ok)]);
+  const done = () => { document.removeEventListener("keydown", onKey, true); back(); };
+  const onKey = e => {
+    if (e.key !== "Enter" && e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    done();
+  };
+  document.addEventListener("keydown", onKey, true);
+  ok.onclick = done;
+  setTimeout(() => ok.focus(), 50);
 }
 
 function profileDialog(needName) {
@@ -3617,20 +3809,23 @@ function profileDialog(needName) {
   };
   const save = el("button", { class: "ghost default" }, "Save");
   const cancel = el("button", { class: "ghost" }, "Cancel");
-  const close = dialog([
+  // the QR panel borrows the veil and hands this panel back as it was
+  const panel = [
     el("h2", {}, "Your Profile"),
     el("div", { class: "row" }, el("label", {}, "Picture"), avaBox),
     el("div", { class: "row" }, el("label", {}, "Display name"), name),
     el("div", { class: "row" }, el("label", {}, "Bio"), bio),
     keyRow("Id", who && who.id, "id"),
-    keyRow("Solana address", who && who.address, "Solana address"),
+    keyRow("Solana address", who && who.address, "Solana address",
+      () => qrDialog("Solana Address", who.address, "Solana address", () => dialog(panel))),
     el("div", { class: "note" },
       "Both are this node's key, which signs your posts here." +
       (hubInfo && hubInfo.gate && hubInfo.gate.mode === "token"
         ? " This hub is token-gated: it takes them once this address holds its token, or an admin has invited the key."
         : "")),
     err,
-    el("div", { class: "btns" }, cancel, save)]);
+    el("div", { class: "btns" }, cancel, save)];
+  const close = dialog(panel);
   cancel.onclick = close;
   save.onclick = async () => {
     if (!name.value.trim()) { err.textContent = "A name is required."; return; }
