@@ -1064,7 +1064,8 @@ at its own size, its pixels hard-edged, and plays once as it comes into
 view, again every time the page is loaded afresh, in Safari too;
 **Replay from Start**, the small button under it, draws it again
 from the empty pad as often as you press it. A click on the drawing opens
-it in a window, which plays it too. Anything that cannot animate a picture (a link
+it in a window, which plays it too. The hub's public pages show a drawing
+the same way, the button under it included. Anything that cannot animate a picture (a link
 preview, an old reader) shows the finished drawing. The strokes
 themselves ride inside the file, for whatever reads them later;
 `docs/hub-drawing.md` in the source has the format.

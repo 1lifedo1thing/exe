@@ -97,6 +97,15 @@ picture has loaded it:
 The hub address is the way back for a browser without IntersectionObserver, or
 when the bytes cannot be fetched.
 
+The hub's public pages do the same (exe-hub `internal/api/web.html`,
+`drawings`, `drawReplay`; its PLAN.md, Drawings): the server marks the
+embed and serves the box at the pad's size with Replay from Start under
+it, in the page's language; the script plays it on view from a blob, and
+the page's viewer replays it. There a pad pixel takes fewer device pixels
+where the row is narrower than the pad, and a reader without script is
+shown the picture by its hub address. The two scripts are copies: a
+change to one is a change to both.
+
 The file must reach the hub as it is. A re-encode through a canvas (the
 composer's `prepareImage`, for photographs) keeps the finished picture and
 drops both the replay and the record.
@@ -105,6 +114,9 @@ drops both the replay and the record.
 
 `~/tools/playwright/exe-hub-draw-test.js`: `DPR=1.5 node exe-hub-draw-test.js`,
 `PHONE=1 node exe-hub-draw-test.js`. It reads the file back chunk by chunk.
+
+`~/tools/playwright/exe-hub-page-draw-test.js`: the public pages, on a
+scratch hub of its own (`BIN`, `HUB_SCRATCH`, `DPR`, `PHONE`, `ENGINE`).
 
 `~/tools/playwright/exe-hub-draw-reload-test.js`: the reload, in Chromium and
 WebKit, over a real server with the hub's cache headers (a routed request
