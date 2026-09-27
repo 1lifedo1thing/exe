@@ -1542,15 +1542,19 @@ function renderPost(p, opts = {}) {
     const box = el("div", { class: "p-embeds" });
     for (const em of p.embeds || []) {
       if ((em.mime || "").startsWith("image/")) {
-        const img = el("img", { src: hurl("/v1/embed/" + em.cid), alt: em.alt || "", loading: "lazy" });
+        const draws = isDrawing(em), src = hurl("/v1/embed/" + em.cid);
+        const img = draws ? el("img", { src: DRAW_BLANK, alt: em.alt || "" })
+          : el("img", { src, alt: em.alt || "", loading: "lazy" });
         img.onclick = e => { e.stopPropagation(); viewImage(em); };
-        if (isDrawing(em)) { // Draw…'s: the pad's pixels, its box standing before the picture loads
+        if (draws) { // Draw…'s: the pad's pixels, its box standing before the picture loads
           img.className = "p-draw";
           img.dataset.w = em.width;
           img.dataset.h = em.height;
+          img.dataset.src = src;
           drawFit(img);
+          drawWatch(img); // it plays when it comes into view
           const again = el("button", { class: "ghost sm" }, "Replay from Start");
-          again.onclick = e => { e.stopPropagation(); drawReplay(img); };
+          again.onclick = e => { e.stopPropagation(); drawReplay(img, true); };
           box.append(el("div", { class: "p-drawing" }, img, again));
           continue;
         }
@@ -2483,17 +2487,27 @@ function drawFit(img) {
   img.style.width = drawCss(img.dataset.w * k);
   img.style.height = drawCss(img.dataset.h * k);
 }
-// Replay from Start: a drawing plays once, as its picture loads, and a
-// picture tag has no way to be told to play again. It is given a fresh
-// address instead, a blob of the same bytes (the browser has them, the
-// hub says they never change): Chromium would replay the old address in
-// a new tag, WebKit replays only an address it has not played. The blob
-// is let go once the picture has it.
-async function drawReplay(img) {
+// A drawing plays once, as its picture loads, and a picture tag has no
+// way to be told to play again. Nor does every browser play it again for
+// the asking: WebKit keeps a played picture as it ended, so after a
+// reload (Livid's, in Safari on iOS) the drawing stood finished, at its
+// last frame, and stayed so, while Chromium drew it again. So a drawing
+// is never shown by its hub address. It is given a fresh one, a blob of
+// the same bytes (the browser holds them, the hub says they never
+// change), which every engine plays from the start; the blob is let go
+// once the picture has it.
+// - In the feed a drawing waits, an empty box of its final size, until
+//   half of it is in view (drawWatch), and plays then: a drawing further
+//   down is not over before it is reached.
+// - Replay from Start, the button under it, does the same again.
+// The hub address is the way back for a browser without the observer,
+// or when the bytes cannot be fetched.
+const DRAW_BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="; // one clear pixel
+async function drawReplay(img, asked) {
   if (img.dataset.busy) return;
   img.dataset.busy = "1";
   try {
-    const r = await fetch(img.dataset.src || (img.dataset.src = img.src));
+    const r = await fetch(img.dataset.src);
     if (!r.ok) throw new Error("HTTP " + r.status);
     const url = URL.createObjectURL(await r.blob());
     const free = () => {
@@ -2504,8 +2518,21 @@ async function drawReplay(img) {
     img.addEventListener("load", free);
     img.addEventListener("error", free);
     img.src = url;
-  } catch (e) { say("Could not replay the drawing", true); }
+  } catch (e) {
+    if (asked) say("Could not replay the drawing", true);
+    else img.src = img.dataset.src;
+  }
   delete img.dataset.busy;
+}
+const drawSeen = typeof IntersectionObserver === "function" ? new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    drawSeen.unobserve(e.target);
+    drawReplay(e.target);
+  }
+}, { threshold: 0.5 }) : null;
+function drawWatch(img) {
+  if (drawSeen) drawSeen.observe(img); else img.src = img.dataset.src;
 }
 // a move between monitors, or the browser's zoom, changes the density
 // without a resize: every drawing in the feed, and the pad, are fitted again

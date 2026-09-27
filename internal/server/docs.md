@@ -1061,7 +1061,8 @@ the replay, a word rubbed out is written and rubbed out, and a pad that
 ends empty is still a drawing to send. The replay takes ten seconds at
 the most, and a drawing holds 20,000 points. In the feed a drawing stands
 at its own size, its pixels hard-edged, and plays once as it comes into
-view; **Replay from Start**, the small button under it, draws it again
+view, again every time the page is loaded afresh, in Safari too;
+**Replay from Start**, the small button under it, draws it again
 from the empty pad as often as you press it. A click on the drawing opens
 it in a window, which plays it too. Anything that cannot animate a picture (a link
 preview, an old reader) shows the finished drawing. The strokes

@@ -75,14 +75,27 @@ pixel a whole number of device pixels (two at 150 percent), `image-rendering:
 pixelated`, its box standing before the picture loads. Pictures attached the
 ordinary way declare no size.
 
-A picture tag replays a drawing when it loads, and has no way to be told to
-play again. WebKit replays only a fresh address: a second picture of an
-address already played shows the finished pad. So Replay from Start, the small
-button under a drawing in the Hub app's feed (`drawReplay`), gives the same
-picture tag a blob of the same bytes for its address, and lets the blob go once
-the picture has loaded it; both engines start again, press after press. The
-desktop's viewer loads a picture as a blob of its own, which is a fresh address
-too.
+A picture tag plays a drawing once, as it loads, and has no way to be told to
+play again. Nor does every browser play it again for the asking. WebKit keeps
+a played picture as it ended for as long as it holds it, and the hub serves an
+embed as immutable: a second picture of an address already played shows the
+finished pad, and so does the same page after a reload (Livid's report from
+Safari on iOS, 2026-09-27: the drawing "stayed at the last frame"). Chromium
+plays it again both times.
+
+So the Hub app never shows a drawing by its hub address (`drawReplay`). It
+fetches the bytes, which the browser holds, and gives the picture a blob of
+them for its address, a fresh one every time, letting the blob go once the
+picture has loaded it:
+
+- in the feed, when half of the drawing has come into view (`drawWatch`); until
+  then its box stands empty at its final size, so a drawing further down has
+  not played before it is reached;
+- under it, Replay from Start does the same again, press after press;
+- the desktop's viewer loads any picture as a blob of its own.
+
+The hub address is the way back for a browser without IntersectionObserver, or
+when the bytes cannot be fetched.
 
 The file must reach the hub as it is. A re-encode through a canvas (the
 composer's `prepareImage`, for photographs) keeps the finished picture and
@@ -92,3 +105,8 @@ drops both the replay and the record.
 
 `~/tools/playwright/exe-hub-draw-test.js`: `DPR=1.5 node exe-hub-draw-test.js`,
 `PHONE=1 node exe-hub-draw-test.js`. It reads the file back chunk by chunk.
+
+`~/tools/playwright/exe-hub-draw-reload-test.js`: the reload, in Chromium and
+WebKit, over a real server with the hub's cache headers (a routed request
+hides the browser's cache, and with it the fault). The page runs the app's own
+`drawReplay` and `drawWatch`, lifted out of the app as they stand.
