@@ -297,6 +297,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   covers it and the tile resets unseen (`launchIcon`). That, and the 200ms
   flight of Show All Windows, is all the motion on the desktop; both honour
   `prefers-reduced-motion`.
+- A picture window on a phone is put away by swiping it down: the window
+  follows the finger from 6px of vertical travel (a sideways drag and a
+  second finger stay the browser's), springs back over 160ms under 90px,
+  and closes past it or on a flick of 40px inside 300ms. What it covers
+  shows through the gap while the finger is down, and since a phone
+  window borrows the menu bar's bottom border for its own top line, a
+  window off the bar wears that line itself — drawn as a shadow above the
+  frame, so nothing inside shifts by the pixel a border would take.
 - A tmux-backed terminal (the agent windows, and a Terminal on a host
   with tmux) has no scrollback of its own, so a finger drag there turns
   into synthetic wheel notches, one per

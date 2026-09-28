@@ -1250,6 +1250,13 @@ body.mobile #win-log .statusbar, body.mobile #win-chat .statusbar, body.mobile #
 body.mobile .term-window .statusbar { padding-right: 8px; }
 /* enlarge the 13px close box's touch target without changing its pixels */
 body.mobile .tbox.close::before { content: ""; position: absolute; inset: -9px; }
+/* a picture window on a phone follows a downward swipe and springs back,
+   unless the swipe went far enough to close it (wireImageSwipe). Off the
+   menu bar, whose bottom border stands in for the window's own top line,
+   it needs that line back — drawn just above the frame so nothing inside
+   shifts by the pixel a border would take */
+body.mobile .image-window { transition: transform .16s ease-out; }
+body.mobile #desktop .window.image-window.lifted { box-shadow: 0 -1px 0 var(--black); }
 /* grow-box-resizable content tracks the viewport instead of a saved height */
 body.mobile .win-frame > .app-frame,
 body.mobile .win-frame > .finder-icons,
@@ -5571,6 +5578,7 @@ function openImageWin(path, fromWin, name) {
     wireGrow(w.querySelector(".grow-box"), w, w.querySelector(".iv-box"), 240, { minH: 120 });
     $("#desktop").append(w);
     initWindow(w);
+    if (IS_MOBILE) wireImageSwipe(w);
   }
   openWin(w);
   loadImage(w);
@@ -5603,6 +5611,74 @@ async function loadImage(w) {
     img.src = w._imgURL;
     box.replaceChildren(img);
   } catch (e) { dims.textContent = e.message; }
+}
+// A picture window on a phone is dismissed by swiping it down, the way a
+// phone's photo viewer is — Livid asked for it after viewing a hub
+// picture on one. The window follows the finger, springs back when the
+// swipe was short and closes past 90px (or a flick: 40px inside 300ms),
+// which on a phone brings back the window it covered — the Hub app's
+// feed, where the picture was tapped. Nothing in the window scrolls, so a
+// downward drag is ours to take; the axis is settled at 6px like the
+// Newsfeed's swipe, so a sideways drag and a second finger (pinch zoom)
+// are left to the browser, and a touch that starts on the close box is
+// the close box's.
+function wireImageSwipe(w) {
+  const FAR = 90, FLICK = 40, QUICK = 300;
+  let sx = 0, sy = 0, dy = 0, t0 = 0, down = null, under = null;
+  // what the picture covers shows through the gap as it moves — the Hub
+  // app's feed, where the picture was tapped — and goes back under when
+  // the window springs back; a window that closes keeps it, since
+  // closeWin brings the one below up for good
+  const lift = () => {
+    if (under !== null) return;
+    under = document.getElementById(mobileStack[mobileStack.length - 1] || "") || false;
+    if (under) under.hidden = false;
+    w.classList.add("lifted");
+  };
+  // a window that closes keeps the one below up — closeWin pops it off the
+  // stack for good. One that springs back holds its top line, and the
+  // window below, until it is home under the menu bar again; the turn
+  // count drops a spring-back a new drag has overtaken
+  let turn = 0;
+  const rest = keep => {
+    const mine = ++turn, prev = under, moved = !!w.style.transform;
+    under = null;
+    w.style.transition = ""; w.style.transform = "";
+    const home = () => {
+      if (turn !== mine) return;
+      w.classList.remove("lifted");
+      if (prev) prev.hidden = true;
+    };
+    if (keep) { w.classList.remove("lifted"); return; }
+    if (!moved) { home(); return; }
+    w.addEventListener("transitionend", home, { once: true });
+    setTimeout(home, 300); // a transition that never runs still ends the drag
+  };
+  w.addEventListener("touchstart", e => {
+    if (e.touches.length !== 1 || e.target.closest(".tbox")) { down = false; rest(); return; }
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    dy = 0; t0 = Date.now(); down = null;
+  }, { passive: true });
+  w.addEventListener("touchmove", e => {
+    if (down === false) return;
+    if (e.touches.length !== 1) { down = false; rest(); return; }
+    const mx = e.touches[0].clientX - sx, my = e.touches[0].clientY - sy;
+    if (down === null && (Math.abs(mx) > 6 || Math.abs(my) > 6)) down = my > Math.abs(mx);
+    if (!down) return;
+    dy = Math.max(0, my);
+    lift();
+    w.style.transition = "none";
+    w.style.transform = "translateY(" + dy + "px)";
+  }, { passive: true });
+  const settle = () => {
+    if (!down) return;
+    down = false;
+    const gone = dy > FAR || (dy > FLICK && Date.now() - t0 < QUICK);
+    rest(gone);
+    if (gone) closeWin(w);
+  };
+  w.addEventListener("touchend", settle, { passive: true });
+  w.addEventListener("touchcancel", settle, { passive: true });
 }
 // ---- movie windows: QuickTime for the Workspace ----
 // A movie or sound from Finder opens over the movie controller traced

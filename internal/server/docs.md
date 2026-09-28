@@ -283,6 +283,8 @@ phone's back button. In a Claude Code or Codex window a finger drag
 scrolls back through the session's history, and a flick keeps it going.
 In Todo and Weather a finger scrolls the list; to move a row, press and
 hold it for half a second until it tints, then drag it to its new place.
+A picture window swipes down to close, the window under it showing
+through the gap as it goes.
 
 Over HTTPS — a Tailscale Serve address, say — the desktop installs as an
 app: **Add to Home Screen** on an iPhone or iPad, the install button in
@@ -901,8 +903,9 @@ answers the moment the hub has it, and nothing you were reading or
 writing moves. Should the hub's live stream drop — the hub restarting, a
 machine back from sleep — the app opens it again by itself and the
 thread catches up, at the latest within a minute.
-Click a picture to see it in a window of its own. A web page a hub admin
-attached shows as a page card, the way the hub's public pages draw it:
+Click a picture to see it in a window of its own; on a phone, swipe that
+window down to put it away and come back to the feed. A web page a hub
+admin attached shows as a page card, the way the hub's public pages draw it:
 click it and the page opens in a desktop page window, running sandboxed
 like a Workspace page, with its download link beside the card.
 A post is plain words with eight pieces of Markdown: a web address
