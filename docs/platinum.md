@@ -300,7 +300,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - A picture window on a phone is put away by swiping it down: the window
   follows the finger from 6px of vertical travel (a sideways drag and a
   second finger stay the browser's), springs back over 160ms under 90px,
-  and closes past it or on a flick of 40px inside 300ms. What it covers
+  and closes past it or on a flick of 40px inside 300ms. A drag the
+  browser cancels springs back however far it went — a cancelled touch is
+  not a dismissal — and the gesture stands down entirely while
+  `visualViewport.scale` is above 1, since a pinch-zoomed page pans with
+  one finger and the desktop allows the pinch. What the window covers
   shows through the gap while the finger is down, and since a phone
   window borrows the menu bar's bottom border for its own top line, a
   window off the bar wears that line itself — drawn as a shadow above the

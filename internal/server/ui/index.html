@@ -5654,14 +5654,19 @@ function wireImageSwipe(w) {
     w.addEventListener("transitionend", home, { once: true });
     setTimeout(home, 300); // a transition that never runs still ends the drag
   };
+  // a pinch-zoomed page pans with one finger, and the desktop allows the
+  // pinch (its viewport meta sets neither user-scalable nor a maximum
+  // scale): while the page is zoomed in, the pan is the browser's and the
+  // picture stays put (Codex found this one on the patch)
+  const zoomed = () => !!window.visualViewport && window.visualViewport.scale > 1.01;
   w.addEventListener("touchstart", e => {
-    if (e.touches.length !== 1 || e.target.closest(".tbox")) { down = false; rest(); return; }
+    if (e.touches.length !== 1 || zoomed() || e.target.closest(".tbox")) { down = false; rest(); return; }
     sx = e.touches[0].clientX; sy = e.touches[0].clientY;
     dy = 0; t0 = Date.now(); down = null;
   }, { passive: true });
   w.addEventListener("touchmove", e => {
     if (down === false) return;
-    if (e.touches.length !== 1) { down = false; rest(); return; }
+    if (e.touches.length !== 1 || zoomed()) { down = false; rest(); return; }
     const mx = e.touches[0].clientX - sx, my = e.touches[0].clientY - sy;
     if (down === null && (Math.abs(mx) > 6 || Math.abs(my) > 6)) down = my > Math.abs(mx);
     if (!down) return;
@@ -5670,15 +5675,17 @@ function wireImageSwipe(w) {
     w.style.transition = "none";
     w.style.transform = "translateY(" + dy + "px)";
   }, { passive: true });
-  const settle = () => {
+  const settle = cancelled => {
     if (!down) return;
     down = false;
-    const gone = dy > FAR || (dy > FLICK && Date.now() - t0 < QUICK);
+    const gone = !cancelled && (dy > FAR || (dy > FLICK && Date.now() - t0 < QUICK));
     rest(gone);
     if (gone) closeWin(w);
   };
-  w.addEventListener("touchend", settle, { passive: true });
-  w.addEventListener("touchcancel", settle, { passive: true });
+  w.addEventListener("touchend", () => settle(false), { passive: true });
+  // a drag the browser takes away — a system gesture, a call arriving — is
+  // no dismissal however far it went: the window springs back
+  w.addEventListener("touchcancel", () => settle(true), { passive: true });
 }
 // ---- movie windows: QuickTime for the Workspace ----
 // A movie or sound from Finder opens over the movie controller traced
