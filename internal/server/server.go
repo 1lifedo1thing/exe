@@ -95,6 +95,7 @@ type Server struct {
 	cfHealthKey string
 	cfHealthRes map[string]any
 	cfStats     cfStatsState
+	cfAnalytics anState
 
 	// Cached Coinbase quotes for the Control Strip's price module, by
 	// pair list (prices.go).
@@ -295,6 +296,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/cloudflare/wizard", s.handleCFWizard)
 	mux.HandleFunc("GET /v1/cloudflare/health", s.handleCFHealth)
 	mux.HandleFunc("GET /v1/cloudflare/stats", s.handleCFStats)
+	mux.HandleFunc("GET /v1/cloudflare/analytics", s.handleCFAnalytics)
 	mux.HandleFunc("GET /v1/prices", s.handlePrices)
 	mux.HandleFunc("GET /v1/alerts", s.handleAlerts)
 	mux.HandleFunc("GET /v1/push/key", s.handlePushKey)
