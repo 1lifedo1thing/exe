@@ -115,6 +115,22 @@ restyling: `internal/server/ui/index.html` (the desktop),
   options), and the hub's pages take it as `{{popup}}`, the way both take
   the chrome; the host gives the span its width. Never copy the block,
   never a bare select.
+- A pop-up whose items carry icons (Analytics' host menu, each host
+  beside its favicon): a native select cannot draw a picture in an
+  option, so the shared block keeps its frame and well around a `button`
+  in the select's place (the select's box said again for the button: the
+  16px icon, then the name, ellipsised), and the list is a Platinum menu
+  of the app's own, the contextual menu block with the desktop's
+  `.dropdown.icons` columns: the 10px check mark 5px in beside the chosen
+  item, the 16px icon at 17px, the text at 40px. It hangs 2px under the
+  button at its left edge, at least as wide, clamped inside the window,
+  scrolling past its foot. One row is inverted at a time, `.on`, moved by
+  the pointer and the arrow keys alike; Return or a click picks, Escape,
+  a press elsewhere or the window losing the keyboard puts it away. Every
+  icon slot is 16px from the first paint, a stand-in glyph until the
+  picture arrives. Pictures scale smoothly (a 180px touch icon at 16);
+  glyphs of our own are pixels at whole scales and `geometricPrecision`
+  between 1x and 2x.
 - A field that grows with its text (the Hub composer, `fitField`): it
   opens at its shallow height and takes whole lines as the writing needs
   them, up to a limit cut from the window (half its height, a whole number

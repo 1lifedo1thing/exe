@@ -813,7 +813,9 @@ so. The Cloudflare module's menu in the Control Strip opens it too.
 
 Pick a span, **1 Hour**, **24 Hours**, **7 Days** or **30 Days**, and a host
 in the pop-up (or click its row in **Hosts**; click it again for all of
-them). The tiles count requests, visits (Cloudflare's: a page view that came
+them). The pop-up lists each host beside its icon, the one My Apps shows:
+the app's touch icon or favicon, the homepage's for the names that
+redirect to it, and a diamond for an app that declares none. The tiles count requests, visits (Cloudflare's: a page view that came
 from another site or none), data served, the share of requests from bots
 Cloudflare has verified, and server errors (5xx), each against the span
 before it. 30 days has no span before: Cloudflare keeps these numbers 31

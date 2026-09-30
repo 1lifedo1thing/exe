@@ -9,9 +9,14 @@
 // demand once it ages past its TTL, so an app changing its icon shows up
 // on the next My Apps open without any watcher; while the app itself is
 // down, the cached icon keeps serving.
+//
+// A host the daemon answers itself (the homepage, exe:site) is asked
+// through its handler, and a redirect to another published host wears
+// that host's icon, as the browser that follows it would show.
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -27,6 +32,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"exe/internal/proxy"
 )
 
 const (
@@ -54,10 +61,25 @@ var iconHostRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$`)
 
 func (s *Server) handleAppIcon(w http.ResponseWriter, r *http.Request) {
 	host := strings.ToLower(r.PathValue("host"))
-	backend, ok := s.Proxy.Snapshot()[host]
+	routes := s.Proxy.Snapshot()
+	backend, ok := routes[host]
 	if !ok || !iconHostRE.MatchString(host) || strings.Contains(host, "..") {
 		writeErr(w, http.StatusNotFound, errors.New("no such route"))
 		return
+	}
+	// a redirect has no page of its own: it wears the icon of the published
+	// host it leads to (one step, never a chain)
+	if strings.HasPrefix(backend, proxy.Redirect) {
+		target := ""
+		if u, err := url.Parse(strings.TrimPrefix(backend, proxy.Redirect)); err == nil {
+			target = strings.ToLower(u.Hostname())
+		}
+		tb, ok := routes[target]
+		if !ok || strings.HasPrefix(tb, proxy.Redirect) || !iconHostRE.MatchString(target) || strings.Contains(target, "..") {
+			writeErr(w, http.StatusNotFound, errors.New("app has no icon"))
+			return
+		}
+		host, backend = target, tb
 	}
 
 	// one fetch at a time per host — a window opening with N tiles must not
@@ -128,7 +150,8 @@ func (s *Server) refreshAppIcon(ctx context.Context, host, backend string) appIc
 }
 
 // fetchAppIcon asks the app itself: its page's apple-touch-icon link, the
-// well-known /apple-touch-icon.png, then its plain icon link. Every request
+// well-known /apple-touch-icon.png, its plain icon link, then the bare
+// /favicon.ico convention. Every request
 // goes to the route's backend with the public Host header — the same view
 // of the app the proxy serves — and hrefs that resolve off-host are skipped,
 // so this never talks to anything but the app.
@@ -139,8 +162,15 @@ func (s *Server) fetchAppIcon(ctx context.Context, host, backend string) (appIco
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
+	transport := s.Proxy.Transport()
+	if h, ok := s.Proxy.BuiltinHandler(backend); ok {
+		// the daemon's own pages: asked through their handler, under a
+		// stand-in origin iconGet can build addresses on
+		transport = handlerTransport{h}
+		bu = &url.URL{Scheme: "http", Host: host}
+	}
 	client := &http.Client{
-		Transport: s.Proxy.Transport(),
+		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if req.URL.Host != bu.Host {
 				return errors.New("redirect left the app")
@@ -155,7 +185,7 @@ func (s *Server) fetchAppIcon(ctx context.Context, host, backend string) (appIco
 
 	touchHref, plainHref := s.findIconLinks(ctx, client, bu, host)
 	var lastErr error = errors.New("no icon declared")
-	for _, href := range []string{touchHref, "/apple-touch-icon.png", plainHref} {
+	for _, href := range []string{touchHref, "/apple-touch-icon.png", plainHref, "/favicon.ico"} {
 		if href == "" {
 			continue
 		}
@@ -297,4 +327,34 @@ func iconGet(ctx context.Context, client *http.Client, bu *url.URL, host string,
 	}
 	req.Host = host
 	return client.Do(req)
+}
+
+// handlerTransport answers requests from a handler in this process: how a
+// builtin backend, which has no address to dial, is read like any app.
+type handlerTransport struct{ h http.Handler }
+
+type handlerAnswer struct {
+	header http.Header
+	code   int
+	body   bytes.Buffer
+}
+
+func (a *handlerAnswer) Header() http.Header { return a.header }
+func (a *handlerAnswer) WriteHeader(code int) {
+	if a.code == 0 {
+		a.code = code
+	}
+}
+func (a *handlerAnswer) Write(b []byte) (int, error) {
+	a.WriteHeader(http.StatusOK)
+	return a.body.Write(b)
+}
+
+func (t handlerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	a := &handlerAnswer{header: http.Header{}}
+	t.h.ServeHTTP(a, req)
+	a.WriteHeader(http.StatusOK)
+	return &http.Response{StatusCode: a.code, Status: http.StatusText(a.code), Header: a.header,
+		Body: io.NopCloser(&a.body), ContentLength: int64(a.body.Len()), Request: req,
+		Proto: "HTTP/1.1", ProtoMajor: 1, ProtoMinor: 1}, nil
 }

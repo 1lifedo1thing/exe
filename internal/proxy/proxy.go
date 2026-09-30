@@ -46,6 +46,10 @@ func (p *Proxy) SetBuiltin(backend string, h http.Handler) {
 	p.builtin[backend] = h
 }
 
+// BuiltinHandler returns the handler a builtin backend ("exe:site") is
+// served by, for callers that read a published app without the network.
+func (p *Proxy) BuiltinHandler(backend string) (http.Handler, bool) { return p.builtinFor(backend) }
+
 // builtinFor returns the handler for a builtin backend.
 func (p *Proxy) builtinFor(backend string) (http.Handler, bool) {
 	if !strings.HasPrefix(backend, Builtin) {

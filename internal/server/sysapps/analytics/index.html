@@ -53,6 +53,41 @@ button.ghost.on { background: #888; color: #fff;
    240px: on a phone it stays on the buttons' row */
 #host-wrap { flex: 1 1 110px; max-width: 240px; margin-left: auto; height: 20px; }
 #host-wrap .well b { background-position: 4px 3px; }
+/* The host pop-up's items carry each host's icon, which a native <select>
+   cannot draw: the shared block's frame and well stand, around a button
+   in the select's place (the select's own box, said again for a button),
+   and the list that opens is a Platinum menu whose rows carry small icons
+   — the desktop's .dropdown.icons, as its Windows list draws them: the
+   app contextual menu (Blue Pencil's block), every row leaving a 16px
+   icon column and, left of it, the column for the check mark beside the
+   chosen host. The row under the pointer or the arrow keys is .on, never
+   :hover, so two rows never invert at once. */
+#host-wrap button { position: absolute; inset: 0; width: 100%; height: 100%; appearance: none;
+  display: flex; align-items: center; gap: 6px; background: transparent; border: 0; border-radius: 0;
+  padding: 0 27px 0 6px; margin: 0; color: #000; font: 12px/17px var(--font); text-align: left; }
+#host-wrap button:focus { outline: none; }
+#host-wrap .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hico { flex: none; width: 16px; height: 16px; }
+.hico svg, .hico img, .dd-ico svg, .dd-ico img { display: block; width: 16px; height: 16px; }
+/* the two glyphs of our own (the globe, the diamond) are pixels at whole
+   scales; at Windows' 150% those come out uneven, so between 1x and 2x
+   they are drawn as geometry, as the pop-up's triangles are */
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  .hico svg, .dd-ico svg { shape-rendering: geometricPrecision; }
+}
+.dropdown { position: fixed; z-index: 30; min-width: 170px; background: var(--g300);
+  border: 1px solid var(--black); padding: 2px 1px;
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 var(--g500), 2px 2px 0 rgba(38,38,38,.85); }
+.dd-item { padding: 3px 22px 3px 18px; line-height: 18px; white-space: nowrap; }
+.dd-item.on { background: var(--hl); color: #fff; }
+.dropdown.icons .dd-item { position: relative; padding-left: 40px; }
+.dd-ico { position: absolute; left: 17px; top: 50%; margin-top: -8px; width: 16px; height: 16px; }
+.dd-chk { position: absolute; left: 5px; top: 50%; margin-top: -4px; width: 10px; height: 8px; }
+.dd-chk svg { display: block; width: 10px; height: 8px; fill: currentColor; }
+/* never wider than the window, never past its foot: a long name clips,
+   a long list scrolls */
+#host-menu { max-width: calc(100vw - 12px); overflow-x: hidden; overflow-y: auto; }
+#host-menu .dd-item { overflow: hidden; text-overflow: ellipsis; }
 
 /* 15px total (1px border + 14px face), same as the desktop's statusbars;
    the grow tile's black top row lands on this border-top line */
@@ -262,10 +297,9 @@ body.mobile #status { padding-right: 8px; }
     <button class="ghost" data-range="7d" data-short="7d">7 Days</button>
     <button class="ghost" data-range="30d" data-short="30d">30 Days</button>
   </div>
-  <span class="popup" id="host-wrap"><select id="host" title="Host" aria-label="Host">
-    <option value="">All Hosts</option>
-  </select><span class="well"><i><b></b></i></span></span>
+  <span class="popup" id="host-wrap"><button type="button" id="host" aria-label="Host" aria-haspopup="listbox" aria-expanded="false"><span class="hico" id="host-ico"></span><span class="nm" id="host-name">All Hosts</span></button><span class="well"><i><b></b></i></span></span>
 </div>
+<div class="dropdown icons" id="host-menu" role="listbox" aria-label="Host" hidden></div>
 <div id="main" class="wait">
   <div class="tiles">
     <div class="tile" id="t-requests"><div class="tl">Requests</div><div class="tv">—</div><div class="td"></div></div>
@@ -499,16 +533,101 @@ function renderRanges() {
     for (const b of seg.children) b.classList.toggle("on", b.dataset.view === st.views[seg.dataset.list]);
   }
 }
-function renderHostMenu() {
-  const sel = $("#host");
+// ---- the host pop-up: a menu whose rows carry each host's icon ----
+// The icons are the ones My Apps shows (/v1/appicons/<host>: the app's
+// touch icon or favicon, fetched and kept by the daemon). Every icon slot
+// is 16px from the first paint: the diamond stands in until a host's icon
+// arrives, and stays for a host that declares none.
+const CHECK_MARK = `<svg width="10" height="8" viewBox="0 0 10 8" shape-rendering="crispEdges"><path d="M9 0h1v2H9zM8 1h1v2H8zM7 2h1v2H7zM6 3h1v2H6zM5 4h1v2H5zM4 5h1v2H4zM3 6h1v2H3zM0 3h1v2H0zM1 4h1v2H1zM2 5h1v2H2z"/></svg>`;
+const ALL_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#99ccff" d="M5 1h2v1h-2zM8 1h3v1h-3zM3 2h1v1h-1zM6 2h1v1h-1zM8 2h2v1h-2zM11 2h2v1h-2zM2 3h1v1h-1zM4 3h1v1h-1zM6 3h1v1h-1zM8 3h2v1h-2zM11 3h3v1h-3zM2 4h2v1h-2zM5 4h2v1h-2zM8 4h3v1h-3zM12 4h2v1h-2zM1 5h1v1h-1zM14 5h1v1h-1zM1 6h3v1h-3zM5 6h2v1h-2zM8 6h3v1h-3zM12 6h3v1h-3zM1 7h3v1h-3zM5 7h2v1h-2zM8 7h3v1h-3zM12 7h3v1h-3zM1 8h3v1h-3zM5 8h2v1h-2zM8 8h3v1h-3zM12 8h3v1h-3zM1 9h3v1h-3zM5 9h2v1h-2zM8 9h3v1h-3zM12 9h3v1h-3zM1 10h1v1h-1zM14 10h1v1h-1zM2 11h2v1h-2zM5 11h2v1h-2zM8 11h3v1h-3zM12 11h2v1h-2zM2 12h3v1h-3zM6 12h1v1h-1zM8 12h2v1h-2zM11 12h3v1h-3zM3 13h2v1h-2zM6 13h1v1h-1zM8 13h2v1h-2zM11 13h2v1h-2zM5 14h2v1h-2zM8 14h3v1h-3z"/><path fill="#333399" d="M7 1h1v1h-1zM5 2h1v1h-1zM7 2h1v1h-1zM10 2h1v1h-1zM5 3h1v1h-1zM7 3h1v1h-1zM10 3h1v1h-1zM4 4h1v1h-1zM7 4h1v1h-1zM11 4h1v1h-1zM2 5h12v1h-12zM4 6h1v1h-1zM7 6h1v1h-1zM11 6h1v1h-1zM4 7h1v1h-1zM7 7h1v1h-1zM11 7h1v1h-1zM4 8h1v1h-1zM7 8h1v1h-1zM11 8h1v1h-1zM4 9h1v1h-1zM7 9h1v1h-1zM11 9h1v1h-1zM2 10h12v1h-12zM4 11h1v1h-1zM7 11h1v1h-1zM11 11h1v1h-1zM5 12h1v1h-1zM7 12h1v1h-1zM10 12h1v1h-1zM5 13h1v1h-1zM7 13h1v1h-1zM10 13h1v1h-1zM7 14h1v1h-1z"/><path fill="#ffffff" d="M4 2h1v1h-1zM3 3h1v1h-1z"/><path fill="#000000" d="M5 0h6v1h-6zM3 1h2v1h-2zM11 1h2v1h-2zM2 2h1v1h-1zM13 2h1v1h-1zM1 3h1v1h-1zM14 3h1v1h-1zM1 4h1v1h-1zM14 4h1v1h-1zM0 5h1v1h-1zM15 5h1v1h-1zM0 6h1v1h-1zM15 6h1v1h-1zM0 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM15 8h1v1h-1zM0 9h1v1h-1zM15 9h1v1h-1zM0 10h1v1h-1zM15 10h1v1h-1zM1 11h1v1h-1zM14 11h1v1h-1zM1 12h1v1h-1zM14 12h1v1h-1zM2 13h1v1h-1zM13 13h1v1h-1zM3 14h2v1h-2zM11 14h2v1h-2zM5 15h6v1h-6z"/></svg>`;
+const NO_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#dad5ca" d="M7 1h2v1h-2zM6 2h4v1h-4zM5 3h6v1h-6zM4 4h3v1h-3zM9 4h3v1h-3zM3 5h3v1h-3zM10 5h3v1h-3zM2 6h3v1h-3zM11 6h3v1h-3zM1 7h3v1h-3zM12 7h3v1h-3zM1 8h3v1h-3zM12 8h3v1h-3zM2 9h3v1h-3zM11 9h3v1h-3zM3 10h3v1h-3zM10 10h3v1h-3zM4 11h3v1h-3zM9 11h3v1h-3zM5 12h6v1h-6zM6 13h4v1h-4zM7 14h2v1h-2z"/><path fill="#9c9af2" d="M7 5h2v1h-2zM6 6h4v1h-4zM5 7h6v1h-6zM5 8h6v1h-6zM6 9h4v1h-4zM7 10h2v1h-2z"/><path fill="#000000" d="M7 0h2v1h-2zM6 1h1v1h-1zM9 1h1v1h-1zM5 2h1v1h-1zM10 2h1v1h-1zM4 3h1v1h-1zM11 3h1v1h-1zM3 4h1v1h-1zM7 4h2v1h-2zM12 4h1v1h-1zM2 5h1v1h-1zM6 5h1v1h-1zM9 5h1v1h-1zM13 5h1v1h-1zM1 6h1v1h-1zM5 6h1v1h-1zM10 6h1v1h-1zM14 6h1v1h-1zM0 7h1v1h-1zM4 7h1v1h-1zM11 7h1v1h-1zM15 7h1v1h-1zM0 8h1v1h-1zM4 8h1v1h-1zM11 8h1v1h-1zM15 8h1v1h-1zM1 9h1v1h-1zM5 9h1v1h-1zM10 9h1v1h-1zM14 9h1v1h-1zM2 10h1v1h-1zM6 10h1v1h-1zM9 10h1v1h-1zM13 10h1v1h-1zM3 11h1v1h-1zM7 11h2v1h-2zM12 11h1v1h-1zM4 12h1v1h-1zM11 12h1v1h-1zM5 13h1v1h-1zM10 13h1v1h-1zM6 14h1v1h-1zM9 14h1v1h-1zM7 15h2v1h-2z"/></svg>`;
+const hostIcons = new Map(); // host → object URL; "" asked for and none (yet)
+const hostBtn = $("#host"), hostMenu = $("#host-menu");
+function hostList() {
   const names = [...hostNames].sort();
   if (st.host && !names.includes(st.host)) names.push(st.host);
-  const want = ["", ...names].join("\n");
-  if (sel.dataset.names !== want) {
-    sel.replaceChildren(new Option("All Hosts", ""), ...names.map(h => new Option(h, h)));
-    sel.dataset.names = want;
+  return names;
+}
+function setIcon(box, host) {
+  const url = host ? hostIcons.get(host) : "";
+  const want = host === "" ? "all" : url || "none";
+  if (box.dataset.ico === want) return;
+  box.dataset.ico = want;
+  if (!url) { box.innerHTML = host === "" ? ALL_ICON : NO_ICON; return; }
+  const img = new Image(16, 16);
+  img.alt = "";
+  img.onerror = () => { hostIcons.set(host, ""); paintIcons(); }; // not a picture after all
+  img.src = url;
+  box.replaceChildren(img);
+}
+function paintIcons() {
+  setIcon($("#host-ico"), st.host);
+  for (const row of hostMenu.children) setIcon(row.querySelector(".dd-ico"), row.dataset.host);
+}
+async function loadIcon(host) {
+  if (hostIcons.has(host)) return;
+  hostIcons.set(host, "");
+  try {
+    const r = await api("/v1/appicons/" + encodeURIComponent(host));
+    if (r.status === 404) return; // the app declares no icon
+    hostIcons.set(host, URL.createObjectURL(await r.blob()));
+    paintIcons();
+  } catch (e) { hostIcons.delete(host); } // asked again at the next paint
+}
+function fillHostMenu() {
+  const names = ["", ...hostList()], key = names.join("\n");
+  if (hostMenu.dataset.names !== key) {
+    hostMenu.replaceChildren(...names.map(h => {
+      const row = document.createElement("div");
+      row.className = "dd-item";
+      row.setAttribute("role", "option");
+      row.dataset.host = h;
+      row.innerHTML = '<span class="dd-chk">' + CHECK_MARK + '</span><span class="dd-ico"></span>';
+      row.append(h || "All Hosts");
+      return row;
+    }));
+    hostMenu.dataset.names = key;
   }
-  sel.value = st.host;
+  for (const row of hostMenu.children) {
+    row.querySelector(".dd-chk").hidden = row.dataset.host !== st.host;
+    row.setAttribute("aria-selected", row.dataset.host === st.host ? "true" : "false");
+  }
+  paintIcons();
+}
+function renderHostMenu() {
+  for (const h of hostList()) loadIcon(h);
+  $("#host-name").textContent = st.host || "All Hosts";
+  setIcon($("#host-ico"), st.host);
+  if (!hostMenu.hidden) fillHostMenu();
+}
+function hostOn(row) {
+  for (const r of hostMenu.children) r.classList.toggle("on", r === row);
+  if (row) row.scrollIntoView({ block: "nearest" });
+}
+// the menu hangs 2px under the button at its left edge, at least as wide,
+// kept inside the window
+function openHostMenu() {
+  fillHostMenu();
+  hostMenu.hidden = false;
+  const r = $("#host-wrap").getBoundingClientRect();
+  hostMenu.style.minWidth = r.width + "px";
+  hostMenu.style.top = (r.bottom + 2) + "px";
+  hostMenu.style.maxHeight = Math.max(72, innerHeight - r.bottom - 10) + "px";
+  hostMenu.style.left = Math.max(4, Math.min(r.left, innerWidth - hostMenu.offsetWidth - 6)) + "px";
+  hostOn([...hostMenu.children].find(row => row.dataset.host === st.host));
+  hostBtn.setAttribute("aria-expanded", "true");
+}
+function closeHostMenu() {
+  if (hostMenu.hidden) return;
+  hostMenu.hidden = true;
+  hostBtn.setAttribute("aria-expanded", "false");
+}
+function pickHost(h) {
+  closeHostMenu();
+  if (h === st.host) return;
+  st.host = h;
+  saveSettings();
+  load();
 }
 function tile(id, value, d) {
   const t = document.getElementById(id);
@@ -838,10 +957,33 @@ $("#ranges").addEventListener("click", e => {
   saveSettings();
   load();
 });
-$("#host").addEventListener("change", e => {
-  st.host = e.target.value;
-  saveSettings();
-  load();
+hostBtn.addEventListener("click", () => { if (hostMenu.hidden) openHostMenu(); else closeHostMenu(); });
+hostMenu.addEventListener("pointermove", e => {
+  const row = e.target.closest(".dd-item");
+  if (row && !row.classList.contains("on")) hostOn(row);
+});
+hostMenu.addEventListener("click", e => {
+  const row = e.target.closest(".dd-item");
+  if (row) pickHost(row.dataset.host);
+});
+// a press anywhere else, Escape, or the window losing the keyboard puts
+// the menu away; the arrows walk it and Return picks
+document.addEventListener("pointerdown", e => {
+  if (!e.target.closest("#host-menu, #host-wrap")) closeHostMenu();
+}, true);
+addEventListener("blur", closeHostMenu);
+document.addEventListener("keydown", e => {
+  if (hostMenu.hidden) {
+    if (document.activeElement === hostBtn && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); openHostMenu(); }
+    return;
+  }
+  const rows = [...hostMenu.children], at = rows.findIndex(r => r.classList.contains("on"));
+  if (e.key === "Escape") closeHostMenu();
+  else if (e.key === "ArrowDown") hostOn(rows[Math.min(rows.length - 1, at + 1)]);
+  else if (e.key === "ArrowUp") hostOn(rows[Math.max(0, at - 1)]);
+  else if (e.key === "Enter" && at >= 0) pickHost(rows[at].dataset.host);
+  else return;
+  e.preventDefault();
 });
 for (const seg of document.querySelectorAll(".sec .seg")) {
   seg.addEventListener("click", e => {
@@ -921,6 +1063,7 @@ NARROW.addEventListener("change", renderRanges);
 window.addEventListener("message", async e => {
   if (e.origin !== location.origin || !e.data || typeof e.data.exe !== "string") return;
   if (e.data.exe === "hide") {
+    closeHostMenu();
     paused = true;
     if (saveT || saving) saveNow(true);
   } else if (e.data.exe === "show") {
