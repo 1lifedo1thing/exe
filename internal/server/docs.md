@@ -152,6 +152,8 @@ window's shows the ChatGPT subscription's 5-hour and weekly usage windows
 (the sign-in under **Configuration → OpenAI**), re-read once a minute
 while the window is open; hover for the reset times.
 
+<img src="https://hub.v2core.com/v1/embed/bafybeiedurlk54ghfmghdxnscdn6xejkss37uekbun2xrrrxbukqwamwkq" alt="The Claude Code window: its sessions down the left, the chosen one's conversation in the terminal, and the model, context, tokens, cost and weekly usage on the status line" width="896" height="487">
+
 The mouse wheel scrolls back through the conversation in either window.
 Claude Code takes the wheel itself and scrolls its own transcript. Codex
 leaves its transcript to the terminal, and on a host with tmux that is
@@ -210,6 +212,8 @@ copies the row's title, or archives the session, after a dialog: the session and
 this machine for `/resume` inside Claude Code or Codex — the desktop keeps no list
 of its own. Archive shows only once the conversation exists; when the
 window was showing that session it moves to the one before it.
+
+<img src="https://hub.v2core.com/v1/embed/bafybeigr4z6peilck47xgpbqq6lcxn2ka3hb36nhuxfglswhcw7yn5uco4" alt="The Codex window: its sessions down the left, a finished turn in the terminal, and the subscription's weekly usage on the status line" width="821" height="487">
 
 A window whose link drops — the tab left behind while the laptop slept, a
 network that came and went, the daemon restarted — reconnects on its own,
