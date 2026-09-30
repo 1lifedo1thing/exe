@@ -1,11 +1,14 @@
 package server
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"database/sql"
 	"embed"
 	"encoding/hex"
+	"fmt"
 	"html/template"
+	"image/gif"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -27,7 +30,7 @@ import (
 // The page's icons are the desktop's own (uiFS), served here so the site
 // host is self-contained and the repository keeps one copy of each.
 
-//go:embed site/index.html site/site.css site/screenshot.png
+//go:embed site/index.html site/site.css site/screenshot.png site/badge.gif site/badge.html
 var siteFS embed.FS
 
 // SiteBackend is the proxy backend that names this handler. `exe site`
@@ -45,7 +48,7 @@ const SiteBackend = "exe:site"
 // and are not cached, so they always name the current stamp.
 var siteBuild = func() string {
 	sum := sha256.New()
-	for _, n := range []string{"/site.css", "/icon.svg", "/icon-192.png", "/screenshot.png"} {
+	for _, n := range []string{"/site.css", "/icon.svg", "/icon-192.png", "/screenshot.png", "/badge.gif"} {
 		f := siteFiles[n]
 		var b []byte
 		switch {
@@ -98,6 +101,10 @@ var siteFiles = map[string]siteFile{
 	"/icon.svg":       {name: "ui/icon.svg", kind: "image/svg+xml", maxAge: "max-age=14400", fromUI: true},
 	"/icon-192.png":   {name: "ui/icon-192.png", kind: "image/png", maxAge: "max-age=14400", fromUI: true},
 	"/robots.txt":     {bytes: siteRobots, kind: "text/plain; charset=utf-8", maxAge: "max-age=14400"},
+	// the badge other pages link: its plain address is the one they are
+	// given, so it is kept no longer than the screenshot and a new
+	// drawing reaches them within hours
+	"/badge.gif": {fs: siteFS, name: "site/badge.gif", kind: "image/gif", maxAge: "max-age=14400"},
 }
 
 // SiteStats opens the homepage's own analytics — github.com/livid/exe-stats,
@@ -146,6 +153,9 @@ func siteOnline(an *stats.Stats, r *http.Request, kind string) int {
 func siteLabel(path string) string {
 	if path == "/" {
 		return "/ (the homepage)"
+	}
+	if path == "/badge/" {
+		return "The badge"
 	}
 	if slug, ok := strings.CutPrefix(path, "/docs/"); ok {
 		if slug == "" {
@@ -242,6 +252,8 @@ func SiteHandler(an *stats.Stats) http.Handler {
 		mux.Handle("GET /docs/{page}", docs)
 		mux.Handle("GET /docs/using/{chapter}", docs)
 		mux.Handle("GET /docs", http.RedirectHandler("/docs/", http.StatusMovedPermanently))
+		mux.Handle("GET /badge/{$}", siteBadgeHandler(nil))
+		mux.Handle("GET /badge", http.RedirectHandler("/badge/", http.StatusMovedPermanently))
 		mux.Handle("/", page)
 		return mux
 	}
@@ -254,6 +266,8 @@ func SiteHandler(an *stats.Stats) http.Handler {
 	mux.Handle("GET /docs/{page}", an.Counted("docs", docs))
 	mux.Handle("GET /docs/using/{chapter}", an.Counted("docs", docs))
 	mux.Handle("GET /docs", http.RedirectHandler("/docs/", http.StatusMovedPermanently))
+	mux.Handle("GET /badge/{$}", an.Counted("badge", siteBadgeHandler(an)))
+	mux.Handle("GET /badge", http.RedirectHandler("/badge/", http.StatusMovedPermanently))
 	mux.Handle("GET /stats", siteStatsHandler(an))
 	mux.Handle("GET /v1/stats", an.JSONHandler())
 	mux.Handle("/", page)
@@ -326,6 +340,43 @@ func sitePage(w http.ResponseWriter, r *http.Request, an *stats.Stats) {
 			Build  string
 		}{siteOnline(an, r, "home"), siteBuild}); err != nil {
 			log.Printf("site: %v", err)
+		}
+	}
+}
+
+// The badge: an 88×31 animated GIF (site/badge.gif, drawn by
+// site/badge.py) at the foot of the homepage, for other pages to link
+// here with, and a page of its own at /badge/ that hands out the HTML and
+// the Markdown to do it.
+
+var siteBadgeTmpl = template.Must(template.New("badge").Parse(string(mustSiteFile("site/badge.html"))))
+
+// siteBadgeFacts are what the page's status line says of the GIF, read
+// off the file itself so a new drawing is never described as the old.
+var siteBadgeFrames, siteBadgeSize = func() (int, string) {
+	b := mustSiteFile("site/badge.gif")
+	g, err := gif.DecodeAll(bytes.NewReader(b))
+	if err != nil {
+		panic("site/badge.gif: " + err.Error())
+	}
+	return len(g.Image), fmt.Sprintf("%.1f KB", float64(len(b))/1000)
+}()
+
+// siteBadgeHandler serves /badge/.
+func siteBadgeHandler(an *stats.Stats) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if err := siteBadgeTmpl.Execute(w, struct {
+			Build, Size    string
+			Frames, Online int
+		}{siteBuild, siteBadgeSize, siteBadgeFrames, siteOnline(an, r, "badge")}); err != nil {
+			log.Printf("site: badge: %v", err)
 		}
 	}
 }

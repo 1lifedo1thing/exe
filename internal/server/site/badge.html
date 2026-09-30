@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Badge — exe</title>
+<meta name="description" content="An animated 88×31 button to link to exe with, the kind a row of which ended every page on the late-nineties web.">
+<meta name="theme-color" content="#dddddd">
+<link rel="icon" href="/v{{.Build}}/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/v{{.Build}}/icon-192.png">
+<link rel="stylesheet" href="/v{{.Build}}/site.css">
+<script>
+// the copy buttons work only with this script, so it says so before the
+// first paint and their row is drawn from the start rather than appearing
+document.documentElement.className = "js";
+</script>
+</head>
+<body>
+
+<div class="window">
+  <div class="titlebar"><a class="tbox" href="/" title="The homepage" aria-label="The homepage"></a><span class="stripe"></span><span class="title">Badge</span><span class="stripe"></span></div>
+  <div class="frame">
+    <div class="body">
+      <div class="head">
+        <img src="/v{{.Build}}/icon.svg" alt="" width="32" height="32">
+        <h1>Link to exe<small>An 88×31 button for your page.</small></h1>
+      </div>
+      <p>Before there were link previews there were buttons: 88 by 31 pixels, a row
+      of them at the foot of a page, each one a link to something its author made,
+      ran or liked. This is exe's. The little computer types what exe is, and a
+      click brings a reader here.</p>
+
+      <div class="badges">
+        <figure><img src="/v{{.Build}}/badge.gif" width="88" height="31" alt="The exe badge at its own size"><figcaption>Its own size</figcaption></figure>
+        <figure><img src="/v{{.Build}}/badge.gif" width="264" height="93" alt="The exe badge, three times as large"><figcaption>Three times</figcaption></figure>
+      </div>
+
+      <p>Put it in your footer, your sidebar or a README, wherever the web you
+      like still keeps its buttons. Paste one of these as it is, or
+      <a href="/badge.gif" download="exe-badge.gif">save the GIF</a> and serve it yourself.</p>
+
+      <h2>HTML</h2>
+<pre class="term snip" id="html">&lt;a href="https://exe.v2core.com/"&gt;&lt;img src="https://exe.v2core.com/badge.gif" width="88" height="31" alt="exe: a personal VM cloud"&gt;&lt;/a&gt;</pre>
+      <h2>Markdown</h2>
+<pre class="term snip" id="md">[![exe: a personal VM cloud](https://exe.v2core.com/badge.gif)](https://exe.v2core.com/)</pre>
+    </div>
+    <div class="btnrow copies">
+      <button class="btn" data-from="md">Copy Markdown</button>
+      <button class="btn default" data-from="html">Copy HTML</button>
+    </div>
+    <div class="statusbar"><span id="said">GIF, 88 × 31, {{.Frames}} frames, {{.Size}}</span>{{if .Online}}<a href="/stats">{{.Online}} online</a>{{end}}</div>
+  </div>
+</div>
+
+<script>
+// Copy puts a snippet on the clipboard and says so on the status line.
+// Where the clipboard is not offered, the snippet is selected instead,
+// ready for the reader's own copy.
+(function () {
+  var said = document.getElementById("said");
+  function select(pre) {
+    var r = document.createRange();
+    r.selectNodeContents(pre);
+    var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  document.querySelectorAll(".copies .btn").forEach(function (b) {
+    b.onclick = function () {
+      var pre = document.getElementById(b.getAttribute("data-from")),
+          name = pre.id === "html" ? "The HTML" : "The Markdown";
+      function selected() { select(pre); said.textContent = name + " is selected: copy it with your keyboard."; }
+      if (!navigator.clipboard || !navigator.clipboard.writeText) return selected();
+      navigator.clipboard.writeText(pre.textContent).then(function () {
+        select(pre);
+        said.textContent = name + " is on your clipboard.";
+      }, selected);
+    };
+  });
+})();
+</script>
+</body>
+</html>

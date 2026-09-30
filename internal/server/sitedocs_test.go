@@ -127,6 +127,7 @@ func getDoc(t *testing.T, h http.Handler, path string) (int, string) {
 func TestSiteLabel(t *testing.T) {
 	for path, want := range map[string]string{
 		"/":               "/ (the homepage)",
+		"/badge/":         "The badge",
 		"/docs/":          "Docs: all of them",
 		"/docs/config":    "Docs: Configuration",
 		"/docs/using":     "Docs: Using exe",

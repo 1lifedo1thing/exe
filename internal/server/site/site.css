@@ -213,3 +213,25 @@ ul.toc li:last-child { border-bottom: 1px solid var(--rule); }
 ul.toc li a { font-weight: bold; text-decoration: none; min-width: 152px; }
 ul.toc li a:hover { text-decoration: underline; }
 ul.toc li span { color: var(--quiet); }
+
+/* ---- the badge: the homepage's last line, and its own page (/badge/).
+   An 88×31 button is pixel art, so it is scaled a pixel at a time. ---- */
+.badge { width: 88px; margin: 14px auto 0; }
+.badge a, .badge img { display: block; }
+.badge img, .badges img { image-rendering: pixelated; }
+/* the badge twice, on the desk's lavender, in a sunken field of its own */
+.badges { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: center; gap: 12px 32px;
+  margin: 12px 0; padding: 20px 12px 10px; border: 1px solid #262626; background: #ccf;
+  box-shadow: -1px -1px 0 #999, 1px 1px 0 #fff; }
+.badges figure { margin: 0; }
+.badges img { display: block; max-width: 100%; height: auto; margin: 0 auto 6px; }
+.badges figcaption { text-align: center; font-size: 11px; color: #333; }
+/* a snippet is a terminal sunk into the page, and one click takes all
+   of it */
+.snip { margin: 0 0 8px; border: 1px solid #262626; box-shadow: -1px -1px 0 #999, 1px 1px 0 #fff;
+  -webkit-user-select: all; user-select: all; }
+/* Copy needs the page's script; without it the snippets are still there
+   to select, and no row of buttons is drawn that would do nothing */
+.btnrow.copies { display: none; }
+html.js .btnrow.copies { display: flex; }
+.copies .btn { font-family: inherit; }
