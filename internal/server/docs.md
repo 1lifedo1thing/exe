@@ -858,6 +858,11 @@ its edge; a crawler that keeps hammering a challenge shows as a Requests
 line with a Stopped line close under it. **Hosts** can rank by it, to see
 which name draws them.
 
+The chart follows the view picked in **Hosts**: **Requests** and **Visits**
+draw requests, visits and stopped requests together; **Data**, **Errors**
+and **Stopped** draw data served, server errors or stopped requests alone,
+on a scale of their own, and the reading under the pointer says the same.
+
 <img src="https://hub.v2core.com/v1/embed/bafkreicygtsslkz6zbwpqbj6ygwlhbxbvhu7hsowdvvijhqt4mptfpnc4u" alt="The Analytics window over the last hour: requests, visits, data served, verified bots and server errors, the chart, and the hosts by requests" width="662" height="587">
 
 Click a row in **Bots** to narrow everything to that category, keeping the

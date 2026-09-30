@@ -105,6 +105,8 @@ type anPoint struct {
 	T        time.Time `json:"t"`
 	Requests int64     `json:"requests"`
 	Visits   int64     `json:"visits"`
+	Bytes    int64     `json:"bytes"`
+	Errors   int64     `json:"errors"` // 5xx
 	Stopped  int64     `json:"stopped"`
 }
 
@@ -551,7 +553,7 @@ func (s *Server) fetchAnalytics(ctx context.Context, v anView) (*anResponse, err
 	if bot == "" {
 		b.WriteString(g("botTotal", 1, "bots", "count", "", ""))
 	}
-	b.WriteString(g("series", 2000, "sel", "count sum { visits }", rg.Dim, rg.Dim+"_ASC"))
+	b.WriteString(g("series", 2000, "sel", "count sum { visits edgeResponseBytes } ratio { status5xx }", rg.Dim, rg.Dim+"_ASC"))
 	b.WriteString(g("stopHosts", 1000, "astop", "count", "clientRequestHTTPHost", "count_DESC"))
 	b.WriteString(g("stopTotal", 1, "sstop", "count", "", ""))
 	b.WriteString(g("stopSeries", 2000, "sstop", "count", rg.Dim, rg.Dim+"_ASC"))
@@ -688,8 +690,11 @@ func (s *Server) fetchAnalytics(ctx context.Context, v anView) (*anResponse, err
 	}
 	for _, grp := range z["series"] {
 		if i := bucket(grp); i >= 0 {
-			res.Series[i].Requests += grp.Count
-			res.Series[i].Visits += grp.Sum.Visits
+			t := grp.totals()
+			res.Series[i].Requests += t.Requests
+			res.Series[i].Visits += t.Visits
+			res.Series[i].Bytes += t.Bytes
+			res.Series[i].Errors += t.Errors
 		}
 	}
 	for _, grp := range z["stopSeries"] {

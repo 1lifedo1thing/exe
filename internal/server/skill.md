@@ -157,7 +157,7 @@ gate instead and only reach for this to delegate.
   `bot`, the `bots` list alone staying broad): `totals` and `previous` (the span before; null for 30d) with
   `requests`, `visits`, `bytes`, `errors` (5xx), `refused` (4xx), `bots`,
   `stopped` (challenged or blocked by Cloudflare, included in `requests`);
-  `series` of `{t, requests, visits, stopped}` a `step` apart (minute, 15m, hour, or
+  `series` of `{t, requests, visits, bytes, errors, stopped}` a `step` apart (minute, 15m, hour, or
   the `tz` zone's days), the last `filling` of them still being counted;
   `hosts` (every published host with its totals, `stopped` among them, and
   `to`, where it leads);

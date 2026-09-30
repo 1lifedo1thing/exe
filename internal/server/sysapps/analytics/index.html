@@ -218,7 +218,8 @@ button.ghost.on { background: #888; color: #fff;
 .chart { display: grid; grid-template-columns: 44px minmax(0, 1fr); padding: 8px 12px 6px; }
 .chart .legend { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 12px; height: 18px; align-items: center; font-size: 11px; color: #555; white-space: nowrap; }
 .chart .legend i { display: inline-block; width: 12px; height: 2px; margin-right: 5px; vertical-align: middle; background: #333399; }
-.chart .legend i.vi { background: #ff6600; } .chart .legend i.sp { background: #dd0808; } .chart .legend i.end { background: #bbb; }
+.chart .legend i.vi { background: #ff6600; } .chart .legend i.sp { background: #dd0808; } .chart .legend i.by { background: #562c05; }
+.chart .legend i.er { background: #f20884; } .chart .legend i.end { background: #bbb; }
 .chart .ys { position: relative; height: 160px; margin-right: 6px; font-size: 11px; color: #555; }
 .chart .ys span { position: absolute; right: 0; transform: translateY(-50%); white-space: nowrap; }
 .chart .plot { position: relative; height: 160px; border-left: 1px solid var(--black); border-bottom: 1px solid var(--black); touch-action: pan-y; }
@@ -226,10 +227,14 @@ button.ghost.on { background: #888; color: #fff;
 .chart svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
 .chart polyline { fill: none; stroke-width: 2px; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; }
 /* requests in the desktop's highlight blue, visits in OS 9's "Essential"
-   label orange, the requests Cloudflare stopped in its "Hot" red; the
-   buckets Cloudflare is still counting in a tint of each */
+   label orange, the requests Cloudflare stopped in its "Hot" red; alone on
+   the chart, data served in the classic Mac palette's brown and server
+   errors in its magenta; the buckets Cloudflare is still counting in a
+   tint of each */
 .chart .rq { stroke: #333399; } .chart .vi { stroke: #ff6600; } .chart .sp { stroke: #dd0808; }
+.chart .by { stroke: #562c05; } .chart .er { stroke: #f20884; }
 .chart .rq.end { stroke: #9999ff; } .chart .vi.end { stroke: #ffcc99; } .chart .sp.end { stroke: #f4a4a4; }
+.chart .by.end { stroke: #c9ad97; } .chart .er.end { stroke: #f9b3d4; }
 .chart .xs { grid-column: 2; position: relative; height: 18px; margin-top: 3px; font-size: 11px; color: #555; }
 .chart .xs span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
 .chart .xs span.first { transform: none; } .chart .xs span.last { transform: translateX(-100%); }
@@ -321,12 +326,14 @@ body.mobile #status { padding-right: 8px; }
     <div class="tile" id="t-errors"><div class="tl">Server errors</div><div class="tv">—</div><div class="td"></div></div>
   </div>
   <div class="chart">
-    <div class="legend"><span><i></i>Requests</span><span><i class="vi"></i>Visits</span><span title="Challenged or blocked by Cloudflare"><i class="sp"></i>Stopped</span><span class="lf"><i class="end"></i>still counting</span></div>
+    <div class="legend" id="legend"><span><i></i>Requests</span><span><i class="vi"></i>Visits</span><span title="Challenged or blocked by Cloudflare"><i class="sp"></i>Stopped</span><span class="lf"><i class="end"></i>still counting</span></div>
     <div class="ys" id="ys"></div>
     <div class="plot" id="plot">
       <div class="gl" style="top: 0"></div><div class="gl" style="top: 25%"></div><div class="gl" style="top: 50%"></div><div class="gl" style="top: 75%"></div>
       <svg id="lines" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
         <polyline class="sp end" id="sp-end"/><polyline class="sp" id="sp"/>
+        <polyline class="by end" id="by-end"/><polyline class="by" id="by"/>
+        <polyline class="er end" id="er-end"/><polyline class="er" id="er"/>
         <polyline class="rq end" id="rq-end"/><polyline class="vi end" id="vi-end"/>
         <polyline class="rq" id="rq"/><polyline class="vi" id="vi"/>
       </svg>
@@ -694,10 +701,47 @@ function ticks(d) {
   return out;
 }
 let chartPts = null; // the drawn series, for the pointer's reading
+// The chart follows the Hosts list's view: Requests and Visits draw
+// requests, visits and stopped requests together; Data, Errors and Stopped
+// draw that one alone, on its own scale and in its own units — server
+// errors run hundreds to requests' hundred thousand.
+const LINES = { requests: "rq", visits: "vi", stopped: "sp", bytes: "by", errors: "er" };
+const fmtBytesAxis = v => v ? fmtBytes(v).replace(".0 ", " ") : "0";
+const CHART = {
+  bytes: { key: "bytes", label: "Data served", axis: fmtBytesAxis, empty: "No data served in this span.",
+    read: v => fmtBytes(v) + " served" },
+  errors: { key: "errors", label: "Server errors", axis: fmtCompact, empty: "No server errors in this span.",
+    read: v => fmtN(v) + (v === 1 ? " server error" : " server errors") },
+  stopped: { key: "stopped", label: "Stopped", axis: fmtCompact, empty: "Nothing was stopped in this span.",
+    read: v => fmtN(v) + " stopped" },
+};
+const chartMode = () => CHART[st.views.hosts] || null;
+// the legend names the lines drawn; its row keeps its height whatever it holds
+function renderLegend(m) {
+  const want = m ? m.key : "all";
+  const lg = $("#legend");
+  if (lg.dataset.mode === want) return;
+  lg.dataset.mode = want;
+  const item = (cls, text, title) => {
+    const sp = document.createElement("span"), i = document.createElement("i");
+    if (cls) i.className = cls;
+    if (title) sp.title = title;
+    sp.append(i, text);
+    return sp;
+  };
+  const pale = item("end", "still counting");
+  pale.className = "lf";
+  lg.replaceChildren(...(m ? [item(LINES[m.key], m.label)]
+    : [item("", "Requests"), item("vi", "Visits"), item("sp", "Stopped", "Challenged or blocked by Cloudflare")]), pale);
+}
 function renderChart() {
-  const note = $("#plot-note"), ys = $("#ys"), xs = $("#xs");
+  const note = $("#plot-note"), ys = $("#ys"), xs = $("#xs"), m = chartMode();
+  renderLegend(m);
   const clear = () => {
-    for (const id of ["rq", "vi", "sp", "rq-end", "vi-end", "sp-end"]) document.getElementById(id).setAttribute("points", "");
+    for (const id of Object.values(LINES)) {
+      document.getElementById(id).setAttribute("points", "");
+      document.getElementById(id + "-end").setAttribute("points", "");
+    }
     chartPts = null;
     hideTip();
   };
@@ -710,12 +754,12 @@ function renderChart() {
     return;
   }
   const s = data.series, n = s.length;
-  const max = Math.max(0, ...s.map(p => p.requests));
+  const max = Math.max(0, ...s.map(p => (m ? p[m.key] : p.requests) || 0));
   const step = niceStep(max), top = step * 4;
   ys.replaceChildren(...[4, 3, 2, 1, 0].map((k, j) => {
     const sp = document.createElement("span");
     sp.style.top = (j * 25) + "%";
-    sp.textContent = fmtCompact(step * k);
+    sp.textContent = (m ? m.axis : fmtCompact)(step * k);
     return sp;
   }));
   xs.replaceChildren(...ticks(data).map(({ i, label }) => {
@@ -729,18 +773,18 @@ function renderChart() {
   if (!max) {
     clear();
     note.hidden = false;
-    note.textContent = "No requests in this span.";
+    note.textContent = m ? m.empty : "No requests in this span.";
     return;
   }
   note.hidden = true;
   const pt = (i, v) => (n > 1 ? i / (n - 1) * 1000 : 0).toFixed(1) + "," + (1000 - v / top * 1000).toFixed(1);
   const cut = Math.max(0, n - 1 - (data.filling || 0));
   const line = (key, a, b) => s.slice(a, b + 1).map((p, j) => pt(a + j, p[key] || 0)).join(" ");
-  // the stopped line only when something was stopped: flat on the axis it
-  // would paint the baseline red under the others
+  // with the others, the stopped line only when something was stopped:
+  // flat on the axis it would paint the baseline red under them
   const stopped = s.some(p => p.stopped > 0);
-  for (const [id, key] of [["rq", "requests"], ["vi", "visits"], ["sp", "stopped"]]) {
-    const on = key !== "stopped" || stopped;
+  for (const [key, id] of Object.entries(LINES)) {
+    const on = m ? key === m.key : key === "requests" || key === "visits" || key === "stopped" && stopped;
     $("#" + id).setAttribute("points", on ? line(key, 0, cut) : "");
     $("#" + id + "-end").setAttribute("points", on && cut < n - 1 ? line(key, cut, n - 1) : "");
   }
@@ -767,7 +811,9 @@ function showTip(i) {
   tip.replaceChildren();
   const head = document.createElement("b");
   head.textContent = bucketLabel(p.t) + (i >= n - (data.filling || 0) ? " · still counting" : "");
-  tip.append(head, document.createElement("br"), fmtN(p.requests) + " requests · " + fmtN(p.visits) + " visits · " + fmtN(p.stopped || 0) + " stopped");
+  const m = chartMode();
+  tip.append(head, document.createElement("br"), m ? m.read(p[m.key] || 0)
+    : fmtN(p.requests) + " requests · " + fmtN(p.visits) + " visits · " + fmtN(p.stopped || 0) + " stopped");
   tip.hidden = false;
   const tw = tip.offsetWidth;
   tip.style.left = (x + 8 + tw <= w ? x + 8 : Math.max(0, x - 8 - tw)) + "px";
@@ -1012,6 +1058,7 @@ for (const seg of document.querySelectorAll(".sec .seg")) {
     saveSettings();
     renderRanges();
     renderLists();
+    if (seg.dataset.list === "hosts") renderChart();
   });
 }
 // a host row chooses that host; the chosen one again goes back to all

@@ -112,7 +112,7 @@ const anReply = `{"data":{"viewer":{"zones":[{
   {"count":25,"dimensions":{"datetimeMinute":"2026-09-29T11:00:00Z"}},
   {"count":90,"dimensions":{"datetimeMinute":"2026-09-29T10:00:00Z"}}],
  "series":[
-  {"count":30,"sum":{"visits":9},"dimensions":{"datetimeMinute":"2026-09-29T11:00:00Z"}},
+  {"count":30,"sum":{"visits":9,"edgeResponseBytes":3000},"ratio":{"status5xx":0.1},"dimensions":{"datetimeMinute":"2026-09-29T11:00:00Z"}},
   {"count":20,"sum":{"visits":8},"dimensions":{"datetimeMinute":"2026-09-29T11:59:00Z"}},
   {"count":99,"sum":{"visits":9},"dimensions":{"datetimeMinute":"2026-09-29T10:00:00Z"}}],
  "paths":[
@@ -188,7 +188,7 @@ func TestCFAnalyticsView(t *testing.T) {
 		t.Errorf("previous %+v", v.Previous)
 	}
 	if len(v.Series) != 60 || v.Series[0].Requests != 30 || v.Series[59].Requests != 20 || v.Series[59].Visits != 8 ||
-		v.Series[0].Stopped != 25 || v.Series[59].Stopped != 0 {
+		v.Series[0].Stopped != 25 || v.Series[59].Stopped != 0 || v.Series[0].Bytes != 3000 || v.Series[0].Errors != 3 || v.Series[59].Errors != 0 {
 		t.Errorf("series %d: %+v … %+v", len(v.Series), v.Series[0], v.Series[len(v.Series)-1])
 	}
 	if !v.Series[0].T.Equal(time.Date(2026, 9, 29, 11, 0, 0, 0, time.UTC)) || v.Step != "minute" {
