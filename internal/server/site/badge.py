@@ -35,7 +35,9 @@ PAL = {
 ORDER = list(PAL)
 
 # the desktop's icon at badge size: the case 18 by 22, its screen, its
-# slot and its stand, as ui/icon.svg draws them at 32
+# slot and its stand, as ui/icon.svg draws them at 32, except that the
+# slot sits right of the middle, as the original Macintosh's floppy
+# slot does; the stand is centred under the case
 COMPUTER = [
     "kkkkkkkkkkkkkkkkkk",
     "khhhhhhhhhhhhhhhhk",
@@ -52,8 +54,8 @@ COMPUTER = [
     "khBBBBBBBBBBBBBBdk",
     "khBBBBBBBBBBBBBBdk",
     "khBBBBBBBBBBBBBBdk",
-    "khBBBTTTTTTTTBBBdk",
-    "khBBBTTTTTTTTBBBdk",
+    "khBBBBTTTTTTTTBBdk",
+    "khBBBBTTTTTTTTBBdk",
     "khBBBBBBBBBBBBBBdk",
     "khBBBBBBBBBBBBBBdk",
     "khBBBBBBBBBBBBBBdk",
