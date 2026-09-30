@@ -1,0 +1,5 @@
+{
+  "title": "Analytics",
+  "icon": "icon.svg",
+  "window": { "width": 660, "height": 620, "grow": true }
+}

@@ -8961,6 +8961,7 @@ const WIZ_STEPS = [
       "Create a token at ", el("a", { href: "https://dash.cloudflare.com/profile/api-tokens", target: "_blank", rel: "noopener" }, "dash.cloudflare.com → API Tokens"),
       " → Create Token → Custom token, with two permissions: ",
       el("b", {}, "Zone → DNS → Edit"), " and ", el("b", {}, "Account → Cloudflare Tunnel → Edit"),
+      "; add ", el("b", {}, "Zone → Analytics → Read"), " for the Analytics app's traffic",
       ". Paste it below — it is validated against Cloudflare before moving on.") },
   { key: "account_id", title: "Account", optionsKey: "accounts",
     desc: () => el("span", {}, "The Cloudflare account that owns your tunnel. If no list appears, copy the Account ID from the dashboard's right sidebar on any zone page.") },
@@ -9218,6 +9219,7 @@ function cfStripMenu() {
     ...live,
     "-",
     { label: "Cloudflare Status…", act: () => sumOpen() },
+    { label: "Analytics…", act: () => openAppWin("analytics"), dis: !appsList.some(a => a.name === "analytics") },
     { label: "Cloudflare Setup Wizard…", act: () => wizOpen(false) },
     "-",
     { label: "Check Now", act: () => Promise.all([cfHeartbeat(true), cfStatsRefresh()]).then(() =>

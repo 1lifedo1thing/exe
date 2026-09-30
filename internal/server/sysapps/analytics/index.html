@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Analytics</title>
+<link rel="stylesheet" href="/platinum/popup.css">
+<style>
+/* Platinum values match the exe desktop (same block as the Weather and Tides apps) */
+:root {
+  --black: #262626;
+  --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999;
+  --hl: #333399; --lav: #ccf;
+  --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
+  --mono: Monaco, "Courier New", monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+/* iOS Safari inflates text after a rotate to landscape (its text-size
+   "auto" heuristic) and keeps the inflated size on the way back; 100% pins
+   the type to its authored size */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { height: 100%; }
+body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: var(--g200);
+  user-select: none; cursor: default; overflow: hidden; display: flex; flex-direction: column; }
+
+#bar { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 10px 10px 8px; align-items: center; }
+
+button { font: inherit; cursor: default; }
+button.ghost { background: var(--g300); color: var(--black);
+  border: 1px solid var(--black); border-radius: 3px;
+  padding: 2px 13px; font-size: 12px; line-height: 14px; font-weight: bold; height: 20px;
+  box-shadow: inset 1px 1px 0 var(--g300), inset -1px -1px 0 #777,
+    inset 2px 2px 0 #fff, inset -2px -2px 0 #aaa; }
+button.ghost:active { background: #666; color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
+    inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
+/* the selected range stays depressed, like a Platinum segmented control */
+button.ghost.on { background: #888; color: #fff;
+  box-shadow: inset 1px 1px 0 #666, inset -1px -1px 0 #aaa,
+    inset 2px 2px 0 #777, inset -2px -2px 0 #999; }
+.seg { display: flex; gap: 0; flex: none; }
+.seg button { border-radius: 0; border-right-width: 0; }
+.seg button:first-child { border-radius: 3px 0 0 3px; }
+.seg button:last-child { border-radius: 0 3px 3px 0; border-right-width: 1px; }
+/* the views of a list are the same control at their words' width */
+.sec .seg button { padding: 2px 8px; }
+
+/* The pop-up menu button is the shared block the daemon serves
+   (/platinum/popup.css, exe-stats popup.css): linked above, never copied.
+   Beside 20px buttons it takes their 20 rows, as the hub's language menu
+   does (the block is due the same move). */
+/* wrapping is judged on the basis, so the menu starts small and grows to
+   240px: on a phone it stays on the buttons' row */
+#host-wrap { flex: 1 1 110px; max-width: 240px; margin-left: auto; height: 20px; }
+#host-wrap .well b { background-position: 4px 3px; }
+
+/* 15px total (1px border + 14px face), same as the desktop's statusbars;
+   the grow tile's black top row lands on this border-top line */
+/* overflow: clip — the 11px text's line box is taller than the 14px face and
+   hangs a pixel past the bar; clipped, that pixel is no scrollable overflow of
+   the page (docs/platinum.md, status bar) */
+#status { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--black);
+  background: var(--g300); font-size: 11px; color: #333; padding: 0 20px 0 8px; height: 15px;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; overflow: clip; }
+#st-left { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#st-right { flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+#grow { position: fixed; right: 0; bottom: 0; width: 15px; height: 15px;
+  touch-action: none; z-index: 6; }
+
+/* Mac OS 9 scrollbars — the desktop's pixel-sampled spec, adapted for a
+   document window: the host frame (or a bordered box) draws the outer black
+   line, so bars are 15px (1px leading separator + the sampled 14px face)
+   with no trailing border of their own — otherwise the edge doubles to 2px.
+   Vertical is the city list against the window frame; horizontal is the
+   forecast tables inside their own boxes. */
+::-webkit-scrollbar { width: 15px; height: 15px; }
+::-webkit-scrollbar-track:vertical { border-left: 1px solid var(--black);
+  background: linear-gradient(to right, #777 0, #777 1px, #888 1px, #888 2px, #aaa 2px, #aaa 12px, #bbb 12px, #bbb 13px, #ccc 13px, #ccc 14px); }
+::-webkit-scrollbar-track:horizontal { border-top: 1px solid var(--black);
+  background: linear-gradient(to bottom, #777 0, #777 1px, #888 1px, #888 2px, #aaa 2px, #aaa 12px, #bbb 12px, #bbb 13px, #ccc 13px, #ccc 14px); }
+::-webkit-scrollbar-thumb:vertical { border: 1px solid var(--black); border-right: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="0" width="6" height="1" fill="%23ccccff"/><rect x="4" y="1" width="7" height="1" fill="%23333399"/><rect x="3" y="2" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="2" width="6" height="1" fill="%23ccccff"/><rect x="4" y="3" width="7" height="1" fill="%23333399"/><rect x="3" y="4" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="4" width="6" height="1" fill="%23ccccff"/><rect x="4" y="5" width="7" height="1" fill="%23333399"/><rect x="3" y="6" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="6" width="6" height="1" fill="%23ccccff"/><rect x="4" y="7" width="7" height="1" fill="%23333399"/></svg>') center no-repeat,
+    linear-gradient(to right, #ccccff 0 1px, #9999ff 1px 13px, #6666cc 13px 14px);
+  box-shadow: inset 0 1px 0 #ccccff, inset 0 -1px 0 #6666cc; }
+::-webkit-scrollbar-thumb:horizontal { border: 1px solid var(--black); border-bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="14" shape-rendering="crispEdges"><rect x="0" y="3" width="1" height="1" fill="%23eeeeee"/><rect x="0" y="4" width="1" height="6" fill="%23ccccff"/><rect x="1" y="4" width="1" height="7" fill="%23333399"/><rect x="2" y="3" width="1" height="1" fill="%23eeeeee"/><rect x="2" y="4" width="1" height="6" fill="%23ccccff"/><rect x="3" y="4" width="1" height="7" fill="%23333399"/><rect x="4" y="3" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="4" width="1" height="6" fill="%23ccccff"/><rect x="5" y="4" width="1" height="7" fill="%23333399"/><rect x="6" y="3" width="1" height="1" fill="%23eeeeee"/><rect x="6" y="4" width="1" height="6" fill="%23ccccff"/><rect x="7" y="4" width="1" height="7" fill="%23333399"/></svg>') center no-repeat,
+    linear-gradient(to bottom, #ccccff 0 1px, #9999ff 1px 13px, #6666cc 13px 14px);
+  box-shadow: inset 1px 0 0 #ccccff, inset -1px 0 0 #6666cc; }
+::-webkit-scrollbar-thumb:vertical:active {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23ccccff"/><rect x="4" y="0" width="6" height="1" fill="%239999ff"/><rect x="4" y="1" width="7" height="1" fill="%23000066"/><rect x="3" y="2" width="1" height="1" fill="%23ccccff"/><rect x="4" y="2" width="6" height="1" fill="%239999ff"/><rect x="4" y="3" width="7" height="1" fill="%23000066"/><rect x="3" y="4" width="1" height="1" fill="%23ccccff"/><rect x="4" y="4" width="6" height="1" fill="%239999ff"/><rect x="4" y="5" width="7" height="1" fill="%23000066"/><rect x="3" y="6" width="1" height="1" fill="%23ccccff"/><rect x="4" y="6" width="6" height="1" fill="%239999ff"/><rect x="4" y="7" width="7" height="1" fill="%23000066"/></svg>') center no-repeat,
+    linear-gradient(to right, #9999ff 0 1px, #6666cc 1px 13px, #333399 13px 14px);
+  box-shadow: inset 0 1px 0 #9999ff, inset 0 -1px 0 #333399; }
+::-webkit-scrollbar-thumb:horizontal:active {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="14" shape-rendering="crispEdges"><rect x="0" y="3" width="1" height="1" fill="%23ccccff"/><rect x="0" y="4" width="1" height="6" fill="%239999ff"/><rect x="1" y="4" width="1" height="7" fill="%23000066"/><rect x="2" y="3" width="1" height="1" fill="%23ccccff"/><rect x="2" y="4" width="1" height="6" fill="%239999ff"/><rect x="3" y="4" width="1" height="7" fill="%23000066"/><rect x="4" y="3" width="1" height="1" fill="%23ccccff"/><rect x="4" y="4" width="1" height="6" fill="%239999ff"/><rect x="5" y="4" width="1" height="7" fill="%23000066"/><rect x="6" y="3" width="1" height="1" fill="%23ccccff"/><rect x="6" y="4" width="1" height="6" fill="%239999ff"/><rect x="7" y="4" width="1" height="7" fill="%23000066"/></svg>') center no-repeat,
+    linear-gradient(to bottom, #9999ff 0 1px, #6666cc 1px 13px, #333399 13px 14px);
+  box-shadow: inset 1px 0 0 #9999ff, inset -1px 0 0 #333399; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical {
+  border-top-color: #ccccff; box-shadow: inset 0 -1px 0 #6666cc; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical:active {
+  border-top-color: #9999ff; box-shadow: inset 0 -1px 0 #333399; }
+.at-y-end::-webkit-scrollbar-thumb:vertical {
+  border-bottom-color: #6666cc; box-shadow: inset 0 1px 0 #ccccff; }
+.at-y-end::-webkit-scrollbar-thumb:vertical:active {
+  border-bottom-color: #333399; box-shadow: inset 0 1px 0 #9999ff; }
+:not(.scrolled-x)::-webkit-scrollbar-thumb:horizontal {
+  border-left-color: #ccccff; box-shadow: inset -1px 0 0 #6666cc; }
+:not(.scrolled-x)::-webkit-scrollbar-thumb:horizontal:active {
+  border-left-color: #9999ff; box-shadow: inset -1px 0 0 #333399; }
+.at-x-end::-webkit-scrollbar-thumb:horizontal {
+  border-right-color: #6666cc; box-shadow: inset 1px 0 0 #ccccff; }
+.at-x-end::-webkit-scrollbar-thumb:horizontal:active {
+  border-right-color: #333399; box-shadow: inset 1px 0 0 #9999ff; }
+::-webkit-scrollbar-button { display: block; width: 16px; height: 16px;
+  background: #ddd; border: 1px solid var(--black);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #bbb;
+  background-position: center; background-repeat: no-repeat; }
+::-webkit-scrollbar-button:vertical { border-right: 0; }
+::-webkit-scrollbar-button:vertical:end:increment:enabled { height: 14px; border-top: 0; border-bottom: 0; }
+::-webkit-scrollbar-button:horizontal { border-bottom: 0; }
+::-webkit-scrollbar-button:horizontal:end:increment:enabled { width: 14px; border-left: 0; border-right: 0; }
+::-webkit-scrollbar-button:vertical:decrement {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M0 3h8v1h-8z"/></svg>'); }
+::-webkit-scrollbar-button:vertical:increment {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M0 0h8v1h-8z M1 1h6v1h-6z M2 2h4v1h-4z M3 3h2v1h-2z"/></svg>'); }
+::-webkit-scrollbar-button:horizontal:decrement {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="4" height="8" shape-rendering="crispEdges"><path fill="black" d="M0 3h1v2h-1z M1 2h1v4h-1z M2 1h1v6h-1z M3 0h1v8h-1z"/></svg>'); }
+::-webkit-scrollbar-button:horizontal:increment {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="4" height="8" shape-rendering="crispEdges"><path fill="black" d="M0 0h1v8h-1z M1 1h1v6h-1z M2 2h1v4h-1z M3 3h1v2h-1z"/></svg>'); }
+::-webkit-scrollbar-button:active { background-color: #777;
+  box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 #999; }
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:start:increment,
+::-webkit-scrollbar-button:horizontal:start:decrement,
+::-webkit-scrollbar-button:horizontal:start:increment { display: none; }
+/* Disabled (nothing to scroll), sampled from OS 9: the strip goes flat #eee
+   between the rails, arrows ghost to #888 with no button face or bevel,
+   and a 1px #888 line separates the two arrows. The list sits in this
+   state until it holds more cities than the window shows; a forecast
+   table narrower than its box too. */
+::-webkit-scrollbar-track:disabled { background: #eee; }
+::-webkit-scrollbar-button:disabled { background-color: #eee; box-shadow: none; border: 0; }
+::-webkit-scrollbar-button:vertical:disabled { border-left: 1px solid var(--black); }
+::-webkit-scrollbar-button:horizontal:disabled { border-top: 1px solid var(--black); }
+::-webkit-scrollbar-button:vertical:end:increment:disabled { border-top: 1px solid #888; }
+::-webkit-scrollbar-button:horizontal:end:increment:disabled { border-left: 1px solid #888; }
+/* OS 9 draws a darker #555 line where the disabled arrow pair meets the track */
+::-webkit-scrollbar-button:vertical:end:decrement:disabled { border-top: 1px solid #555; }
+::-webkit-scrollbar-button:horizontal:end:decrement:disabled { border-left: 1px solid #555; }
+::-webkit-scrollbar-button:vertical:decrement:disabled {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="%23888888" d="M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M0 3h8v1h-8z"/></svg>'); }
+::-webkit-scrollbar-button:vertical:increment:disabled {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="%23888888" d="M0 0h8v1h-8z M1 1h6v1h-6z M2 2h4v1h-4z M3 3h2v1h-2z"/></svg>'); }
+::-webkit-scrollbar-button:horizontal:decrement:disabled {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="4" height="8" shape-rendering="crispEdges"><path fill="%23888888" d="M0 3h1v2h-1z M1 2h1v4h-1z M2 1h1v6h-1z M3 0h1v8h-1z"/></svg>'); }
+::-webkit-scrollbar-button:horizontal:increment:disabled {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="4" height="8" shape-rendering="crispEdges"><path fill="%23888888" d="M0 0h1v8h-1z M1 1h1v6h-1z M2 2h1v4h-1z M3 3h1v2h-1z"/></svg>'); }
+::-webkit-scrollbar-corner { background: var(--g300); }
+
+/* the report is a document area: flush left/right/bottom, separator on
+   top, an always-on OS 9 scrollbar like a Finder list */
+#main { flex: 1; min-height: 0; background: #fff; border-top: 1px solid var(--black);
+  overflow-y: scroll; overflow-x: hidden; }
+/* until the host list knows how many rows it has (the routes answer in a
+   few milliseconds) the report stays unpainted, so the lists under it
+   never step down as the rows arrive */
+#main.wait > * { visibility: hidden; }
+
+/* the headline tiles (the hub's /stats): label, number, change against
+   the span before */
+.tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-bottom: 1px solid var(--g300); }
+.tile { min-width: 0; padding: 8px 12px 9px; border-right: 1px solid var(--g300); }
+.tile:last-child { border-right: 0; }
+.tile .tl { font-size: 11px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .tv { font-size: 18px; font-weight: bold; line-height: 24px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tile .td { font-size: 11px; color: #555; height: 16px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* the chart (the hub's /stats): y labels in a column, the plot a box with
+   its grid drawn as the top borders of four boxes, the lines an SVG
+   stretched over it with non-scaling 2px strokes, x labels under it */
+.chart { display: grid; grid-template-columns: 44px minmax(0, 1fr); padding: 8px 12px 6px; }
+.chart .legend { grid-column: 2; display: flex; justify-content: flex-end; gap: 12px; height: 18px; align-items: center; font-size: 11px; color: #555; white-space: nowrap; }
+.chart .legend i { display: inline-block; width: 12px; height: 2px; margin-right: 5px; vertical-align: middle; background: #333399; }
+.chart .legend i.vi { background: #ff6600; } .chart .legend i.end { background: #bbb; }
+.chart .ys { position: relative; height: 160px; margin-right: 6px; font-size: 11px; color: #555; }
+.chart .ys span { position: absolute; right: 0; transform: translateY(-50%); white-space: nowrap; }
+.chart .plot { position: relative; height: 160px; border-left: 1px solid var(--black); border-bottom: 1px solid var(--black); touch-action: pan-y; }
+.chart .gl { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--g300); }
+.chart svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.chart polyline { fill: none; stroke-width: 2px; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; }
+/* requests in the desktop's highlight blue, visits in OS 9's "Essential"
+   label orange; the buckets Cloudflare is still counting in a tint of each */
+.chart .rq { stroke: #333399; } .chart .vi { stroke: #ff6600; }
+.chart .rq.end { stroke: #9999ff; } .chart .vi.end { stroke: #ffcc99; }
+.chart .xs { grid-column: 2; position: relative; height: 18px; margin-top: 3px; font-size: 11px; color: #555; }
+.chart .xs span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.chart .xs span.first { transform: none; } .chart .xs span.last { transform: translateX(-100%); }
+.chart .none { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  padding: 0 24px; text-align: center; font-size: 11px; color: #777; }
+.chart .none.err { font-size: 12px; color: var(--black); user-select: text; cursor: text; }
+/* the reading under the pointer: a 1px line on the bucket and the
+   yellow tip Tides wears */
+.chart .cur { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid var(--black); pointer-events: none; }
+#tip { position: absolute; z-index: 4; pointer-events: none; background: #ffffcc;
+  border: 1px solid var(--black); box-shadow: 1px 1px 0 rgba(0,0,0,.35);
+  font-size: 10px; line-height: 1.3; padding: 2px 6px; white-space: nowrap; }
+
+/* a list: the find strip's platinum holding its name and views, then
+   ranked rows. Two lists stand side by side once there is room; their
+   one seam is the right list's left border. */
+.sec { min-width: 0; }
+.sec .strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-height: 34px; padding: 6px 12px;
+  border-top: 1px solid var(--black); border-bottom: 1px solid var(--black); background: var(--g300);
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; }
+.sec .strip .st { font-weight: bold; white-space: nowrap; }
+.sec .strip .sum { margin-left: auto; font-size: 11px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pair { display: flex; }
+.pair > .sec { flex: 1 1 0; }
+.pair > .sec + .sec { border-left: 1px solid var(--black); }
+@media (max-width: 560px) {
+  .pair { display: block; }
+  .pair > .sec + .sec { border-left: 0; }
+}
+/* a ranked row (the hub's /stats): 20px, the bar (the desk's lavender)
+   behind the label as a share of the top row, the count at the right.
+   Every list holds ten rows whatever it shows, so nothing under it moves
+   when a view or a refresh brings fewer. */
+.rows { padding: 6px 12px 8px; }
+.row { display: flex; align-items: center; height: 20px; gap: 8px; }
+.row .lab { flex: 1 1 0; position: relative; min-width: 0; height: 18px; line-height: 18px; }
+.row .bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--lav); }
+.row .t { position: relative; display: block; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .tag { font: 10px var(--mono); color: #555; margin-left: 5px; }
+.row .n { flex: none; width: 64px; text-align: right; font-size: 11px; color: #333; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.row .none { padding: 0 4px; font-size: 11px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the chosen host is the list's selection: inverted, its share darker */
+#l-hosts .row.sel .lab { background: var(--hl); }
+#l-hosts .row.sel .bar { background: #6666cc; }
+#l-hosts .row.sel .t, #l-hosts .row.sel .tag { color: #fff; }
+
+/* a phone: five tiles in two rows, every other axis label dropped so the
+   words never overlap */
+@media (max-width: 480px) {
+  .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tile:nth-child(3) { border-right: 0; }
+  .tile:nth-child(-n+3) { border-bottom: 1px solid var(--g300); }
+  .chart { grid-template-columns: 36px minmax(0, 1fr); }
+  .chart .xs span:nth-child(even) { display: none; }
+}
+body.mobile #grow { display: none; }
+body.mobile #status { padding-right: 8px; }
+
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <div class="seg" id="ranges">
+    <button class="ghost" data-range="1h" data-short="1h">1 Hour</button>
+    <button class="ghost" data-range="24h" data-short="24h">24 Hours</button>
+    <button class="ghost" data-range="7d" data-short="7d">7 Days</button>
+    <button class="ghost" data-range="30d" data-short="30d">30 Days</button>
+  </div>
+  <span class="popup" id="host-wrap"><select id="host" title="Host" aria-label="Host">
+    <option value="">All Hosts</option>
+  </select><span class="well"><i><b></b></i></span></span>
+</div>
+<div id="main" class="wait">
+  <div class="tiles">
+    <div class="tile" id="t-requests"><div class="tl">Requests</div><div class="tv">—</div><div class="td"></div></div>
+    <div class="tile" id="t-visits"><div class="tl">Visits</div><div class="tv">—</div><div class="td"></div></div>
+    <div class="tile" id="t-bytes"><div class="tl">Data served</div><div class="tv">—</div><div class="td"></div></div>
+    <div class="tile" id="t-bots"><div class="tl">Verified bots</div><div class="tv">—</div><div class="td"></div></div>
+    <div class="tile" id="t-errors"><div class="tl">Server errors</div><div class="tv">—</div><div class="td"></div></div>
+  </div>
+  <div class="chart">
+    <div class="legend"><span><i></i>Requests</span><span><i class="vi"></i>Visits</span><span><i class="end"></i>still counting</span></div>
+    <div class="ys" id="ys"></div>
+    <div class="plot" id="plot">
+      <div class="gl" style="top: 0"></div><div class="gl" style="top: 25%"></div><div class="gl" style="top: 50%"></div><div class="gl" style="top: 75%"></div>
+      <svg id="lines" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+        <polyline class="rq end" id="rq-end"/><polyline class="vi end" id="vi-end"/>
+        <polyline class="rq" id="rq"/><polyline class="vi" id="vi"/>
+      </svg>
+      <div class="none" id="plot-note">Loading…</div>
+      <div class="cur" id="cur" hidden></div>
+      <div id="tip" hidden></div>
+    </div>
+    <div class="xs" id="xs"></div>
+  </div>
+  <section class="sec" id="s-hosts">
+    <div class="strip"><span class="st">Hosts</span>
+      <div class="seg" data-list="hosts">
+        <button class="ghost" data-view="requests">Requests</button>
+        <button class="ghost" data-view="visits">Visits</button>
+        <button class="ghost" data-view="bytes">Data</button>
+        <button class="ghost" data-view="errors">Errors</button>
+      </div><span class="sum" id="hosts-sum"></span></div>
+    <div class="rows" id="l-hosts"></div>
+  </section>
+  <section class="sec" id="s-pages">
+    <div class="strip"><span class="st">Pages</span>
+      <div class="seg" data-list="pages">
+        <button class="ghost" data-view="paths">Top</button>
+        <button class="ghost" data-view="errors">Errors</button>
+      </div></div>
+    <div class="rows" id="l-pages"></div>
+  </section>
+  <div class="pair">
+    <section class="sec" id="s-where">
+      <div class="strip"><span class="st">Countries</span></div>
+      <div class="rows" id="l-where"></div>
+    </section>
+    <section class="sec" id="s-bots">
+      <div class="strip"><span class="st">Bots</span><span class="sum">verified by Cloudflare</span></div>
+      <div class="rows" id="l-bots"></div>
+    </section>
+  </div>
+  <div class="pair">
+    <section class="sec" id="s-resp">
+      <div class="strip"><span class="st">Responses</span>
+        <div class="seg" data-list="resp">
+          <button class="ghost" data-view="status">Status</button>
+          <button class="ghost" data-view="cache">Cache</button>
+          <button class="ghost" data-view="types">Types</button>
+        </div></div>
+      <div class="rows" id="l-resp"></div>
+    </section>
+    <section class="sec" id="s-clients">
+      <div class="strip"><span class="st">Clients</span>
+        <div class="seg" data-list="clients">
+          <button class="ghost" data-view="browsers">Browsers</button>
+          <button class="ghost" data-view="systems">Systems</button>
+          <button class="ghost" data-view="devices">Devices</button>
+        </div></div>
+      <div class="rows" id="l-clients"></div>
+    </section>
+  </div>
+</div>
+<div id="status">
+  <span id="st-left">…</span>
+  <span id="st-right"></span>
+</div>
+<!-- grow box sampled pixel-for-pixel from Mac OS 9 (Infinite Mac) -->
+<svg id="grow" width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges">
+  <rect width="15" height="15" fill="#ccc"/>
+  <path fill="#000" d="M0 0h15v1H0zM0 1h1v14H0z"/>
+  <path fill="#fff" d="M1 1h14v1H1zM1 2h1v13H1z"/>
+  <path fill="#fff" d="M9 4h2v1H9zM8 5h1v1H8zM7 6h1v1H7zM6 7h1v1H6zM5 8h1v1H5zM4 9h1v1H4zM11 6h2v1h-2zM10 7h1v1h-1zM9 8h1v1H9zM8 9h1v1H8zM7 10h1v1H7zM6 11h1v1H6zM13 8h2v1h-2zM12 9h1v1h-1zM11 10h1v1h-1zM10 11h1v1h-1zM9 12h1v1H9zM8 13h1v1H8z"/>
+  <path fill="#777" d="M10 5h1v1h-1zM9 6h1v1H9zM8 7h1v1H8zM7 8h1v1H7zM6 9h1v1H6zM5 10h1v1H5zM12 7h1v1h-1zM11 8h1v1h-1zM10 9h1v1h-1zM9 10h1v1H9zM8 11h1v1H8zM7 12h1v1H7zM14 9h1v1h-1zM13 10h1v1h-1zM12 11h1v1h-1zM11 12h1v1h-1zM10 13h1v1h-1zM9 14h1v1H9z"/>
+  <path fill="#aaa" d="M4 10h1v1H4zM6 12h1v1H6zM8 14h1v1H8z"/>
+</svg>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+
+// The desktop passes its API token in the iframe URL; the app name comes
+// from the path so a renamed bundle folder keeps working.
+const TOKEN = new URLSearchParams(location.search).get("token") || "";
+const APP = decodeURIComponent(location.pathname.split("/")[2] || "analytics");
+const SETTINGS_URL = "/v1/apps/" + encodeURIComponent(APP) + "/data/settings.json";
+// identifies this window's writes so the daemon's change events can be
+// echo-suppressed here (we made the write) but delivered to other windows
+const CLIENT = Math.random().toString(36).slice(2) + Date.now().toString(36);
+// a phone (?mobile=1): no grow box. A narrow window (a phone's among
+// them) shrinks the range buttons to their short names, so the row and the
+// host menu fit.
+const MOBILE = new URLSearchParams(location.search).has("mobile");
+if (MOBILE) document.body.classList.add("mobile");
+const NARROW = matchMedia("(max-width: 460px)");
+// 30 days are the viewer's calendar days, cut in this zone by the daemon
+let TZ = "";
+try { TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {}
+
+async function api(url, opts = {}) {
+  opts.headers = Object.assign({}, opts.headers);
+  if (TOKEN) opts.headers["Authorization"] = "Bearer " + TOKEN;
+  opts.headers["X-Exe-Client"] = CLIENT;
+  const r = await fetch(url, opts);
+  if (!r.ok && r.status !== 404) throw new Error("HTTP " + r.status);
+  return r;
+}
+
+const RANGES = {
+  "1h": { words: "the last hour", before: "the hour before" },
+  "24h": { words: "the last 24 hours", before: "the 24 hours before" },
+  "7d": { words: "the last 7 days", before: "the 7 days before" },
+  "30d": { words: "the last 30 days", before: "" },
+};
+const VIEWS = {
+  hosts: ["requests", "visits", "bytes", "errors"],
+  pages: ["paths", "errors"],
+  resp: ["status", "cache", "types"],
+  clients: ["browsers", "systems", "devices"],
+};
+const EMPTY = {
+  paths: "No requests in this span.", errors: "No errors in this span.",
+  countries: "No requests in this span.", bots: "No verified bots in this span.",
+  status: "No requests in this span.", cache: "No requests in this span.", types: "No requests in this span.",
+  browsers: "No requests in this span.", systems: "No requests in this span.", devices: "No requests in this span.",
+};
+const SLOTS = 10; // every list's height, whatever it holds
+
+let st = { range: "24h", host: "", views: { hosts: "requests", pages: "paths", resp: "status", clients: "browsers" } };
+let data = null;      // the answer on screen, or null while the view is on its way
+let hostNames = [];   // the published hosts, known before the first answer from /v1/routes
+let hostTo = {};      // where each leads, kept from the last answer
+let failure = "";     // what the daemon said instead of an answer
+let busy = false;
+
+function adopt(d) {
+  if (!d || typeof d !== "object") return;
+  if (RANGES[d.range]) st.range = d.range;
+  if (typeof d.host === "string") st.host = d.host;
+  if (d.views && typeof d.views === "object") {
+    for (const k of Object.keys(VIEWS)) if (VIEWS[k].includes(d.views[k])) st.views[k] = d.views[k];
+  }
+}
+
+// ---- settings: the sync contract (Tides' block) ----
+// Debounced whole-doc PUT, serialized so a slow write is never overtaken;
+// saves stay blocked until the initial GET settled so a failed load can't
+// be clobbered with the defaults. keepalive on flush survives the desktop
+// tearing the iframe down mid-debounce.
+let saveT = null, saving = false, again = false, loaded = false;
+function saveSettings() {
+  if (!loaded) return;
+  clearTimeout(saveT);
+  saveT = setTimeout(saveNow, 250);
+}
+// X-Exe-Seq stamps count upward whatever the clock does: two snapshots in one
+// millisecond (a debounced save, then the unload flush right behind it) or a
+// clock set back would otherwise carry a stamp the daemon has already taken,
+// and the newer text be the one answered stale.
+let lastSeq = 0;
+const nextSeq = () => (lastSeq = Math.max(Date.now(), lastSeq + 1));
+async function saveNow(flush) {
+  clearTimeout(saveT); saveT = null;
+  const body = JSON.stringify({ range: st.range, host: st.host, views: st.views }, null, 2);
+  const seq = { "X-Exe-Seq": String(nextSeq()) };
+  if (flush) {
+    try { api(SETTINGS_URL, { method: "PUT", keepalive: true, headers: seq, body }); } catch (e) {}
+    return;
+  }
+  if (saving) { again = true; return; }
+  saving = true;
+  try {
+    await api(SETTINGS_URL, { method: "PUT", headers: seq, body });
+  } catch (e) { console.error("analytics save failed:", e); }
+  saving = false;
+  if (again) { again = false; saveNow(); }
+}
+addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && (saveT || saving)) saveNow(true);
+  else if (document.visibilityState === "visible" && !paused) catchUp();
+});
+addEventListener("pagehide", () => { if (saveT || saving) saveNow(true); });
+
+// ---- numbers ----
+const NUM = new Intl.NumberFormat("en-US");
+const fmtN = n => NUM.format(n);
+function fmtCompact(n) {
+  if (n < 1000) return String(n);
+  const [d, u] = n < 1e6 ? [1e3, "k"] : n < 1e9 ? [1e6, "M"] : [1e9, "G"];
+  const v = n / d;
+  return (v < 10 ? v.toFixed(1).replace(/\.0$/, "") : Math.round(v)) + u;
+}
+function fmtBytes(b) {
+  if (b < 1000) return b + " B";
+  const u = ["KB", "MB", "GB", "TB"];
+  let i = -1;
+  do { b /= 1000; i++; } while (b >= 1000 && i < u.length - 1);
+  return (b < 10 ? b.toFixed(1) : Math.round(b)) + " " + u[i];
+}
+const share = (n, of) => of > 0 ? n / of * 100 : 0;
+const fmtPct = p => (p > 0 && p < 0.1 ? "<0.1" : p.toFixed(1).replace(/\.0$/, "")) + "%";
+const sign = v => (v > 0 ? "+" : v < 0 ? "−" : "±");
+function delta(cur, prev) {
+  if (!prev) return "";
+  const p = (cur - prev) / prev * 100;
+  return sign(p) + Math.abs(p).toFixed(1) + "%";
+}
+const TIME = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
+const HOUR = new Intl.DateTimeFormat("en-US", { hour: "numeric" });
+const DAYF = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+const WDAY = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+// ---- drawing ----
+function renderRanges() {
+  for (const b of document.querySelectorAll("#ranges button")) {
+    b.classList.toggle("on", b.dataset.range === st.range);
+    if (!b.dataset.long) b.dataset.long = b.textContent;
+    b.textContent = NARROW.matches ? b.dataset.short : b.dataset.long;
+  }
+  for (const seg of document.querySelectorAll(".sec .seg")) {
+    for (const b of seg.children) b.classList.toggle("on", b.dataset.view === st.views[seg.dataset.list]);
+  }
+}
+function renderHostMenu() {
+  const sel = $("#host");
+  const names = [...hostNames].sort();
+  if (st.host && !names.includes(st.host)) names.push(st.host);
+  const want = ["", ...names].join("\n");
+  if (sel.dataset.names !== want) {
+    sel.replaceChildren(new Option("All Hosts", ""), ...names.map(h => new Option(h, h)));
+    sel.dataset.names = want;
+  }
+  sel.value = st.host;
+}
+function tile(id, value, d) {
+  const t = document.getElementById(id);
+  t.querySelector(".tv").textContent = value;
+  t.querySelector(".td").textContent = d;
+}
+function renderTiles() {
+  if (!data) {
+    for (const id of ["t-requests", "t-visits", "t-bytes", "t-bots", "t-errors"]) tile(id, "—", "");
+    return;
+  }
+  const t = data.totals, p = data.previous;
+  tile("t-requests", fmtN(t.requests), p ? delta(t.requests, p.requests) : "");
+  tile("t-visits", fmtN(t.visits), p ? delta(t.visits, p.visits) : "");
+  tile("t-bytes", fmtBytes(t.bytes), p ? delta(t.bytes, p.bytes) : "");
+  // bots as a share of the requests, their change in points
+  const bs = share(t.bots, t.requests);
+  let bd = "";
+  if (p && p.requests) {
+    const pp = bs - share(p.bots, p.requests);
+    bd = sign(Math.round(pp * 10)) + Math.abs(pp).toFixed(1) + " pp";
+  }
+  tile("t-bots", t.requests ? fmtPct(bs) : "—", bd);
+  tile("t-errors", fmtN(t.errors), p ? delta(t.errors, p.errors) : "");
+}
+
+function stepMs(d) {
+  return { minute: 60e3, "15m": 900e3, hour: 3600e3, day: 86400e3 }[d.step] || 3600e3;
+}
+function niceStep(max) {
+  const raw = Math.max(max, 1) / 4, p = 10 ** Math.floor(Math.log10(raw));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= raw) return Math.max(1, m * p);
+  return Math.max(1, 10 * p);
+}
+// the x labels fall on round times in the viewer's clock: ten minutes, four
+// hours (a date at midnight), midnights, every fifth day back from today
+function ticks(d) {
+  const out = [], n = d.series.length;
+  d.series.forEach((pt, i) => {
+    const t = new Date(pt.t);
+    let label = "";
+    if (d.step === "minute") { if (t.getMinutes() % 10 === 0) label = TIME.format(t); }
+    else if (d.step === "15m") {
+      if (t.getMinutes() === 0 && t.getHours() % 4 === 0) label = t.getHours() === 0 ? DAYF.format(t) : HOUR.format(t);
+    } else if (d.step === "hour") { if (t.getHours() === 0) label = DAYF.format(t); }
+    else if ((n - 1 - i) % 5 === 0) label = DAYF.format(t);
+    if (label) out.push({ i, label });
+  });
+  return out;
+}
+let chartPts = null; // the drawn series, for the pointer's reading
+function renderChart() {
+  const note = $("#plot-note"), ys = $("#ys"), xs = $("#xs");
+  const clear = () => {
+    for (const id of ["rq", "vi", "rq-end", "vi-end"]) document.getElementById(id).setAttribute("points", "");
+    chartPts = null;
+    hideTip();
+  };
+  if (!data) {
+    clear();
+    ys.replaceChildren(); xs.replaceChildren();
+    note.hidden = false;
+    note.classList.toggle("err", !!failure);
+    note.textContent = failure || "Loading…";
+    return;
+  }
+  const s = data.series, n = s.length;
+  const max = Math.max(0, ...s.map(p => p.requests));
+  const step = niceStep(max), top = step * 4;
+  ys.replaceChildren(...[4, 3, 2, 1, 0].map((k, j) => {
+    const sp = document.createElement("span");
+    sp.style.top = (j * 25) + "%";
+    sp.textContent = fmtCompact(step * k);
+    return sp;
+  }));
+  xs.replaceChildren(...ticks(data).map(({ i, label }) => {
+    const sp = document.createElement("span"), pct = n > 1 ? i / (n - 1) * 100 : 0;
+    sp.style.left = pct + "%";
+    sp.textContent = label;
+    if (pct < 4) sp.className = "first"; else if (pct > 96) sp.className = "last";
+    return sp;
+  }));
+  note.classList.remove("err");
+  if (!max) {
+    clear();
+    note.hidden = false;
+    note.textContent = "No requests in this span.";
+    return;
+  }
+  note.hidden = true;
+  const pt = (i, v) => (n > 1 ? i / (n - 1) * 1000 : 0).toFixed(1) + "," + (1000 - v / top * 1000).toFixed(1);
+  const cut = Math.max(0, n - 1 - (data.filling || 0));
+  const line = (key, a, b) => s.slice(a, b + 1).map((p, j) => pt(a + j, p[key])).join(" ");
+  $("#rq").setAttribute("points", line("requests", 0, cut));
+  $("#vi").setAttribute("points", line("visits", 0, cut));
+  $("#rq-end").setAttribute("points", cut < n - 1 ? line("requests", cut, n - 1) : "");
+  $("#vi-end").setAttribute("points", cut < n - 1 ? line("visits", cut, n - 1) : "");
+  chartPts = s;
+  if (tipAt >= 0) showTip(tipAt);
+}
+
+// the reading under the pointer (or the finger): the bucket's time and
+// both counts in the tip, a line through the bucket
+const plot = $("#plot"), tip = $("#tip"), cur = $("#cur");
+let tipAt = -1;
+function bucketLabel(t) {
+  const d = new Date(t);
+  if (data.step === "day") return WDAY.format(d);
+  return DAYF.format(d) + ", " + TIME.format(d);
+}
+function showTip(i) {
+  if (!chartPts || !chartPts[i]) return hideTip();
+  tipAt = i;
+  const n = chartPts.length, p = chartPts[i], w = plot.clientWidth;
+  const x = n > 1 ? i / (n - 1) * w : 0;
+  cur.hidden = false;
+  cur.style.left = x + "px";
+  tip.replaceChildren();
+  const head = document.createElement("b");
+  head.textContent = bucketLabel(p.t) + (i >= n - (data.filling || 0) ? " · still counting" : "");
+  tip.append(head, document.createElement("br"), fmtN(p.requests) + " requests · " + fmtN(p.visits) + " visits");
+  tip.hidden = false;
+  const tw = tip.offsetWidth;
+  tip.style.left = (x + 8 + tw <= w ? x + 8 : Math.max(0, x - 8 - tw)) + "px";
+  tip.style.top = "4px";
+}
+function hideTip() { tipAt = -1; tip.hidden = true; cur.hidden = true; }
+function pointAt(e) {
+  if (!chartPts) return;
+  const r = plot.getBoundingClientRect(), n = chartPts.length;
+  const i = Math.round(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (n - 1));
+  showTip(i);
+}
+plot.addEventListener("pointermove", pointAt);
+plot.addEventListener("pointerdown", pointAt);
+plot.addEventListener("pointerleave", hideTip);
+plot.addEventListener("pointercancel", hideTip);
+
+// a list's rows: made once at their count, filled in place
+function slots(box, count) {
+  while (box.children.length > count) box.lastChild.remove();
+  while (box.children.length < count) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = '<span class="lab"><span class="bar"></span><span class="t"></span></span><span class="n"></span>';
+    box.append(row);
+  }
+  return [...box.children];
+}
+function fill(row, r, max, value) {
+  const lab = row.querySelector(".lab");
+  let t = lab.querySelector(".t"), none = lab.querySelector(".none");
+  if (none) { none.remove(); lab.append(t = Object.assign(document.createElement("span"), { className: "t" })); }
+  if (!t) lab.append(t = Object.assign(document.createElement("span"), { className: "t" }));
+  row.querySelector(".bar").style.width = r && max > 0 ? share(r.n, max) + "%" : "0";
+  t.textContent = r ? r.label : "";
+  if (r && r.tag) {
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = r.tag;
+    t.append(tag);
+  }
+  if (r && r.title) row.title = r.title; else row.removeAttribute("title");
+  row.querySelector(".n").textContent = r ? value(r) : "";
+}
+function note(row, text) {
+  fill(row, null, 0, () => "");
+  const t = row.querySelector(".t");
+  t.className = "none";
+  t.textContent = text;
+}
+function renderList(box, rows, empty, value = r => fmtN(r.n)) {
+  const els = slots(box, SLOTS);
+  const max = rows.length ? Math.max(...rows.map(r => r.n)) : 0;
+  els.forEach((row, i) => fill(row, rows[i], max, value));
+  if (data && !rows.length) note(els[0], empty);
+}
+const HOST_VALUE = {
+  requests: h => fmtN(h.requests), visits: h => fmtN(h.visits),
+  bytes: h => fmtBytes(h.bytes), errors: h => fmtN(h.errors),
+};
+function renderHosts() {
+  const box = $("#l-hosts"), view = st.views.hosts;
+  let hosts = data ? data.hosts : hostNames.map(h => ({ host: h, to: hostTo[h] }));
+  if (data) hosts = [...hosts].sort((a, b) => b[view] - a[view] || a.host.localeCompare(b.host));
+  else hosts = [...hosts].sort((a, b) => a.host.localeCompare(b.host));
+  const els = slots(box, Math.max(1, hosts.length));
+  const max = data ? Math.max(0, ...hosts.map(h => h[view])) : 0;
+  els.forEach((row, i) => {
+    const h = hosts[i];
+    if (!h) return note(row, data ? "Nothing is published yet — expose a VM port and its domain lands here." : "");
+    fill(row, { label: h.host, tag: h.to || "", n: data ? h[view] : 0, title: "https://" + h.host },
+      max, () => data ? HOST_VALUE[view](h) : "—");
+    row.dataset.host = h.host;
+    row.classList.toggle("sel", h.host === st.host);
+  });
+  $("#hosts-sum").textContent = hosts.length ? hosts.length + (hosts.length === 1 ? " host" : " hosts") : "";
+}
+function renderLists() {
+  renderHosts();
+  const L = data ? data.lists : {};
+  renderList($("#l-pages"), L[st.views.pages] || [], EMPTY[st.views.pages]);
+  renderList($("#l-where"), L.countries || [], EMPTY.countries);
+  renderList($("#l-bots"), L.bots || [], EMPTY.bots);
+  renderList($("#l-resp"), L[st.views.resp] || [], EMPTY[st.views.resp]);
+  renderList($("#l-clients"), L[st.views.clients] || [], EMPTY[st.views.clients]);
+}
+function renderStatus() {
+  const left = $("#st-left"), right = $("#st-right");
+  if (failure && !data) { left.textContent = failure; right.textContent = ""; return; }
+  const R = RANGES[st.range], words = R.words.replace(/^the /, "");
+  const parts = [data && data.zone ? words : words[0].toUpperCase() + words.slice(1)];
+  if (data && data.zone) parts.unshift(data.zone);
+  if (data && data.previous && R.before) parts.push("change vs " + R.before);
+  if (data && data.sample_interval > 1.05) parts.push("sampled");
+  left.textContent = parts.join(" · ");
+  right.textContent = busy ? "Loading…" : data ? "Updated " + TIME.format(new Date(data.fetched_at)) : "";
+}
+function render() {
+  if (hostNames.length || data || failure) $("#main").classList.remove("wait");
+  renderRanges();
+  renderHostMenu();
+  renderTiles();
+  renderChart();
+  renderLists();
+  renderStatus();
+}
+
+// ---- fetching: one view at a time, the latest asked for wins ----
+// A press aborts the fetch in the air; an answer lands only while its turn
+// is still the latest (the hub's /stats: 24 hours then 30 days, the first
+// answer landing last, must not leave 24 hours on screen).
+let turn = 0, air = null, fetchedAt = 0;
+async function load(quiet) {
+  const mine = ++turn;
+  if (air) air.abort();
+  const ctl = air = new AbortController();
+  if (!quiet) { data = null; failure = ""; }
+  busy = true;
+  render();
+  const q = new URLSearchParams({ range: st.range });
+  if (st.host) q.set("host", st.host);
+  if (TZ) q.set("tz", TZ);
+  try {
+    const r = await fetch("/v1/cloudflare/analytics?" + q, {
+      cache: "no-store", signal: ctl.signal,
+      headers: TOKEN ? { Authorization: "Bearer " + TOKEN } : {},
+    });
+    const body = await r.json().catch(() => ({}));
+    if (mine !== turn) return;
+    if (r.status === 404 && st.host) { // the host was unpublished: back to all of them
+      st.host = "";
+      saveSettings();
+      busy = false;
+      return load();
+    }
+    if (!r.ok) {
+      data = null;
+      failure = body.error || "The daemon answered HTTP " + r.status + ".";
+    } else {
+      data = body;
+      failure = "";
+      hostNames = data.hosts.map(h => h.host);
+      hostTo = Object.fromEntries(data.hosts.map(h => [h.host, h.to]));
+      fetchedAt = Date.now();
+    }
+  } catch (e) {
+    if (mine !== turn) return;
+    if (!data) failure = "The daemon did not answer.";
+  } finally {
+    if (air === ctl) air = null;
+  }
+  if (mine !== turn) return;
+  busy = false;
+  render();
+}
+// before the first answer the host list already has its rows: the names
+// come from the proxy's routes, the numbers follow
+async function loadRoutes() {
+  try {
+    const r = await api("/v1/routes");
+    const routes = await r.json();
+    if (!hostNames.length) hostNames = Object.keys(routes);
+  } catch (e) {}
+  $("#main").classList.remove("wait"); // nothing published, or no answer: show what there is
+  render();
+}
+
+// ---- controls ----
+$("#ranges").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b || b.dataset.range === st.range) return;
+  st.range = b.dataset.range;
+  saveSettings();
+  load();
+});
+$("#host").addEventListener("change", e => {
+  st.host = e.target.value;
+  saveSettings();
+  load();
+});
+for (const seg of document.querySelectorAll(".sec .seg")) {
+  seg.addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    st.views[seg.dataset.list] = b.dataset.view;
+    saveSettings();
+    renderRanges();
+    renderLists();
+  });
+}
+// a host row chooses that host; the chosen one again goes back to all
+$("#l-hosts").addEventListener("click", e => {
+  const row = e.target.closest(".row[data-host]");
+  if (!row) return;
+  st.host = row.dataset.host === st.host ? "" : row.dataset.host;
+  saveSettings();
+  load();
+});
+
+// ---- desktop window plumbing (same bridge as the Weather app) ----
+window.addEventListener("pointerdown", () => {
+  if (window.parent !== window) parent.postMessage({ exe: "focus" }, location.origin);
+}, { capture: true, passive: true });
+
+// no grow box on its own page, nor on a phone, where the window fills the
+// screen and the desktop hides its own grow boxes
+const grow = $("#grow");
+if (window.parent === window) grow.style.display = "none";
+grow.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  grow.setPointerCapture(e.pointerId);
+  const sx = e.clientX, sy = e.clientY;
+  const move = ev =>
+    parent.postMessage({ exe: "grow", dx: ev.clientX - sx, dy: ev.clientY - sy }, location.origin);
+  const up = () => {
+    grow.removeEventListener("pointermove", move);
+    grow.removeEventListener("pointerup", up);
+    parent.postMessage({ exe: "grow-end" }, location.origin);
+  };
+  grow.addEventListener("pointermove", move);
+  grow.addEventListener("pointerup", up);
+  parent.postMessage({ exe: "grow-start" }, location.origin);
+});
+
+// OS 9 scrollbar end-merges need the same scrolled/at-end flags as the desktop
+document.addEventListener("scroll", e => {
+  const el = e.target;
+  if (!(el instanceof Element)) return;
+  el.classList.toggle("scrolled-y", el.scrollTop >= 1);
+  el.classList.toggle("at-y-end", el.scrollTop >= 1 && el.scrollTop >= el.scrollHeight - el.clientHeight - 1);
+}, { capture: true, passive: true });
+
+// A minute a view: Cloudflare counts with a lag of a minute or two, and the
+// daemon keeps each answer a minute. A window the desktop has closed is
+// only hidden, so it sleeps until show and catches up at once.
+let paused = false;
+function catchUp() { if (!air && Date.now() - fetchedAt >= 60000) load(true); }
+setInterval(() => { if (!paused && !document.hidden) catchUp(); }, 15000);
+new ResizeObserver(() => { if (tipAt >= 0) showTip(tipAt); }).observe(plot);
+NARROW.addEventListener("change", renderRanges);
+
+// hide/show from the desktop pause and resume the refresh. Node sync
+// landing a peer's settings on disk (forwarded by the desktop as a
+// data-changed message): adopt them — settings are last-writer-wins. Skip
+// while a local save is in flight; it's about to overwrite anyway.
+window.addEventListener("message", async e => {
+  if (e.origin !== location.origin || !e.data || typeof e.data.exe !== "string") return;
+  if (e.data.exe === "hide") {
+    paused = true;
+    if (saveT || saving) saveNow(true);
+  } else if (e.data.exe === "show") {
+    paused = false;
+    catchUp();
+  } else if (e.data.exe === "data-changed") {
+    if (e.data.client && e.data.client === CLIENT) return; // our own write
+    if (!loaded || e.data.path !== "settings.json" || saveT || saving) return;
+    try {
+      const r = await api(SETTINGS_URL);
+      if (r.status === 404) return;
+      const was = st.range + "|" + st.host;
+      adopt(await r.json());
+      if (st.range + "|" + st.host !== was) load(); else render();
+    } catch (err) {}
+  }
+});
+
+// Load settings, retrying a transient failure with backoff. Saves stay
+// blocked (loaded=false) until a GET succeeds so a failed load can't clobber
+// the stored choice with the defaults; the first attempt still shows the
+// default view so the window is useful at once.
+let settingsTries = 0;
+async function loadSettings() {
+  try {
+    const r = await api(SETTINGS_URL);
+    if (r.status !== 404) adopt(await r.json());
+    loaded = true;
+    load();
+  } catch (e) {
+    console.error("analytics settings load failed:", e);
+    if (settingsTries++ < 12) setTimeout(loadSettings, 5000);
+    if (settingsTries === 1) load();
+  }
+}
+render();
+loadRoutes();
+loadSettings();
+</script>
+</body>
+</html>

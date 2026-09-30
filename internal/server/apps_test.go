@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"exe/internal/config"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -84,8 +85,10 @@ func TestSystemAppAliases(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &apps); err != nil {
 		t.Fatal(err)
 	}
-	if len(apps) != 3 {
-		t.Fatalf("unexpected app list: %+v", apps)
+	// one entry a bundle: no alias lists a system app twice
+	bundles, _ := fs.ReadDir(sysAppsFS, "sysapps")
+	if len(apps) != len(bundles) || len(apps) < 4 {
+		t.Fatalf("unexpected app list (%d bundles): %+v", len(bundles), apps)
 	}
 	for _, app := range apps {
 		if app.Name != canonicalAppName(app.Name) || app.SystemIcon == "" {

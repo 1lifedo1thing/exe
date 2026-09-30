@@ -69,7 +69,8 @@ module is the Cloudflare heartbeat: the lamp on the cloud is green while
 the tunnel is healthy, yellow when it needs attention, grey while it is
 still checking. Its menu shows the tunnel's replicas and edge connections,
 plus this node's request rate, active requests, totals and origin errors.
-Open **Cloudflare Status…** for the same live counters and connector uptime.
+Open **Cloudflare Status…** for the same live counters and connector uptime,
+or **Analytics…** for the traffic Cloudflare counted (below, Analytics).
 Local traffic refreshes every five seconds while either view is open;
 tunnel-wide connection counts refresh every 30 seconds. Traffic totals
 are for this node's connector, include every hostname on its tunnel, and
@@ -711,8 +712,8 @@ how to drive the API and the VMs.
 ## Publishing to the web
 
 One-time setup: run **Special → Cloudflare Setup Wizard…** with a Cloudflare
-API token (Zone → DNS → Edit, Account → Cloudflare Tunnel → Edit) and a
-remotely-managed tunnel. The Cloudflare module in the Control Strip
+API token (Zone → DNS → Edit, Account → Cloudflare Tunnel → Edit, and Zone →
+Analytics → Read for the Analytics app) and a remotely-managed tunnel. The Cloudflare module in the Control Strip
 (bottom-left) shows tunnel health at a glance.
 
 Live local traffic uses cloudflared's loopback metrics listener at
@@ -800,6 +801,36 @@ sign-in token lives only on this machine (`~/.exe/github.json`), and the
 push travels through a proxy that exists just for that one operation and
 answers only for that one repository — the VM's git talks to it without
 ever holding a token, on disk or in memory.
+
+## Analytics
+
+The **Analytics** app shows the traffic Cloudflare's edge saw for every
+hostname this node publishes: the same list as **My Apps**, VM ports,
+local services, the homepage and redirects alike. It reads Cloudflare's
+analytics with the node's own token, which needs **Zone → Analytics →
+Read** on top of the wizard's two permissions; without it the window says
+so. The Cloudflare module's menu in the Control Strip opens it too.
+
+Pick a span, **1 Hour**, **24 Hours**, **7 Days** or **30 Days**, and a host
+in the pop-up (or click its row in **Hosts**; click it again for all of
+them). The tiles count requests, visits (Cloudflare's: a page view that came
+from another site or none), data served, the share of requests from bots
+Cloudflare has verified, and server errors (5xx), each against the span
+before it. 30 days has no span before: Cloudflare keeps these numbers 31
+days. The chart draws requests and visits over the span, a minute, 15
+minutes, an hour or a day a point; the last points, which Cloudflare is
+still counting, are drawn pale. Point at the chart to read one.
+
+Under it, ranked lists for the chosen hosts: **Hosts** by requests, visits,
+data or errors; **Pages**, the most requested paths or those answered with
+an error, each marked with its host when all are shown; **Countries**;
+**Bots** by Cloudflare's categories; **Responses** by status, cache status
+or content type; **Clients** by browser, system or device. A Host header
+that carries a port (scanners try Cloudflare's other ports) counts with its
+host. Busy spans are sampled by Cloudflare and the status line says
+"sampled". The window refreshes every minute while it is open, and the
+daemon keeps each answer a minute, so several windows cost one query.
+The same numbers are `GET /v1/cloudflare/analytics?range=24h&host=…`.
 
 ## Workspace and files
 
