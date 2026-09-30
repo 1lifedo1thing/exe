@@ -155,10 +155,12 @@ gate instead and only reach for this to delegate.
   → Cloudflare's edge traffic for the published hosts (all of them without
   `host`; only one verified bot category's, such as `AI Crawler`, with
   `bot`, the `bots` list alone staying broad): `totals` and `previous` (the span before; null for 30d) with
-  `requests`, `visits`, `bytes`, `errors` (5xx), `refused` (4xx), `bots`;
-  `series` of `{t, requests, visits}` a `step` apart (minute, 15m, hour, or
+  `requests`, `visits`, `bytes`, `errors` (5xx), `refused` (4xx), `bots`,
+  `stopped` (challenged or blocked by Cloudflare, included in `requests`);
+  `series` of `{t, requests, visits, stopped}` a `step` apart (minute, 15m, hour, or
   the `tz` zone's days), the last `filling` of them still being counted;
-  `hosts` (every published host with its totals and `to`, where it leads);
+  `hosts` (every published host with its totals, `stopped` among them, and
+  `to`, where it leads);
   and `lists` (`paths`, `errors`, `countries`, `status`, `cache`, `types`,
   `bots`, `browsers`, `systems`, `devices`) of `{label, tag, n}`. Needs the
   token's Zone → Analytics → Read; answers are kept a minute. With

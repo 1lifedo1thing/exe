@@ -103,6 +103,14 @@ const anReply = `{"data":{"viewer":{"zones":[{
  "botTotal":[{"count":12}],
  "prevTotal":[{"count":50,"sum":{"visits":20,"edgeResponseBytes":100},"ratio":{"status4xx":0,"status5xx":0}}],
  "prevBots":[{"count":5}],
+ "stopHosts":[
+  {"count":60,"dimensions":{"clientRequestHTTPHost":"hub.example.com"}},
+  {"count":2,"dimensions":{"clientRequestHTTPHost":"hub.example.com:8443"}}],
+ "stopTotal":[{"count":62}],
+ "prevStop":[{"count":1}],
+ "stopSeries":[
+  {"count":25,"dimensions":{"datetimeMinute":"2026-09-29T11:00:00Z"}},
+  {"count":90,"dimensions":{"datetimeMinute":"2026-09-29T10:00:00Z"}}],
  "series":[
   {"count":30,"sum":{"visits":9},"dimensions":{"datetimeMinute":"2026-09-29T11:00:00Z"}},
   {"count":20,"sum":{"visits":8},"dimensions":{"datetimeMinute":"2026-09-29T11:59:00Z"}},
@@ -150,12 +158,17 @@ func TestCFAnalyticsView(t *testing.T) {
 	if !strings.Contains(c.Query, "prevTotal:") || !strings.Contains(c.Query, "datetimeMinute_ASC") {
 		t.Errorf("query: %s", c.Query)
 	}
+	// requests Cloudflare stopped: the same span and hosts, its own actions
+	if stop, _ := json.Marshal(c.Variables["sstop"]); !strings.Contains(string(stop), `"securityAction_in":["block","challenge"`) ||
+		!strings.Contains(string(stop), `"clientRequestHTTPHost_like":"hub.example.com:%"`) || c.Variables["pstop"] == nil {
+		t.Errorf("stopped filter: %s", stop)
+	}
 	if psel, _ := json.Marshal(c.Variables["psel"]); !strings.Contains(string(psel), `"datetime_geq":"2026-09-29T10:00:30Z","datetime_lt":"2026-09-29T11:00:00Z"`) {
 		t.Errorf("span before: %s", psel)
 	}
 
 	want := []anHost{
-		{Host: "hub.example.com", To: "hubvm:7788", Requests: 105, Visits: 40, Bytes: 5010, Errors: 2},
+		{Host: "hub.example.com", To: "hubvm:7788", Requests: 105, Visits: 40, Bytes: 5010, Errors: 2, Stopped: 62},
 		{Host: "example.com", To: "→ exe.example.com", Requests: 7, Visits: 3, Bytes: 70},
 		{Host: "blog.example.com", To: "planet"},
 		{Host: "exe.example.com", To: "homepage"},
@@ -168,13 +181,14 @@ func TestCFAnalyticsView(t *testing.T) {
 			t.Errorf("host %d = %+v, want %+v", i, v.Hosts[i], want[i])
 		}
 	}
-	if v.Totals != (anTotals{Requests: 105, Visits: 40, Bytes: 5010, Errors: 4, Refused: 21, Bots: 12}) {
+	if v.Totals != (anTotals{Requests: 105, Visits: 40, Bytes: 5010, Errors: 4, Refused: 21, Bots: 12, Stopped: 62}) {
 		t.Errorf("totals %+v", v.Totals)
 	}
-	if v.Previous == nil || v.Previous.Requests != 50 || v.Previous.Bots != 5 {
+	if v.Previous == nil || v.Previous.Requests != 50 || v.Previous.Bots != 5 || v.Previous.Stopped != 1 {
 		t.Errorf("previous %+v", v.Previous)
 	}
-	if len(v.Series) != 60 || v.Series[0].Requests != 30 || v.Series[59].Requests != 20 || v.Series[59].Visits != 8 {
+	if len(v.Series) != 60 || v.Series[0].Requests != 30 || v.Series[59].Requests != 20 || v.Series[59].Visits != 8 ||
+		v.Series[0].Stopped != 25 || v.Series[59].Stopped != 0 {
 		t.Errorf("series %d: %+v … %+v", len(v.Series), v.Series[0], v.Series[len(v.Series)-1])
 	}
 	if !v.Series[0].T.Equal(time.Date(2026, 9, 29, 11, 0, 0, 0, time.UTC)) || v.Step != "minute" {

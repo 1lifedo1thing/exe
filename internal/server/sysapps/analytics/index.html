@@ -42,8 +42,10 @@ button.ghost.on { background: #888; color: #fff;
 .seg button { border-radius: 0; border-right-width: 0; }
 .seg button:first-child { border-radius: 3px 0 0 3px; }
 .seg button:last-child { border-radius: 0 3px 3px 0; border-right-width: 1px; }
-/* the views of a list are the same control at their words' width */
+/* the views of a list are the same control at their words' width; in a
+   very narrow window closer still, so Hosts' five fit the strip */
 .sec .seg button { padding: 2px 8px; }
+@media (max-width: 340px) { .sec .seg button { padding: 2px 4px; } }
 
 /* The pop-up menu button is the shared block the daemon serves
    (/platinum/popup.css, exe-stats popup.css): linked above, never copied.
@@ -203,7 +205,7 @@ button.ghost.on { background: #888; color: #fff;
 
 /* the headline tiles (the hub's /stats): label, number, change against
    the span before */
-.tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-bottom: 1px solid var(--g300); }
+.tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-bottom: 1px solid var(--g300); }
 .tile { min-width: 0; padding: 8px 12px 9px; border-right: 1px solid var(--g300); }
 .tile:last-child { border-right: 0; }
 .tile .tl { font-size: 11px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -214,9 +216,9 @@ button.ghost.on { background: #888; color: #fff;
    its grid drawn as the top borders of four boxes, the lines an SVG
    stretched over it with non-scaling 2px strokes, x labels under it */
 .chart { display: grid; grid-template-columns: 44px minmax(0, 1fr); padding: 8px 12px 6px; }
-.chart .legend { grid-column: 2; display: flex; justify-content: flex-end; gap: 12px; height: 18px; align-items: center; font-size: 11px; color: #555; white-space: nowrap; }
+.chart .legend { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 12px; height: 18px; align-items: center; font-size: 11px; color: #555; white-space: nowrap; }
 .chart .legend i { display: inline-block; width: 12px; height: 2px; margin-right: 5px; vertical-align: middle; background: #333399; }
-.chart .legend i.vi { background: #ff6600; } .chart .legend i.end { background: #bbb; }
+.chart .legend i.vi { background: #ff6600; } .chart .legend i.sp { background: #dd0808; } .chart .legend i.end { background: #bbb; }
 .chart .ys { position: relative; height: 160px; margin-right: 6px; font-size: 11px; color: #555; }
 .chart .ys span { position: absolute; right: 0; transform: translateY(-50%); white-space: nowrap; }
 .chart .plot { position: relative; height: 160px; border-left: 1px solid var(--black); border-bottom: 1px solid var(--black); touch-action: pan-y; }
@@ -224,9 +226,10 @@ button.ghost.on { background: #888; color: #fff;
 .chart svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
 .chart polyline { fill: none; stroke-width: 2px; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; }
 /* requests in the desktop's highlight blue, visits in OS 9's "Essential"
-   label orange; the buckets Cloudflare is still counting in a tint of each */
-.chart .rq { stroke: #333399; } .chart .vi { stroke: #ff6600; }
-.chart .rq.end { stroke: #9999ff; } .chart .vi.end { stroke: #ffcc99; }
+   label orange, the requests Cloudflare stopped in its "Hot" red; the
+   buckets Cloudflare is still counting in a tint of each */
+.chart .rq { stroke: #333399; } .chart .vi { stroke: #ff6600; } .chart .sp { stroke: #dd0808; }
+.chart .rq.end { stroke: #9999ff; } .chart .vi.end { stroke: #ffcc99; } .chart .sp.end { stroke: #f4a4a4; }
 .chart .xs { grid-column: 2; position: relative; height: 18px; margin-top: 3px; font-size: 11px; color: #555; }
 .chart .xs span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
 .chart .xs span.first { transform: none; } .chart .xs span.last { transform: translateX(-100%); }
@@ -274,12 +277,20 @@ button.ghost.on { background: #888; color: #fff;
 .pick .row.sel .bar { background: #6666cc; }
 .pick .row.sel .t, .pick .row.sel .tag { color: #fff; }
 
-/* a phone: five tiles in two rows, every other axis label dropped so the
-   words never overlap */
-@media (max-width: 480px) {
+/* a narrow window or a phone: the six tiles in two rows of three */
+@media (max-width: 640px) {
   .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .tile:nth-child(3) { border-right: 0; }
   .tile:nth-child(-n+3) { border-bottom: 1px solid var(--g300); }
+}
+/* a very narrow window: the legend keeps its lines, the pale tail's note
+   goes (the reading under the pointer still says "still counting") */
+@media (max-width: 350px) {
+  .chart .legend { gap: 8px; }
+  .chart .legend .lf { display: none; }
+}
+/* a phone: every other axis label dropped so the words never overlap */
+@media (max-width: 480px) {
   .chart { grid-template-columns: 36px minmax(0, 1fr); }
   .chart .xs span:nth-child(even) { display: none; }
 }
@@ -303,17 +314,19 @@ body.mobile #status { padding-right: 8px; }
 <div id="main" class="wait">
   <div class="tiles">
     <div class="tile" id="t-requests"><div class="tl">Requests</div><div class="tv">—</div><div class="td"></div></div>
+    <div class="tile" id="t-stopped" title="Requests Cloudflare challenged or blocked: they never reached the host"><div class="tl">Stopped</div><div class="tv">—</div><div class="td"></div></div>
     <div class="tile" id="t-visits"><div class="tl">Visits</div><div class="tv">—</div><div class="td"></div></div>
     <div class="tile" id="t-bytes"><div class="tl">Data served</div><div class="tv">—</div><div class="td"></div></div>
     <div class="tile" id="t-bots"><div class="tl">Verified bots</div><div class="tv">—</div><div class="td"></div></div>
     <div class="tile" id="t-errors"><div class="tl">Server errors</div><div class="tv">—</div><div class="td"></div></div>
   </div>
   <div class="chart">
-    <div class="legend"><span><i></i>Requests</span><span><i class="vi"></i>Visits</span><span><i class="end"></i>still counting</span></div>
+    <div class="legend"><span><i></i>Requests</span><span><i class="vi"></i>Visits</span><span title="Challenged or blocked by Cloudflare"><i class="sp"></i>Stopped</span><span class="lf"><i class="end"></i>still counting</span></div>
     <div class="ys" id="ys"></div>
     <div class="plot" id="plot">
       <div class="gl" style="top: 0"></div><div class="gl" style="top: 25%"></div><div class="gl" style="top: 50%"></div><div class="gl" style="top: 75%"></div>
       <svg id="lines" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+        <polyline class="sp end" id="sp-end"/><polyline class="sp" id="sp"/>
         <polyline class="rq end" id="rq-end"/><polyline class="vi end" id="vi-end"/>
         <polyline class="rq" id="rq"/><polyline class="vi" id="vi"/>
       </svg>
@@ -330,6 +343,7 @@ body.mobile #status { padding-right: 8px; }
         <button class="ghost" data-view="visits">Visits</button>
         <button class="ghost" data-view="bytes">Data</button>
         <button class="ghost" data-view="errors">Errors</button>
+        <button class="ghost" data-view="stopped">Stopped</button>
       </div><span class="sum" id="hosts-sum"></span></div>
     <div class="rows pick" id="l-hosts"></div>
   </section>
@@ -424,7 +438,7 @@ const RANGES = {
   "30d": { words: "the last 30 days", before: "" },
 };
 const VIEWS = {
-  hosts: ["requests", "visits", "bytes", "errors"],
+  hosts: ["requests", "visits", "bytes", "errors", "stopped"],
   pages: ["paths", "errors"],
   resp: ["status", "cache", "types"],
   clients: ["browsers", "systems", "devices"],
@@ -636,11 +650,12 @@ function tile(id, value, d) {
 }
 function renderTiles() {
   if (!data) {
-    for (const id of ["t-requests", "t-visits", "t-bytes", "t-bots", "t-errors"]) tile(id, "—", "");
+    for (const id of ["t-requests", "t-stopped", "t-visits", "t-bytes", "t-bots", "t-errors"]) tile(id, "—", "");
     return;
   }
   const t = data.totals, p = data.previous;
   tile("t-requests", fmtN(t.requests), p ? delta(t.requests, p.requests) : "");
+  tile("t-stopped", fmtN(t.stopped || 0), p ? delta(t.stopped || 0, p.stopped || 0) : "");
   tile("t-visits", fmtN(t.visits), p ? delta(t.visits, p.visits) : "");
   tile("t-bytes", fmtBytes(t.bytes), p ? delta(t.bytes, p.bytes) : "");
   // bots as a share of the requests, their change in points
@@ -682,7 +697,7 @@ let chartPts = null; // the drawn series, for the pointer's reading
 function renderChart() {
   const note = $("#plot-note"), ys = $("#ys"), xs = $("#xs");
   const clear = () => {
-    for (const id of ["rq", "vi", "rq-end", "vi-end"]) document.getElementById(id).setAttribute("points", "");
+    for (const id of ["rq", "vi", "sp", "rq-end", "vi-end", "sp-end"]) document.getElementById(id).setAttribute("points", "");
     chartPts = null;
     hideTip();
   };
@@ -720,11 +735,15 @@ function renderChart() {
   note.hidden = true;
   const pt = (i, v) => (n > 1 ? i / (n - 1) * 1000 : 0).toFixed(1) + "," + (1000 - v / top * 1000).toFixed(1);
   const cut = Math.max(0, n - 1 - (data.filling || 0));
-  const line = (key, a, b) => s.slice(a, b + 1).map((p, j) => pt(a + j, p[key])).join(" ");
-  $("#rq").setAttribute("points", line("requests", 0, cut));
-  $("#vi").setAttribute("points", line("visits", 0, cut));
-  $("#rq-end").setAttribute("points", cut < n - 1 ? line("requests", cut, n - 1) : "");
-  $("#vi-end").setAttribute("points", cut < n - 1 ? line("visits", cut, n - 1) : "");
+  const line = (key, a, b) => s.slice(a, b + 1).map((p, j) => pt(a + j, p[key] || 0)).join(" ");
+  // the stopped line only when something was stopped: flat on the axis it
+  // would paint the baseline red under the others
+  const stopped = s.some(p => p.stopped > 0);
+  for (const [id, key] of [["rq", "requests"], ["vi", "visits"], ["sp", "stopped"]]) {
+    const on = key !== "stopped" || stopped;
+    $("#" + id).setAttribute("points", on ? line(key, 0, cut) : "");
+    $("#" + id + "-end").setAttribute("points", on && cut < n - 1 ? line(key, cut, n - 1) : "");
+  }
   chartPts = s;
   if (tipAt >= 0) showTip(tipAt);
 }
@@ -748,7 +767,7 @@ function showTip(i) {
   tip.replaceChildren();
   const head = document.createElement("b");
   head.textContent = bucketLabel(p.t) + (i >= n - (data.filling || 0) ? " · still counting" : "");
-  tip.append(head, document.createElement("br"), fmtN(p.requests) + " requests · " + fmtN(p.visits) + " visits");
+  tip.append(head, document.createElement("br"), fmtN(p.requests) + " requests · " + fmtN(p.visits) + " visits · " + fmtN(p.stopped || 0) + " stopped");
   tip.hidden = false;
   const tw = tip.offsetWidth;
   tip.style.left = (x + 8 + tw <= w ? x + 8 : Math.max(0, x - 8 - tw)) + "px";
@@ -807,19 +826,19 @@ function renderList(box, rows, empty, value = r => fmtN(r.n)) {
 }
 const HOST_VALUE = {
   requests: h => fmtN(h.requests), visits: h => fmtN(h.visits),
-  bytes: h => fmtBytes(h.bytes), errors: h => fmtN(h.errors),
+  bytes: h => fmtBytes(h.bytes), errors: h => fmtN(h.errors), stopped: h => fmtN(h.stopped || 0),
 };
 function renderHosts() {
   const box = $("#l-hosts"), view = st.views.hosts;
   let hosts = data ? data.hosts : hostNames.map(h => ({ host: h, to: hostTo[h] }));
-  if (data) hosts = [...hosts].sort((a, b) => b[view] - a[view] || a.host.localeCompare(b.host));
+  if (data) hosts = [...hosts].sort((a, b) => (b[view] || 0) - (a[view] || 0) || a.host.localeCompare(b.host));
   else hosts = [...hosts].sort((a, b) => a.host.localeCompare(b.host));
   const els = slots(box, Math.max(1, hosts.length));
-  const max = data ? Math.max(0, ...hosts.map(h => h[view])) : 0;
+  const max = data ? Math.max(0, ...hosts.map(h => h[view] || 0)) : 0;
   els.forEach((row, i) => {
     const h = hosts[i];
     if (!h) return note(row, data ? "Nothing is published yet — expose a VM port and its domain lands here." : "");
-    fill(row, { label: h.host, tag: h.to || "", n: data ? h[view] : 0, title: "https://" + h.host },
+    fill(row, { label: h.host, tag: h.to || "", n: data ? h[view] || 0 : 0, title: "https://" + h.host },
       max, () => data ? HOST_VALUE[view](h) : "—");
     row.dataset.host = h.host;
     row.classList.toggle("sel", h.host === st.host);

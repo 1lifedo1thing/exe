@@ -39,6 +39,11 @@ import (
 // the lists — except the Bots list itself, which stays broad so the other
 // categories can still be picked.
 //
+// Stopped counts the requests Cloudflare's own security answered — a
+// challenge page or a block from a custom rule, a managed rule or the
+// browser check — which never reached the host. They are in Requests too:
+// Cloudflare counts every request that reached its edge.
+//
 // A query costs a second or so, so answers are kept: one younger than a
 // minute is the answer, and a view asked for twice at once is fetched once,
 // whoever asks. With stale=1 an answer up to 15 minutes old is served at
@@ -93,12 +98,14 @@ type anTotals struct {
 	Errors   int64 `json:"errors"`  // 5xx
 	Refused  int64 `json:"refused"` // 4xx
 	Bots     int64 `json:"bots"`
+	Stopped  int64 `json:"stopped"` // challenged or blocked at the edge
 }
 
 type anPoint struct {
 	T        time.Time `json:"t"`
 	Requests int64     `json:"requests"`
 	Visits   int64     `json:"visits"`
+	Stopped  int64     `json:"stopped"`
 }
 
 type anHost struct {
@@ -108,7 +115,14 @@ type anHost struct {
 	Visits   int64  `json:"visits"`
 	Bytes    int64  `json:"bytes"`
 	Errors   int64  `json:"errors"`
+	Stopped  int64  `json:"stopped"`
 }
+
+// anStopActions are the securityAction values of a request Cloudflare
+// answered itself instead of passing it on: this zone shows challenge and
+// block; the rest are the other ways a rule stops one.
+var anStopActions = []string{"block", "challenge", "jschallenge", "managedChallenge", "connectionClose",
+	"challengeFailed", "jschallengeFailed", "managedChallengeFailed"}
 
 type anRow struct {
 	Label string `json:"label"`
@@ -510,14 +524,16 @@ func (s *Server) fetchAnalytics(ctx context.Context, v anView) (*anResponse, err
 		return extra
 	}
 	vars := map[string]any{
-		"z":    c.ZoneID,
-		"all":  span(from, now, all, only),
-		"sel":  span(from, now, sel, only),
-		"bots": span(from, now, sel, map[string]any{"verifiedBotCategory_neq": ""}),
-		"errs": span(from, now, sel, with(map[string]any{"edgeResponseStatus_geq": 400})),
+		"z":     c.ZoneID,
+		"all":   span(from, now, all, only),
+		"sel":   span(from, now, sel, only),
+		"bots":  span(from, now, sel, map[string]any{"verifiedBotCategory_neq": ""}),
+		"errs":  span(from, now, sel, with(map[string]any{"edgeResponseStatus_geq": 400})),
+		"astop": span(from, now, all, with(map[string]any{"securityAction_in": anStopActions})),
+		"sstop": span(from, now, sel, with(map[string]any{"securityAction_in": anStopActions})),
 	}
 	const F = "ZoneHttpRequestsAdaptiveGroupsFilter_InputObject!"
-	decl := "$z: String!, $all: " + F + ", $sel: " + F + ", $bots: " + F + ", $errs: " + F
+	decl := "$z: String!, $all: " + F + ", $sel: " + F + ", $bots: " + F + ", $errs: " + F + ", $astop: " + F + ", $sstop: " + F
 	g := func(alias string, limit int, filter, fields, dims, order string) string {
 		s := alias + ": httpRequestsAdaptiveGroups(limit: " + strconv.Itoa(limit) + ", filter: $" + filter
 		if order != "" {
@@ -536,6 +552,9 @@ func (s *Server) fetchAnalytics(ctx context.Context, v anView) (*anResponse, err
 		b.WriteString(g("botTotal", 1, "bots", "count", "", ""))
 	}
 	b.WriteString(g("series", 2000, "sel", "count sum { visits }", rg.Dim, rg.Dim+"_ASC"))
+	b.WriteString(g("stopHosts", 1000, "astop", "count", "clientRequestHTTPHost", "count_DESC"))
+	b.WriteString(g("stopTotal", 1, "sstop", "count", "", ""))
+	b.WriteString(g("stopSeries", 2000, "sstop", "count", rg.Dim, rg.Dim+"_ASC"))
 	b.WriteString(g("paths", 50, "sel", "count", "clientRequestHTTPHost clientRequestPath", "count_DESC"))
 	b.WriteString(g("errors", 50, "errs", "count", "clientRequestHTTPHost clientRequestPath edgeResponseStatus", "count_DESC"))
 	b.WriteString(g("countries", 10, "sel", "count", "clientCountryName", "count_DESC"))
@@ -551,6 +570,9 @@ func (s *Server) fetchAnalytics(ctx context.Context, v anView) (*anResponse, err
 		vars["psel"] = span(pfrom, from, sel, only)
 		decl += ", $psel: " + F
 		b.WriteString(g("prevTotal", 1, "psel", anTotalFields, "", ""))
+		vars["pstop"] = span(pfrom, from, sel, with(map[string]any{"securityAction_in": anStopActions}))
+		decl += ", $pstop: " + F
+		b.WriteString(g("prevStop", 1, "pstop", "count", "", ""))
 		if bot == "" {
 			vars["pbots"] = span(pfrom, from, sel, map[string]any{"verifiedBotCategory_neq": ""})
 			decl += ", $pbots: " + F
@@ -592,6 +614,11 @@ func (s *Server) fetchAnalytics(ctx context.Context, v anView) (*anResponse, err
 		h.Bytes += t.Bytes
 		h.Errors += t.Errors
 	}
+	for _, grp := range z["stopHosts"] {
+		if h := byHost[anFold(grp.dim("clientRequestHTTPHost"))]; h != nil {
+			h.Stopped += grp.Count
+		}
+	}
 	slices.SortStableFunc(res.Hosts, func(a, b anHost) int {
 		if a.Requests != b.Requests {
 			if a.Requests > b.Requests {
@@ -614,6 +641,9 @@ func (s *Server) fetchAnalytics(ctx context.Context, v anView) (*anResponse, err
 	if t, ok := one("botTotal"); ok {
 		res.Totals.Bots = t.Count
 	}
+	if t, ok := one("stopTotal"); ok {
+		res.Totals.Stopped = t.Count
+	}
 	if bot != "" {
 		res.Totals.Bots = res.Totals.Requests
 	}
@@ -625,6 +655,9 @@ func (s *Server) fetchAnalytics(ctx context.Context, v anView) (*anResponse, err
 		if t, ok := one("prevBots"); ok {
 			p.Bots = t.Count
 		}
+		if t, ok := one("prevStop"); ok {
+			p.Stopped = t.Count
+		}
 		if bot != "" {
 			p.Bots = p.Requests
 		}
@@ -635,10 +668,10 @@ func (s *Server) fetchAnalytics(ctx context.Context, v anView) (*anResponse, err
 	for i, bk := range buckets {
 		day[bk.Format("2006-01-02")] = i
 	}
-	for _, grp := range z["series"] {
+	bucket := func(grp anGroup) int {
 		t, err := time.Parse(time.RFC3339, grp.dim(rg.Dim))
 		if err != nil {
-			continue
+			return -1
 		}
 		i := -1
 		if rg.Days {
@@ -648,11 +681,21 @@ func (s *Server) fetchAnalytics(ctx context.Context, v anView) (*anResponse, err
 		} else if !t.Before(buckets[0]) {
 			i = int(t.Sub(buckets[0]) / rg.Step)
 		}
-		if i < 0 || i >= len(res.Series) {
-			continue
+		if i >= len(res.Series) {
+			return -1
 		}
-		res.Series[i].Requests += grp.Count
-		res.Series[i].Visits += grp.Sum.Visits
+		return i
+	}
+	for _, grp := range z["series"] {
+		if i := bucket(grp); i >= 0 {
+			res.Series[i].Requests += grp.Count
+			res.Series[i].Visits += grp.Sum.Visits
+		}
+	}
+	for _, grp := range z["stopSeries"] {
+		if i := bucket(grp); i >= 0 {
+			res.Series[i].Stopped += grp.Count
+		}
 	}
 
 	short := func(h string) string {

@@ -841,13 +841,22 @@ Pick a span, **1 Hour**, **24 Hours**, **7 Days** or **30 Days**, and a host
 in the pop-up (or click its row in **Hosts**; click it again for all of
 them). The pop-up lists each host beside its icon, the one My Apps shows:
 the app's touch icon or favicon, the homepage's for the names that
-redirect to it, and a diamond for an app that declares none. The tiles count requests, visits (Cloudflare's: a page view that came
-from another site or none), data served, the share of requests from bots
-Cloudflare has verified, and server errors (5xx), each against the span
-before it. 30 days has no span before: Cloudflare keeps these numbers 31
-days. The chart draws requests and visits over the span, a minute, 15
-minutes, an hour or a day a point; the last points, which Cloudflare is
-still counting, are drawn pale. Point at the chart to read one.
+redirect to it, and a diamond for an app that declares none. The tiles count requests, the requests Cloudflare stopped, visits
+(Cloudflare's: a page view that came from another site or none), data
+served, the share of requests from bots Cloudflare has verified, and
+server errors (5xx), each against the span before it. 30 days has no span
+before: Cloudflare keeps these numbers 31 days. The chart draws requests,
+visits and stopped requests over the span, a minute, 15 minutes, an hour
+or a day a point; the last points, which Cloudflare is still counting, are
+drawn pale. Point at the chart to read one.
+
+**Stopped** is what Cloudflare's security answered itself: a challenge
+page or a block, from a rule of your own in the zone's WAF, a managed rule
+or the browser check. Those requests never reached your host, but they are
+in **Requests** too, since Cloudflare counts every request that reached
+its edge; a crawler that keeps hammering a challenge shows as a Requests
+line with a Stopped line close under it. **Hosts** can rank by it, to see
+which name draws them.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreicygtsslkz6zbwpqbj6ygwlhbxbvhu7hsowdvvijhqt4mptfpnc4u" alt="The Analytics window over the last hour: requests, visits, data served, verified bots and server errors, the chart, and the hosts by requests" width="662" height="587">
 
@@ -858,7 +867,7 @@ itself stays whole, so another category is one click away; the chosen row
 again lifts it.
 
 Under the chart, ranked lists for the chosen hosts: **Hosts** by requests, visits,
-data or errors; **Pages**, the most requested paths or those answered with
+data, errors or stopped requests; **Pages**, the most requested paths or those answered with
 an error, each marked with its host when all are shown; **Countries**;
 **Bots** by Cloudflare's categories; **Responses** by status, cache status
 or content type; **Clients** by browser, system or device. A Host header
