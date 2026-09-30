@@ -821,7 +821,13 @@ days. The chart draws requests and visits over the span, a minute, 15
 minutes, an hour or a day a point; the last points, which Cloudflare is
 still counting, are drawn pale. Point at the chart to read one.
 
-Under it, ranked lists for the chosen hosts: **Hosts** by requests, visits,
+Click a row in **Bots** to narrow everything to that category, keeping the
+chosen host: the tiles, the chart, the host totals and the other lists then
+count only, say, AI crawlers, and the status line says so. The Bots list
+itself stays whole, so another category is one click away; the chosen row
+again lifts it.
+
+Under the chart, ranked lists for the chosen hosts: **Hosts** by requests, visits,
 data or errors; **Pages**, the most requested paths or those answered with
 an error, each marked with its host when all are shown; **Countries**;
 **Bots** by Cloudflare's categories; **Responses** by status, cache status
@@ -830,7 +836,13 @@ that carries a port (scanners try Cloudflare's other ports) counts with its
 host. Busy spans are sampled by Cloudflare and the status line says
 "sampled". The window refreshes every minute while it is open, and the
 daemon keeps each answer a minute, so several windows cost one query.
-The same numbers are `GET /v1/cloudflare/analytics?range=24h&host=…`.
+Switching is quick because answers are kept twice over: the window paints
+a view it has shown before from memory and then brings it up to date, and
+the daemon, behind an All Hosts answer, fetches the view of each host that
+had traffic, so the first switch to a host needs no trip to Cloudflare.
+An answer up to 15 minutes old is shown at once while a fresh one is
+fetched (the status line says "Updating…").
+The same numbers are `GET /v1/cloudflare/analytics?range=24h&host=…&bot=…`.
 
 ## Workspace and files
 

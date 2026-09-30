@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,6 +35,11 @@ type anCall struct {
 func anServer(t *testing.T, reply func(anCall) string) (*Server, *[]anCall) {
 	t.Helper()
 	calls := &[]anCall{}
+	var mu sync.Mutex
+	// no warming unless a test asks: its queries land behind the answer
+	warm := anWarmHosts
+	anWarmHosts = 0
+	t.Cleanup(func() { anWarmHosts = warm })
 	old := anHTTPClient
 	anHTTPClient = &http.Client{Transport: cfStatsTransport(func(r *http.Request) (*http.Response, error) {
 		if r.URL.String() != "https://api.cloudflare.com/client/v4/graphql" || r.Header.Get("Authorization") != "Bearer secret" {
@@ -42,7 +49,9 @@ func anServer(t *testing.T, reply func(anCall) string) (*Server, *[]anCall) {
 		if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
 			t.Fatal(err)
 		}
+		mu.Lock()
 		*calls = append(*calls, c)
+		mu.Unlock()
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(reply(c))), Header: make(http.Header)}, nil
 	})}
 	t.Cleanup(func() { anHTTPClient = old })
@@ -285,5 +294,152 @@ func TestCFAnalyticsRefusals(t *testing.T) {
 	s.cfg.Store(&config.Config{})
 	if code, _, body := anGet(t, s, "range=24h"); code != 409 || !strings.Contains(body, "not set up") {
 		t.Errorf("unconfigured: %d %s", code, body)
+	}
+}
+
+// A chosen bot category narrows the tiles, the chart, the host totals and
+// every list but Bots, which stays broad so the other categories can be
+// picked; the bot count is then the request count (never 125 percent).
+func TestCFAnalyticsBot(t *testing.T) {
+	s, calls := anServer(t, func(anCall) string { return anReply })
+	code, v, body := anGet(t, s, "range=24h&host=hub.example.com&bot=AI+Crawler")
+	if code != 200 || v.Bot != "AI Crawler" {
+		t.Fatalf("%d %s", code, body)
+	}
+	c := (*calls)[0]
+	for _, name := range []string{"all", "sel", "psel", "errs"} {
+		if f, _ := json.Marshal(c.Variables[name]); !strings.Contains(string(f), `"verifiedBotCategory":"AI Crawler"`) {
+			t.Errorf("%s is not narrowed: %s", name, f)
+		}
+	}
+	if f, _ := json.Marshal(c.Variables["bots"]); strings.Contains(string(f), "AI Crawler") || !strings.Contains(string(f), `"verifiedBotCategory_neq":""`) {
+		t.Errorf("the Bots list is narrowed: %s", f)
+	}
+	if strings.Contains(c.Query, "botTotal") || strings.Contains(c.Query, "prevBots") || c.Variables["pbots"] != nil {
+		t.Errorf("a broad bot count is still asked for: %s", c.Query)
+	}
+	if v.Totals.Bots != v.Totals.Requests || v.Previous.Bots != v.Previous.Requests {
+		t.Errorf("bot share: %+v of %+v", v.Totals, v.Previous)
+	}
+	if len(v.Lists["bots"]) != 1 {
+		t.Errorf("bots %+v", v.Lists["bots"])
+	}
+	// a category is a view of its own
+	anGet(t, s, "range=24h&host=hub.example.com")
+	if len(*calls) != 2 {
+		t.Errorf("the unfiltered view was served from the category's answer: %d calls", len(*calls))
+	}
+	if code, _, _ := anGet(t, s, "bot="+strings.Repeat("x", 65)); code != 400 {
+		t.Errorf("an overlong category: %d", code)
+	}
+}
+
+// anAge makes every kept answer d older; anLanded waits for the fetches in
+// the air.
+func anAge(s *Server, d time.Duration) {
+	s.cfAnalytics.mu.Lock()
+	defer s.cfAnalytics.mu.Unlock()
+	for _, e := range s.cfAnalytics.entries {
+		e.at = e.at.Add(-d)
+		e.errAt = e.errAt.Add(-d)
+	}
+}
+
+func anLanded(s *Server) {
+	for {
+		var flight chan struct{}
+		s.cfAnalytics.mu.Lock()
+		for _, e := range s.cfAnalytics.entries {
+			if e.flight != nil {
+				flight = e.flight
+			}
+		}
+		s.cfAnalytics.mu.Unlock()
+		if flight == nil {
+			return
+		}
+		<-flight
+	}
+}
+
+// With stale=1 an answer past its minute is served at once, marked
+// refreshing, while the fresh one is fetched behind it; without it the
+// request waits for the fresh one. Past 15 minutes nothing kept is shown.
+func TestCFAnalyticsStale(t *testing.T) {
+	n, fail := 0, false
+	s, calls := anServer(t, func(anCall) string {
+		n++
+		if fail {
+			return `{"data":null,"errors":[{"message":"boom"}]}`
+		}
+		return strings.Replace(anReply, `"total":[{"count":105`, `"total":[{"count":`+strconv.Itoa(100+n), 1)
+	})
+	_, v, _ := anGet(t, s, "range=24h")
+	if v.Totals.Requests != 101 || v.Refreshing {
+		t.Fatalf("first answer %+v", v.Totals)
+	}
+	anAge(s, 2*time.Minute)
+	_, v, _ = anGet(t, s, "range=24h&stale=1")
+	if v.Totals.Requests != 101 || !v.Refreshing {
+		t.Fatalf("stale answer: %d refreshing %v", v.Totals.Requests, v.Refreshing)
+	}
+	anLanded(s)
+	if len(*calls) != 2 {
+		t.Fatalf("no fetch behind the stale answer: %d", len(*calls))
+	}
+	_, v, _ = anGet(t, s, "range=24h&stale=1")
+	if v.Totals.Requests != 102 || v.Refreshing {
+		t.Errorf("after the refresh: %d refreshing %v", v.Totals.Requests, v.Refreshing)
+	}
+	anAge(s, 2*time.Minute)
+	if _, v, _ = anGet(t, s, "range=24h"); v.Totals.Requests != 103 || v.Refreshing {
+		t.Errorf("without stale=1 the request waits for the fresh answer: %d", v.Totals.Requests)
+	}
+	// Cloudflare failing: the kept answer still serves a stale=1 reader,
+	// and a reader who wants the fresh one is told
+	fail = true
+	anAge(s, 2*time.Minute)
+	if code, _, body := anGet(t, s, "range=24h"); code != 502 || !strings.Contains(body, "boom") {
+		t.Errorf("a failed refresh: %d %s", code, body)
+	}
+	if code, v, _ := anGet(t, s, "range=24h&stale=1"); code != 200 || v.Totals.Requests != 103 {
+		t.Errorf("the kept answer under a failure: %d %d", code, v.Totals.Requests)
+	}
+	anLanded(s)
+	before := len(*calls)
+	anAge(s, 20*time.Minute)
+	if code, _, _ := anGet(t, s, "range=24h&stale=1"); code != 502 || len(*calls) != before+1 {
+		t.Errorf("an answer past 15 minutes: %d, %d calls", code, len(*calls)-before)
+	}
+}
+
+// An All Hosts answer warms the view of each host that had requests, so
+// the first switch to one costs no query; hosts without traffic are left.
+func TestCFAnalyticsWarm(t *testing.T) {
+	s, calls := anServer(t, func(anCall) string { return anReply })
+	anWarmHosts = 12
+	anGet(t, s, "range=24h")
+	s.cfAnalytics.warming.Wait()
+	if len(*calls) != 3 { // all hosts, then hub and example.com
+		t.Fatalf("%d calls", len(*calls))
+	}
+	for _, h := range []string{"hub.example.com", "example.com"} {
+		if code, v, _ := anGet(t, s, "range=24h&host="+h); code != 200 || v.Host != h {
+			t.Errorf("%s: %d", h, code)
+		}
+	}
+	if len(*calls) != 3 {
+		t.Errorf("a warmed host cost a query: %d calls", len(*calls))
+	}
+	anGet(t, s, "range=24h&host=blog.example.com")
+	if len(*calls) != 4 {
+		t.Errorf("a host without traffic was warmed: %d calls", len(*calls))
+	}
+	// one host's answer, or a category's, warms nothing
+	anGet(t, s, "range=7d&host=hub.example.com")
+	anGet(t, s, "range=7d&bot=AI+Crawler")
+	s.cfAnalytics.warming.Wait()
+	if len(*calls) != 6 {
+		t.Errorf("%d calls", len(*calls))
 	}
 }

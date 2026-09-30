@@ -233,10 +233,11 @@ button.ghost.on { background: #888; color: #fff;
 .row .tag { font: 10px var(--mono); color: #555; margin-left: 5px; }
 .row .n { flex: none; width: 64px; text-align: right; font-size: 11px; color: #333; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .row .none { padding: 0 4px; font-size: 11px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* the chosen host is the list's selection: inverted, its share darker */
-#l-hosts .row.sel .lab { background: var(--hl); }
-#l-hosts .row.sel .bar { background: #6666cc; }
-#l-hosts .row.sel .t, #l-hosts .row.sel .tag { color: #fff; }
+/* the chosen host, and the chosen bot category, are their lists'
+   selection: inverted, the share darker */
+.pick .row.sel .lab { background: var(--hl); }
+.pick .row.sel .bar { background: #6666cc; }
+.pick .row.sel .t, .pick .row.sel .tag { color: #fff; }
 
 /* a phone: five tiles in two rows, every other axis label dropped so the
    words never overlap */
@@ -296,7 +297,7 @@ body.mobile #status { padding-right: 8px; }
         <button class="ghost" data-view="bytes">Data</button>
         <button class="ghost" data-view="errors">Errors</button>
       </div><span class="sum" id="hosts-sum"></span></div>
-    <div class="rows" id="l-hosts"></div>
+    <div class="rows pick" id="l-hosts"></div>
   </section>
   <section class="sec" id="s-pages">
     <div class="strip"><span class="st">Pages</span>
@@ -313,7 +314,7 @@ body.mobile #status { padding-right: 8px; }
     </section>
     <section class="sec" id="s-bots">
       <div class="strip"><span class="st">Bots</span><span class="sum">verified by Cloudflare</span></div>
-      <div class="rows" id="l-bots"></div>
+      <div class="rows pick" id="l-bots"></div>
     </section>
   </div>
   <div class="pair">
@@ -402,7 +403,7 @@ const EMPTY = {
 };
 const SLOTS = 10; // every list's height, whatever it holds
 
-let st = { range: "24h", host: "", views: { hosts: "requests", pages: "paths", resp: "status", clients: "browsers" } };
+let st = { range: "24h", host: "", bot: "", views: { hosts: "requests", pages: "paths", resp: "status", clients: "browsers" } };
 let data = null;      // the answer on screen, or null while the view is on its way
 let hostNames = [];   // the published hosts, known before the first answer from /v1/routes
 let hostTo = {};      // where each leads, kept from the last answer
@@ -413,6 +414,7 @@ function adopt(d) {
   if (!d || typeof d !== "object") return;
   if (RANGES[d.range]) st.range = d.range;
   if (typeof d.host === "string") st.host = d.host;
+  st.bot = typeof d.bot === "string" && d.bot.length <= 64 ? d.bot : "";
   if (d.views && typeof d.views === "object") {
     for (const k of Object.keys(VIEWS)) if (VIEWS[k].includes(d.views[k])) st.views[k] = d.views[k];
   }
@@ -437,7 +439,7 @@ let lastSeq = 0;
 const nextSeq = () => (lastSeq = Math.max(Date.now(), lastSeq + 1));
 async function saveNow(flush) {
   clearTimeout(saveT); saveT = null;
-  const body = JSON.stringify({ range: st.range, host: st.host, views: st.views }, null, 2);
+  const body = JSON.stringify({ range: st.range, host: st.host, bot: st.bot, views: st.views }, null, 2);
   const seq = { "X-Exe-Seq": String(nextSeq()) };
   if (flush) {
     try { api(SETTINGS_URL, { method: "PUT", keepalive: true, headers: seq, body }); } catch (e) {}
@@ -705,12 +707,26 @@ function renderHosts() {
   });
   $("#hosts-sum").textContent = hosts.length ? hosts.length + (hosts.length === 1 ? " host" : " hosts") : "";
 }
+// the Bots list is every category whatever is chosen, so another can be
+// picked; a chosen one the span has nothing of still gets its row, so it
+// can be lifted
+function renderBots() {
+  const box = $("#l-bots");
+  let rows = data ? [...(data.lists.bots || [])] : [];
+  if (data && st.bot && !rows.some(r => r.label === st.bot)) rows = [...rows.slice(0, SLOTS - 1), { label: st.bot, n: 0 }];
+  renderList(box, rows, EMPTY.bots);
+  [...box.children].forEach((row, i) => {
+    const r = rows[i];
+    if (r) row.dataset.bot = r.label; else delete row.dataset.bot;
+    row.classList.toggle("sel", !!r && r.label === st.bot);
+  });
+}
 function renderLists() {
   renderHosts();
   const L = data ? data.lists : {};
   renderList($("#l-pages"), L[st.views.pages] || [], EMPTY[st.views.pages]);
   renderList($("#l-where"), L.countries || [], EMPTY.countries);
-  renderList($("#l-bots"), L.bots || [], EMPTY.bots);
+  renderBots();
   renderList($("#l-resp"), L[st.views.resp] || [], EMPTY[st.views.resp]);
   renderList($("#l-clients"), L[st.views.clients] || [], EMPTY[st.views.clients]);
 }
@@ -720,10 +736,11 @@ function renderStatus() {
   const R = RANGES[st.range], words = R.words.replace(/^the /, "");
   const parts = [data && data.zone ? words : words[0].toUpperCase() + words.slice(1)];
   if (data && data.zone) parts.unshift(data.zone);
+  if (st.bot) parts.push(st.bot + " only");
   if (data && data.previous && R.before) parts.push("change vs " + R.before);
   if (data && data.sample_interval > 1.05) parts.push("sampled");
   left.textContent = parts.join(" · ");
-  right.textContent = busy ? "Loading…" : data ? "Updated " + TIME.format(new Date(data.fetched_at)) : "";
+  right.textContent = busy ? (data ? "Updating…" : "Loading…") : data ? "Updated " + TIME.format(new Date(data.fetched_at)) : "";
 }
 function render() {
   if (hostNames.length || data || failure) $("#main").classList.remove("wait");
@@ -740,38 +757,56 @@ function render() {
 // is still the latest (the hub's /stats: 24 hours then 30 days, the first
 // answer landing last, must not leave 24 hours on screen).
 let turn = 0, air = null, fetchedAt = 0;
+// Every answer is kept in memory by its view, so a view shown before is
+// painted at once and then brought up to date. The daemon keeps answers
+// too: a switch asks with stale=1 and takes one up to 15 minutes old at
+// once; if that one was marked refreshing, the fresh one is asked for
+// right behind it (that request waits for the daemon's fetch to land).
+const seen = new Map();
+const viewKey = () => st.range + "|" + st.host + "|" + st.bot;
+function keep(key, answer) {
+  seen.delete(key);
+  seen.set(key, answer);
+  if (seen.size > 80) seen.delete(seen.keys().next().value);
+}
 async function load(quiet) {
   const mine = ++turn;
   if (air) air.abort();
   const ctl = air = new AbortController();
-  if (!quiet) { data = null; failure = ""; }
+  const key = viewKey();
+  if (!quiet) { data = seen.get(key) || null; failure = ""; }
   busy = true;
   render();
   const q = new URLSearchParams({ range: st.range });
   if (st.host) q.set("host", st.host);
+  if (st.bot) q.set("bot", st.bot);
   if (TZ) q.set("tz", TZ);
   try {
-    const r = await fetch("/v1/cloudflare/analytics?" + q, {
-      cache: "no-store", signal: ctl.signal,
-      headers: TOKEN ? { Authorization: "Bearer " + TOKEN } : {},
-    });
-    const body = await r.json().catch(() => ({}));
-    if (mine !== turn) return;
-    if (r.status === 404 && st.host) { // the host was unpublished: back to all of them
-      st.host = "";
-      saveSettings();
-      busy = false;
-      return load();
-    }
-    if (!r.ok) {
-      data = null;
-      failure = body.error || "The daemon answered HTTP " + r.status + ".";
-    } else {
+    for (let stale = !quiet; ; stale = false) {
+      const r = await fetch("/v1/cloudflare/analytics?" + q + (stale ? "&stale=1" : ""), {
+        cache: "no-store", signal: ctl.signal,
+        headers: TOKEN ? { Authorization: "Bearer " + TOKEN } : {},
+      });
+      const body = await r.json().catch(() => ({}));
+      if (mine !== turn) return;
+      if (r.status === 404 && st.host) { // the host was unpublished: back to all of them
+        st.host = "";
+        saveSettings();
+        busy = false;
+        return load();
+      }
+      if (!r.ok) {
+        // a kept answer on screen stays when only its refresh failed
+        if (!(data && !stale)) { data = null; failure = body.error || "The daemon answered HTTP " + r.status + "."; }
+        break;
+      }
       data = body;
       failure = "";
+      keep(key, body);
       hostNames = data.hosts.map(h => h.host);
       hostTo = Object.fromEntries(data.hosts.map(h => [h.host, h.to]));
-      fetchedAt = Date.now();
+      if (!(stale && body.refreshing)) { fetchedAt = Date.now(); break; }
+      render(); // the kept answer now; the fresh one is on its way
     }
   } catch (e) {
     if (mine !== turn) return;
@@ -823,6 +858,16 @@ $("#l-hosts").addEventListener("click", e => {
   const row = e.target.closest(".row[data-host]");
   if (!row) return;
   st.host = row.dataset.host === st.host ? "" : row.dataset.host;
+  saveSettings();
+  load();
+});
+
+// a Bots row narrows everything to that category, keeping the host; the
+// chosen one again lifts it
+$("#l-bots").addEventListener("click", e => {
+  const row = e.target.closest(".row[data-bot]");
+  if (!row) return;
+  st.bot = row.dataset.bot === st.bot ? "" : row.dataset.bot;
   saveSettings();
   load();
 });
@@ -887,9 +932,9 @@ window.addEventListener("message", async e => {
     try {
       const r = await api(SETTINGS_URL);
       if (r.status === 404) return;
-      const was = st.range + "|" + st.host;
+      const was = viewKey();
       adopt(await r.json());
-      if (st.range + "|" + st.host !== was) load(); else render();
+      if (viewKey() !== was) load(); else render();
     } catch (err) {}
   }
 });

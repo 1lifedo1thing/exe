@@ -151,16 +151,19 @@ gate instead and only reach for this to delegate.
   with `backend: "redirect:https://exe.example.com"`.
 - `GET /v1/routes` → `{"host": "backend-url", ...}` current published routes;
   `DELETE /v1/routes/{host}` unpublishes one.
-- `GET /v1/cloudflare/analytics?range=1h|24h|7d|30d&host=<published host>&tz=<IANA zone>`
+- `GET /v1/cloudflare/analytics?range=1h|24h|7d|30d&host=<published host>&bot=<category>&tz=<IANA zone>`
   → Cloudflare's edge traffic for the published hosts (all of them without
-  `host`): `totals` and `previous` (the span before; null for 30d) with
+  `host`; only one verified bot category's, such as `AI Crawler`, with
+  `bot`, the `bots` list alone staying broad): `totals` and `previous` (the span before; null for 30d) with
   `requests`, `visits`, `bytes`, `errors` (5xx), `refused` (4xx), `bots`;
   `series` of `{t, requests, visits}` a `step` apart (minute, 15m, hour, or
   the `tz` zone's days), the last `filling` of them still being counted;
   `hosts` (every published host with its totals and `to`, where it leads);
   and `lists` (`paths`, `errors`, `countries`, `status`, `cache`, `types`,
   `bots`, `browsers`, `systems`, `devices`) of `{label, tag, n}`. Needs the
-  token's Zone → Analytics → Read; answers are kept a minute.
+  token's Zone → Analytics → Read; answers are kept a minute. With
+  `stale=1` an answer up to 15 minutes old comes back at once, marked
+  `"refreshing": true`, while a fresh one is fetched behind it.
 
 ## Interactive terminal (WebSocket)
 

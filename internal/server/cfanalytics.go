@@ -25,16 +25,27 @@ import (
 // Cloudflare token — which needs Zone → Analytics → Read besides the
 // wizard's DNS and Tunnel grants.
 //
-// GET /v1/cloudflare/analytics?range=1h|24h|7d|30d&host=<host>&tz=<IANA zone>
+// GET /v1/cloudflare/analytics?range=1h|24h|7d|30d&host=<host>&bot=<category>&tz=<IANA zone>&stale=1
 //
 // One GraphQL request answers a view: every exposed host's totals, and for
 // the chosen host (or all of them) the chart, the totals of the span before
 // and the ranked lists. A Host header that carries a port (scanners try
 // Cloudflare's other HTTPS ports: tides.v2core.com:2096) is counted with its
 // host. The httpRequestsAdaptiveGroups dataset reaches back 31 days and
-// spans 30 at most, so 30 days has no span before to compare with. Answers
-// are kept a minute per view and a view asked for twice at once is fetched
-// once, whoever asks.
+// spans 30 at most, so 30 days has no span before to compare with.
+//
+// bot names one of Cloudflare's verified bot categories ("AI Crawler") and
+// narrows everything to it — the tiles, the chart, every host's totals and
+// the lists — except the Bots list itself, which stays broad so the other
+// categories can still be picked.
+//
+// A query costs a second or so, so answers are kept: one younger than a
+// minute is the answer, and a view asked for twice at once is fetched once,
+// whoever asks. With stale=1 an answer up to 15 minutes old is served at
+// once, marked refreshing, while a fresh one is fetched behind it (the app
+// paints it and asks again for the fresh). An All Hosts answer warms the
+// view of each host that had requests, two at a time, so the first switch
+// to a host is served from the kept answers too.
 
 type anRange struct {
 	Key  string
@@ -60,7 +71,17 @@ const anMaxSpan = 30*24*time.Hour - time.Minute
 // inside it are drawn as still filling.
 const anLag = 3 * time.Minute
 
-const anTTL = time.Minute
+const (
+	anFresh  = time.Minute      // an answer this young is the answer
+	anStale  = 15 * time.Minute // an older one may still be shown while a fresh one is fetched
+	anErrTTL = 10 * time.Second // a failure is not retried sooner
+)
+
+// anWarmHosts is how many hosts' views an All Hosts answer warms, busiest
+// first; anWarmAtOnce how many of those queries run at a time.
+var anWarmHosts = 12
+
+const anWarmAtOnce = 2
 
 var anHTTPClient = &http.Client{Timeout: 20 * time.Second}
 var anNow = time.Now
@@ -99,6 +120,7 @@ type anRow struct {
 type anResponse struct {
 	Range     string             `json:"range"`
 	Host      string             `json:"host"`
+	Bot       string             `json:"bot"`
 	Zone      string             `json:"zone"`
 	From      time.Time          `json:"from"`
 	To        time.Time          `json:"to"`
@@ -111,18 +133,41 @@ type anResponse struct {
 	Lists     map[string][]anRow `json:"lists"`
 	Sampled   float64            `json:"sample_interval"`
 	FetchedAt time.Time          `json:"fetched_at"`
+	// Refreshing marks a kept answer served under stale=1 while a fresh
+	// one is on its way.
+	Refreshing bool `json:"refreshing,omitempty"`
 }
 
+// anEntry is one view's kept answer: the last good one, the last failure,
+// and the fetch in the air, if any.
 type anEntry struct {
-	done chan struct{}
-	res  *anResponse
-	err  error
-	at   time.Time
+	res    *anResponse
+	at     time.Time
+	err    error
+	errAt  time.Time
+	flight chan struct{} // closed when the fetch lands
 }
 
 type anState struct {
 	mu      sync.Mutex
 	entries map[string]*anEntry
+	warm    chan struct{}  // slots for warming queries
+	warming sync.WaitGroup // warming in progress, for tests
+}
+
+// anView is what one answer is of.
+type anView struct {
+	rg     anRange
+	host   string
+	bot    string
+	loc    *time.Location
+	routes map[string]string
+	hosts  []string // the routes' hosts, sorted
+}
+
+func (s *Server) anKey(v anView) string {
+	c := s.Config().Cloudflare
+	return strings.Join([]string{c.APIToken, c.ZoneID, v.rg.Key, v.host, v.bot, v.loc.String(), strings.Join(v.hosts, ",")}, "|")
 }
 
 // anError is a failure the app shows as it is, with the status it gets.
@@ -145,82 +190,175 @@ func (s *Server) handleCFAnalytics(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errors.New("range must be 1h, 24h, 7d or 30d"))
 		return
 	}
-	rg := anRanges[i]
+	v := anView{rg: anRanges[i], loc: time.UTC}
 	c := s.Config().Cloudflare
 	if c.APIToken == "" || c.ZoneID == "" {
 		writeErr(w, http.StatusConflict, errors.New("Cloudflare is not set up. Run Special → Cloudflare Setup Wizard… first."))
 		return
 	}
-	var routes map[string]string
 	if s.Proxy != nil {
-		routes = s.Proxy.Snapshot()
+		v.routes = s.Proxy.Snapshot()
 	}
-	host := strings.ToLower(strings.TrimSpace(q.Get("host")))
-	if _, ok := routes[host]; host != "" && !ok {
-		writeErr(w, http.StatusNotFound, fmt.Errorf("%s is not published from this node", host))
+	v.host = strings.ToLower(strings.TrimSpace(q.Get("host")))
+	if _, ok := v.routes[v.host]; v.host != "" && !ok {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("%s is not published from this node", v.host))
 		return
 	}
-	loc := time.UTC
-	if rg.Days {
+	v.bot = strings.TrimSpace(q.Get("bot"))
+	if len(v.bot) > 64 || strings.ContainsFunc(v.bot, func(r rune) bool { return r < ' ' || r == 0x7f }) {
+		writeErr(w, http.StatusBadRequest, errors.New("bot must be one of Cloudflare's verified bot categories"))
+		return
+	}
+	if v.rg.Days {
 		if l, err := time.LoadLocation(q.Get("tz")); err == nil && q.Get("tz") != "" {
-			loc = l
+			v.loc = l
 		}
 	}
-	hosts := make([]string, 0, len(routes))
-	for h := range routes {
-		hosts = append(hosts, h)
+	for h := range v.routes {
+		v.hosts = append(v.hosts, h)
 	}
-	slices.Sort(hosts)
-	ck := strings.Join([]string{c.APIToken, c.ZoneID, rg.Key, host, loc.String(), strings.Join(hosts, ",")}, "|")
+	slices.Sort(v.hosts)
 
 	st := &s.cfAnalytics
 	st.mu.Lock()
 	if st.entries == nil {
 		st.entries = map[string]*anEntry{}
 	}
+	now := time.Now()
 	for k, e := range st.entries {
-		if e.res != nil || e.err != nil {
-			if time.Since(e.at) > 10*time.Minute {
-				delete(st.entries, k)
-			}
+		if e.flight == nil && now.Sub(e.at) > anStale && now.Sub(e.errAt) > anErrTTL {
+			delete(st.entries, k)
 		}
 	}
+	ck := s.anKey(v)
 	e := st.entries[ck]
-	fresh := e != nil && (e.res == nil && e.err == nil || // in flight
-		e.err == nil && time.Since(e.at) < anTTL ||
-		e.err != nil && time.Since(e.at) < 10*time.Second)
-	if !fresh {
-		e = &anEntry{done: make(chan struct{})}
+	if e == nil {
+		e = &anEntry{}
 		st.entries[ck] = e
-		st.mu.Unlock()
-		// the fetch is the view's, not this request's: a reader who
-		// closes the window must not fail it for another waiting on it
-		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-		res, err := s.fetchAnalytics(ctx, rg, host, loc, routes)
-		cancel()
-		st.mu.Lock()
-		e.res, e.err, e.at = res, err, time.Now()
-		if err != nil {
-			e.res = nil
+	}
+	failed := e.err != nil && now.Sub(e.errAt) < anErrTTL
+	var wait chan struct{}
+	kept := false // serving an answer that is no longer fresh
+	switch age := now.Sub(e.at); {
+	case e.res != nil && age < anFresh:
+	case e.res != nil && age < anStale && q.Get("stale") != "":
+		// the kept answer now, the fresh one behind it
+		kept = true
+		if e.flight == nil && !failed {
+			s.anFly(v, ck, e)
 		}
-		close(e.done)
+	case e.flight == nil && failed:
+	default:
+		if e.flight == nil {
+			s.anFly(v, ck, e)
+		}
+		wait = e.flight
 	}
 	st.mu.Unlock()
-	select {
-	case <-e.done:
-	case <-r.Context().Done():
-		return
+	if wait != nil {
+		select {
+		case <-wait:
+		case <-r.Context().Done():
+			return
+		}
 	}
-	if e.err != nil {
+	st.mu.Lock()
+	res, err := e.res, e.err
+	refreshing := kept && e.flight != nil
+	if !kept && (res == nil || time.Since(e.at) >= anFresh) {
+		res = nil // the fetch this request needed failed
+	}
+	st.mu.Unlock()
+	if res == nil {
+		if err == nil {
+			err = errors.New("Cloudflare did not answer")
+		}
 		var ae *anError
-		if errors.As(e.err, &ae) {
+		if errors.As(err, &ae) {
 			writeErr(w, ae.code, ae)
 			return
 		}
-		writeErr(w, http.StatusBadGateway, e.err)
+		writeErr(w, http.StatusBadGateway, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, e.res)
+	if refreshing {
+		marked := *res
+		marked.Refreshing = true
+		res = &marked
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// anFly starts the view's fetch; the caller holds the lock. The fetch is
+// the view's, not a request's: a reader who closes the window must not
+// fail it for another waiting on it.
+func (s *Server) anFly(v anView, ck string, e *anEntry) {
+	flight := make(chan struct{})
+	e.flight = flight
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		res, err := s.fetchAnalytics(ctx, v)
+		cancel()
+		st := &s.cfAnalytics
+		st.mu.Lock()
+		if err != nil {
+			e.err, e.errAt = err, time.Now()
+		} else {
+			e.res, e.at, e.err = res, time.Now(), nil
+		}
+		e.flight = nil
+		if err == nil && v.host == "" && v.bot == "" {
+			s.anWarm(v, res)
+		}
+		st.mu.Unlock()
+		close(flight)
+	}()
+}
+
+// anWarm fetches, behind an All Hosts answer, the view of each host that
+// had requests and has no answer worth showing, so the first switch to a
+// host is served from the kept answers. The caller holds the lock. A warming
+// query takes its slot before its flight starts: a reader who asks for the
+// host meanwhile flies at once instead of queueing behind the others.
+func (s *Server) anWarm(all anView, res *anResponse) {
+	st := &s.cfAnalytics
+	if st.warm == nil {
+		st.warm = make(chan struct{}, anWarmAtOnce)
+	}
+	n := 0
+	for _, h := range res.Hosts {
+		if n >= anWarmHosts || h.Requests == 0 {
+			break // busiest first
+		}
+		v := all
+		v.host = h.Host
+		ck := s.anKey(v)
+		if e := st.entries[ck]; e != nil && (e.flight != nil || e.res != nil && time.Since(e.at) < anStale) {
+			continue
+		}
+		n++
+		st.warming.Add(1)
+		go func() {
+			defer st.warming.Done()
+			st.warm <- struct{}{}
+			defer func() { <-st.warm }()
+			st.mu.Lock()
+			e := st.entries[ck]
+			if e == nil {
+				e = &anEntry{}
+				st.entries[ck] = e
+			}
+			var flight chan struct{}
+			if e.flight == nil && (e.res == nil || time.Since(e.at) >= anStale) && time.Since(e.errAt) >= anErrTTL {
+				s.anFly(v, ck, e)
+				flight = e.flight
+			}
+			st.mu.Unlock()
+			if flight != nil {
+				<-flight
+			}
+		}()
+	}
 }
 
 // anWindow is the view's span and its chart buckets: n steps ending with the
@@ -303,11 +441,12 @@ func (g anGroup) totals() anTotals {
 
 const anTotalFields = `count sum { visits edgeResponseBytes } ratio { status4xx status5xx }`
 
-func (s *Server) fetchAnalytics(ctx context.Context, rg anRange, host string, loc *time.Location, routes map[string]string) (*anResponse, error) {
+func (s *Server) fetchAnalytics(ctx context.Context, v anView) (*anResponse, error) {
+	rg, host, bot, loc, routes := v.rg, v.host, v.bot, v.loc, v.routes
 	c := s.Config().Cloudflare
 	now := anNow().UTC().Truncate(time.Second)
 	from, buckets := anWindow(rg, now, loc)
-	res := &anResponse{Range: rg.Key, Host: host, Zone: c.Domain, From: from, To: now,
+	res := &anResponse{Range: rg.Key, Host: host, Bot: bot, Zone: c.Domain, From: from, To: now,
 		Lists: map[string][]anRow{}, Series: []anPoint{}, Hosts: []anHost{}}
 	switch {
 	case rg.Days:
@@ -357,12 +496,25 @@ func (s *Server) fetchAnalytics(ctx context.Context, rg anRange, host string, lo
 		}
 		return f
 	}
+	// a chosen bot category narrows everything but the Bots list, which
+	// stays broad so the other categories can be picked; the bot count is
+	// then the request count itself
+	only := map[string]any{}
+	if bot != "" {
+		only["verifiedBotCategory"] = bot
+	}
+	with := func(extra map[string]any) map[string]any {
+		for k, v := range only {
+			extra[k] = v
+		}
+		return extra
+	}
 	vars := map[string]any{
 		"z":    c.ZoneID,
-		"all":  span(from, now, all, nil),
-		"sel":  span(from, now, sel, nil),
+		"all":  span(from, now, all, only),
+		"sel":  span(from, now, sel, only),
 		"bots": span(from, now, sel, map[string]any{"verifiedBotCategory_neq": ""}),
-		"errs": span(from, now, sel, map[string]any{"edgeResponseStatus_geq": 400}),
+		"errs": span(from, now, sel, with(map[string]any{"edgeResponseStatus_geq": 400})),
 	}
 	const F = "ZoneHttpRequestsAdaptiveGroupsFilter_InputObject!"
 	decl := "$z: String!, $all: " + F + ", $sel: " + F + ", $bots: " + F + ", $errs: " + F
@@ -380,7 +532,9 @@ func (s *Server) fetchAnalytics(ctx context.Context, rg anRange, host string, lo
 	var b strings.Builder
 	b.WriteString(g("hosts", 1000, "all", anTotalFields, "clientRequestHTTPHost", "count_DESC"))
 	b.WriteString(g("total", 1, "sel", anTotalFields+" avg { sampleInterval }", "", ""))
-	b.WriteString(g("botTotal", 1, "bots", "count", "", ""))
+	if bot == "" {
+		b.WriteString(g("botTotal", 1, "bots", "count", "", ""))
+	}
 	b.WriteString(g("series", 2000, "sel", "count sum { visits }", rg.Dim, rg.Dim+"_ASC"))
 	b.WriteString(g("paths", 50, "sel", "count", "clientRequestHTTPHost clientRequestPath", "count_DESC"))
 	b.WriteString(g("errors", 50, "errs", "count", "clientRequestHTTPHost clientRequestPath edgeResponseStatus", "count_DESC"))
@@ -394,11 +548,14 @@ func (s *Server) fetchAnalytics(ctx context.Context, rg anRange, host string, lo
 	b.WriteString(g("devices", 10, "sel", "count", "clientDeviceType", "count_DESC"))
 	if rg.Prev {
 		pfrom := from.Add(-now.Sub(from))
-		vars["psel"] = span(pfrom, from, sel, nil)
-		vars["pbots"] = span(pfrom, from, sel, map[string]any{"verifiedBotCategory_neq": ""})
-		decl += ", $psel: " + F + ", $pbots: " + F
+		vars["psel"] = span(pfrom, from, sel, only)
+		decl += ", $psel: " + F
 		b.WriteString(g("prevTotal", 1, "psel", anTotalFields, "", ""))
-		b.WriteString(g("prevBots", 1, "pbots", "count", "", ""))
+		if bot == "" {
+			vars["pbots"] = span(pfrom, from, sel, map[string]any{"verifiedBotCategory_neq": ""})
+			decl += ", $pbots: " + F
+			b.WriteString(g("prevBots", 1, "pbots", "count", "", ""))
+		}
 	}
 	query := "query(" + decl + ") { viewer { zones(filter: {zoneTag: $z}) {\n" + b.String() + "} } }"
 
@@ -457,6 +614,9 @@ func (s *Server) fetchAnalytics(ctx context.Context, rg anRange, host string, lo
 	if t, ok := one("botTotal"); ok {
 		res.Totals.Bots = t.Count
 	}
+	if bot != "" {
+		res.Totals.Bots = res.Totals.Requests
+	}
 	if rg.Prev {
 		p := anTotals{}
 		if t, ok := one("prevTotal"); ok {
@@ -464,6 +624,9 @@ func (s *Server) fetchAnalytics(ctx context.Context, rg anRange, host string, lo
 		}
 		if t, ok := one("prevBots"); ok {
 			p.Bots = t.Count
+		}
+		if bot != "" {
+			p.Bots = p.Requests
 		}
 		res.Previous = &p
 	}
