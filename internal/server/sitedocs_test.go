@@ -27,6 +27,18 @@ func TestMarkdownRender(t *testing.T) {
 		{"```sh\n$ ./exe serve  # the daemon\n```", `<span class="p">$</span> ./exe serve<span class="c">  # the daemon</span>`},
 		{"```\n# a comment\n```", `<span class="c"># a comment</span>`},
 		{"![the desktop](screenshot.png)", `<p class="shot"><img src="screenshot.png" alt="the desktop"></p>`},
+		// a window's picture: its size said, so it holds its place
+		{`<img src="https://hub.example.com/v1/embed/bafy" alt="About This Computer" width="482" height="378">`,
+			`<p class="pic"><img src="https://hub.example.com/v1/embed/bafy" alt="About This Computer" width="482" height="378" loading="lazy"></p>`},
+		{`<img src="/badge.gif" alt="" width="88" height="31" />`, `<p class="pic"><img src="/badge.gif" alt="" width="88" height="31" loading="lazy"></p>`},
+		{`<img src="https://h/x" alt="a &amp; b" width="1" height="1">`, `alt="a &amp; b"`},
+		// any other tag, attribute or address is text
+		{`<img src="https://h/x" width="4" height="4" onerror="alert(1)">`, "<p>&lt;img src="},
+		{`<img src="javascript:alert(1)" width="4" height="4">`, "<p>&lt;img src="},
+		{`<img src="//elsewhere/x" width="4" height="4">`, "<p>&lt;img src="},
+		{`<img src="https://h/x" alt="no size">`, "<p>&lt;img src="},
+		{`<b>bold</b>`, "<p>&lt;b&gt;bold&lt;/b&gt;</p>"},
+		{"words before\n<img src=\"/a.png\" alt=\"\" width=\"2\" height=\"2\">", "<p>words before</p>\n<p class=\"pic\">"},
 		// what is not markup is text, and text is escaped
 		{"a < b & c", "<p>a &lt; b &amp; c</p>"},
 		{"`<script>`", "<code>&lt;script&gt;</code>"},
@@ -92,6 +104,10 @@ func TestSiteDocs(t *testing.T) {
 		}
 		if strings.Contains(page, "```") {
 			t.Errorf("/docs/using/%s went out with unrendered markdown in it", c.Slug)
+		}
+		// a picture the renderer refused would reach the reader as its tag
+		if strings.Contains(page, "&lt;img") {
+			t.Errorf("/docs/using/%s shows a picture's tag as text", c.Slug)
 		}
 	}
 	// every word of the manual is on exactly one chapter page

@@ -895,6 +895,9 @@ pre.out { background: #10120f; color: #cfe3cf; border: 1px solid var(--black); p
 /* Documentation (Help menu): the manual on paper, rendered markdown with
    the chat's typography (the inner div carries .msg.asst) */
 #docs-body { height: 420px; overflow-y: scroll; overflow-x: hidden; user-select: text; }
+/* the manual's pictures: each a window, at its own size or the column's;
+   its width and height keep its place while it loads */
+#docs-md img { display: block; max-width: 100%; height: auto; margin: 8px 0 12px; }
 .news-item { position: relative; overflow: hidden; touch-action: pan-y; }
 .news-item + .news-item { border-top: 1px solid var(--g500); }
 /* the row content is its own white layer so on mobile it can slide left

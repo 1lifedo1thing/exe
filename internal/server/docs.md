@@ -39,6 +39,8 @@ memory bar per running VM shows its allotment, scaled so the largest fills
 the column, with exe's own footprint as the first row. It refreshes every
 few seconds while open.
 
+<img src="https://hub.v2core.com/v1/embed/bafkreightb5vb7wkbiirymaoj7ewmkedjeea2mcpl3x66gsscdylpjs434" alt="About This Computer: the build, the machine, its addresses, memory and disk, and a memory bar for exe and each running VM" width="482" height="378">
+
 **Updates arrive by themselves.** When the daemon restarts with a new
 desktop or new system apps, an open desktop notices and reloads — a few
 seconds after the daemon is back, at once in a tab you are not looking at.
@@ -63,6 +65,8 @@ installed on this host; one persistent session per agent, so closing the
 window and reopening it returns to the same conversation), one icon per VM,
 one per installed app, plus **Newsfeed**, **Chat** (appears when Ollama is
 reachable) and the **Trash**. Double-click opens things.
+
+<img src="https://hub.v2core.com/v1/embed/bafkreiadh2tua4bcsuus4cm7hrzhgz7hisurbvughod6t2ytfoqocedfny" alt="The Control Strip: the Cloudflare, Tailscale, Solana ticker and agent usage modules" width="271" height="24">
 
 The **Control Strip** in the bottom-left corner is OS 9's tray. Its first
 module is the Cloudflare heartbeat: the lamp on the cloud is green while
@@ -308,6 +312,8 @@ draw them, copy their SVG for use anywhere, delete them when done. System
 icons can only be repainted, never deleted. Restored editors keep their position,
 stacking and shaded state even when their icon loads after the desktop layout.
 
+<img src="https://hub.v2core.com/v1/embed/bafkreifywpjwrpr7wss5xiw5aukrugxpvupownkyis6pjq5vlzvdwidhby" alt="The Icon Editor's gallery of system icons, with New Icon at its top" width="562" height="383">
+
 ## Desktop context menu
 
 The desktop context menu is a NeXT-style menu that opens at the pointer.
@@ -319,6 +325,8 @@ The factory menu offers New VM, Terminal, Workspace, lists of VMs, apps
 and windows, Show All Windows, tools, Cloudflare and Help. You can rename
 or reorder items, add shortcuts and group them in submenus.
 
+<img src="https://hub.v2core.com/v1/embed/bafkreicioeb4dotyt2cxdkhzjsgolzxxtnl53etfnqvgpzpxnctlja4emy" alt="A customized desktop menu open on the desk, its Virtual Machines list showing two VMs" width="340" height="369">
+
 ### Edit and save
 
 Choose **Customize…** to open the menu editor. Edit the text, then click
@@ -327,6 +335,8 @@ checks the format first: an error identifies and selects the bad line,
 and your current menu stays in place until the file is valid.
 The scrollbars run along the document's right and bottom edges; drag the
 resize tile where they meet to make the editor wider or taller.
+
+<img src="https://hub.v2core.com/v1/embed/bafkreia3c6lsc3lfvgmuilnaevilaigaeg7tco5ktic4upy3rr6sgx4n6q" alt="The Desktop Menu editor with System :menu.txt open: a label on each line, then its action" width="522" height="420">
 
 The menu is stored as `System :menu.txt` (normally
 `~/.exe/appdata/System/menu.txt`). A saved change reaches other open
@@ -530,6 +540,8 @@ guest display keeps its size and connection.
 Automatic emulator installation supports Ubuntu 24.04; other hosts need
 `qemu-system-ppc` and `qemu-img` installed first (on macOS, `brew install qemu`).
 
+<img src="https://hub.v2core.com/v1/embed/bafkreiezokqwstse7romg3g2ybez6hv2soyoqdknotaahcm3y3j7vh5c24" alt="The Mac OS 9 window: a running Power Mac G4 with the Finder, its Control Strip, and the app's own buttons above it" width="814" height="687">
+
 The app guides you through Drive Setup and Apple Software Restore inside the
 Mac. After Restore reports success, shut down the guest and click
 **Installation finished — start my Mac**. Subsequent launches use the saved
@@ -610,6 +622,8 @@ memory and a 20 GB disk. The very first VM downloads the Debian base image
 (~3 GB) once — later VMs clone it and boot in seconds. VMs persist: stopping
 one keeps its disk, starting boots it again, deleting destroys the disk too.
 
+<img src="https://hub.v2core.com/v1/embed/bafkreihgifdv4knmxe7hrxsnv3tybqwv2cbfcf47zcmdmydnuxrtgnmzuu" alt="The New VM dialog: a name, CPUs, memory, disk and the System pop-up" width="332" height="246">
+
 The **System** pop-up picks the VM's Linux: **Debian 13**, the default, or
 **Alpine 3.24** — a ~93 MB download the first time, a lean guest for
 disposable experiments. An Alpine guest runs OpenRC and `apk`, not systemd
@@ -626,6 +640,8 @@ Computer shows the same reason, and everything else works as usual.
 Right-click a running VM and choose **btop** to open its process monitor in
 an 80×24 terminal window. It runs the VM's installed `btop` over SSH; press
 **q** to quit and close the window. A failed launch leaves its error visible.
+
+<img src="https://hub.v2core.com/v1/embed/bafkreidvhuabfxo7lqmwu33nslajdbuexc42slkqjbazf7hzlcnmjjzseq" alt="The Virtual Machines window listing two running VMs with their specs and IP addresses" width="562" height="131">
 
 Double-click a VM in the list to open its window. Its status line shows the
 state lamp, then middot-separated: the IP, how much disk the VM really holds
@@ -647,6 +663,8 @@ every five seconds while the window is open. The tabs:
 - **Notes** — free-form notes about the VM, saved automatically. Agents are
   told to read these before working in an unfamiliar VM, so write down what
   runs where.
+
+<img src="https://hub.v2core.com/v1/embed/bafkreiajs7o257w7yffrgteuxigohvbvcy5vapumuy2yfvxb7awv4ujoiu" alt="A VM's window on its Services tab: the state, IP, disk and system, then the ports listening inside it and the addresses they are published at" width="682" height="379">
 
 ## SSH from your own terminal
 
@@ -688,6 +706,8 @@ needs one. Then:
   never interrupts a long task — reopen the chat and select the session,
   marked with a green dot while streaming, to rejoin it live. The **Stop**
   button actually cancels the run.
+
+<img src="https://hub.v2core.com/v1/embed/bafkreiguvunbfzvv4srl3kc444sa4kyrsg4jgvrtnqk4vp7sgsp2urzgni" alt="A VM's Agent tab: a prompt for the agent and the Run Agent button" width="602" height="379">
 
 The Chat window can also run on a **ChatGPT subscription** instead of
 Ollama: in **Windows → Configuration → OpenAI**, click **Sign in with
@@ -792,6 +812,8 @@ needed, commits any uncommitted work as your GitHub account's noreply
 identity, creates the repository, and pushes. Publishing again later pushes
 the new commits to the same repository.
 
+<img src="https://hub.v2core.com/v1/embed/bafkreiasgpixuvyoargp7mmhpljkz2rp3f6oet5du6dnjrwrwzhjgwswcy" alt="The Publish to GitHub dialog: the signed-in account, the project folder in the VM, the repository name and Private repository" width="422" height="235">
+
 The Chat agent can do the same: tell it to "push to github" and it uses the
 daemon's github_push tool — a plain `git push` inside a VM always fails,
 because that is the point.
@@ -822,6 +844,8 @@ before it. 30 days has no span before: Cloudflare keeps these numbers 31
 days. The chart draws requests and visits over the span, a minute, 15
 minutes, an hour or a day a point; the last points, which Cloudflare is
 still counting, are drawn pale. Point at the chart to read one.
+
+<img src="https://hub.v2core.com/v1/embed/bafkreicygtsslkz6zbwpqbj6ygwlhbxbvhu7hsowdvvijhqt4mptfpnc4u" alt="The Analytics window over the last hour: requests, visits, data served, verified bots and server errors, the chart, and the hosts by requests" width="662" height="587">
 
 Click a row in **Bots** to narrow everything to that category, keeping the
 chosen host: the tiles, the chart, the host totals and the other lists then
@@ -870,6 +894,8 @@ the path is typed into the window).
 New files brought in this way are announced on the Newsfeed, so every desk
 in the mesh sees them arrive; overwriting an existing file stays quiet.
 
+<img src="https://hub.v2core.com/v1/embed/bafkreigcssoqlxnaybr7d7yjusstyejrfd4utagcwqzonbjzhadtwcbs4m" alt="The Workspace window with folders, a picture, a movie, a sound and text files" width="522" height="266">
+
 ## Apps
 
 Built-in app IDs use lowercase names (`macos9`, `hub`, `bluepencil`); their
@@ -895,6 +921,8 @@ and tunnel rule a VM's Expose makes), or send every changed build to
 IPFS under a key this node keeps, or both. Both are off until you turn
 them on, and Export… bundles the site with its key for another node.
 
+<img src="https://hub.v2core.com/v1/embed/bafkreiawlo2odksnfrqdqi4txaanzhb4b2cq6enapldb6a3e3uusvlj4ny" alt="The Planet window: sites on the left, the chosen site's posts in the middle, and the built page on the right" width="762" height="467">
+
 The same sheet can put an exposed site on an exe hub. Turn on **Announce**
 and give the hub's address: this node invites the site's own key there
 (the site's key is also its IPNS name and a Solana address), and from then
@@ -916,7 +944,11 @@ The **Newsfeed** is the shared timeline of the mesh: VMs created and
 deleted, nodes joining, sync conflicts — and agents can post to it, so
 finished work or problems show up on every desk.
 
+<img src="https://hub.v2core.com/v1/embed/bafkreiax4eitncarscykxoemj73yk2lakp4xpxy4r33mmzlzjeepsjr5fq" alt="The Newsfeed: a file added to the Workspace, a project published to GitHub, VMs created and deleted" width="432" height="372">
+
 ## The Hub
+
+<img src="https://hub.v2core.com/v1/embed/bafkreife4pj25xqeqid7wsexsq633j2fikk2lmdef4gkphs4fbryjgo7yi" alt="The Hub app open on a thread: the reply field and its buttons, a post with two pictures, and a reply under it" width="522" height="587">
 
 The **Hub** app is a small public feed shared between exe nodes. An
 exe-hub is one binary anyone can run; a key is an account. Posts you write
@@ -1159,6 +1191,8 @@ worth the wait; Ollama's Off is fastest, but some models then think out
 loud in the answer; a level a ChatGPT model rejects runs at its default),
 and whether changes are marked at all.
 
+<img src="https://hub.v2core.com/v1/embed/bafkreid4jiirth7777z32dmbzjkeyrh6d6zywg77z4dtjmgwsxdoducgpa" alt="Blue Pencil: a draft in the top field, and below it the checked text with five corrections marked in blue" width="602" height="467">
+
 Drafts are listed down the window's left, the way a Claude Code or Codex
 window lists its sessions: one row per draft, newest first, titled by its
 first line. Click a row to open that draft; **New** starts another beside
@@ -1226,6 +1260,8 @@ restart. Highlights:
 - `ssh_user` — the user created in every VM (default `dev`).
 - `ollama.*`, `chat_provider`, `openai.model`, `cloudflare.*` — the agent
   and publishing sections above.
+
+<img src="https://hub.v2core.com/v1/embed/bafkreib5o3chahprhedmnmlt5ewo25povt6sfx5rfqqiawty3pwxv3b77i" alt="The Configuration window on its Daemon tab: listen, proxy_listen, ssh_listen, advertise_host, api_token and more" width="662" height="476">
 
 **Windows → Log Viewer** streams two logs live, a tab each, when something
 needs a closer look. **Daemon Log** is the daemon's own log. **Access Log**

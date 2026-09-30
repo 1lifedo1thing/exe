@@ -357,12 +357,21 @@ detail; the <a href="/">homepage</a> is the short version and the
 // tables, and inline code, bold, italic and links. No nesting, no
 // blockquotes: what the pages use and nothing else, so what a page says
 // is what a reader gets.
+//
+// A picture is a line of its own: `![alt](src)` for a screenshot of the
+// desk, or an `<img>` tag with its width and height for a window of the
+// desktop's — the manual's pictures, which the desktop's Help window
+// renders too. That tag is the one piece of HTML read as HTML, and only
+// its src, alt, width and height are kept; anything else is text.
 
 var (
 	mdHeading = regexp.MustCompile(`^(#{1,3})\s+(.*)$`)
 	mdBullet  = regexp.MustCompile(`^[-*]\s+(.*)$`)
 	mdNumber  = regexp.MustCompile(`^\d+\.\s+(.*)$`)
 	mdImage   = regexp.MustCompile(`^!\[([^\]]*)\]\(([^)\s]+)\)\s*$`)
+	mdImgTag  = regexp.MustCompile(`^<img\s((?:\s*[a-z]+="[^"<>]*")+)\s*/?>\s*$`)
+	mdImgAttr = regexp.MustCompile(`([a-z]+)="([^"<>]*)"`)
+	mdDigits  = regexp.MustCompile(`^[1-9][0-9]{0,4}$`)
 	mdLink    = regexp.MustCompile(`\[([^\]]+)\]\(([^)\s]+)\)`)
 	mdBold    = regexp.MustCompile(`\*\*([^*]+)\*\*`)
 	mdItalic  = regexp.MustCompile(`\*([^*\s][^*]*)\*`)
@@ -396,6 +405,9 @@ func mdRender(src string) template.HTML {
 			m := mdImage.FindStringSubmatch(line)
 			b.WriteString(`<p class="shot"><img src="` + html.EscapeString(m[2]) + `" alt="` + html.EscapeString(m[1]) + `"></p>` + "\n")
 
+		case mdPicture(line) != "":
+			b.WriteString(mdPicture(line))
+
 		case strings.HasPrefix(line, "|"):
 			var rows []string
 			for ; i < len(lines) && strings.HasPrefix(lines[i], "|"); i++ {
@@ -414,7 +426,7 @@ func mdRender(src string) template.HTML {
 			for ; i < len(lines) && strings.TrimSpace(lines[i]) != "" &&
 				!strings.HasPrefix(lines[i], "```") && !strings.HasPrefix(lines[i], "|") &&
 				!mdHeading.MatchString(lines[i]) && !mdBullet.MatchString(lines[i]) &&
-				!mdNumber.MatchString(lines[i]); i++ {
+				!mdNumber.MatchString(lines[i]) && mdPicture(lines[i]) == ""; i++ {
 				para = append(para, strings.TrimSpace(lines[i]))
 			}
 			i--
@@ -422,6 +434,36 @@ func mdRender(src string) template.HTML {
 		}
 	}
 	return template.HTML(b.String())
+}
+
+// mdPicture renders a line that is one <img> tag: a window of the
+// desktop's, drawn at its own size. Its width and height hold its place
+// from the first paint, so nothing moves when it arrives. The address
+// is the hub's or the site's own (https or a path); a tag that is not
+// exactly that renders nothing here and is read as text.
+func mdPicture(line string) string {
+	m := mdImgTag.FindStringSubmatch(line)
+	if m == nil {
+		return ""
+	}
+	a := map[string]string{}
+	for _, kv := range mdImgAttr.FindAllStringSubmatch(m[1], -1) {
+		switch kv[1] {
+		case "src", "alt", "width", "height":
+			a[kv[1]] = html.UnescapeString(kv[2])
+		default:
+			return ""
+		}
+	}
+	src := a["src"]
+	if !strings.HasPrefix(src, "https://") && !(strings.HasPrefix(src, "/") && !strings.HasPrefix(src, "//")) {
+		return ""
+	}
+	if !mdDigits.MatchString(a["width"]) || !mdDigits.MatchString(a["height"]) {
+		return ""
+	}
+	return `<p class="pic"><img src="` + html.EscapeString(src) + `" alt="` + html.EscapeString(a["alt"]) +
+		`" width="` + a["width"] + `" height="` + a["height"] + `" loading="lazy"></p>` + "\n"
 }
 
 // mdList renders the list beginning at lines[i] and says which line it
