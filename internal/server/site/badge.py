@@ -52,16 +52,16 @@ COMPUTER = [
     "khBBBBBBBBBBBBBBdk",
     "khBBBBBBBBBBBBBBdk",
     "khBBBBBBBBBBBBBBdk",
-    "khBBBBTTTTTTTTBBdk",
-    "khBBBBTTTTTTTTBBdk",
+    "khBBBTTTTTTTTBBBdk",
+    "khBBBTTTTTTTTBBBdk",
     "khBBBBBBBBBBBBBBdk",
     "khBBBBBBBBBBBBBBdk",
     "khBBBBBBBBBBBBBBdk",
     "khdddddddddddddddk",
     "kkkkkkkkkkkkkkkkkk",
     "..khbbbbbbbbbbdk..",
-    "..kdddddddddddddk.",
-    "..kkkkkkkkkkkkkkk.",
+    "..kddddddddddddk..",
+    "..kkkkkkkkkkkkkk..",
 ]
 CX, CY = 4, 3  # where it stands
 SCREEN = (CX + 4, CY + 4)  # the green's top left: 10 by 7
