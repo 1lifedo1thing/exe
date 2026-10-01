@@ -176,6 +176,11 @@ type pushMessage struct {
 	Body  string `json:"body"`
 	Tag   string `json:"tag"`
 	URL   string `json:"url,omitempty"`
+	// Show names the window a tap should open, for a desk already open
+	// (sw.js posts it to the page; URL carries the same in its fragment
+	// for a desk that has to be loaded first): "claude:exe-claude-2",
+	// "chat:<session id>" (agentpush.go).
+	Show string `json:"show,omitempty"`
 }
 
 // pushAll sends one message to every subscription, dropping the ones whose

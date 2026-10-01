@@ -143,6 +143,20 @@ push, at most four warnings per hazard in 24 hours, in °F and mph for a US
 city and °C and km/h elsewhere. Reorder the Weather list and the watcher
 follows; there is no setting to flip.
 
+The same switch tells you when an agent is done. When a turn ends in a
+Claude Code or Codex window's session, a push says **Claude Code finished**
+or **Codex finished** with the session's title under it; when a Chat run
+ends on its own — a VM's Agent tab starts one too — it says **Chat
+finished** with the chat's title, or **Chat stopped** with the error that
+ended it. Tap the notification and the desktop opens that window on that
+session or chat, whether it was already open or has to be loaded first. A
+turn that ends within a minute of your last keystroke in that session from
+a desktop window, or of your last message in that chat, stays quiet: you
+are still there. So does a run you stopped yourself. One notification
+stands per session, a later turn's replacing the earlier one. Only
+sessions started from the desktop's windows are followed — a `claude` run
+in a shell of your own carries none of the desktop's hooks.
+
 A Claude Code window's status line shows the session's figures at its
 right — the model, context in use, tokens, cost and the plan's 5-hour and
 7-day usage windows — kept current after every reply by Claude Code's own

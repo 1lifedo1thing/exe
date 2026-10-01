@@ -233,6 +233,11 @@ func cmdServe() error {
 	// city, a push when rain reaches the next hour and one when it clears.
 	go srv.RunRain(context.Background())
 
+	// A push when a Claude Code or Codex turn ends in one of the desk's
+	// agent sessions; a tap opens that window (Chat runs push their own
+	// end).
+	go srv.RunAgentPush(context.Background())
+
 	apiHandler := srv.Handler()
 	// Every API request, each listener, goes to access.log beside
 	// daemon.log: who reached the API, what they asked, what they got.

@@ -348,6 +348,9 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 			if _, err := sh.Write(data); err != nil {
 				return
 			}
+			if col != nil && personInput(data) {
+				s.noteAgentInput(col.current(), time.Now()) // someone is at this session: its turn end needs no push
+			}
 		case websocket.MessageText:
 			var msg struct {
 				Resize  []int           `json:"resize"`

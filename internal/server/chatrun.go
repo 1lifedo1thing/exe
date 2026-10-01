@@ -58,6 +58,11 @@ type chatRun struct {
 	// them so a stale answer can't approve a later confirmation.
 	confirm    *chatConfirmReq
 	confirmSeq int
+	// for the push at the run's end (agentpush.go): when the person last
+	// said something in it — the send that started it, a message queued
+	// since — and the last error the loop reported, "" for a clean end
+	lastInput time.Time
+	failed    string
 }
 
 // chatConfirmTimeout bounds how long the loop waits for the user to answer
@@ -125,6 +130,7 @@ func (r *chatRun) queue(msg string) bool {
 		return false
 	}
 	r.queued = append(r.queued, msg)
+	r.lastInput = time.Now()
 	return true
 }
 
@@ -160,6 +166,9 @@ func (r *chatRun) emit(ev map[string]any) {
 	}
 	r.mu.Lock()
 	r.events = append(r.events, b)
+	if ev["type"] == "error" {
+		r.failed, _ = ev["error"].(string)
+	}
 	r.mu.Unlock()
 	r.cond.Broadcast()
 }
@@ -190,7 +199,7 @@ func (r *chatRun) stopReason() string {
 // longer exists.
 func (s *Server) startChatRun(cfg *config.Config, provider string, sess *chat.Session, message string) (*chatRun, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	run := &chatRun{base: len(sess.Messages) + 1, userMsg: message, cancel: cancel}
+	run := &chatRun{base: len(sess.Messages) + 1, userMsg: message, cancel: cancel, lastInput: time.Now()}
 	run.cond = sync.NewCond(&run.mu)
 	if _, loaded := s.chatRuns.LoadOrStore(sess.ID, run); loaded {
 		cancel()
@@ -241,8 +250,10 @@ func (s *Server) startChatRun(cfg *config.Config, provider string, sess *chat.Se
 			run.emit(map[string]any{"type": "done", "meta": sess.Meta})
 			run.mu.Lock()
 			run.done = true
+			stopped, failed, lastInput := run.stopMsg != "" || ctx.Err() != nil, run.failed, run.lastInput
 			run.mu.Unlock()
 			run.cond.Broadcast()
+			s.pushChatEnd(sess.ID, sess.Title, sess.VM, failed, stopped, lastInput, time.Now())
 			// Detached so done isn't delayed by a model call: after this the
 			// run goroutine's sess is private, safe to digest without locks.
 			go s.summarizeChat(cfg, provider, sess, run.base)

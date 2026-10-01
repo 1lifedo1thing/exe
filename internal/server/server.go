@@ -123,6 +123,11 @@ type Server struct {
 	vapidKey *ecdsa.PrivateKey
 	vapidPub string
 
+	// When the person last typed into each agent session from a desk
+	// window: a turn that ends right after needs no push (agentpush.go).
+	agentInputMu sync.Mutex
+	agentInput   map[string]time.Time
+
 	// Cached chat-backend detection for the Chat window, plus the in-flight
 	// detached reply per chat session (chatrun.go) — one at most, so two
 	// sends can't interleave a session's history.

@@ -44,22 +44,31 @@ self.addEventListener("fetch", e => {
   })());
 });
 
-// A push from the daemon (the ticker's price alerts, docs/price-alerts.md):
-// show it — the tag replaces an older notification for the same token
-// rather than stacking — and a tap brings the desktop forward or opens it.
+// A push from the daemon — the ticker's price alerts (docs/price-alerts.md),
+// the weather's, an agent's turn end (agentpush.go): show it — the tag
+// replaces an older notification for the same token or session rather than
+// stacking.
 self.addEventListener("push", e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { title: "exe", body: e.data ? e.data.text() : "" }; }
   e.waitUntil(self.registration.showNotification(d.title || "exe", {
     body: d.body || "", tag: d.tag || "exe", renotify: true,
-    icon: "/ui/icon-192.png", badge: "/ui/icon-192.png", data: { url: d.url || "/" } }));
+    icon: "/ui/icon-192.png", badge: "/ui/icon-192.png", data: { url: d.url || "/", show: d.show || "" } }));
 });
 
+// A tap brings the desktop forward or opens it. A push that names a window
+// (show: an agent session, a chat) has the desktop open it there: an open
+// desktop is told in a message, one that has to be loaded finds the same in
+// the URL's fragment. The desktop is the top-level page at "/" — an app's
+// frame or the manual in a tab of its own is not it.
 self.addEventListener("notificationclick", e => {
   e.notification.close();
-  const url = new URL((e.notification.data && e.notification.data.url) || "/", self.location.origin).href;
+  const d = e.notification.data || {};
+  const url = new URL(d.url || "/", self.location.origin).href;
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => {
-    const c = cs.find(x => x.url.startsWith(self.location.origin));
-    return c ? c.focus() : self.clients.openWindow(url);
+    const c = cs.find(x => x.frameType === "top-level" && new URL(x.url).origin === self.location.origin && new URL(x.url).pathname === "/");
+    if (!c) return self.clients.openWindow(url);
+    if (d.show) c.postMessage({ exeShow: d.show });
+    return c.focus();
   }));
 });

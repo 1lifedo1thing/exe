@@ -2188,8 +2188,32 @@ if (IS_MOBILE && /iPhone|iPod|iPad/i.test(navigator.userAgent))
 // The service worker (/sw.js) has one job: the alert page for a top-level
 // load the daemon cannot answer (offline.html). Browsers expose the API on
 // a secure origin only, so over the plain-HTTP address this is skipped.
-if ("serviceWorker" in navigator)
+if ("serviceWorker" in navigator) {
   addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+  // a tapped notification that names a window (sw.js) opens it here
+  navigator.serviceWorker.addEventListener("message", e => {
+    if (e.data && typeof e.data.exeShow === "string") showTarget(e.data.exeShow);
+  });
+}
+// showTarget opens what a notification named when an agent's turn ended
+// (the daemon's agentpush.go): "claude:exe-claude-2" is the Claude Code
+// window on that session, "chat:<id>" the Chat window on that chat. A
+// desk that had to be loaded for the tap finds the same after "#show=" in
+// its address (showFromHash, at boot). Anything else is ignored.
+function showTarget(t) {
+  const m = /^([a-z]+):([A-Za-z0-9_-]+)$/.exec(t || "");
+  if (!m) return;
+  if (m[1] === "chat") { openChatWin(); selectChat(m[2]); return; }
+  if (!AGENT_APPS[m[1]]) return;
+  const w = openHostTermWin(m[1]);
+  if (w && w._showSession) w._showSession(m[2]);
+}
+function showFromHash() {
+  const m = /^#show=(.+)$/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(null, "", location.pathname + location.search); // a reload must not open it again
+  showTarget(decodeURIComponent(m[1]));
+}
 // A phone's keyboard: iOS keeps the layout viewport at full height under
 // the keys and pans it to show the focused field, so a fullscreen window's
 // bottom — a Claude Code window's input line — stays behind the keyboard.
@@ -6728,6 +6752,17 @@ function openHostTermWin(app, cmd, vm, termSess) {
     renderSessions();
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ switch: name }));
   }
+  // a notification's tap asks for a session (showTarget): the switch waits
+  // for the column's list when the window has only just been opened, and
+  // a session that is gone by then leaves the window where it is
+  let wanted = "";
+  const showWanted = () => {
+    if (!wanted || !current) return;
+    const name = wanted;
+    wanted = "";
+    if (name !== current && sessions.some(s => s.name === name)) switchSession(name);
+  };
+  w._showSession = name => { wanted = name; if (ws && ws.readyState === 1) showWanted(); };
   const threadTitle = t => t.title || t.thread.slice(0, 8);
   function resumeThread(t) {
     if (pending || !(ws && ws.readyState === 1)) return; // one at a time: a second click must not start a second session
@@ -6941,6 +6976,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
         current = msg.current || current;
         if (Array.isArray(msg.threads)) { threads = msg.threads; pending = ""; }
         renderSessions();
+        showWanted();
       }
       if (msg.error) toast(msg.error);
     };
@@ -10076,7 +10112,8 @@ j("/v1/hostinfo").then(h => {
   if (any) renderIcons(lastVMs);
   vmsError = h.vms_error || "";
   applyVMsError();
-}).catch(() => { vmsError = ""; applyVMsError(); });
+}).catch(() => { vmsError = ""; applyVMsError(); })
+  .then(showFromHash); // a notification's tap loaded this desk: an agent window needs hostAgents to know its shape
 loadConfig().catch(() => {});
 cfHeartbeat(false);
 chatDetect(false);
