@@ -6767,6 +6767,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
   function resumeThread(t) {
     if (pending || !(ws && ws.readyState === 1)) return; // one at a time: a second click must not start a second session
     pending = t.thread;
+    status.textContent = "opening session…";
     renderSessions();
     ws.send(JSON.stringify({ resume: t.thread }));
   }
@@ -6974,11 +6975,26 @@ function openHostTermWin(app, cmd, vm, termSess) {
       if (Array.isArray(msg.sessions)) {
         if (msg.sessions.length) sessions = msg.sessions;
         current = msg.current || current;
-        if (Array.isArray(msg.threads)) { threads = msg.threads; pending = ""; }
+        if (Array.isArray(msg.threads)) {
+          threads = msg.threads;
+          // A poll can arrive while the launch is still in flight. Only
+          // the resumed thread leaving the list acknowledges this request.
+          if (pending && !threads.some(t => t.thread === pending)) {
+            pending = "";
+            status.textContent = "connected";
+          }
+        }
         renderSessions();
         showWanted();
       }
-      if (msg.error) toast(msg.error);
+      if (msg.error) {
+        if (pending) {
+          pending = "";
+          status.textContent = "could not open session";
+          renderSessions();
+        }
+        toast(msg.error);
+      }
     };
     ws.onclose = e => lost(e.code, e.reason);
   }
@@ -7002,6 +7018,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
   // reconnect could only offer a stranger.
   function lost(code, reason) {
     ws = null;
+    if (pending) { pending = ""; renderSessions(); }
     clearInterval(hb); hb = 0;
     clearTimeout(probe); probe = 0;
     usage.hidden = true; // the figures come back with the link

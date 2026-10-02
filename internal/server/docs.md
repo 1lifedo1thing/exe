@@ -263,7 +263,10 @@ Hover a row for where and when it started. Click it, or choose **Continue
 Here** from its menu, and the thread opens in a session of its own, in the
 folder it was started in: the row moves up among the sessions and the
 conversation carries on here; leave it be and it stays where it is. The
-API takes the same: `POST /v1/agents/codex/sessions` with `{"resume":
+status line says **opening session…** while it starts. If opening fails,
+the error is shown and you can click again; a reconnect also allows a
+fresh attempt once the window is connected. The API takes the same:
+`POST /v1/agents/codex/sessions` with `{"resume":
 "<thread id>"}`, and `GET …/sessions` lists the threads beside the
 sessions.
 
