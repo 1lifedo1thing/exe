@@ -4232,25 +4232,54 @@ async function openWorkspaceFile(rel) {
     setTimeout(() => URL.revokeObjectURL(u), 60000);
   } catch (e) {}
 }
-// type-select, as in the OS 9 Finder: letters typed into the front icon
-// window (Workspace folders, My Apps, Icons) select the first item whose
-// name starts with them, or else the one that sorts next; keys typed
-// within a second of each other spell one name ("ar" passes "apps")
+// the keyboard in the front icon window (Workspace folders, My Apps,
+// Icons), as in the OS 9 Finder. Type-select: letters select the first item
+// whose name starts with them, or else the one that sorts next; keys typed
+// within a second of each other spell one name ("ar" passes "apps"). Arrows
+// move the selection an icon over or a row up or down, never off the grid.
 let tsBuf = "", tsAt = 0;
+function fiPick(box, hit) {
+  box.querySelectorAll(".fitem").forEach(it => it.classList.toggle("sel", it === hit));
+  // scroll the box alone: scrollIntoView would also shift the desktop under
+  // a window hanging off its edge
+  const top = hit.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientTop;
+  if (top < 0) box.scrollTop += top - 10;
+  else if (top + hit.offsetHeight > box.clientHeight) box.scrollTop += top + hit.offsetHeight - box.clientHeight;
+}
+// the icons wrap in rows of equal width, so a row is `cols` items long;
+// down from beyond the short last row lands on its last icon
+function fiStep(items, cur, key) {
+  const i = items.indexOf(cur);
+  if (i < 0) return items[0];
+  const cols = items.filter(it => it.offsetTop === items[0].offsetTop).length;
+  const lastRow = Math.floor((items.length - 1) / cols);
+  if (key === "ArrowLeft" && i % cols) return items[i - 1];
+  if (key === "ArrowRight" && i % cols < cols - 1 && i + 1 < items.length) return items[i + 1];
+  if (key === "ArrowUp" && i >= cols) return items[i - cols];
+  if (key === "ArrowDown" && Math.floor(i / cols) < lastRow) return items[Math.min(i + cols, items.length - 1)];
+  return cur;
+}
 document.addEventListener("keydown", e => {
-  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+  const arrow = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key);
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || !arrow && e.key.length !== 1) return;
   if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
   if (showAllOn || !ctxMenu.hidden || document.querySelector(".overlay:not([hidden])")) return;
   const w = document.querySelector("#desktop .window.front");
   const box = w && !w.hidden && !w.classList.contains("shaded") && w.querySelector(".finder-icons");
   if (!box) return;
+  const items = [...box.querySelectorAll(".fitem")];
+  if (arrow) {
+    e.preventDefault();
+    tsAt = 0; // a letter after an arrow starts a new name
+    if (items.length) fiPick(box, fiStep(items, box.querySelector(".fitem.sel"), e.key));
+    return;
+  }
   const now = Date.now();
   if (now - tsAt > 1000) tsBuf = "";
   tsAt = now;
   if (!tsBuf && e.key === " ") return;
   tsBuf += e.key.toLowerCase();
   e.preventDefault();
-  const items = [...box.querySelectorAll(".fitem")];
   if (!items.length) return;
   const name = it => it.querySelector(".lbl").textContent.toLowerCase();
   let hit = items.find(it => name(it).startsWith(tsBuf));
@@ -4260,12 +4289,7 @@ document.addEventListener("keydown", e => {
     hit = after.length ? after.reduce((a, b) => name(b) < name(a) ? b : a)
       : items.reduce((a, b) => name(b) > name(a) ? b : a);
   }
-  items.forEach(it => it.classList.toggle("sel", it === hit));
-  // scroll the box alone: scrollIntoView would also shift the desktop under
-  // a window hanging off its edge
-  const top = hit.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientTop;
-  if (top < 0) box.scrollTop += top - 10;
-  else if (top + hit.offsetHeight > box.clientHeight) box.scrollTop += top + hit.offsetHeight - box.clientHeight;
+  fiPick(box, hit);
 });
 
 // ---- My Apps: a Finder window over the published app domains ----
