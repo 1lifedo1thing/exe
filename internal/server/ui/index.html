@@ -4232,6 +4232,41 @@ async function openWorkspaceFile(rel) {
     setTimeout(() => URL.revokeObjectURL(u), 60000);
   } catch (e) {}
 }
+// type-select, as in the OS 9 Finder: letters typed into the front icon
+// window (Workspace folders, My Apps, Icons) select the first item whose
+// name starts with them, or else the one that sorts next; keys typed
+// within a second of each other spell one name ("ar" passes "apps")
+let tsBuf = "", tsAt = 0;
+document.addEventListener("keydown", e => {
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+  if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
+  if (showAllOn || !ctxMenu.hidden || document.querySelector(".overlay:not([hidden])")) return;
+  const w = document.querySelector("#desktop .window.front");
+  const box = w && !w.hidden && !w.classList.contains("shaded") && w.querySelector(".finder-icons");
+  if (!box) return;
+  const now = Date.now();
+  if (now - tsAt > 1000) tsBuf = "";
+  tsAt = now;
+  if (!tsBuf && e.key === " ") return;
+  tsBuf += e.key.toLowerCase();
+  e.preventDefault();
+  const items = [...box.querySelectorAll(".fitem")];
+  if (!items.length) return;
+  const name = it => it.querySelector(".lbl").textContent.toLowerCase();
+  let hit = items.find(it => name(it).startsWith(tsBuf));
+  // no name starts so: the nearest one after it, else the last of all
+  if (!hit) {
+    const after = items.filter(it => name(it) > tsBuf);
+    hit = after.length ? after.reduce((a, b) => name(b) < name(a) ? b : a)
+      : items.reduce((a, b) => name(b) > name(a) ? b : a);
+  }
+  items.forEach(it => it.classList.toggle("sel", it === hit));
+  // scroll the box alone: scrollIntoView would also shift the desktop under
+  // a window hanging off its edge
+  const top = hit.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientTop;
+  if (top < 0) box.scrollTop += top - 10;
+  else if (top + hit.offsetHeight > box.clientHeight) box.scrollTop += top + hit.offsetHeight - box.clientHeight;
+});
 
 // ---- My Apps: a Finder window over the published app domains ----
 // The tiles are /v1/routes — the registry expose/unexpose already maintain —

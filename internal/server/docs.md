@@ -919,6 +919,10 @@ scrub, step a frame at a time, click the speaker to mute. The movie streams
 from the daemon, so a long clip starts at once and scrubbing seeks instead
 of downloading. The **Artifacts** folder is where the agents
 publish the pages they make — Claude's claude.ai artifacts land there.
+Type a name's first letters to select it, as in the classic Finder: `a`
+jumps to the first name starting with "a", and letters typed quickly
+spell more of it (`ar` reaches Artifacts). The same works in My Apps and
+the Icon Editor gallery.
 Right-click for Get Info and Download; right-click a window's empty space
 for New Folder, New Text File and Upload; **File → Upload to Workspace…**
 brings files in from this browser. Files can also be dragged from your
