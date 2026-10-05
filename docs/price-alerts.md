@@ -48,9 +48,9 @@ Everything runs in the daemon, whether or not a desktop is open.
 
 1. **Sample.** Every minute, just past the whole minute, the spot price of
    the four USD pairs and the three SOL cross rates, from the same Coinbase
-   call the ticker uses; the sampler fills the `/v1/prices` cache, so the
-   tiles' own polls cost nothing. It keeps 25 hours of samples per token and
-   writes them with the alert state to `~/.exe/alerts-state.json` each
+   call the ticker uses (Jupiter's price API for a pair Coinbase cannot
+   quote); the sampler fills the `/v1/prices` cache, so the tiles' own
+   polls cost nothing. It keeps 25 hours of samples per token and writes them with the alert state to `~/.exe/alerts-state.json` each
    minute, so a restart loses nothing.
 2. **Measure.** For each token, the change against the sample nearest to 60
    minutes ago and to 24 hours ago, within ±3 minutes; a gap (Coinbase down,

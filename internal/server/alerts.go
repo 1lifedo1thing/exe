@@ -16,9 +16,10 @@ import (
 )
 
 // Price alerts for the Control Strip ticker — the rule of docs/price-alerts.md.
-// A sampler takes Coinbase's spot prices every minute whether or not a desktop
-// is open (and fills the /v1/prices cache on the way, so the tiles' own polls
-// cost nothing), keeps a day of samples per token, and sends a notification
+// A sampler takes Coinbase's spot prices (Jupiter's when Coinbase cannot
+// quote one, prices.go) every minute whether or not a desktop is open (and
+// fills the /v1/prices cache on the way, so the tiles' own polls cost
+// nothing), keeps a day of samples per token, and sends a notification
 // when a token moves more in an hour or a day than it rarely does — at most
 // four per token in any sliding 24 hours.
 
@@ -152,7 +153,7 @@ func countSamples(st *alertState) int {
 // alertTick fetches, records, evaluates, delivers and saves.
 func (s *Server) alertTick(ctx context.Context, now time.Time) {
 	pairs, _ := parsePricePairs(alertPairs)
-	quotes := fetchPrices(ctx, pairs)
+	quotes := fetchPrices(ctx, pairs, s.Config().Jupiter.APIKey)
 	res := map[string]any{"checked_at": now.UTC(), "prices": quotes}
 	s.pricesMu.Lock()
 	if s.prices == nil {

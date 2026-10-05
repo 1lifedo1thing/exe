@@ -87,6 +87,13 @@ type CloudflareConfig struct {
 	MetricsURL string `json:"metrics_url,omitempty"`
 }
 
+// JupiterConfig is the key for Jupiter's price API, the fallback behind the
+// Control Strip's Solana ticker when Coinbase cannot quote a token (portal.jup.ag).
+// Empty uses Jupiter's keyless, rate-limited host.
+type JupiterConfig struct {
+	APIKey string `json:"api_key,omitempty"`
+}
+
 type FirecrackerConfig struct {
 	// Binary is either a command on PATH or an absolute path.
 	Binary string `json:"binary"`
@@ -163,6 +170,7 @@ type Config struct {
 	GitHub      GitHubConfig      `json:"github"`
 	Hub         HubConfig         `json:"hub"`
 	Cloudflare  CloudflareConfig  `json:"cloudflare"`
+	Jupiter     JupiterConfig     `json:"jupiter"`
 	Firecracker FirecrackerConfig `json:"firecracker"`
 	QEMU        QEMUConfig        `json:"qemu"`
 }
@@ -353,6 +361,7 @@ func (c *Config) Normalize() {
 	c.Firecracker.NetworkHelper = strings.TrimSpace(c.Firecracker.NetworkHelper)
 	c.Firecracker.NetworkCIDR = strings.TrimSpace(c.Firecracker.NetworkCIDR)
 	c.Firecracker.OutboundInterface = strings.TrimSpace(c.Firecracker.OutboundInterface)
+	c.Jupiter.APIKey = strings.TrimSpace(c.Jupiter.APIKey)
 	c.QEMU.Binary = strings.TrimSpace(c.QEMU.Binary)
 	c.QEMU.FirmwareDir = strings.TrimSpace(c.QEMU.FirmwareDir)
 	c.QEMU.NetworkCIDR = strings.TrimSpace(c.QEMU.NetworkCIDR)

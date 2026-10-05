@@ -9376,7 +9376,8 @@ cfStripPaint();
 // the ecosystem tokens PUMP, MET and SKR with their prices in SOL as well,
 // each row beside its coin the way the Application menu showed programs.
 // The figures are Coinbase's public spot prices by way of the daemon
-// (/v1/prices caches them a minute for every desktop on the node). Picking
+// (/v1/prices caches them a minute for every desktop on the node), and
+// Jupiter's for a token Coinbase cannot quote (prices.go). Picking
 // a row puts that token on the tile, remembered per browser like the strip.
 const PX_TOKENS = ["SOL", "PUMP", "MET", "SKR"];
 const PX_PAIRS = ["SOL-USD", "PUMP-USD", "MET-USD", "SKR-USD", "PUMP-SOL", "MET-SOL", "SKR-SOL"];
@@ -9403,10 +9404,15 @@ function pxFig(v, dom, from = 3) {
 const pxUSD = (v, dom) => v >= 1 ? ["$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })] : ["$", ...pxFig(v, dom)];
 const pxSOL = (v, dom) => [...pxFig(v, dom, 2), " SOL"];
 const pxWhen = () => pxLast && pxLast.checked_at ? new Date(pxLast.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
-// the menu's head and the tooltip's last line: checking, down, or the time
-const pxHead = () => !pxLast ? "Solana: checking…"
-  : Object.values(pxLast.prices || {}).every(q => q.error) ? "Solana: Coinbase did not answer"
-  : "Solana: Coinbase spot, " + pxWhen();
+// the menu's head and the tooltip's last line: checking, down, or the
+// source and the time — Jupiter is named once it filled in for Coinbase
+function pxHead() {
+  if (!pxLast) return "Solana: checking…";
+  const qs = Object.values(pxLast.prices || {}), ok = qs.filter(q => !q.error);
+  if (!ok.length) return "Solana: Coinbase and Jupiter did not answer";
+  const jup = ok.filter(q => q.source === "jupiter").length;
+  return "Solana: " + (!jup ? "Coinbase spot" : jup === ok.length ? "Jupiter" : "Coinbase + Jupiter") + ", " + pxWhen();
+}
 function pxChange(spot, open) {
   if (!(spot > 0 && open > 0)) return "";
   const c = (spot / open - 1) * 100;

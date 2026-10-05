@@ -104,8 +104,11 @@ small sunk count, so PUMP's 0.00003717 SOL reads 0.0₄3717 SOL, MET's
 0.002404 SOL reads 0.0₂2404 SOL, and the column lines up (a dollar price
 folds from three zeros); the figures are Coinbase's public spot
 prices, fetched once a minute by the daemon and shared by every desktop on
-the node. **Notify Me of Big Moves** in that menu turns on push
-notifications for this device (on a phone, the app added to the Home
+the node — and Jupiter's, for a token Coinbase cannot quote or when it does
+not answer (the menu's first line then names Jupiter; a Jupiter API key
+from portal.jup.ag goes in `jupiter.api_key` of `~/.exe/config.json`).
+**Notify Me of Big Moves** in that menu turns on push notifications for
+this device (on a phone, the app added to the Home
 Screen): you hear when a token moves more in an hour or a day than it
 rarely does — SOL 2.5% / 6%, PUMP 5% / 12%, MET 6% / 15%, SKR 8% / 25% —
 never more than four times per token in 24 hours; a move that qualifies
