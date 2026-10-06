@@ -46,7 +46,7 @@ func (s *Server) handleRoutePublish(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	host, err := zoneHost(req.Host, s.Config().Cloudflare.Domain)
+	host, zone, err := s.zoneHost(r.Context(), req.Host)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -60,7 +60,7 @@ func (s *Server) handleRoutePublish(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	res, err := s.publishHost(r.Context(), host, backend)
+	res, err := s.publishHost(r.Context(), host, zone, backend)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

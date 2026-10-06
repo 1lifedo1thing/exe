@@ -131,6 +131,23 @@ func (c *Client) ListZones(ctx context.Context) ([]IDName, error) {
 	return out, err
 }
 
+// ZoneFor returns the ID of the zone the token holds that fqdn falls in —
+// the longest suffix of fqdn naming one — or "" when it holds none.
+func (c *Client) ZoneFor(ctx context.Context, fqdn string) (string, error) {
+	labels := strings.Split(strings.TrimSuffix(fqdn, "."), ".")
+	for i := 0; i+1 < len(labels); i++ {
+		var out []IDName
+		q := url.Values{"name": {strings.Join(labels[i:], ".")}}
+		if err := c.do(ctx, "GET", "/zones?"+q.Encode(), nil, &out); err != nil {
+			return "", err
+		}
+		if len(out) > 0 {
+			return out[0].ID, nil
+		}
+	}
+	return "", nil
+}
+
 func (c *Client) ListTunnels(ctx context.Context) ([]Tunnel, error) {
 	var out []Tunnel
 	err := c.do(ctx, "GET", "/accounts/"+c.AccountID+"/cfd_tunnel?is_deleted=false&per_page=50", nil, &out)

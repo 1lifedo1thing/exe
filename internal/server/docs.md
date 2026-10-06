@@ -783,7 +783,10 @@ exe expose example.com -redirect https://exe.example.com
 exe expose www.example.com -redirect https://exe.example.com
 ```
 
-Use your configured domain or one of its full subdomain names. The target
+Use your configured domain or one of its full subdomain names, or a name in
+another zone your Cloudflare token can edit, such as a second domain on
+the same account: its DNS record goes in that zone, and the tunnel and
+proxy are the same. `-backend` takes those names too. The target
 must be an HTTP(S) origin, with no path, query, fragment or credentials.
 exe creates the same DNS and tunnel rules, then answers with **308 Permanent
 Redirect**, preserving each request's path and query string. For example,

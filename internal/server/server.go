@@ -627,22 +627,15 @@ func (s *Server) syncIngressRoutes(ctx context.Context, cfg *config.Config, svc 
 	if svc == "" {
 		return nil, "advertise_host is empty; existing tunnel ingress rules were left as-is"
 	}
-	cfc := &cf.Client{
-		Token:     cfg.Cloudflare.APIToken,
-		AccountID: cfg.Cloudflare.AccountID,
-		ZoneID:    cfg.Cloudflare.ZoneID,
-		TunnelID:  cfg.Cloudflare.TunnelID,
-		Domain:    cfg.Cloudflare.Domain,
-	}
+	cfc := cfClient(cfg)
 	if !cfc.Configured() {
 		return nil, "cloudflare not fully configured; tunnel ingress rules were not updated"
 	}
-	suffix := "." + cfg.Cloudflare.Domain
+	// Every route was published with a tunnel ingress rule, whether its
+	// name is in the configured domain or another zone the token holds.
 	services := map[string]string{}
 	for host := range s.Proxy.Snapshot() {
-		if host == cfg.Cloudflare.Domain || strings.HasSuffix(host, suffix) {
-			services[host] = svc
-		}
+		services[host] = svc
 	}
 	if len(services) == 0 {
 		return []string{}, ""
@@ -667,15 +660,26 @@ func (s *Server) exposeVM(ctx context.Context, info *vmm.Info, name, sub string,
 	if sub == "" {
 		sub = name
 	}
-	return s.publishHost(ctx, sub+"."+cfg.Cloudflare.Domain,
+	return s.publishHost(ctx, sub+"."+cfg.Cloudflare.Domain, cfg.Cloudflare.ZoneID,
 		"http://"+net.JoinHostPort(info.IP, strconv.Itoa(port)))
+}
+
+func cfClient(cfg *config.Config) *cf.Client {
+	return &cf.Client{
+		Token:     cfg.Cloudflare.APIToken,
+		AccountID: cfg.Cloudflare.AccountID,
+		ZoneID:    cfg.Cloudflare.ZoneID,
+		TunnelID:  cfg.Cloudflare.TunnelID,
+		Domain:    cfg.Cloudflare.Domain,
+	}
 }
 
 // publishHost routes <fqdn> to backend in the local proxy and, when
 // Cloudflare is configured, ensures the hostname's DNS record and tunnel
 // ingress rule. The backend is a VM's URL (exe expose) or a builtin the
-// daemon answers itself (exe site). The caller validates the domain.
-func (s *Server) publishHost(ctx context.Context, fqdn, backend string) (map[string]any, error) {
+// daemon answers itself (exe site). The caller validates the hostname and
+// names the zone its DNS record goes in (see zoneHost).
+func (s *Server) publishHost(ctx context.Context, fqdn, zone, backend string) (map[string]any, error) {
 	cfg := s.Config()
 	if err := s.Proxy.Set(fqdn, backend); err != nil {
 		log.Printf("expose %s: proxy: %v", fqdn, err)
@@ -688,13 +692,8 @@ func (s *Server) publishHost(ctx context.Context, fqdn, backend string) (map[str
 		"url":     "https://" + fqdn,
 	}
 	var warnings []string
-	cfc := &cf.Client{
-		Token:     cfg.Cloudflare.APIToken,
-		AccountID: cfg.Cloudflare.AccountID,
-		ZoneID:    cfg.Cloudflare.ZoneID,
-		TunnelID:  cfg.Cloudflare.TunnelID,
-		Domain:    cfg.Cloudflare.Domain,
-	}
+	cfc := cfClient(cfg)
+	cfc.ZoneID = zone
 	if cfc.Configured() {
 		ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 		defer cancel()
@@ -742,7 +741,7 @@ func (s *Server) handleSitePublish(w http.ResponseWriter, r *http.Request) {
 	if sub == "" {
 		sub = "exe"
 	}
-	res, err := s.publishHost(r.Context(), sub+"."+cfg.Cloudflare.Domain, SiteBackend)
+	res, err := s.publishHost(r.Context(), sub+"."+cfg.Cloudflare.Domain, cfg.Cloudflare.ZoneID, SiteBackend)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -945,21 +944,27 @@ func (s *Server) handleRoutes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) removeRoute(ctx context.Context, host string) (map[string]any, error) {
 	cfg := s.Config()
 	res := map[string]any{"status": "removed"}
-	cfc := &cf.Client{
-		Token:     cfg.Cloudflare.APIToken,
-		AccountID: cfg.Cloudflare.AccountID,
-		ZoneID:    cfg.Cloudflare.ZoneID,
-		TunnelID:  cfg.Cloudflare.TunnelID,
-		Domain:    cfg.Cloudflare.Domain,
-	}
+	cfc := cfClient(cfg)
 	if cfc.Configured() {
 		ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 		defer cancel()
-		if err := cfc.DeleteDNS(ctx, host); err != nil {
-			log.Printf("unexpose %s: dns: %v", host, err)
-			return nil, fmt.Errorf("dns: %w", err)
+		// A name outside the configured domain keeps its record in its own zone.
+		domain := strings.TrimSuffix(strings.ToLower(cfg.Cloudflare.Domain), ".")
+		if host != domain && !strings.HasSuffix(host, "."+domain) {
+			zone, err := cfc.ZoneFor(ctx, host)
+			if err != nil {
+				log.Printf("unexpose %s: dns: %v", host, err)
+				return nil, fmt.Errorf("dns: %w", err)
+			}
+			cfc.ZoneID = zone
 		}
-		res["dns"] = "removed"
+		if cfc.ZoneID != "" {
+			if err := cfc.DeleteDNS(ctx, host); err != nil {
+				log.Printf("unexpose %s: dns: %v", host, err)
+				return nil, fmt.Errorf("dns: %w", err)
+			}
+			res["dns"] = "removed"
+		}
 		if err := cfc.RemoveIngress(ctx, host); err != nil {
 			log.Printf("unexpose %s: ingress: %v", host, err)
 			return nil, fmt.Errorf("ingress: %w", err)
