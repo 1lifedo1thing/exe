@@ -961,7 +961,9 @@ you type; an edit made elsewhere reloads a clean file and leaves an unsaved
 one alone. Planet is three columns like the Mac app: your sites, the chosen
 site's posts, pages and drafts as a list view, and the chosen article's
 built page. New Post and Edit open the article in Writer; right-click a
-site or an article for the rest. Publish… is where a site leaves this
+site or an article for the rest. A to-do list in a post (`- [ ] words`)
+can be ticked in that page: click an item's box and its line in the
+Markdown flips, on a site that wears Paper, Platinum or Sepia. Publish… is where a site leaves this
 node: expose it under a name in your domain (the same route, DNS record
 and tunnel rule a VM's Expose makes), or send every changed build to
 IPFS under a key this node keeps, or both. Both are off until you turn
