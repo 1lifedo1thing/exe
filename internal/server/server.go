@@ -308,6 +308,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/push/subscribe", s.handlePushSubscribe)
 	mux.HandleFunc("DELETE /v1/push/subscribe", s.handlePushSubscribe)
 	mux.HandleFunc("POST /v1/push/test", s.handlePushTest)
+	mux.HandleFunc("POST /v1/push", s.handlePush)
 	mux.HandleFunc("GET /v1/config", s.handleConfigGet)
 	mux.HandleFunc("PUT /v1/config", s.handleConfigPut)
 	mux.HandleFunc("POST /v1/daemon/restart", s.handleDaemonRestart)

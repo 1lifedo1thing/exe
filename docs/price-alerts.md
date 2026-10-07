@@ -117,6 +117,12 @@ desktop browsers always have.
   list heals itself.
 - **Send a Test Notification** (`POST /v1/push/test`) sends a hello to every
   subscribed browser, for checking a phone right after turning it on.
+- `POST /v1/push` (`{title, body, tag?, url?}`) sends a caller's own words
+  to every subscription — for scripts on this machine, such as the checks
+  that the nightly idea routine still runs. `tsVia` must call the request
+  "local": a tailnet address, Tailscale Serve's `.ts.net` Host or a
+  forwarded client is refused, since anyone there could otherwise put words
+  on the phone. `url` must be a path on the desktop.
 - Each alert goes to every subscription as an ES256 VAPID token
   (standard-library ECDSA) and an aes128gcm payload per RFC 8291 (the
   standard library's HKDF); `webpush_test.go` checks the encryption against

@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"math/big"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -120,4 +121,43 @@ func TestPushSubscribeRoundTrip(t *testing.T) {
 	if rec := call("DELETE", "/v1/push/subscribe", `{"endpoint":"https://web.push.apple.com/abc"}`); !strings.Contains(rec.Body.String(), `"subscriptions":0`) {
 		t.Fatalf("delete: %s", rec.Body)
 	}
+}
+
+// POST /v1/push sends the caller's words from this machine, and only from
+// it: a tailnet address, Tailscale Serve's proxy (a .ts.net Host) and a
+// forwarded LAN client are all refused before anything is sent.
+func TestPushOwnWords(t *testing.T) {
+	s, posts := pushTestServer(t)
+	call := func(body string, edit func(*http.Request)) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/v1/push", strings.NewReader(body))
+		req.RemoteAddr = "127.0.0.1:50000"
+		req.Host = "127.0.0.1:7777"
+		if edit != nil {
+			edit(req)
+		}
+		s.handlePush(rec, req)
+		return rec
+	}
+	msg := `{"title":"Nightly idea","body":"exe-rc is down and did not come back.","tag":"rc-check"}`
+	for name, edit := range map[string]func(*http.Request){
+		"tailnet":   func(r *http.Request) { r.RemoteAddr = "100.116.32.57:50000" },
+		"serve":     func(r *http.Request) { r.Host = "spark.example.ts.net" },
+		"forwarded": func(r *http.Request) { r.Header.Set("X-Forwarded-For", "192.168.1.20") },
+	} {
+		if rec := call(msg, edit); rec.Code != http.StatusForbidden {
+			t.Errorf("%s caller: %d %s", name, rec.Code, rec.Body)
+		}
+	}
+	for _, bad := range []string{`{"title":"Nightly idea"}`, `{"title":" ","body":"x"}`, `{"title":"a","body":"b","url":"https://example.com/"}`, `not json`} {
+		if rec := call(bad, nil); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d", bad, rec.Code)
+		}
+	}
+	waitPosts(t, posts, 0, "refused calls")
+	rec := call(msg, nil)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"sent":1`) {
+		t.Fatalf("local call: %d %s", rec.Code, rec.Body)
+	}
+	waitPosts(t, posts, 1, "local call")
 }

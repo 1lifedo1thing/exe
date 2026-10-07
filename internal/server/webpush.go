@@ -171,6 +171,34 @@ func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"sent": n, "errors": errs})
 }
 
+// POST /v1/push — {title, body, tag?, url?} to every subscribed browser, in
+// the caller's own words: for scripts on this machine, such as the checks
+// that the nightly idea routine still runs. The words are the caller's, so a
+// request from anywhere else (the tailnet, Tailscale Serve, the LAN) is
+// refused. A tag replaces the earlier notification of the same tag.
+func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
+	if tsVia(r) != "local" {
+		writeErr(w, http.StatusForbidden, errors.New("push takes callers on this machine only"))
+		return
+	}
+	var msg pushMessage
+	if err := json.NewDecoder(io.LimitReader(r.Body, 2<<10)).Decode(&msg); err != nil {
+		writeErr(w, http.StatusBadRequest, errors.New("bad request body"))
+		return
+	}
+	msg.Title, msg.Body = strings.TrimSpace(msg.Title), strings.TrimSpace(msg.Body)
+	if msg.Title == "" || msg.Body == "" {
+		writeErr(w, http.StatusBadRequest, errors.New("title and body are both needed"))
+		return
+	}
+	if msg.URL != "" && !strings.HasPrefix(msg.URL, "/") {
+		writeErr(w, http.StatusBadRequest, errors.New("url is a path on this desktop, such as /"))
+		return
+	}
+	n, errs := s.pushAll(r.Context(), msg)
+	writeJSON(w, http.StatusOK, map[string]any{"sent": n, "errors": errs})
+}
+
 type pushMessage struct {
 	Title string `json:"title"`
 	Body  string `json:"body"`

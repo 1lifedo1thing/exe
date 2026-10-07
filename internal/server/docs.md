@@ -160,6 +160,13 @@ stands per session, a later turn's replacing the earlier one. Only
 sessions started from the desktop's windows are followed — a `claude` run
 in a shell of your own carries none of the desktop's hooks.
 
+A script on the exe machine can send its own words the same way:
+`curl -s 127.0.0.1:7777/v1/push -d '{"title":"Backup","body":"Done."}'`
+reaches every browser that turned notifications on. A `tag` makes a later
+push replace the earlier one, and a `url` (a path, such as `/`) is what a
+tap opens. Only callers on the machine itself are taken; the same request
+over Tailscale is refused.
+
 A Claude Code window's status line shows the session's figures at its
 right — the model, context in use, tokens, cost and the plan's 5-hour and
 7-day usage windows — kept current after every reply by Claude Code's own
