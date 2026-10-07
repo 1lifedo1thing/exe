@@ -67,6 +67,11 @@ func TestVapidAuthorization(t *testing.T) {
 	if err := json.Unmarshal(cb, &claims); err != nil || claims["aud"] != "https://web.push.apple.com" {
 		t.Fatalf("claims: %s", cb)
 	}
+	// Apple refuses (BadJwtToken) a subject that is not an https URL or a
+	// mailto: at a real domain, such as a bare hostname's
+	if sub, _ := claims["sub"].(string); !strings.HasPrefix(sub, "https://") || !strings.Contains(sub, ".") {
+		t.Fatalf("sub %q is not an https contact", sub)
+	}
 	sig, _ := b64.DecodeString(parts[2])
 	if len(sig) != 64 {
 		t.Fatalf("raw signature length %d", len(sig))

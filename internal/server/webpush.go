@@ -387,7 +387,7 @@ func vapidAuthorization(priv *ecdsa.PrivateKey, pub, endpoint string) (string, e
 	claims, _ := json.Marshal(map[string]any{
 		"aud": u.Scheme + "://" + u.Host,
 		"exp": time.Now().Add(12 * time.Hour).Unix(),
-		"sub": "mailto:exe@" + hostnameOr("localhost"),
+		"sub": vapidContact,
 	})
 	signing := header + "." + b64.EncodeToString(claims)
 	h := sha256.Sum256([]byte(signing))
@@ -401,9 +401,9 @@ func vapidAuthorization(priv *ecdsa.PrivateKey, pub, endpoint string) (string, e
 	return "vapid t=" + signing + "." + b64.EncodeToString(sig) + ", k=" + pub, nil
 }
 
-func hostnameOr(def string) string {
-	if h, err := os.Hostname(); err == nil && h != "" {
-		return h
-	}
-	return def
-}
+// vapidContact is the token's sub, the operator contact RFC 8292 asks for.
+// Apple's push service answers 403 BadJwtToken to a subject that is not an
+// https URL or a mailto: at a real domain: "mailto:exe@<hostname>" had every
+// iPhone and Mac Safari subscription refused while Chrome's and Edge's went
+// through.
+const vapidContact = "https://exe.v2core.com"
