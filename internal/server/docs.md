@@ -134,8 +134,26 @@ machine is in, not only the ones opened from this desktop
 (`GET /v1/agents/usage`). Claude Code's windows are as fresh as its last
 reply in a Claude Code window here; Codex's are read live on the ChatGPT
 sign-in. An agent appears once it is installed and has left figures; with
-neither, the tile stays away. The tab at the right hides the strip down to
-the tab alone.
+neither, the tile stays away.
+
+The **activity module**, a little monitor at the end of the strip, charts
+this machine: CPU, memory, GPU, network and disk, a sample every two
+seconds. Its tile shows the last minute of one of them and its figure now
+(`23%`, or `1.2 MB/s` for network and disk, both directions added); the
+menu shows all five as charts over the last four minutes with their words —
+CPU's share of all cores, memory in use (total less what the kernel says is
+available), the GPU's use, temperature and power from `nvidia-smi`, bytes a
+second in and out over the physical network interfaces and read and written
+on the physical disks — and picking a row puts it on the tile. Percentages
+fill their chart at 100%; rates fill it at their busiest moment in view,
+two-way rates stacked. Counting only physical interfaces and disks counts
+every byte once: a VM's traffic crosses its tap, the bridge and the NIC.
+The daemon samples only while a desktop reads (`GET /v1/host/monitor`),
+so the figures start when the strip opens and stop ten minutes after the
+last desktop folds it away or goes hidden; it keeps the last ten minutes.
+It reads Linux so far; on another system the tile stays away. A host
+without `nvidia-smi` has no GPU row. The tab at the right hides the strip
+down to the tab alone.
 
 With notifications on, the daemon also watches the sky over the first city
 in the Weather app — the row your drag put on top. When Open-Meteo's

@@ -31,6 +31,7 @@ import (
 	"exe/internal/config"
 	"exe/internal/github"
 	"exe/internal/hostinfo"
+	"exe/internal/hostmon"
 	"exe/internal/macos9"
 	"exe/internal/peer"
 	"exe/internal/proxy"
@@ -96,6 +97,11 @@ type Server struct {
 	cfHealthRes map[string]any
 	cfStats     cfStatsState
 	cfAnalytics anState
+
+	// The Control Strip's activity module: CPU, memory, GPU, network and
+	// disk, sampled only while a desktop reads them (hostmon.go).
+	hostMon     *hostmon.Monitor
+	hostMonOnce sync.Once
 
 	// Cached Coinbase quotes for the Control Strip's price module, by
 	// pair list (prices.go).
@@ -315,6 +321,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/tailscale", s.handleTailscale)
 	mux.HandleFunc("POST /v1/tailscale/set", s.handleTailscaleSet)
 	mux.HandleFunc("GET /v1/hostinfo", s.handleHostInfo)
+	mux.HandleFunc("GET /v1/host/monitor", s.handleHostMonitor)
 	mux.HandleFunc("GET /v1/routes", s.handleRoutes)
 	mux.HandleFunc("DELETE /v1/routes/{host}", s.handleRouteDelete)
 	mux.HandleFunc("GET /v1/appicons/{host}", s.handleAppIcon)

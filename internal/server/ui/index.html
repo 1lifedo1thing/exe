@@ -160,6 +160,16 @@ body.mobile #clock { padding: 0 10px; }
 .au-row .w { white-space: pre; }
 .au-row .w span::before { content: attr(data-w); display: block; box-sizing: border-box; height: 0; visibility: hidden; }
 .au-row .w .p { text-align: right; }
+/* the activity module's rows: the measure, its chart in a 120x16 sunken
+   well (64px on a narrow screen), and its words in a column as wide as the
+   widest words any row can show (data-w, a ghost of no height) */
+.mon-row { display: inline-flex; align-items: center; gap: 12px; font-variant-numeric: tabular-nums; }
+.mon-row .n { width: 60px; }
+.mon-row .c { display: block; box-sizing: content-box; width: 120px; height: 16px; background: #fff;
+  border-top: 1px solid #808080; border-left: 1px solid #808080; border-bottom: 1px solid #fff; border-right: 1px solid #fff; }
+.mon-row .v { white-space: pre; }
+.mon-row .v::before { content: attr(data-w); display: block; box-sizing: border-box; height: 0; visibility: hidden; }
+@media (max-width: 460px) { .mon-row { gap: 8px; } .mon-row .n { width: 52px; } .mon-row .c { width: 64px; } }
 /* an agent's week as columns in its submenu: 16px bars in the agent's colour
    on one baseline (a border on the plot's own box), a figure on the peak's
    cap and on today's, the day under each; every column's title has its split */
@@ -333,6 +343,13 @@ body.showall #rail { visibility: hidden; }
 .cs-txt { position: absolute; left: 20px; right: 11px; top: 0; height: 19px; line-height: 19px;
   font-size: 11px; text-align: right; white-space: nowrap; overflow: hidden; color: #000;
   font-variant-numeric: tabular-nums; }
+/* the activity module's chart: a 32x14 white well behind the sunken
+   frame's two Ls (#808080 top/left, white bottom/right), level with the
+   icon, and the figure moved past it */
+#cs-mon .cs-chart { position: absolute; left: 20px; top: 2px; box-sizing: content-box; width: 32px; height: 14px; background: #fff;
+  border-top: 1px solid #808080; border-left: 1px solid #808080; border-bottom: 1px solid #fff; border-right: 1px solid #fff; }
+.cs-chart canvas, .mon-row .c canvas { display: block; width: 100%; height: 100%; }
+#cs-mon .cs-txt { left: 58px; }
 /* pressed, while its menu is up: the bevel turns in — #404040 top/left,
    #808080 face, the shadows go light */
 .cs-mod.down { background: #404040; }
@@ -1396,6 +1413,7 @@ body.mobile th.sorted {
         <div class="cs-mod" id="cs-ts" title="Tailscale — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
         <div class="cs-mod wide" id="cs-sol" title="Solana prices — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><span class="cs-txt">—</span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
         <div class="cs-mod wide" id="cs-ai" title="Agent usage — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><span class="cs-txt">—</span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
+        <div class="cs-mod wide" id="cs-mon" aria-label="Activity"><span class="f"><span class="b"><span class="cs-ico"></span><span class="cs-chart"><canvas></canvas></span><span class="cs-txt">—</span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
       </div>
       <div class="cs-well cs-r" title="Control Strip — scroll"><svg width="8" height="10" viewBox="0 0 8 10" shape-rendering="crispEdges"><path fill="#555" d="M4 0h1v1H4zM3 1h2v1H3zM2 2h1v1H2zM4 2h4v1H4zM1 3h1v1H1zM7 3h1v1H7zM0 4h1v1H0zM7 4h1v1H7zM0 5h1v1H0zM7 5h1v1H7zM1 6h1v1H1zM7 6h1v1H7zM2 7h1v1H2zM4 7h4v1H4zM3 8h2v1H3zM4 9h1v1H4z"/><path fill="#ddd" d="M3 2h1v1H3zM2 3h5v1H2zM1 4h6v1H1zM1 5h6v1H1zM2 6h5v1H2zM3 7h1v1H3z"/></svg></div>
     </div>
@@ -3470,6 +3488,16 @@ const agentMini = mark => `<svg width="16" height="16" viewBox="0 0 16 16" shape
 let CLAUDE_MINI_ICON = agentMini(`<path fill="#D97757" d="M5 3h1v1H5zM7 3h2v1H7zM10 3h1v1H10zM6 4h4v1H6zM5 5h6v1H5zM6 6h4v1H6zM5 7h1v1H5zM7 7h2v1H7zM10 7h1v1H10z"/>`);
 let CODEX_MINI_ICON = agentMini(`<path fill="#FFFFFF" d="M6 3h4v1H6zM5 4h1v3H5zM10 4h1v3H10zM6 7h4v1H6z"/>`);
 let auLast = null; // the last /v1/agents/usage answer, for the same reason
+// the Control Strip's activity module: a little monitor on its stand, a
+// bar chart lit on its screen
+let ACTIVITY_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <path fill="#dad5ca" d="M13 2h1v1H13zM2 10h1v1H2zM7 12h2v1H7zM6 13h4v1H6zM4 14h8v1H4z"/>
+  <path fill="#edeae2" d="M2 2h11v1H2zM2 3h1v1H2zM2 4h1v1H2zM2 5h1v1H2zM2 6h1v1H2zM2 7h1v1H2zM2 8h1v1H2zM2 9h1v1H2z"/>
+  <path fill="#b7b2a7" d="M13 3h1v1H13zM13 4h1v1H13zM13 5h1v1H13zM13 6h1v1H13zM13 7h1v1H13zM13 8h1v1H13zM13 9h1v1H13zM3 10h11v1H3z"/>
+  <path fill="#222244" d="M3 3h10v1H3zM3 4h7v1H3zM12 4h1v1H12zM3 5h4v1H3zM9 5h1v1H9zM12 5h1v1H12zM3 6h4v1H3zM9 6h1v1H9zM12 6h1v1H12zM3 7h1v1H3zM6 7h1v1H6zM9 7h1v1H9zM12 7h1v1H12zM3 8h1v1H3zM6 8h1v1H6zM9 8h1v1H9zM12 8h1v1H12zM3 9h1v1H3zM6 9h1v1H6zM9 9h1v1H9zM12 9h1v1H12z"/>
+  <path fill="#33ff33" d="M10 4h2v1H10zM7 5h2v1H7zM10 5h2v1H10zM7 6h2v1H7zM10 6h2v1H10zM4 7h2v1H4zM7 7h2v1H7zM10 7h2v1H10zM4 8h2v1H4zM7 8h2v1H7zM10 8h2v1H10zM4 9h2v1H4zM7 9h2v1H7zM10 9h2v1H10z"/>
+  <path fill="#000" d="M1 1h14v1H1zM1 2h1v1H1zM14 2h1v1H14zM1 3h1v1H1zM14 3h1v1H14zM1 4h1v1H1zM14 4h1v1H14zM1 5h1v1H1zM14 5h1v1H14zM1 6h1v1H1zM14 6h1v1H14zM1 7h1v1H1zM14 7h1v1H14zM1 8h1v1H1zM14 8h1v1H14zM1 9h1v1H1zM14 9h1v1H14zM1 10h1v1H1zM14 10h1v1H14zM1 11h14v1H1zM6 12h1v1H6zM9 12h1v1H9zM4 13h2v1H4zM10 13h2v1H10zM3 14h1v1H3zM12 14h1v1H12zM3 15h10v1H3z"/>
+</svg>`;
 let MINI_CHAT_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
   <rect x="1.5" y="2.5" width="13" height="8" fill="#DAD5CA" stroke="#000"/>
   <path d="M4.5 10.5 v3 l3 -3 z" fill="#DAD5CA" stroke="#000"/>
@@ -4422,6 +4450,8 @@ const ICON_DEFS = [
   { key: "claude-mini", label: "Claude Code (mini)", size: 16, get: () => CLAUDE_MINI_ICON, set: s => CLAUDE_MINI_ICON = s,
     note: "the Control Strip's usage meter wears the chosen agent's Mac" },
   { key: "codex-mini", label: "Codex (mini)", size: 16, get: () => CODEX_MINI_ICON, set: s => CODEX_MINI_ICON = s },
+  { key: "activity", label: "Activity", size: 16, get: () => ACTIVITY_ICON, set: s => ACTIVITY_ICON = s,
+    note: "the Control Strip's activity module" },
   // the menubar Mac is the 32-grid art shown at 15px — edited at 32, the
   // custom SVG gets its display size re-stamped on the way into the DOM
   { key: "apple", label: "Apple Menu", size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
@@ -4473,6 +4503,7 @@ function applyIconOverrides(ovs, custom) {
   tsStripPaint();
   pxStripPaint();
   auStripPaint();
+  monStripPaint();
   tickClock();
   $("#about-icon").innerHTML = macIcon("running", 48);
   document.querySelectorAll(".finder-window").forEach(w => { if (!w.hidden) loadFinder(w); });
@@ -9791,6 +9822,178 @@ auStripPaint();
 auRefresh(false);
 setInterval(() => { if (!document.hidden) auRefresh(false); }, 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) auRefresh(false); });
+
+// ---- Control Strip: activity ----
+// This host's CPU, memory, GPU, network and disk, a sample every two
+// seconds (/v1/host/monitor, hostmon): a wide module wearing a little
+// monitor, the chosen measure's last minute as a chart and its figure now,
+// and a menu with all five as charts over the last few minutes. Picking a
+// row puts it on the tile, remembered per browser like the token and the
+// agent. The daemon samples only while a desktop reads, so the desk asks
+// every two seconds while the strip is open and not at all while it is
+// folded away or the tab is hidden; it keeps ten minutes, and a page asks
+// only for what is newer than its last sample. A platform the daemon
+// cannot read hides the tile — remembered, like Tailscale's, so the strip
+// has its final width from the first paint. Each chart column is one
+// sample, drawn on a canvas in whole device pixels so it stays crisp at
+// any scale; percentages fill to 100, rates to their busiest moment in
+// view, two-way rates stacked (in under out, read under write).
+const csMon = $("#cs-mon");
+const MON = {
+  cpu: { name: "CPU", colors: ["#6666be"], pct: true, vals: s => [s.cpu] },
+  mem: { name: "Memory", colors: ["#cc9933"], pct: true, vals: s => [s.mem] },
+  gpu: { name: "GPU", colors: ["#77bb77"], pct: true, vals: s => [s.gpu] },
+  net: { name: "Network", colors: ["#99ccff", "#30305e"], vals: s => [s.net_in, s.net_out] },
+  disk: { name: "Disk", colors: ["#ffb060", "#c8600a"], vals: s => [s.disk_read, s.disk_write] },
+};
+const MON_FLOOR = 10000; // a rate chart's top is never under 10 KB/s, so an idle line stays flat
+let monShown = "cpu", monSeen = "1", monInfo = null, monSamples = [], monT = 0, monInterval = 2000;
+let monFreshAt = 0, monPending = false, monLive = null;
+try {
+  const k = localStorage.getItem("exe_cstrip_mon_kind"); if (MON[k]) monShown = k;
+  monSeen = localStorage.getItem("exe_cstrip_mon") || "1";
+} catch (e) {}
+const monKinds = () => Object.keys(MON).filter(k => k !== "gpu" || (monInfo && monInfo.gpu));
+const monKind = () => monKinds().includes(monShown) ? monShown : "cpu";
+const monNow = () => Date.now() - monFreshAt < 10000 && monSamples.length ? monSamples[monSamples.length - 1] : null;
+const monPct = v => v == null ? "—" : Math.round(v) + "%";
+const monSum = vs => vs.some(v => v != null) ? vs.reduce((a, v) => a + (v || 0), 0) : null;
+// the tile's figure: a percentage, or the two directions added up
+function monFigure(kind, s) {
+  if (!s) return "—";
+  const vs = MON[kind].vals(s);
+  return MON[kind].pct ? monPct(vs[0]) : (monSum(vs) == null ? "—" : cfBps(monSum(vs)));
+}
+// a menu row's words
+function monWords(kind, s) {
+  if (!s) return "—";
+  const i = monInfo || {};
+  if (kind === "cpu") return monPct(s.cpu) + " of " + i.cores + " cores";
+  if (kind === "mem") return s.mem == null ? "—" : monPct(s.mem) + " · " + fmtBytes(s.mem_used) + " of " + fmtBytes(i.memory_total);
+  if (kind === "gpu") return [monPct(s.gpu), s.gpu_temp != null ? Math.round(s.gpu_temp) + "°C" : "", s.gpu_power != null ? Math.round(s.gpu_power) + " W" : ""].filter(Boolean).join(" · ");
+  const [a, b] = kind === "net" ? ["in", "out"] : ["read", "write"], vs = MON[kind].vals(s);
+  return vs[0] == null ? "—" : cfBps(vs[0]) + " " + a + " · " + cfBps(vs[1]) + " " + b;
+}
+// the widest words a row can show, for the column's ghost (au-row's trick)
+function monWidest() {
+  const i = monInfo || {}, mem = fmtBytes(i.memory_total || 0);
+  return ["100% of " + (i.cores || 99) + " cores", "100% · " + mem + " of " + mem, "100% · 99°C · 999 W",
+    "999 KB/s in · 999 KB/s out", "999 KB/s read · 999 KB/s write"]
+    .reduce((w, s) => s.length > w.length ? s : w, "");
+}
+// one sample a CSS pixel column, the newest at the right edge
+function monDraw(cv, kind) {
+  const w = cv.parentElement.clientWidth, h = cv.parentElement.clientHeight;
+  if (!w || !h) return;
+  const dpr = window.devicePixelRatio || 1, W = Math.round(w * dpr), H = Math.round(h * dpr);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const g = cv.getContext("2d"), k = MON[kind];
+  g.clearRect(0, 0, W, H);
+  if (!monSamples.length) return;
+  const last = monSamples[monSamples.length - 1].t, cols = [];
+  for (const s of monSamples) {
+    const i = w - 1 - Math.round((last - s.t) / monInterval);
+    if (i >= 0) cols[i] = k.vals(s);
+  }
+  // cols has holes until the history fills the chart: forEach skips them
+  let top = 100;
+  if (!k.pct) { top = MON_FLOOR; cols.forEach(v => { top = Math.max(top, monSum(v) || 0); }); }
+  for (let i = 0; i < w; i++) {
+    const vs = cols[i];
+    if (!vs) continue;
+    const x0 = Math.round(i * dpr), x1 = Math.round((i + 1) * dpr);
+    let sum = 0, y = H;
+    vs.forEach((v, j) => {
+      if (!(v > 0)) return;
+      sum += v;
+      const y1 = Math.min(y - 1, H - Math.round(Math.min(sum, top) / top * H));
+      if (y1 < y) { g.fillStyle = k.colors[j]; g.fillRect(x0, Math.max(0, y1), x1 - x0, y - Math.max(0, y1)); }
+      y = Math.max(0, y1);
+    });
+  }
+}
+// the tile is as wide as the chosen measure's widest figure (auFit), plus
+// the chart: 34px of frame, icon and triangle, 38px of chart and its gap
+function monFit() {
+  const probe = el("span", { style: "position:absolute;visibility:hidden;white-space:nowrap;font-size:11px;font-variant-numeric:tabular-nums" },
+    MON[monKind()].pct ? "100%" : "999 KB/s");
+  document.body.append(probe);
+  const w = Math.ceil(probe.getBoundingClientRect().width);
+  probe.remove();
+  if (w) csMon.style.width = w + 2 + 34 + 38 + "px";
+}
+function monStripPaint() {
+  csMon.hidden = !(monInfo ? true : monSeen === "1");
+  $("#cs-mon .cs-ico").innerHTML = iconCurrent("activity");
+  $("#cs-mon .cs-txt").textContent = monFigure(monKind(), monNow());
+  monDraw($("#cs-mon .cs-chart canvas"), monKind());
+  if (monLive) {
+    const s = monNow();
+    for (const [kind, r] of Object.entries(monLive)) { r.val.textContent = monWords(kind, s); monDraw(r.cv, kind); }
+  }
+}
+const monWanted = () => !document.hidden && !csMon.hidden && (!cstrip.classList.contains("collapsed") || csMon.classList.contains("down"));
+async function monRefresh() {
+  if (monPending) return;
+  monPending = true;
+  try {
+    const r = await j("/v1/host/monitor?after=" + monT);
+    if (!r.supported) {
+      monInfo = null; monSeen = "0"; csMon.hidden = true;
+      try { localStorage.setItem("exe_cstrip_mon", "0"); } catch (e) {}
+      return;
+    }
+    const first = !monInfo;
+    monInfo = r.info; monInterval = r.interval || 2000;
+    if (monSeen !== "1") { monSeen = "1"; try { localStorage.setItem("exe_cstrip_mon", "1"); } catch (e) {} }
+    if (r.samples.length) {
+      if (r.samples[0].t <= monT) monSamples = []; // a restarted daemon's clock runs from scratch
+      monSamples.push(...r.samples);
+      monT = r.samples[r.samples.length - 1].t;
+      monFreshAt = Date.now();
+      monSamples = monSamples.filter(s => s.t > monT - 600000);
+    }
+    if (first) monFit();
+  } catch (e) { /* keep the last picture; a dash once it goes stale */ }
+  finally { monPending = false; monStripPaint(); }
+}
+function monPick(kind) {
+  monShown = kind;
+  try { localStorage.setItem("exe_cstrip_mon_kind", kind); } catch (e) {}
+  monFit();
+  monStripPaint();
+}
+function monStripMenu() {
+  if (Date.now() - csMenuClosedAt < 300) return; // the click that just closed it
+  const widest = monWidest(), i = monInfo;
+  monLive = {};
+  const rows = monKinds().map(kind => {
+    const cv = el("canvas"), val = el("span", { class: "v", "data-w": widest });
+    monLive[kind] = { cv, val };
+    return { label: el("span", { class: "mon-row" }, el("span", { class: "n" }, MON[kind].name), el("span", { class: "c" }, cv), val),
+      mark: kind === monKind(), act: () => monPick(kind) };
+  });
+  const head = !i ? "Activity: checking…" : (i.host || "This machine") + ": " + i.cores + " cores · " + fmtBytes(i.memory_total) + (i.gpu ? " · " + i.gpu : "");
+  showCtxMenu(0, 0, [
+    { label: head, dis: true },
+    "-",
+    ...rows,
+    "-",
+    { label: "A column every 2 seconds; rates drawn to their peak", dis: true },
+  ], () => { csMon.classList.remove("down"); monLive = null; csMenuClosedAt = Date.now(); });
+  csMon.classList.add("down");
+  csMenuAt(csMon);
+  monStripPaint();
+  monRefresh();
+}
+csMon.addEventListener("click", monStripMenu);
+csMon.addEventListener("contextmenu", e => { e.preventDefault(); monStripMenu(); });
+monFit();
+monStripPaint();
+if (monWanted()) monRefresh();
+setInterval(() => { if (monWanted()) monRefresh(); }, 2000);
+document.addEventListener("visibilitychange", () => { if (monWanted()) monRefresh(); });
+csTab.addEventListener("click", () => { if (monWanted()) monRefresh(); });
 
 // ---- Control Strip: Tailscale ----
 // The tailnet module, shown only on a machine with the tailscale CLI: an
