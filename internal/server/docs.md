@@ -1013,8 +1013,9 @@ a reader replies with a Solana wallet that meets the hub's gate, signing
 a message and never a transaction. Posts published before you turned it
 on stay put; right-click one and choose **Announce on Hub** to send it.
 
-Easel comes with exe-art, an oil paint simulator that runs beside exe
-(its `apps` folder goes in `apps_dirs`, its daemon is the service `art`).
+Easel comes with exe-easel, which runs Claude painters at an oil paint
+simulator beside exe (its `apps` folder goes in `apps_dirs`, its daemon is
+the service `easel`).
 A studio is a folder holding an easel, a box of tubes and a brief.
 **New Studio…** makes one, and **Start Painter…** sets a Claude painter
 to work there. The painter is Claude Code with Opus 5.5 unless you pick
