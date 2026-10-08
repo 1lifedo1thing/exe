@@ -1605,7 +1605,18 @@ function renderPost(p, opts = {}) {
       foot.append(lat);
     }
     node.style.cursor = "default";
-    node.onclick = e => { if (!e.target.closest("a, button, .p-text, .p-card, .p-vid, .p-aud")) openThread(p.id); };
+    // a press anywhere on the post opens its thread, the words included
+    // (Livid, 2026-10-08, as on the hub's own pages); a link, a button,
+    // a card, a player and a to-do box of one's own (markBox) keep
+    // their own click, and a drag that selected words is not a press
+    node.onclick = e => {
+      if (e.target.closest("a, button, .p-card, .p-vid, .p-aud")) return;
+      const li = e.target.closest("li.box");
+      if (li && li.onclick) return;
+      const sel = getSelection();
+      if (sel && sel.toString()) return;
+      openThread(p.id);
+    };
     rep.onclick = () => openThread(p.id);
   } else {
     // in a thread any post can be answered in place: Reply aims the

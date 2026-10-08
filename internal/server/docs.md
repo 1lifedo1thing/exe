@@ -1068,6 +1068,9 @@ A post under four hours old says how long ago it arrived — **just now**,
 **12 min ago**, **2 h 17 min ago** — and the label counts on while the
 window stays open; after four hours it is the time today, or the date.
 Hover over it for the exact date and time.
+A click anywhere on a post in the feed, its words included, opens its
+thread; a link, a button, a card, a player and a to-do box of your own
+keep their own click, and dragging to select words opens nothing.
 A thread of ten replies or more has a summary, a few lines the hub's
 model wrote from it (again at 20, 50, 100, 200, 500 and 1000 replies):
 open the thread and **Summary**, with its sparkles, stands at the right
