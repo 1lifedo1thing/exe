@@ -9352,8 +9352,9 @@ async function cfStatsRefresh() {
     cfStatsPaint();
   }
 }
-// the tile's figure keeps the counters polled whenever the strip is open
-function cfStatsVisible() { return !cstrip.classList.contains("collapsed") || csCF.classList.contains("down") || !$("#sum-overlay").hidden; }
+// a desktop tile's figure keeps the counters polled whenever the strip is
+// open; a phone's tile is the lamp alone, polled only for its menu
+function cfStatsVisible() { return !IS_MOBILE && !cstrip.classList.contains("collapsed") || csCF.classList.contains("down") || !$("#sum-overlay").hidden; }
 
 // ---- Control Strip ----
 // Four modules: the Cloudflare heartbeat, then the Tailscale panel, the
@@ -9370,8 +9371,8 @@ function cfStripPaint() {
   $("#cs-cf .cs-ico").innerHTML = iconCurrent("cloudflare").replace(/#33cc33/gi, lamp).replace(/#99ee99/gi, glint);
   // the figure is what this node's connector is sending out: its answers,
   // what visitors download; a dash until two samples five seconds apart
-  const sent = cfLiveValues().sent;
-  $("#cs-cf .cs-txt").textContent = sent === "Sampling…" ? "—" : sent;
+  const sent = cfLiveValues().sent, fig = $("#cs-cf .cs-txt");
+  if (fig) fig.textContent = sent === "Sampling…" ? "—" : sent;
   // no browser tooltip on the tile: its menu says all of it
 }
 let csMenuClosedAt = 0;
@@ -9412,8 +9413,14 @@ csCF.addEventListener("click", cfStripMenu);
 csCF.addEventListener("contextmenu", e => { e.preventDefault(); cfStripMenu(); });
 // The heartbeat is a wide module since its tile shows bytes a second: sized
 // like the usage meter (auFit), from the widest figure in the font this
-// machine draws, before the first figure arrives.
+// machine draws, before the first figure arrives. On a phone (Livid: the
+// live figure is for the desktop) it stays a standard tile, the lamp alone.
 function cfFit() {
+  if (IS_MOBILE) {
+    csCF.classList.remove("wide");
+    $("#cs-cf .cs-txt").remove();
+    return;
+  }
   const probe = el("span", { style: "position:absolute;visibility:hidden;white-space:nowrap;font-size:11px;font-variant-numeric:tabular-nums" });
   document.body.append(probe);
   let w = 0;
