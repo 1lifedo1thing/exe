@@ -1012,6 +1012,23 @@ a reader replies with a Solana wallet that meets the hub's gate, signing
 a message and never a transaction. Posts published before you turned it
 on stay put; right-click one and choose **Announce on Hub** to send it.
 
+Easel comes with exe-art, an oil paint simulator that runs beside exe
+(its `apps` folder goes in `apps_dirs`, its daemon is the service `art`).
+A studio is a folder holding an easel, a box of tubes and a brief.
+**New Studio…** makes one, and **Start Painter…** sets a Claude painter
+to work there. The painter is Claude Code with Opus 5.5 unless you pick
+another model, and it is given nothing but the easel. It mixes its paint
+from the tubes and lays it on with simulated brushes, a chunk of Lua at a
+time. It looks at the canvas between chunks and keeps a journal, and it
+stops when it is happy with the picture. The window follows it live:
+**Canvas** shows its latest look, **Session** its words, chunks and looks
+as they come, and **Journal** and **Code** its notes and its log. The log
+is the painting: replaying it paints the same canvas. **Finish…** dries
+the painting right through, varnishes it and lets it crack, and
+**Replay…** films it being painted again. **Save to Workspace** puts the
+picture and the movie in the Workspace's `Easel` folder. While no painter
+is at work, the **Easel** tab paints by hand, from the same Lua.
+
 ## Joining desks together
 
 **Special → Join…** pairs this exe with another one (say, your laptop's)
