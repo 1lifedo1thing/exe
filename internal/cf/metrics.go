@@ -23,10 +23,19 @@ type LocalMetrics struct {
 	Requests    float64 `json:"requests"`
 	Active      float64 `json:"active_requests"`
 	Errors      float64 `json:"origin_errors"`
-	Started     float64 `json:"-"`
+	// SentBytes and ReceivedBytes count the bytes on the QUIC connections to
+	// Cloudflare's edge: what this connector served and what it was sent.
+	// nil when it exports no such counters (an HTTP/2 connector has none).
+	SentBytes     *float64 `json:"sent_bytes"`
+	ReceivedBytes *float64 `json:"received_bytes"`
+	Started       float64  `json:"-"`
+	// the same counters per edge connection, so a rate can step over one
+	// connection's reconnect (see ByteRates)
+	sentByConn, receivedByConn map[string]float64
 }
 
-var metricSample = regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{.*\})?\s+(\S+)(?:\s+\S+)?$`)
+var metricSample = regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{.*\})?\s+(\S+)(?:\s+\S+)?$`)
+var connIndexLabel = regexp.MustCompile(`conn_index="([^"]*)"`)
 
 // ParseLocalMetrics accepts just the small set of Prometheus samples we
 // display. Unknown metrics are ignored; absent/bad samples are not zeros.
@@ -39,7 +48,12 @@ func ParseLocalMetrics(r io.Reader) (*LocalMetrics, error) {
 		"cloudflared_tunnel_request_errors":                 &m.Errors,
 		"process_start_time_seconds":                        &m.Started,
 	}
-	seen := map[string]bool{}
+	// optional, one sample per edge connection
+	byConn := map[string]*map[string]float64{
+		"quic_client_sent_bytes":    &m.sentByConn,
+		"quic_client_receive_bytes": &m.receivedByConn,
+	}
+	seen, badBytes := map[string]bool{}, map[string]bool{}
 	scan := bufio.NewScanner(r)
 	scan.Buffer(make([]byte, 4096), 128*1024)
 	for scan.Scan() {
@@ -51,16 +65,34 @@ func ParseLocalMetrics(r io.Reader) (*LocalMetrics, error) {
 		if parts == nil {
 			continue
 		}
-		p := fields[parts[1]]
-		if p == nil {
+		name, labels := parts[1], parts[2]
+		p, conns := fields[name], byConn[name]
+		if p == nil && conns == nil {
 			continue
 		}
-		n, err := strconv.ParseFloat(parts[2], 64)
-		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || n < 0 {
-			return nil, fmt.Errorf("invalid metric %s", parts[1])
+		n, err := strconv.ParseFloat(parts[3], 64)
+		bad := err != nil || math.IsNaN(n) || math.IsInf(n, 0) || n < 0
+		if conns != nil {
+			// a bad byte sample costs only the byte figures, not the rest
+			if bad {
+				badBytes[name] = true
+				continue
+			}
+			if *conns == nil {
+				*conns = map[string]float64{}
+			}
+			conn := ""
+			if c := connIndexLabel.FindStringSubmatch(labels); c != nil {
+				conn = c[1]
+			}
+			(*conns)[conn] += n
+			continue
+		}
+		if bad {
+			return nil, fmt.Errorf("invalid metric %s", name)
 		}
 		*p += n // cloudflared versions may attach labels to a gauge/counter.
-		seen[parts[1]] = true
+		seen[name] = true
 	}
 	if err := scan.Err(); err != nil {
 		return nil, err
@@ -70,7 +102,49 @@ func ParseLocalMetrics(r io.Reader) (*LocalMetrics, error) {
 			return nil, fmt.Errorf("missing metric %s", name)
 		}
 	}
+	for name, conns := range byConn {
+		if badBytes[name] {
+			*conns = nil
+		}
+	}
+	m.SentBytes, m.ReceivedBytes = connTotal(m.sentByConn), connTotal(m.receivedByConn)
 	return m, nil
+}
+
+func connTotal(conns map[string]float64) *float64 {
+	if conns == nil {
+		return nil
+	}
+	var total float64
+	for _, n := range conns {
+		total += n
+	}
+	return &total
+}
+
+// ByteRates is how many bytes a second this connector sent and received
+// since prev, taken seconds earlier. It is worked out per edge connection,
+// so a connection whose counter restarted with a reconnect adds what it
+// has counted since rather than a negative. nil when either sample lacks
+// the counters.
+func (m *LocalMetrics) ByteRates(prev *LocalMetrics, seconds float64) (sent, received *float64) {
+	return connRate(m.sentByConn, prev.sentByConn, seconds), connRate(m.receivedByConn, prev.receivedByConn, seconds)
+}
+
+func connRate(cur, prev map[string]float64, seconds float64) *float64 {
+	if cur == nil || prev == nil || seconds <= 0 {
+		return nil
+	}
+	var bytes float64
+	for conn, n := range cur {
+		if p, ok := prev[conn]; ok && n >= p {
+			bytes += n - p
+		} else {
+			bytes += n
+		}
+	}
+	rate := bytes / seconds
+	return &rate
 }
 
 var localMetricsTransport = func() *http.Transport {

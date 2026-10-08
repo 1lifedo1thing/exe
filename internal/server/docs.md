@@ -71,12 +71,17 @@ reachable) and the **Trash**. Double-click opens things.
 The **Control Strip** in the bottom-left corner is OS 9's tray. Its first
 module is the Cloudflare heartbeat: the lamp on the cloud is green while
 the tunnel is healthy, yellow when it needs attention, grey while it is
-still checking. Its menu shows the tunnel's replicas and edge connections,
-plus this node's request rate, active requests, totals and origin errors.
-Open **Cloudflare Status…** for the same live counters and connector uptime,
-or **Analytics…** for the traffic Cloudflare counted (below, Analytics).
-Local traffic refreshes every five seconds while either view is open;
-tunnel-wide connection counts refresh every 30 seconds. Traffic totals
+still checking. Beside the lamp is how many bytes a second this node's
+connector is sending out — its answers, what visitors download. Its menu
+shows the tunnel's replicas and edge connections, plus this node's request
+rate, bytes a second sent and received, active requests, totals and origin
+errors. Open **Cloudflare Status…** for the same live counters and connector
+uptime, or **Analytics…** for the traffic Cloudflare counted (below,
+Analytics). Local traffic refreshes every five seconds while the strip is
+open; tunnel-wide connection counts refresh every 30 seconds. Bytes come
+from cloudflared's QUIC connections to Cloudflare, so a connector on HTTP/2
+shows a dash, and files Cloudflare answers from its cache never reach the
+tunnel and are not counted. Traffic totals
 are for this node's connector, include every hostname on its tunnel, and
 reset when cloudflared restarts. Unavailable data is shown as a dash.
 The menu also offers the Setup Wizard and Check Now.

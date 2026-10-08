@@ -122,6 +122,40 @@ func TestCFStatsCounterRestart(t *testing.T) {
 	}
 }
 
+func TestCFStatsByteRate(t *testing.T) {
+	sample := func(sent string) *cf.LocalMetrics {
+		m, err := cf.ParseLocalMetrics(strings.NewReader(`cloudflared_tunnel_ha_connections 4
+cloudflared_tunnel_total_requests 10
+cloudflared_tunnel_concurrent_requests_per_tunnel 0
+cloudflared_tunnel_request_errors 0
+process_start_time_seconds 1
+quic_client_sent_bytes{conn_index="0"} ` + sent + `
+quic_client_receive_bytes{conn_index="0"} 100
+`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.ConnectorID = "a"
+		return m
+	}
+	now := time.Now()
+	s := localStats(sample("6000"), sample("1000"), now, now.Add(-5*time.Second))
+	if s.SentBytesPerSecond == nil || *s.SentBytesPerSecond != 1000 || s.ReceivedBytesPerSecond == nil || *s.ReceivedBytesPerSecond != 0 {
+		t.Fatalf("byte rates: %v %v", s.SentBytesPerSecond, s.ReceivedBytesPerSecond)
+	}
+	restarted := sample("6000")
+	restarted.Started = 2
+	if localStats(restarted, sample("1000"), now, now.Add(-5*time.Second)).SentBytesPerSecond != nil {
+		t.Error("computed a byte rate across a cloudflared restart")
+	}
+	b, _ := json.Marshal(s)
+	for _, key := range []string{`"sent_bytes":6000`, `"received_bytes":100`, `"sent_bytes_per_second":1000`, `"received_bytes_per_second":0`} {
+		if !strings.Contains(string(b), key) {
+			t.Errorf("JSON lacks %s: %s", key, b)
+		}
+	}
+}
+
 func TestCFTunnelStats(t *testing.T) {
 	s := tunnelStats(&cf.Tunnel{Connections: []cf.Connection{
 		{ID: "1", ClientID: "a", Location: "lax12"},

@@ -253,8 +253,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   separators (face `#c0c0c0`, white top/left L, `#a0a0a0` inner and
   `#808080` outer bottom/right L, a 16px icon at x2 y3, the solid 4x8 menu
   triangle 3px from the right edge), the 18px tab. A standard tile is 30px;
-  a wide module (`.cs-mod.wide`, the price ticker and the agent usage
-  meter, as OS 9's battery gauge was wider) keeps the frame and bevel
+  a wide module (`.cs-mod.wide`, the Cloudflare heartbeat with its bytes
+  a second, the price ticker and the agent usage meter, as OS 9's battery
+  gauge was wider) keeps the frame and bevel
   around a longer face and shows its 11px figure right-aligned in a slot
   of fixed width. Size that slot to the widest figure it can show and no
   wider — a gap ahead of the figure reads as a tile that is too wide. The

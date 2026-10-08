@@ -315,7 +315,8 @@ body.showall #rail { visibility: hidden; }
    than its neighbours) keeps the same frame and bevel around a longer
    face: the face and bevel take their widths from the tile */
 .cs-mod.wide { width: 96px; }
-/* the agent usage meter sets its own width from its figure (auFit) */
+/* the agent usage meter and the Cloudflare heartbeat set their own widths
+   from their figures (auFit, cfFit) */
 .cs-mod > .f { display: block; height: 21px; position: relative; background: #c0c0c0;
   border-right: 1px solid #808080; border-bottom: 1px solid #808080; }
 .cs-mod .b { display: block; height: 20px; position: relative; }
@@ -1391,7 +1392,7 @@ body.mobile th.sorted {
     <div class="cs-body">
       <div class="cs-well cs-l" title="Control Strip — scroll"><svg width="8" height="10" viewBox="0 0 8 10" shape-rendering="crispEdges"><path fill="#555" d="M4 0h1v1H4zM3 1h2v1H3zM2 2h1v1H2zM4 2h4v1H4zM1 3h1v1H1zM7 3h1v1H7zM0 4h1v1H0zM7 4h1v1H7zM0 5h1v1H0zM7 5h1v1H7zM1 6h1v1H1zM7 6h1v1H7zM2 7h1v1H2zM4 7h4v1H4zM3 8h2v1H3zM4 9h1v1H4z"/><path fill="#ddd" d="M3 2h1v1H3zM2 3h5v1H2zM1 4h6v1H1zM1 5h6v1H1zM2 6h5v1H2zM3 7h1v1H3z"/></svg></div>
       <div class="cs-mods">
-        <div class="cs-mod" id="cs-cf" title="Cloudflare status — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
+        <div class="cs-mod wide" id="cs-cf" title="Cloudflare status — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><span class="cs-txt">—</span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
         <div class="cs-mod" id="cs-ts" title="Tailscale — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
         <div class="cs-mod wide" id="cs-sol" title="Solana prices — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><span class="cs-txt">—</span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
         <div class="cs-mod wide" id="cs-ai" title="Agent usage — checking…"><span class="f"><span class="b"><span class="cs-ico"></span><span class="cs-txt">—</span><svg class="cs-tri" width="4" height="8" viewBox="0 0 4 8" shape-rendering="crispEdges"><path d="M0 0h1v8H0zM1 1h1v6H1zM2 2h1v4H2zM3 3h1v2H3z"/></svg></span></span></div>
@@ -1948,6 +1949,8 @@ body.mobile th.sorted {
           <div class="cf-grid">
             <div class="cf-stat"><span>Requests / second</span><b data-cf-stat="rate">—</b></div>
             <div class="cf-stat"><span>Active requests</span><b data-cf-stat="active">—</b></div>
+            <div class="cf-stat"><span>Sent / second</span><b data-cf-stat="sent">—</b></div>
+            <div class="cf-stat"><span>Received / second</span><b data-cf-stat="received">—</b></div>
             <div class="cf-stat"><span>Requests since startup</span><b data-cf-stat="requests">—</b></div>
             <div class="cf-stat"><span>Origin errors since startup</span><b data-cf-stat="errors">—</b></div>
             <div class="cf-stat"><span>Edge connections</span><b data-cf-stat="localEdges">—</b></div>
@@ -9255,10 +9258,26 @@ function cfLiveValues() {
     localEdges: num(l && l.connections), active: num(l && l.active_requests),
     requests: num(l && l.requests), errors: num(l && l.origin_errors),
     rate: l ? (l.requests_per_second == null ? "Sampling…" : l.requests_per_second.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })) : "—",
+    sent: cfBpsOf(l, "sent"), received: cfBpsOf(l, "received"),
     uptime: l ? (age >= 86400 ? Math.floor(age / 86400) + "d " + Math.floor(age % 86400 / 3600) + "h"
       : age >= 3600 ? Math.floor(age / 3600) + "h " + Math.floor(age % 3600 / 60) + "m"
       : Math.floor(age / 60) + "m " + age % 60 + "s") : "—",
   };
+}
+// bytes a second, in the Analytics app's decimal units: 812 B/s, 4.2 KB/s,
+// 38 KB/s, 1.2 MB/s — a figure that would round to 1000 moves up a unit
+function cfBps(n) {
+  const units = ["B/s", "KB/s", "MB/s", "GB/s"];
+  let i = 0;
+  while (n >= 999.5 && i < units.length - 1) { n /= 1000; i++; }
+  return (i && n < 9.95 ? n.toFixed(1) : Math.round(n)) + " " + units[i];
+}
+// what the connector sent (its answers: what visitors download) or received
+// (their requests and uploads), from the QUIC counters on its edge
+// connections; an HTTP/2 connector has none
+function cfBpsOf(l, dir) {
+  return !l || l[dir + "_bytes"] == null ? "—"
+    : l[dir + "_bytes_per_second"] == null ? "Sampling…" : cfBps(l[dir + "_bytes_per_second"]);
 }
 function cfMenuValues() {
   const v = cfLiveValues();
@@ -9266,6 +9285,7 @@ function cfMenuValues() {
     all: `All replicas: ${v.replicas} · ${v.edges} connections${v.t && v.t.stale ? " (last known)" : ""}`,
     local: `This node: ${v.localEdges} connections · ${v.active} active`,
     rate: `Local traffic: ${v.rate}${v.l && v.l.requests_per_second != null ? " requests/s" : ""}`,
+    bytes: `Local bytes: ${v.l && v.l.sent_bytes_per_second != null ? v.sent + " sent · " + v.received + " received" : v.sent}`,
     total: `Local total: ${v.requests} requests`,
     errors: `Local errors: ${v.errors} since startup`,
   };
@@ -9301,7 +9321,8 @@ async function cfStatsRefresh() {
     cfStatsPaint();
   }
 }
-function cfStatsVisible() { return csCF.classList.contains("down") || !$("#sum-overlay").hidden; }
+// the tile's figure keeps the counters polled whenever the strip is open
+function cfStatsVisible() { return !cstrip.classList.contains("collapsed") || csCF.classList.contains("down") || !$("#sum-overlay").hidden; }
 
 // ---- Control Strip ----
 // Four modules: the Cloudflare heartbeat, then the Tailscale panel, the
@@ -9316,6 +9337,10 @@ const CF_LAMP = { ok: ["#33cc33", "#99ee99"], warn: ["#ffdd30", "#fff3a0"], off:
 function cfStripPaint() {
   const [lamp, glint] = CF_LAMP[!cfLast ? "off" : cfLast.status === "ok" ? "ok" : "warn"];
   $("#cs-cf .cs-ico").innerHTML = iconCurrent("cloudflare").replace(/#33cc33/gi, lamp).replace(/#99ee99/gi, glint);
+  // the figure is what this node's connector is sending out: its answers,
+  // what visitors download; a dash until two samples five seconds apart
+  const sent = cfLiveValues().sent;
+  $("#cs-cf .cs-txt").textContent = sent === "Sampling…" ? "—" : sent;
   csCF.title = cfLast ? (cfLast.message || "Cloudflare status: " + cfLast.status) : "Cloudflare status — checking…";
   if (cfStatsLast && cfLiveValues().fresh) csCF.title += "\n" + Object.values(cfMenuValues()).join("\n");
 }
@@ -9355,6 +9380,21 @@ function csMenuAt(tile) {
 }
 csCF.addEventListener("click", cfStripMenu);
 csCF.addEventListener("contextmenu", e => { e.preventDefault(); cfStripMenu(); });
+// The heartbeat is a wide module since its tile shows bytes a second: sized
+// like the usage meter (auFit), from the widest figure in the font this
+// machine draws, before the first figure arrives.
+function cfFit() {
+  const probe = el("span", { style: "position:absolute;visibility:hidden;white-space:nowrap;font-size:11px;font-variant-numeric:tabular-nums" });
+  document.body.append(probe);
+  let w = 0;
+  for (const s of ["999 B/s", "999 KB/s", "999 MB/s", "999 GB/s"]) {
+    probe.textContent = s;
+    w = Math.max(w, Math.ceil(probe.getBoundingClientRect().width));
+  }
+  probe.remove();
+  if (w) csCF.style.width = w + 2 + 34 + "px";
+}
+cfFit();
 function csCollapse(on) {
   cstrip.classList.toggle("collapsed", on);
   try { localStorage.setItem("exe_cstrip", on ? "collapsed" : "open"); } catch (e) {}
@@ -9365,7 +9405,10 @@ csTab.addEventListener("mousedown", e => {
   csTab.classList.add("down");
   document.addEventListener("mouseup", () => csTab.classList.remove("down"), { once: true });
 });
-csTab.addEventListener("click", () => csCollapse(!cstrip.classList.contains("collapsed")));
+csTab.addEventListener("click", () => {
+  csCollapse(!cstrip.classList.contains("collapsed"));
+  if (!cstrip.classList.contains("collapsed")) cfStatsRefresh();
+});
 for (const [sel, dir] of [[".cs-l", -1], [".cs-r", 1]])
   cstrip.querySelector(sel).addEventListener("click", () => cstrip.querySelector(".cs-mods").scrollBy({ left: dir * 31 }));
 cfStripPaint();
@@ -9989,6 +10032,7 @@ $("#sum-restart").onclick = () => {
 };
 setInterval(() => { if (!document.hidden) cfHeartbeat(false); }, 30000);
 setInterval(() => { if (!document.hidden && cfStatsVisible()) cfStatsRefresh(); }, 5000);
+if (cfStatsVisible()) cfStatsRefresh();
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     cfHeartbeat(false);

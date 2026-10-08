@@ -28,8 +28,10 @@ type cfTunnelStats struct {
 
 type cfLocalStats struct {
 	*cf.LocalMetrics
-	RequestsPerSecond *float64 `json:"requests_per_second"`
-	UptimeSeconds     float64  `json:"uptime_seconds"`
+	RequestsPerSecond      *float64 `json:"requests_per_second"`
+	SentBytesPerSecond     *float64 `json:"sent_bytes_per_second"`
+	ReceivedBytesPerSecond *float64 `json:"received_bytes_per_second"`
+	UptimeSeconds          float64  `json:"uptime_seconds"`
 }
 
 type cfStatsResponse struct {
@@ -82,9 +84,12 @@ func localStats(current, previous *cf.LocalMetrics, now, previousAt time.Time) *
 	s := &cfLocalStats{LocalMetrics: current, UptimeSeconds: max(0, float64(now.UnixMilli())/1000-current.Started)}
 	seconds := now.Sub(previousAt).Seconds()
 	if previous != nil && seconds >= 1 && seconds <= 30 && current.ConnectorID == previous.ConnectorID &&
-		current.Started == previous.Started && current.Requests >= previous.Requests {
-		rate := (current.Requests - previous.Requests) / seconds
-		s.RequestsPerSecond = &rate
+		current.Started == previous.Started {
+		if current.Requests >= previous.Requests {
+			rate := (current.Requests - previous.Requests) / seconds
+			s.RequestsPerSecond = &rate
+		}
+		s.SentBytesPerSecond, s.ReceivedBytesPerSecond = current.ByteRates(previous, seconds)
 	}
 	return s
 }
