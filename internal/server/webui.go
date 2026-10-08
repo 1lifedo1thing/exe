@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -427,14 +428,41 @@ func (s *Server) handleConfigGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.Config())
 }
 
+// mergeConfig is the configuration a PUT asks for: the request's fields over
+// the current ones. A map the request names replaces the current one whole:
+// decoded over it, JSON would only add keys (a service could be named but
+// never removed), and the map it added them to is the live configuration's,
+// shared by the shallow copy. A map the request leaves out is copied.
+func mergeConfig(old *config.Config, body []byte) (config.Config, error) {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(body, &keys); err != nil {
+		return config.Config{}, err
+	}
+	nc := *old // unknown-in-request fields keep their current values
+	if _, ok := keys["services"]; ok {
+		nc.Services = nil
+	} else {
+		nc.Services = maps.Clone(old.Services)
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&nc); err != nil {
+		return config.Config{}, err
+	}
+	return nc, nil
+}
+
 // handleConfigPut validates, persists, and hot-swaps the configuration.
 // Fields the daemon only reads at startup are reported in restart_required.
 func (s *Server) handleConfigPut(w http.ResponseWriter, r *http.Request) {
 	old := s.Config()
-	nc := *old // unknown-in-request fields keep their current values
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&nc); err != nil {
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	nc, err := mergeConfig(old, body)
+	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
