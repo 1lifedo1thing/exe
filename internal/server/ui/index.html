@@ -9868,7 +9868,7 @@ function monFigure(kind, s) {
 function monWords(kind, s) {
   if (!s) return "—";
   const i = monInfo || {};
-  if (kind === "cpu") return monPct(s.cpu) + " of " + i.cores + " cores";
+  if (kind === "cpu") return monPct(s.cpu) + " of " + i.cores + " cores" + (s.cpu_temp != null ? " · " + Math.round(s.cpu_temp) + "°C" : "");
   if (kind === "mem") return s.mem == null ? "—" : monPct(s.mem) + " · " + fmtBytes(s.mem_used) + " of " + fmtBytes(i.memory_total);
   if (kind === "gpu") return [monPct(s.gpu), s.gpu_temp != null ? Math.round(s.gpu_temp) + "°C" : "", s.gpu_power != null ? Math.round(s.gpu_power) + " W" : ""].filter(Boolean).join(" · ");
   const [a, b] = kind === "net" ? ["in", "out"] : ["read", "write"], vs = MON[kind].vals(s);
@@ -9877,7 +9877,7 @@ function monWords(kind, s) {
 // the widest words a row can show, for the column's ghost (au-row's trick)
 function monWidest() {
   const i = monInfo || {}, mem = fmtBytes(i.memory_total || 0);
-  return ["100% of " + (i.cores || 99) + " cores", "100% · " + mem + " of " + mem, "100% · 99°C · 999 W",
+  return ["100% of " + (i.cores || 99) + " cores · 99°C", "100% · " + mem + " of " + mem, "100% · 99°C · 999 W",
     "999 KB/s in · 999 KB/s out", "999 KB/s read · 999 KB/s write"]
     .reduce((w, s) => s.length > w.length ? s : w, "");
 }

@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -27,6 +29,7 @@ func readHost() counters {
 		c.cpuBusy, c.cpuTotal, c.cpuOK = parseStat(f)
 		f.Close()
 	}
+	c.cpuTemp = readCPUTemp()
 	mem := hostinfo.Mem()
 	c.memTotal, c.memAvail = mem.Total, mem.Available
 	if f, err := os.Open("/proc/net/dev"); err == nil {
@@ -121,6 +124,84 @@ func parseDiskstats(r io.Reader, keep func(string) bool) map[string][2]uint64 {
 		}
 	}
 	return out
+}
+
+var cpuTempOnce sync.Once
+var cpuTempFiles []string
+
+// readCPUTemp is the hottest of the CPU's sensors in °C, or nil when the
+// machine names none. The sensors are found once (cpuTempSensors).
+func readCPUTemp() *float64 {
+	cpuTempOnce.Do(func() { cpuTempFiles = cpuTempSensors("/sys") })
+	var hottest *float64
+	for _, f := range cpuTempFiles {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		milli, err := strconv.ParseFloat(strings.TrimSpace(string(b)), 64)
+		if err != nil || milli <= 0 {
+			continue
+		}
+		if c := milli / 1000; hottest == nil || c > *hottest {
+			hottest = num(c)
+		}
+	}
+	return hottest
+}
+
+// cpuTempSensors finds the files holding CPU temperatures (millidegrees)
+// under a sysfs root: an hwmon chip the kernel names for a CPU (Intel's
+// coretemp, AMD's k10temp and zenpower, the ARM boards' cpu_thermal) —
+// AMD's Tctl/Tdie only, its other inputs being the dies'; else thermal
+// zones typed for a CPU (x86_pkg_temp, cpu-thermal and the like); else
+// ACPI zones the firmware names for a CPU cluster — the GB10's TS0E/TS0P
+// and TS1E/TS1P (each cluster's efficiency and performance cores), not
+// its SoC, GPU or uncore zones.
+func cpuTempSensors(root string) []string {
+	var out []string
+	hw, _ := filepath.Glob(root + "/class/hwmon/hwmon*")
+	for _, h := range hw {
+		name := readTrim(h + "/name")
+		switch name {
+		case "coretemp", "k10temp", "zenpower", "cpu_thermal":
+		default:
+			continue
+		}
+		inputs, _ := filepath.Glob(h + "/temp*_input")
+		for _, in := range inputs {
+			label := readTrim(strings.TrimSuffix(in, "_input") + "_label")
+			if (name == "k10temp" || name == "zenpower") && label != "" && label != "Tctl" && label != "Tdie" {
+				continue
+			}
+			out = append(out, in)
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	zones, _ := filepath.Glob(root + "/class/thermal/thermal_zone*")
+	var acpi []string
+	for _, z := range zones {
+		t := strings.ToLower(readTrim(z + "/type"))
+		if t == "x86_pkg_temp" || strings.Contains(t, "cpu") {
+			out = append(out, z+"/temp")
+		}
+		if t == "acpitz" && acpiCPUZone.MatchString(readTrim(z+"/device/path")) {
+			acpi = append(acpi, z+"/temp")
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	return acpi
+}
+
+var acpiCPUZone = regexp.MustCompile(`^\\_TZ_\.TS\d[EP]$`)
+
+func readTrim(path string) string {
+	b, _ := os.ReadFile(path)
+	return strings.TrimSpace(string(b))
 }
 
 var smiOnce sync.Once

@@ -14,6 +14,7 @@ import (
 type Sample struct {
 	T         int64    `json:"t"`         // unix milliseconds
 	CPU       *float64 `json:"cpu"`       // percent of all cores busy
+	CPUTemp   *float64 `json:"cpu_temp"`  // °C, the hottest CPU sensor
 	Mem       *float64 `json:"mem"`       // percent of memory in use (total − available)
 	MemUsed   uint64   `json:"mem_used"`  // bytes
 	GPU       *float64 `json:"gpu"`       // percent utilisation
@@ -41,6 +42,7 @@ type counters struct {
 	at                 time.Time
 	cpuBusy, cpuTotal  uint64
 	cpuOK              bool
+	cpuTemp            *float64
 	memTotal, memAvail uint64
 	net, disk          map[string][2]uint64 // in/out, read/written bytes per device
 	gpu                gpuReading
@@ -142,6 +144,7 @@ func between(a, b *counters, interval time.Duration) (Sample, bool) {
 	if b.memTotal > 0 {
 		s.Mem = num(float64(s.MemUsed) / float64(b.memTotal) * 100)
 	}
+	s.CPUTemp = b.cpuTemp
 	s.GPU, s.GPUTemp, s.GPUPower = b.gpu.util, b.gpu.temp, b.gpu.power
 	s.NetIn, s.NetOut = rates(a.net, b.net, dt)
 	s.DiskRead, s.DiskWrite = rates(a.disk, b.disk, dt)

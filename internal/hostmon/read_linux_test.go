@@ -3,6 +3,9 @@
 package hostmon
 
 import (
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -54,5 +57,56 @@ func TestParseSMI(t *testing.T) {
 	}
 	if g := parseSMI(""); g.util != nil || g.name != "" {
 		t.Fatalf("no output: %+v", g)
+	}
+}
+
+func TestCPUTempSensors(t *testing.T) {
+	write := func(root, path, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(root+path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(root+path, []byte(body+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// the GB10: seven ACPI zones, four of them the CPU clusters
+	gb10 := t.TempDir()
+	for i, z := range []struct{ path, temp string }{
+		{`\_TZ_.TSOC`, "60900"}, {`\_TZ_.TS0E`, "45300"}, {`\_TZ_.TS0P`, "46700"}, {`\_TZ_.TS1E`, "45700"},
+		{`\_TZ_.TS1P`, "58400"}, {`\_TZ_.TGPU`, "70000"}, {`\_TZ_.TUNC`, "45800"},
+	} {
+		z0 := "/class/thermal/thermal_zone" + strconv.Itoa(i)
+		write(gb10, z0+"/type", "acpitz")
+		write(gb10, z0+"/device/path", z.path)
+		write(gb10, z0+"/temp", z.temp)
+	}
+	write(gb10, "/class/hwmon/hwmon1/name", "nvme")
+	write(gb10, "/class/hwmon/hwmon1/temp1_input", "41850")
+	got := cpuTempSensors(gb10)
+	if len(got) != 4 {
+		t.Fatalf("GB10 sensors: %v", got)
+	}
+	// an AMD desktop: Tctl counts, the dies' inputs do not
+	amd := t.TempDir()
+	write(amd, "/class/hwmon/hwmon2/name", "k10temp")
+	write(amd, "/class/hwmon/hwmon2/temp1_input", "51000")
+	write(amd, "/class/hwmon/hwmon2/temp1_label", "Tctl")
+	write(amd, "/class/hwmon/hwmon2/temp3_input", "43000")
+	write(amd, "/class/hwmon/hwmon2/temp3_label", "Tccd1")
+	write(amd, "/class/thermal/thermal_zone0/type", "acpitz")
+	write(amd, "/class/thermal/thermal_zone0/temp", "30000")
+	if got := cpuTempSensors(amd); len(got) != 1 || !strings.HasSuffix(got[0], "hwmon2/temp1_input") {
+		t.Fatalf("AMD sensors: %v", got)
+	}
+	// a Raspberry Pi: a thermal zone typed for the CPU
+	pi := t.TempDir()
+	write(pi, "/class/thermal/thermal_zone0/type", "cpu-thermal")
+	write(pi, "/class/thermal/thermal_zone0/temp", "48000")
+	if got := cpuTempSensors(pi); len(got) != 1 {
+		t.Fatalf("Pi sensors: %v", got)
+	}
+	if got := cpuTempSensors(t.TempDir()); len(got) != 0 {
+		t.Fatalf("a machine with no sensors: %v", got)
 	}
 }

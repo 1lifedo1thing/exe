@@ -141,8 +141,9 @@ this machine: CPU, memory, GPU, network and disk, a sample every two
 seconds. Its tile shows the last minute of one of them and its figure now
 (`23%`, or `1.2 MB/s` for network and disk, both directions added); the
 menu shows all five as charts over the last four minutes with their words —
-CPU's share of all cores, memory in use (total less what the kernel says is
-available), the GPU's use, temperature and power from `nvidia-smi`, bytes a
+CPU's share of all cores and its hottest sensor's temperature, memory in
+use (total less what the kernel says is available), the GPU's use,
+temperature and power from `nvidia-smi`, bytes a
 second in and out over the physical network interfaces and read and written
 on the physical disks — and picking a row puts it on the tile. Percentages
 fill their chart at 100%; rates fill it at their busiest moment in view,
