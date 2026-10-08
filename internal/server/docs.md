@@ -1023,11 +1023,14 @@ time. It looks at the canvas between chunks and keeps a journal, and it
 stops when it is happy with the picture. The window follows it live:
 **Canvas** shows its latest look, **Session** its words, chunks and looks
 as they come, and **Journal** and **Code** its notes and its log. The log
-is the painting: replaying it paints the same canvas. **Finish…** dries
-the painting right through, varnishes it and lets it crack, and
-**Replay…** films it being painted again. **Save to Workspace** puts the
-picture and the movie in the Workspace's `Easel` folder. While no painter
-is at work, the **Easel** tab paints by hand, from the same Lua.
+is the painting: replaying it paints the same canvas. When a painter is
+done, the picture finishes itself a couple of minutes later: it dries
+right through, is varnished and lets its paint crack. A **Replay** movie
+of it being painted again follows. Both are made again whenever the
+painting changes. **Finish…** and **Replay…** are there only to redo
+them another way: no varnish, a longer movie. **Save to Workspace** puts
+the picture and the movie in the Workspace's `Easel` folder. While no
+painter is at work, the **Easel** tab paints by hand, from the same Lua.
 
 ## Joining desks together
 
