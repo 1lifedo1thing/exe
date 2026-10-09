@@ -232,8 +232,7 @@ restyling: `internal/server/ui/index.html` (the desktop),
   pattern). A sheet is white with a 1px black edge and a hard 2px shadow
   at 35% black, nudged whole pixels off the grid and never rotated, its
   13px pixel pushpin (vector between 1x and 2x) and nudge picked by a hash
-  of its id; the open note's title is highlighted as a selected icon's
-  name is.
+  of its id; no sheet is marked as the open one.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`
