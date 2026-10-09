@@ -226,6 +226,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   black right line that stops one row short, the flap's real pixels above
   the fold and the next page's `#eee` below it, a vector copy at
   fractional scales. The flap turns forward, below the fold turns back.
+  Its notes are never a list: the toolbar's Corkboard button (pressed
+  while up) shows every note as a sheet pinned to cork, a 64px tile in the
+  system palette's cube colours, pixels whole (OS 9 shipped no cork
+  pattern). A sheet is white with a 1px black edge and a hard 2px shadow
+  at 35% black, nudged whole pixels off the grid and never rotated, its
+  13px pixel pushpin (vector between 1x and 2x) and nudge picked by a hash
+  of its id; the open note's title is highlighted as a selected icon's
+  name is.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`
