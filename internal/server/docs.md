@@ -1427,14 +1427,16 @@ word opens in a tab of its own beside it and the first keeps writing.
 Looking up a word that a tab is already writing takes you to that tab.
 A tab writing out of sight wears the pulsing green dot, and one that
 finished while you looked elsewhere wears a black dot until you open it.
-Up to three words are written at once. A fourth waits until one of them
-is done, and the status line says so. Changing the languages while the
-open tab writes opens the word in the new pair in a new tab. Closing a
-tab that is writing does not stop its session: the entry is still
-written and kept. When the bar is full, a new lookup takes over the
-oldest tab that is not writing. The window remembers its tabs, the open
-one and its languages in this browser; after a reload, a tab that was
-writing rejoins its session.
+There is no limit on how many words are written at once: each gets its
+session straight away, and the window follows all of them over a single
+connection, so a pile of writing tabs never ties up the browser. Tabs
+narrow as they crowd, and past that the bar scrolls sideways (a wheel, a
+trackpad or a finger). Changing the languages while the open tab writes
+opens the word in the new pair in a new tab. Closing a tab that is
+writing does not stop its session: the entry is still written and kept.
+The window remembers its tabs, the open one and its languages in this
+browser; after a reload, a tab that was writing rejoins its session, and
+one whose session was lost to a daemon restart starts it again.
 
 `GET /v1/dict?from=en&to=zh&q=word` answers a kept entry (for a known
 typo its word's, with `corrected` saying what was typed; `exact=1` reads
@@ -1451,6 +1453,15 @@ true` skips the spelling check. A lookup that joins a session reads every
 line from the start, and joins only a session it can trust: a plain lookup
 never shares an exact one's, whose text may be a typo, and an exact lookup
 never shares a spelling check still out — each starts its own.
+
+The window itself does not hold a request per lookup. `POST
+/v1/dict/start` (the same body) answers at once: `{"entry": …}`, or the
+session as `{"flight": id, "key", "q", "model", "effort", "wait"}`.
+`GET /v1/dict/stream` is one connection to every session the daemon is
+running, and those finished in the last two minutes: each announced as
+`{"flight": id, "began": {…}}`, then its lines as above with `"flight"`
+added, then its last line; `{"ready": true}` ends the first round and
+`{"ping": …}` keeps a quiet stream open.
 
 ## Configuration
 

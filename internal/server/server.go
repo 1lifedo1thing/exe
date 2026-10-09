@@ -185,6 +185,13 @@ type Server struct {
 	dictMu      sync.Mutex
 	dictDB      *sql.DB
 	dictFlights map[string]*dictFlight
+	// every flight running, and those finished in the last minutes, in
+	// order of start, for the windows' shared streams; dictPoked is closed,
+	// and replaced, whenever any of them moves
+	dictAll   []*dictFlight
+	dictPoked chan struct{}
+	dictSeq   int
+	dictBoot  string // this daemon's start, in flight ids: a restart reuses no id
 
 	// One-writer guard for this node's Newsfeed journal (see newsfeed.go).
 	newsMu  sync.Mutex
@@ -303,6 +310,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/chat/complete", s.handleChatComplete)
 	mux.HandleFunc("GET /v1/dict", s.handleDictGet)
 	mux.HandleFunc("POST /v1/dict", s.handleDictLookup)
+	mux.HandleFunc("POST /v1/dict/start", s.handleDictStart)
+	mux.HandleFunc("GET /v1/dict/stream", s.handleDictStream)
 	mux.HandleFunc("GET /v1/vms/{name}/publish/scan", s.handlePublishScan)
 	mux.HandleFunc("POST /v1/vms/{name}/publish", s.handlePublish)
 	mux.HandleFunc("POST /v1/github/oauth/start", s.handleGitHubStart)

@@ -56,6 +56,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -71,9 +72,10 @@ const (
 	dictTimeout = 10 * time.Minute
 	// how often a waiting lookup hears that the session is still writing
 	dictTick = 5 * time.Second
-	// sessions at once; the rest wait their turn
-	dictSessions = 3
-	dictMaxQuery = 80 // characters
+	// a finished flight stays on the shared streams this long, for a
+	// window whose start answered after the flight was done
+	dictKeepFinished = 2 * time.Minute
+	dictMaxQuery     = 80 // characters
 )
 
 // errNoLLM is what a lookup the dictionary cannot answer says on a host
@@ -83,9 +85,6 @@ var errNoLLM = errors.New("No Usable LLM Backend")
 // dictCodexPath finds the Codex CLI the entries are written with, "" when
 // this host has none. Tests point it at a stand-in.
 var dictCodexPath = func() string { return agentPath(hostAgents["codex"]) }
-
-// dictSlots holds one token per session running.
-var dictSlots = make(chan struct{}, dictSessions)
 
 // A dictLang is one language a lookup can go from or to.
 type dictLang struct {
@@ -433,6 +432,11 @@ func (s *Server) handleDictGet(w http.ResponseWriter, r *http.Request) {
 type dictFlight struct {
 	began time.Time
 	ids   []string // under which s.dictFlights lists it
+	// fid names it on the shared streams, with the languages it writes in
+	// and the word it set out to write; poke tells the streams it moved
+	fid, from, to, word string
+	poke                func()
+	ended               time.Time // when it finished, under s.dictMu
 
 	mu       sync.Mutex
 	spelled  bool // its word is known to be one: a plain lookup may join it
@@ -460,6 +464,9 @@ func (f *dictFlight) say(ev map[string]any) {
 	close(f.changed)
 	f.changed = make(chan struct{})
 	f.mu.Unlock()
+	if f.poke != nil {
+		f.poke()
+	}
 }
 
 // finish sets how the session ended; set the result fields first.
@@ -469,6 +476,45 @@ func (f *dictFlight) finish() {
 	close(f.changed)
 	f.changed = make(chan struct{})
 	f.mu.Unlock()
+	if f.poke != nil {
+		f.poke()
+	}
+}
+
+// final is the line a flight ends on, for a reader who typed key: the
+// entry (marked corrected when key was a typo of its word), the
+// suggestions of a lookup that is no word, or what went wrong.
+func (f *dictFlight) final(key string) map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	switch {
+	case f.err != nil:
+		return map[string]any{"error": f.err.Error()}
+	case f.kept == nil:
+		sugg := f.notFound
+		if sugg == nil {
+			sugg = []string{}
+		}
+		return map[string]any{"notfound": true, "suggestions": sugg}
+	default:
+		kept := *f.kept
+		kept.Corrected = ""
+		if key != "" && kept.Q != key {
+			kept.Corrected = key // what this reader typed was a typo of it
+		}
+		return map[string]any{"entry": kept}
+	}
+}
+
+// dictPoke wakes the shared streams: a flight started, said something or
+// finished.
+func (s *Server) dictPoke() {
+	s.dictMu.Lock()
+	if s.dictPoked != nil {
+		close(s.dictPoked)
+	}
+	s.dictPoked = make(chan struct{})
+	s.dictMu.Unlock()
 }
 
 // follow makes g's work f's own: g's events, as they come, on f's clock
@@ -518,7 +564,12 @@ func (f *dictFlight) follow(g *dictFlight) {
 	}
 }
 
-func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
+// dictBegin reads a lookup's body and answers it as far as it can at once:
+// a kept entry (k), or the flight that writes it (f, joined or started),
+// with key, the reader's own text as kept, and word, what the flight
+// writes. On a failure it has written the error itself and returns ok
+// false.
+func (s *Server) dictBegin(w http.ResponseWriter, r *http.Request) (k *dictKept, f *dictFlight, key, word string, ok bool) {
 	var req struct {
 		From, To, Q string
 		// Exact looks the text up as typed: no spelling pass, no typo
@@ -534,6 +585,142 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	k, word, err = s.dictFind(src.Code, dst.Code, key, req.Exact)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	if k != nil {
+		return k, nil, key, word, true
+	}
+	mode := dictPlain
+	switch {
+	case req.Exact:
+		mode = dictExact
+	case word != key:
+		mode = dictChecked // a known typo: its word, checked already
+	}
+	if f, err = s.dictJoin(src, dst, word, mode); err != nil {
+		writeErr(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	return nil, f, key, word, true
+}
+
+// handleDictStart is a lookup that does not wait: a kept entry as
+// {"entry":…}, or the flight that writes it as {"flight": id, "key",
+// "q" (the word it writes), "model", "effort", "wait"} — its lines come on
+// the window's shared stream (handleDictStream), and a window follows as
+// many flights as it likes on that one connection.
+func (s *Server) handleDictStart(w http.ResponseWriter, r *http.Request) {
+	k, f, key, word, ok := s.dictBegin(w, r)
+	if !ok {
+		return
+	}
+	if k != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"entry": k})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"flight": f.fid, "key": key, "q": word,
+		"model": dictModel, "effort": dictEffort, "wait": int(time.Since(f.began).Seconds())})
+}
+
+// handleDictStream is a window's one connection to every session: every
+// flight running, and those finished in the last minutes, each announced
+// as {"flight": id, "began": {"from","to","q","wait"}}, then each of its
+// lines as POST /v1/dict sends them with "flight" added, and its last line
+// (entry, notfound or error) the same way — the entry unmarked, as the
+// window knows what its tab typed. {"ready": true} follows the first
+// round, the flights running when the window connected; a tab following
+// a flight not among them (finished long ago, or lost to a daemon restart)
+// starts its lookup again. {"ping": seconds} keeps a quiet stream open
+// past Cloudflare's hundred silent seconds.
+func (s *Server) handleDictStream(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	fl, _ := w.(http.Flusher)
+	enc := json.NewEncoder(w)
+	type cursor struct {
+		next int
+		done bool
+	}
+	seen := map[*dictFlight]*cursor{}
+	tick := time.NewTicker(dictTick)
+	defer tick.Stop()
+	ready := false
+	for {
+		s.dictMu.Lock()
+		kept := s.dictAll[:0]
+		for _, f := range s.dictAll { // a flight long finished leaves the streams
+			if f.ended.IsZero() || time.Since(f.ended) < dictKeepFinished {
+				kept = append(kept, f)
+			}
+		}
+		s.dictAll = kept
+		all := append([]*dictFlight(nil), s.dictAll...)
+		if s.dictPoked == nil {
+			s.dictPoked = make(chan struct{})
+		}
+		poked := s.dictPoked
+		s.dictMu.Unlock()
+		for _, f := range all {
+			c := seen[f]
+			if c == nil {
+				c = &cursor{}
+				seen[f] = c
+				enc.Encode(map[string]any{"flight": f.fid, "began": map[string]any{
+					"from": f.from, "to": f.to, "q": f.word, "wait": int(time.Since(f.began).Seconds())}})
+			}
+			if c.done {
+				continue
+			}
+			f.mu.Lock()
+			evs, done := f.events[c.next:], f.done
+			c.next = len(f.events)
+			f.mu.Unlock()
+			for _, ev := range evs {
+				line := make(map[string]any, len(ev)+1)
+				for k, v := range ev {
+					line[k] = v
+				}
+				line["flight"] = f.fid
+				enc.Encode(line)
+			}
+			if done {
+				c.done = true
+				line := f.final("")
+				line["flight"] = f.fid
+				enc.Encode(line)
+			}
+		}
+		for f := range seen { // gone from the list: forget it
+			if !slices.Contains(all, f) {
+				delete(seen, f)
+			}
+		}
+		if !ready {
+			ready = true
+			enc.Encode(map[string]any{"ready": true})
+		}
+		if fl != nil {
+			fl.Flush()
+		}
+		select {
+		case <-r.Context().Done():
+			return // the sessions go on; what they write is kept
+		case <-poked:
+		case <-tick.C:
+			enc.Encode(map[string]any{"ping": time.Now().Unix()})
+		}
+	}
+}
+
+func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
+	k, f, key, word, ok := s.dictBegin(w, r)
+	if !ok {
+		return
+	}
 	fl, _ := w.(http.Flusher)
 	enc := json.NewEncoder(w)
 	flush := func() {
@@ -546,26 +733,9 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Accel-Buffering", "no")
 		w.WriteHeader(http.StatusOK)
 	}
-	k, word, err := s.dictFind(src.Code, dst.Code, key, req.Exact)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
 	if k != nil {
 		start()
 		enc.Encode(map[string]any{"entry": k})
-		return
-	}
-	mode := dictPlain
-	switch {
-	case req.Exact:
-		mode = dictExact
-	case word != key:
-		mode = dictChecked // a known typo: its word, checked already
-	}
-	f, err := s.dictJoin(src, dst, word, mode)
-	if err != nil {
-		writeErr(w, http.StatusServiceUnavailable, err)
 		return
 	}
 	start()
@@ -584,23 +754,7 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 			enc.Encode(ev)
 		}
 		if done {
-			switch {
-			case f.err != nil:
-				enc.Encode(map[string]any{"error": f.err.Error()})
-			case f.kept == nil:
-				sugg := f.notFound
-				if sugg == nil {
-					sugg = []string{}
-				}
-				enc.Encode(map[string]any{"notfound": true, "suggestions": sugg})
-			default:
-				kept := *f.kept
-				kept.Corrected = ""
-				if kept.Q != key {
-					kept.Corrected = key // what this reader typed was a typo of it
-				}
-				enc.Encode(map[string]any{"entry": kept})
-			}
+			enc.Encode(f.final(key))
 			flush()
 			return
 		}
@@ -651,7 +805,13 @@ func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFl
 	if s.dictFlights == nil {
 		s.dictFlights = map[string]*dictFlight{}
 	}
-	f := &dictFlight{began: time.Now(), changed: make(chan struct{}), spelled: mode == dictChecked}
+	if s.dictBoot == "" {
+		s.dictBoot = strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	s.dictSeq++
+	f := &dictFlight{began: time.Now(), changed: make(chan struct{}), spelled: mode == dictChecked,
+		fid: s.dictBoot + "-" + strconv.Itoa(s.dictSeq), from: src.Code, to: dst.Code, word: key, poke: s.dictPoke}
+	s.dictAll = append(s.dictAll, f)
 	id := entryID(key)
 	if mode == dictPlain {
 		id = spellID(key)
@@ -681,27 +841,16 @@ func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFl
 					delete(s.dictFlights, id)
 				}
 			}
+			f.ended = time.Now()
 			s.dictMu.Unlock()
 			f.finish()
 		}()
+		// no ceiling: every lookup that needs a session gets one at once
 		ctx, cancel := context.WithTimeout(context.Background(), dictTimeout)
 		defer cancel()
-		held := false
-		select {
-		case dictSlots <- struct{}{}:
-			held = true
-			defer func() {
-				if held {
-					<-dictSlots
-				}
-			}()
-		case <-ctx.Done():
-			f.err = errors.New("the dictionary is busy: try again in a minute")
-			return
-		}
 		// kept meanwhile: by a session that ended between this lookup's
-		// miss and its join, or while this one waited for a slot — or, for
-		// a plain lookup, read as a typo meanwhile
+		// miss and its join — or, for a plain lookup, read as a typo
+		// meanwhile
 		if k, word, err := s.dictFind(src.Code, dst.Code, key, mode == dictExact); err == nil && k != nil {
 			f.kept = k
 			return
@@ -762,8 +911,6 @@ func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFl
 		if mode != dictExact {
 			if g := file(key); g != nil {
 				// another flight is writing this word: its work is f's
-				<-dictSlots
-				held = false
 				f.follow(g)
 				return
 			}

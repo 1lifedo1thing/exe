@@ -74,20 +74,27 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
    the word gives way to an ellipsis as tabs crowd. The bar is there from
    the first paint, a lone tab too, so the page never drops when a second
    tab opens. */
-#tabs { flex: none; display: flex; align-items: flex-start; padding: 0 6px; position: relative; z-index: 2;
-  min-width: 0; }
+/* past what fits, the bar scrolls sideways (a wheel, a trackpad, a
+   finger), its scroll bar hidden; the 3px it reaches below its line keep
+   the open tab's foot inside the scrolled box, so it is not clipped */
+#tabs { flex: none; display: flex; align-items: flex-start; padding: 0 6px 3px; margin-bottom: -3px;
+  position: relative; z-index: 2; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+#tabs::-webkit-scrollbar { display: none; }
 .tab {
   height: 22px; color: #000; font-size: 11px; font-weight: bold; line-height: 14px;
   text-align: center; padding: 0 2px; position: relative; white-space: nowrap;
   border-style: solid; border-width: 8px 14px 0 14px;
   border-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='22'><path d='M4.5 23 L11 5.5 Q11.8 1.5 14 1.5 L30 1.5 Q32.2 1.5 33 5.5 L39.5 23' fill='%23ccc' stroke='%23000'/><path d='M6.2 23 L12 5.8 Q12.6 2.5 14 2.5 L29.5 2.5' fill='none' stroke='%23ddd'/><path d='M30 2.5 Q31.6 2.5 32.2 5.8 L37.8 23' fill='none' stroke='%23aaa'/></svg>") 8 14 0 14 fill stretch;
-  display: flex; align-items: flex-start; gap: 4px; flex: 0 1 auto; min-width: 72px; max-width: 180px;
+  display: flex; align-items: flex-start; gap: 4px; flex: 0 1 auto; min-width: 100px; max-width: 180px;
 }
 .tab + .tab { margin-left: -7px; }
 .tab.active {
   height: 25px; margin-bottom: -3px; z-index: 3;
   border-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='25'><path d='M3.8 25 L11 5.5 Q11.8 1.5 14 1.5 L30 1.5 Q32.2 1.5 33 5.5 L40.2 25 Z' fill='%23fff'/><path d='M4.9 22 L11 5.5 Q11.8 1.5 14 1.5 L30 1.5 Q32.2 1.5 33 5.5 L39.1 22' fill='none' stroke='%23000'/><path d='M6.6 22 L12 5.8 Q12.6 2.5 14 2.5 L29.5 2.5' fill='none' stroke='%23fff'/><path d='M30 2.5 Q31.6 2.5 32.2 5.8 L37.4 22' fill='none' stroke='%23bbb'/></svg>") 8 14 0 14 fill stretch;
 }
+/* the open tab keeps its whole word (up to the widest a tab gets); the
+   others narrow, then the bar scrolls */
+.tab.active { flex-shrink: 0; }
 .tab .mk { flex: none; width: 7px; height: 7px; margin-top: 4px; }
 .tab .mk svg { display: block; }
 .tab .mk.live { border-radius: 50%; background: var(--green); width: 6px; height: 6px; margin: 4px 0 0 1px;
@@ -327,15 +334,13 @@ const article = name => (/^[AEIOU]/.test(name) ? "an " : "a ") + name;
 
 // ---- tabs ----
 // A tab is one lookup: its pair of languages, its word, its page, its
-// status line, and — while a session writes its entry — the fetch that
-// follows the session. A lookup goes into the open tab, unless that tab is
-// writing: then it opens a tab of its own beside it, and the writing goes
-// on. A tab writing the very word asked for is opened instead. At most
-// three tabs write at once, as many as the daemon runs sessions (and a
-// browser on plain HTTP keeps six connections a host, the desktop's
-// streams among them); the tab bar holds as many tabs as fit, and past
-// that a new one takes the place of the oldest idle tab.
-const MAX_WRITING = 3, TAB_MIN = 72, TAB_OVERLAP = 7;
+// status line, and — while a session writes its entry — the flight it
+// follows on the window's shared stream. A lookup goes into the open tab,
+// unless that tab is writing: then it opens a tab of its own beside it,
+// and the writing goes on. A tab writing the very word asked for is opened
+// instead. There is no ceiling: as many tabs write at once as are asked
+// to, all on the one stream, and the tab bar scrolls sideways when they
+// outgrow it.
 const tabs = [];
 let active = null;
 const CLOSE_CRISP = '<svg class="crisp" width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path fill="#262626" d="M0 0h1v1H0zM6 0h1v1H6zM1 1h1v1H1zM5 1h1v1H5zM2 2h1v1H2zM4 2h1v1H4zM3 3h1v1H3zM2 4h1v1H2zM4 4h1v1H4zM1 5h1v1H1zM5 5h1v1H5zM0 6h1v1H0zM6 6h1v1H6z"/></svg>';
@@ -344,7 +349,7 @@ const BELL = '<svg width="7" height="7" viewBox="0 0 7 7" shape-rendering="crisp
 
 function newTab({ src = "en", dst = "zh", q = "", exact = false, after = null } = {}) {
   const tab = { src, dst, q, exact, busy: false, unseen: false, ctrl: null, ticker: 0, watcher: null,
-    st: "", stErr: false };
+    fid: "", key: "", word: "", typed: "", model: "", effort: "", base: 0, at: 0, st: "", stErr: false };
   tab.entry = el("div", { class: "entry" });
   tab.page = el("div", { class: "page off" }, tab.entry);
   pagesEl.append(tab.page);
@@ -388,9 +393,24 @@ function activate(tab) {
   to.value = tab.dst;
   field.value = tab.q;
   drawTabs();
+  reveal(tab);
   paintStatus();
   remember();
 }
+
+// reveal scrolls the tab bar the least distance that shows a tab whole;
+// by hand, not scrollIntoView, which would move the page itself too
+function reveal(tab) {
+  const bar = tabsEl, l = tab.el.offsetLeft - bar.offsetLeft, r = l + tab.el.offsetWidth;
+  if (l < bar.scrollLeft) bar.scrollLeft = l - 6;
+  else if (r > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = r - bar.clientWidth + 6;
+}
+// a wheel over the tab bar scrolls it sideways
+tabsEl.addEventListener("wheel", e => {
+  if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || tabsEl.scrollWidth <= tabsEl.clientWidth) return;
+  tabsEl.scrollLeft += e.deltaY;
+  e.preventDefault();
+}, { passive: false });
 
 function closeTab(tab) {
   stopTab(tab); // its session, if any, goes on in the daemon and is kept
@@ -403,24 +423,13 @@ function closeTab(tab) {
   else { drawTabs(); remember(); }
 }
 
-// how many tabs the bar holds before they would crowd past its end
-function tabRoom() {
-  return Math.max(2, Math.floor((tabsEl.clientWidth - 12 - TAB_OVERLAP) / (TAB_MIN - TAB_OVERLAP)));
-}
-
 // the tab a lookup goes into: the open one, or — while that one writes —
-// a new one beside it (or, with the bar full, the oldest idle tab)
+// a new one beside it
 function tabFor(q, src, dst, exact) {
   const same = tabs.find(t => t.busy && t.src === src && t.dst === dst && t.exact === exact &&
     t.q.toLowerCase() === q.toLowerCase());
   if (same) return { tab: same, open: true };
   if (!active.busy) return { tab: active };
-  if (tabs.filter(t => t.busy).length >= MAX_WRITING)
-    return { refused: "Three words are being written already: look this one up when one of them is done" };
-  if (tabs.length >= tabRoom()) {
-    const idle = tabs.find(t => !t.busy && t !== active);
-    if (idle) return { tab: idle };
-  }
   return { tab: newTab({ src, dst, q, after: active }) };
 }
 
@@ -432,23 +441,14 @@ function remember() {
 }
 
 // ---- the status line: the open tab's ----
-let flashUntil = 0;
 function setStatus(tab, text, err = false) {
   tab.st = text;
   tab.stErr = err;
   if (tab === active) paintStatus();
 }
 function paintStatus() {
-  if (Date.now() < flashUntil) return;
   st.textContent = active.st;
   st.classList.toggle("err", active.stErr);
-}
-// a word for a moment, over whatever the open tab says
-function flash(text) {
-  flashUntil = Date.now() + 4000;
-  st.textContent = text;
-  st.classList.add("err");
-  setTimeout(paintStatus, 4100);
 }
 
 // ---- what a page shows ----
@@ -605,8 +605,8 @@ function partialJSON(s) {
 }
 
 // ---- looking up ----
-// stopTab lets go of what a tab is following: its fetch (the session, if
-// one is writing, goes on in the daemon), its clock and its drawing
+// stopTab lets go of what a tab is following: its start, its flight on the
+// stream (the session goes on in the daemon), its clock and its drawing
 function stopTab(tab) {
   if (tab.ctrl) tab.ctrl.abort();
   tab.ctrl = null;
@@ -618,10 +618,12 @@ function settle(tab) {
   tab.ticker = 0;
   if (tab.watcher) tab.watcher.stop();
   tab.watcher = null;
+  tab.fid = "";
   if (tab.busy && tab !== active) tab.unseen = true;
   tab.busy = false;
   drawTab(tab);
   remember();
+  streamIdle();
 }
 
 // watch follows one session as it writes, on a tab's page: its steps fill a
@@ -721,6 +723,124 @@ function watch(tab, q, model, effort, word) {
   return w;
 }
 
+// ---- the shared stream ----
+// One connection carries every session the daemon is running to this
+// window, each line tagged with its flight: a tab claims the flight its
+// start named and reads its lines, the ones that came before the claim
+// from the buffer kept here. The stream opens when a tab first follows a
+// flight and closes when none does; a stream that breaks is opened again
+// while any tab follows one, and its replay starts every followed page
+// over. A tab whose flight the daemon no longer lists once a stream is
+// ready (finished long ago, lost to a restart) looks its word up again.
+const flights = new Map(); // flight → { lines, final } on this connection
+let stream = null;
+const following = () => tabs.some(t => t.fid);
+function streamIdle() {
+  if (stream && !following()) {
+    stream.ctrl.abort();
+    stream = null;
+    flights.clear();
+  }
+}
+async function openStream() {
+  const me = stream = { ctrl: new AbortController() };
+  flights.clear();
+  try {
+    const r = await api("/v1/dict/stream", { signal: me.ctrl.signal });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 1);
+        if (!line.trim() || stream !== me) continue;
+        heard(JSON.parse(line));
+      }
+    }
+  } catch (e) {
+    if (me.ctrl.signal.aborted) return;
+  }
+  if (stream !== me) return;
+  stream = null;
+  if (following()) setTimeout(() => { if (!stream && following()) openStream(); }, 1500);
+}
+function heard(m) {
+  if (m.ready) {
+    for (const t of tabs) if (t.fid && !flights.has(t.fid)) run(t, t.typed, t.src, t.dst, t.exact);
+    return;
+  }
+  const fid = m.flight;
+  if (!fid) return; // a ping
+  if (m.began) {
+    flights.set(fid, { lines: [], final: null });
+    for (const t of tabs) if (t.fid === fid) { t.base = m.began.wait || 0; t.at = Date.now(); begin(t); }
+    return;
+  }
+  const fl = flights.get(fid);
+  if (!fl) return;
+  if (m.entry || m.notfound || m.error) fl.final = m;
+  else fl.lines.push(m);
+  for (const t of tabs) if (t.fid === fid) take(t, m);
+}
+
+// begin starts a tab's page over on its flight: the log, the clock
+function begin(tab) {
+  if (tab.watcher) tab.watcher.stop();
+  tab.watcher = watch(tab, tab.typed, tab.model, tab.effort, tab.word);
+  clearInterval(tab.ticker);
+  tab.ticker = setInterval(() => tick(tab), 1000);
+  tick(tab);
+}
+function tick(tab) {
+  const w = tab.watcher;
+  if (!w) return;
+  const s = tab.base + Math.floor((Date.now() - tab.at) / 1000);
+  setStatus(tab, w.answering
+    ? "Codex is writing “" + w.q + "”… " + num([...w.text].length) + " characters · " + clock(s)
+    : w.spell && !w.spell.done ? "Codex is checking the spelling of “" + w.q + "”… " + clock(s)
+    : "Codex is thinking about “" + w.q + "”… " + clock(s));
+}
+
+// take is one line of a tab's flight
+function take(tab, m) {
+  const w = tab.watcher;
+  if (m.step) { if (w) { w.step(m.step); tick(tab); } return; }
+  if (m.text !== undefined) { if (w) w.more(m.text); return; }
+  const q = tab.typed, src = tab.src, dst = tab.dst;
+  const elapsed = tab.base + Math.floor((Date.now() - tab.at) / 1000);
+  if (m.entry) {
+    // corrected: the daemon read what was typed as a typo — a known one
+    // (it says so), or the flight's word is not the tab's own text
+    const typo = m.entry.corrected || (tab.key && m.entry.q !== tab.key);
+    const k = Object.assign({}, m.entry, { corrected: typo ? q : "" });
+    const drawn = !!(w && w.drawn);
+    // a typo: the tab takes its word, as the session showed it
+    tab.q = !k.corrected ? q : w && w.q.toLowerCase() === k.q ? w.q : k.q;
+    if (tab === active) field.value = tab.q;
+    settle(tab);
+    renderEntry(tab, k, drawn); // a page watched being written keeps its place
+    const tok = k.tokens;
+    setStatus(tab, k.written
+      ? "Written by " + k.model + " (" + k.effort + ") in " + clock(elapsed) +
+        (tok ? " · " + num(tok.totalTokens) + " tokens, " + num(tok.reasoningOutputTokens) + " of them reasoning" : "") + " · kept"
+      : pairOf(src, dst) + " · in the dictionary since " + day(k.created));
+  } else if (m.notfound) {
+    settle(tab);
+    const sugg = m.suggestions || [];
+    show(tab, caution("“" + q + "” is not " + article(nameOf(FROM, src)) + " word Dict knows.",
+      sugg.length ? el("span", {}, "Did you mean ", ...sugg.flatMap((s, j) =>
+        [j ? (j === sugg.length - 1 ? " or " : ", ") : "", link(s, src)]), "?") : "Check the spelling, or the language it is looked up from."));
+    setStatus(tab, "Not " + article(nameOf(FROM, src)) + " word: nothing was kept");
+  } else if (m.error) {
+    failed(tab, q, tab.exact, m.error);
+  }
+}
+
 // lookup looks up what the field holds, in the pop-ups' languages, in the
 // tab tabFor picks: an entry the dictionary keeps comes back at once; one
 // it lacks is written by a Codex session, which takes a minute or two and
@@ -735,105 +855,55 @@ function lookup(exact = false) {
   if (!q) { field.focus(); return; }
   field.value = q;
   const pick = tabFor(q, from.value, to.value, exact);
-  if (pick.refused) return flash(pick.refused);
   if (pick.open) return activate(pick.tab);
   const tab = pick.tab;
   if (tab !== active) activate(tab);
   run(tab, q, from.value, to.value, exact);
 }
 
-// run is one lookup on one tab, followed to its end
+// run is one lookup on one tab: its start answers with the entry, or with
+// the flight the tab then follows on the shared stream
 async function run(tab, q, src, dst, exact) {
   stopTab(tab);
-  Object.assign(tab, { q, src, dst, exact, busy: true, unseen: false });
+  Object.assign(tab, { q, typed: q, src, dst, exact, busy: true, unseen: false });
   drawTab(tab);
   remember();
   const my = tab.ctrl = new AbortController();
   setStatus(tab, "Looking up “" + q + "”…");
-  let r;
+  let r, m;
   try {
-    r = await api("/v1/dict", { method: "POST", signal: my.signal,
+    r = await api("/v1/dict/start", { method: "POST", signal: my.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ from: src, to: dst, q, exact }) });
+    m = await r.json().catch(() => ({}));
   } catch (e) {
     if (my.signal.aborted) return;
     return failed(tab, q, exact, "The daemon did not answer.", e.message);
   }
+  if (my !== tab.ctrl) return;
+  tab.ctrl = null;
   if (!r.ok) {
-    const e = await r.json().catch(() => ({}));
-    if (my !== tab.ctrl) return;
     settle(tab);
     if (r.status === 503) {
       setStatus(tab, "No Usable LLM Backend", true);
       return show(tab, caution("No Usable LLM Backend",
         "Dict writes the entries it does not have yet with Codex, and this host has no Codex CLI. Words already in the dictionary still open."));
     }
-    return failed(tab, q, exact, e.error || "HTTP " + r.status);
+    return failed(tab, q, exact, m.error || "HTTP " + r.status);
   }
-  const reader = r.body.getReader(), dec = new TextDecoder();
-  let buf = "", base = 0, at = 0, w = null;
-  const elapsed = () => base + Math.floor((Date.now() - at) / 1000);
-  const tick = () => {
-    if (!w) return;
-    setStatus(tab, w.answering
-      ? "Codex is writing “" + w.q + "”… " + num([...w.text].length) + " characters · " + clock(elapsed())
-      : w.spell && !w.spell.done ? "Codex is checking the spelling of “" + w.q + "”… " + clock(elapsed())
-      : "Codex is thinking about “" + w.q + "”… " + clock(elapsed()));
-  };
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let i;
-      while ((i = buf.indexOf("\n")) >= 0) {
-        const line = buf.slice(0, i);
-        buf = buf.slice(i + 1);
-        if (!line.trim()) continue;
-        const m = JSON.parse(line);
-        if (my !== tab.ctrl) return;
-        if (m.writing) {
-          w = tab.watcher = watch(tab, q, m.model, m.effort, m.q);
-          base = m.wait || 0; at = Date.now();
-          tick();
-          tab.ticker = setInterval(tick, 1000);
-        } else if (m.step) {
-          if (w) { w.step(m.step); tick(); }
-        } else if (m.text !== undefined) {
-          if (w) w.more(m.text);
-        } else if (m.wait !== undefined) {
-          base = m.wait; at = Date.now();
-        } else if (m.entry) {
-          const k = m.entry, drawn = !!(w && w.drawn);
-          // a typo: the tab takes its word, as the session showed it
-          tab.q = !k.corrected ? q : w && w.q.toLowerCase() === k.q ? w.q : k.q;
-          if (tab === active) field.value = tab.q;
-          settle(tab);
-          renderEntry(tab, k, drawn); // a page watched being written keeps its place
-          const tok = k.tokens;
-          setStatus(tab, k.written
-            ? "Written by " + k.model + " (" + k.effort + ") in " + clock(elapsed()) +
-              (tok ? " · " + num(tok.totalTokens) + " tokens, " + num(tok.reasoningOutputTokens) + " of them reasoning" : "") + " · kept"
-            : pairOf(src, dst) + " · in the dictionary since " + day(k.created));
-          return;
-        } else if (m.notfound) {
-          settle(tab);
-          const sugg = m.suggestions || [];
-          show(tab, caution("“" + q + "” is not " + article(nameOf(FROM, src)) + " word Dict knows.",
-            sugg.length ? el("span", {}, "Did you mean ", ...sugg.flatMap((s, j) =>
-              [j ? (j === sugg.length - 1 ? " or " : ", ") : "", link(s, src)]), "?") : "Check the spelling, or the language it is looked up from."));
-          setStatus(tab, "Not " + article(nameOf(FROM, src)) + " word: nothing was kept");
-          return;
-        } else if (m.error) {
-          return failed(tab, q, exact, m.error);
-        }
-      }
-    }
-  } catch (e) {
-    if (my.signal.aborted) return;
-    return failed(tab, q, exact, "The answer broke off.", e.message);
+  if (m.entry) {
+    tab.key = "";
+    return take(tab, { entry: m.entry });
   }
-  if (my === tab.ctrl) failed(tab, q, exact, "The answer broke off.");
+  Object.assign(tab, { fid: m.flight, key: m.key, word: m.q || "", model: m.model, effort: m.effort,
+    base: m.wait || 0, at: Date.now() });
+  begin(tab);
+  const fl = flights.get(tab.fid);
+  if (fl) { // what the stream already brought
+    for (const line of fl.lines) take(tab, line);
+    if (fl.final) take(tab, fl.final);
+  }
+  if (!stream) openStream();
 }
 function failed(tab, q, exact, msg, detail) {
   settle(tab);

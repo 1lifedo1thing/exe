@@ -593,6 +593,152 @@ func TestDictFollowsASessionOnTheSameWord(t *testing.T) {
 	}
 }
 
+// dictStreamReader reads a window's shared stream line by line.
+type dictStreamReader struct {
+	dec  *json.Decoder
+	body interface{ Close() error }
+}
+
+func openDictStream(t *testing.T, url string) *dictStreamReader {
+	t.Helper()
+	resp, err := http.Get(url + "/v1/dict/stream")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "application/x-ndjson" {
+		t.Fatalf("stream content-type = %q", ct)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	return &dictStreamReader{dec: json.NewDecoder(resp.Body), body: resp.Body}
+}
+
+// until reads lines until one satisfies want, and returns every line read
+func (r *dictStreamReader) until(t *testing.T, want func(map[string]any) bool) []map[string]any {
+	t.Helper()
+	var lines []map[string]any
+	for {
+		var m map[string]any
+		if err := r.dec.Decode(&m); err != nil {
+			t.Fatalf("stream ended: %v (after %d lines)", err, len(lines))
+		}
+		lines = append(lines, m)
+		if want(m) {
+			return lines
+		}
+	}
+}
+
+func dictStartFlight(t *testing.T, url, body string) map[string]any {
+	t.Helper()
+	resp, err := http.Post(url+"/v1/dict/start", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var m map[string]any
+	json.NewDecoder(resp.Body).Decode(&m)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("start %s: %d %v", body, resp.StatusCode, m)
+	}
+	return m
+}
+
+// A window follows its sessions on one shared stream: a start answers at
+// once with the flight, whose lines — steps, the entry in fragments, the
+// last line — come on the stream tagged with it. A kept word's start is
+// its entry.
+func TestDictSharedStream(t *testing.T) {
+	dir := t.TempDir()
+	fakeDictCodex(t, dir, dictAnswer)
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close) // after the streams close: Close waits for open requests
+
+	st := openDictStream(t, ts.URL)
+	st.until(t, func(m map[string]any) bool { return m["ready"] == true })
+	got := dictStartFlight(t, ts.URL, `{"from":"en","to":"zh","q":"Serendipity"}`)
+	fid, _ := got["flight"].(string)
+	if fid == "" || got["key"] != "serendipity" || got["q"] != "serendipity" || got["model"] != "gpt-6-astra" {
+		t.Fatalf("start = %v", got)
+	}
+	lines := st.until(t, func(m map[string]any) bool { return m["flight"] == fid && m["entry"] != nil })
+	var text strings.Builder
+	announced, steps := false, 0
+	for _, l := range lines {
+		if l["flight"] != fid {
+			continue
+		}
+		if b, ok := l["began"].(map[string]any); ok && b["q"] == "serendipity" && b["from"] == "en" {
+			announced = true
+		}
+		if l["step"] != nil {
+			steps++
+		}
+		if d, ok := l["text"].(string); ok {
+			text.WriteString(d)
+		}
+	}
+	if !announced || steps < 5 || text.String() != dictAnswer {
+		t.Fatalf("announced %v, %d steps, text %q", announced, steps, text.String())
+	}
+	last := lines[len(lines)-1]["entry"].(map[string]any)
+	if last["q"] != "serendipity" || last["written"] != true || last["corrected"] != nil {
+		t.Fatalf("last line = %v", last)
+	}
+
+	if k := dictStartFlight(t, ts.URL, `{"from":"en","to":"zh","q":"serendipity"}`); k["entry"] == nil {
+		t.Fatalf("a kept word's start = %v", k)
+	}
+
+	// a window that connects later still finds the finished flight, its
+	// lines and its end
+	late := openDictStream(t, ts.URL)
+	lines = late.until(t, func(m map[string]any) bool { return m["ready"] == true })
+	if lines[0]["flight"] != fid || lines[0]["began"] == nil || lines[len(lines)-2]["entry"] == nil {
+		t.Fatalf("a late window read %d lines: first %v, before ready %v", len(lines), lines[0], lines[len(lines)-2])
+	}
+}
+
+// No ceiling: every lookup gets its session at once — five held mid-entry
+// together, then all written.
+func TestDictNoSessionCeiling(t *testing.T) {
+	dir := t.TempDir()
+	fakeDictCodex(t, dir, dictAnswer)
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close) // after the streams close: Close waits for open requests
+
+	gate := filepath.Join(dir, "hold-entry")
+	os.WriteFile(gate, nil, 0o600)
+	words := []string{"alpha", "bravo", "charlie", "delta", "echo"}
+	fids := map[string]string{}
+	for _, w := range words {
+		fids[dictStartFlight(t, ts.URL, `{"from":"en","to":"zh","q":"`+w+`"}`)["flight"].(string)] = w
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for dictTurns(dir, "entry") < len(words) {
+		if time.Now().After(deadline) {
+			os.Remove(gate)
+			t.Fatalf("only %d of %d sessions reached their entry together", dictTurns(dir, "entry"), len(words))
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	os.Remove(gate)
+	st := openDictStream(t, ts.URL)
+	done := map[string]bool{}
+	st.until(t, func(m map[string]any) bool {
+		if f, ok := m["flight"].(string); ok && m["entry"] != nil {
+			done[f] = true
+		}
+		return len(done) == len(words)
+	})
+	for f := range fids {
+		if !done[f] {
+			t.Fatalf("flight %s (%s) never ended", f, fids[f])
+		}
+	}
+}
+
 // Two lookups of one word at once share one session.
 func TestDictSharesASession(t *testing.T) {
 	dir := t.TempDir()
