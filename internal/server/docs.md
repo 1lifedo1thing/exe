@@ -1438,6 +1438,13 @@ The window remembers its tabs, the open one and its languages in this
 browser; after a reload, a tab that was writing rejoins its session, and
 one whose session was lost to a daemon restart starts it again.
 
+Dict also works on its own, outside the desktop: open `/apps/dict/` on
+your exe's address (`https://<host>.ts.net/apps/dict/` over Tailscale
+Serve) and, on an iPhone, **Share → Add to Home Screen**. It opens full
+screen with its own icon, the red dictionary on the desk's lavender,
+keeps clear of the notch and the home indicator, and uses the API token
+the desktop saved in that browser, if your exe has one.
+
 `GET /v1/dict?from=en&to=zh&q=word` answers a kept entry (for a known
 typo its word's, with `corrected` saying what was typed; `exact=1` reads
 the text as typed), 404 when there is none. `POST /v1/dict` with `{"from",

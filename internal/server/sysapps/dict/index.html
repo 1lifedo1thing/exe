@@ -2,7 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- Dict also stands alone: opened at /apps/dict/ and added to a phone's
+     home screen it is an app of its own (manifest.json, the touch icon on
+     the desk's lavender — iOS fills a transparent one black). In the
+     desktop's window none of this applies: an iframe has no viewport or
+     safe areas of its own. maximum-scale=1 keeps iOS from zooming in on
+     the 12px field when it takes the caret. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Dict</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dict">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#eeeeee">
 <link rel="stylesheet" href="/platinum/popup.css">
 <style>
 /* Platinum values match the exe desktop (same block as Blue Pencil and Notes) */
@@ -16,7 +30,10 @@
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { height: 100%; }
 body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: var(--g200);
-  user-select: none; cursor: default; overflow: hidden; display: flex; flex-direction: column; }
+  user-select: none; cursor: default; overflow: hidden; display: flex; flex-direction: column;
+  /* on its own on a phone: clear of the notch and the rounded corners in
+     landscape (all zero inside the desktop's window) */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px); }
 
 button { font: inherit; cursor: default; }
 button.ghost { background: var(--g300); color: var(--black);
@@ -187,10 +204,15 @@ body.lone .tab .tx { visibility: hidden; }
 /* overflow: clip — the 11px text's line box is taller than the 14px face and
    hangs a pixel past the bar; clipped, that pixel is no scrollable overflow of
    the page (docs/platinum.md, status bar) */
-#status { flex: none; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--black);
-  background: var(--g300); font-size: 11px; color: #333; padding: 0 20px 0 8px; height: 15px;
+/* on its own on a phone the bar runs on under the home indicator: its face
+   grows by the inset below, the line of text stays where it always was —
+   top-aligned a pixel up is exactly where centring put the 16px line box
+   on the 14px face, and the line height is left alone */
+#status { flex: none; display: flex; align-items: flex-start; gap: 10px; border-top: 1px solid var(--black);
+  background: var(--g300); font-size: 11px; color: #333; padding: 0 20px env(safe-area-inset-bottom, 0px) 8px;
+  height: calc(15px + env(safe-area-inset-bottom, 0px));
   box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; overflow: clip; }
-#st { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#st { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: -1px; }
 #st.err { color: var(--red); }
 #grow { position: fixed; right: 0; bottom: 0; width: 15px; height: 15px;
   touch-action: none; z-index: 6; }
@@ -282,7 +304,10 @@ body.mobile #status { padding-right: 8px; }
 <script>
 "use strict";
 const $ = s => document.querySelector(s);
-const TOKEN = new URLSearchParams(location.search).get("token") || "";
+// the desktop hands its window the API token; opened on its own (a home
+// screen icon), Dict reads the one the desktop keeps for this origin
+const TOKEN = new URLSearchParams(location.search).get("token") ||
+  (() => { try { return localStorage.getItem("exe_token") || ""; } catch (e) { return ""; } })();
 const APP = decodeURIComponent(location.pathname.split("/")[2] || "dict");
 const KEY = "exe-dict:" + APP; // the languages and the word: this browser's own
 // A phone shows no grow tile. The desktop passes its own verdict as

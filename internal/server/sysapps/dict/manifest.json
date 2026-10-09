@@ -1,0 +1,16 @@
+{
+  "name": "Dict",
+  "short_name": "Dict",
+  "description": "A dictionary into Chinese, Japanese and Korean, written by Codex",
+  "id": "/apps/dict/",
+  "start_url": "/apps/dict/",
+  "scope": "/apps/dict/",
+  "display": "standalone",
+  "background_color": "#eeeeee",
+  "theme_color": "#eeeeee",
+  "icons": [
+    { "src": "/apps/dict/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/apps/dict/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/apps/dict/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
