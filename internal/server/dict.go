@@ -22,7 +22,7 @@
 // lines — t the seconds since the session began; kind "session" (it
 // started), "spell" and "spelled" (the spelling pass began, and its
 // "verdict" on the "typed" text: "word", "typo" with the "word" it stands
-// for, or "unknown"),
+// for — its key, and "shown", as the pass spelled it — or "unknown"),
 // "think" and "thought" (a reasoning pass, by "pass", began and ended),
 // "summary" (a line of a pass's summary as it stands: "pass", "part",
 // "text"), "answer" (the entry begins), "usage" (the tokens spent,
@@ -744,7 +744,11 @@ func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFl
 					step("spelled", map[string]any{"verdict": "word", "typed": key})
 					break
 				}
-				step("spelled", map[string]any{"verdict": "typo", "word": word, "typed": key})
+				// word is the key it is kept under; shown, the word as the
+				// pass spelled it, for the window (a German noun keeps its
+				// capital)
+				step("spelled", map[string]any{"verdict": "typo", "word": word, "typed": key,
+					"shown": strings.Join(strings.Fields(v.Word), " ")})
 				s.dictPutTypo(src.Code, key, word)
 				key = word
 				if k, err := s.dictGet(src.Code, dst.Code, key); err == nil && k != nil {

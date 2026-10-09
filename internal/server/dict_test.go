@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -56,10 +57,13 @@ func fakeDictCodex(t *testing.T, dir, answer string) {
 // then plays each turn. A spelling pass (its schema asks for a verdict)
 // answers spell.json, a word by default. An entry turn plays a reasoning
 // pass with a summary, the answer in fragments and the tokens — or, with
-// no answer.json, fails. A turn waits, once begun, while a gate file
-// stands in dir: hold-spell holds the spelling verdict, hold-entry the
-// entry's reasoning — a test that needs two lookups in flight at once
-// makes the gate before the first and removes it after the second.
+// no answer.json, fails. For trying the app by hand on a scratch daemon,
+// EXE_DICT_FAKE_PACE (a duration) spaces an entry turn's notes out, and
+// "{{word}}" in answer.json becomes the word looked up. A turn waits, once
+// begun, while a gate file stands in dir: hold-spell holds the spelling
+// verdict, hold-entry the entry's reasoning — a test that needs two
+// lookups in flight at once makes the gate before the first and removes
+// it after the second.
 func fakeCodexAppServer(dir string) {
 	note := func(name, text string) {
 		f, _ := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
@@ -78,6 +82,7 @@ func fakeCodexAppServer(dir string) {
 	note("runs", "run\n")
 	time.Sleep(300 * time.Millisecond) // long enough for a second lookup to join
 	enc := json.NewEncoder(os.Stdout)
+	pace, _ := time.ParseDuration(os.Getenv("EXE_DICT_FAKE_PACE"))
 	say := func(method string, params any) { enc.Encode(map[string]any{"method": method, "params": params}) }
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 64<<10), 4<<20)
@@ -118,14 +123,27 @@ func fakeCodexAppServer(dir string) {
 				say("turn/completed", map[string]any{"turn": map[string]any{"status": "failed", "error": map[string]any{"message": "boom"}}})
 				continue
 			}
+			var turn struct{ Input []struct{ Text string } }
+			json.Unmarshal(m.Params, &turn)
+			if len(turn.Input) > 0 {
+				if _, rest, ok := strings.Cut(turn.Input[0].Text, "The reader looked up: "); ok {
+					w, _, _ := strings.Cut(rest, "\n")
+					w, _ = strconv.Unquote(w)
+					answer = []byte(strings.ReplaceAll(string(answer), "{{word}}", w))
+				}
+			}
 			say("item/started", map[string]any{"item": map[string]any{"type": "reasoning", "id": "r1"}})
+			time.Sleep(pace)
 			say("item/reasoning/summaryTextDelta", map[string]any{"itemId": "r1", "summaryIndex": 0, "delta": "**Checking the senses**"})
+			time.Sleep(pace)
 			say("item/completed", map[string]any{"item": map[string]any{"type": "reasoning", "id": "r1"}})
+			time.Sleep(pace)
 			say("item/started", map[string]any{"item": map[string]any{"type": "agentMessage", "id": "m1", "text": ""}})
 			for r := []rune(string(answer)); len(r) > 0; {
 				n := min(len(r), 10)
 				say("item/agentMessage/delta", map[string]any{"itemId": "m1", "delta": string(r[:n])})
 				r = r[n:]
+				time.Sleep(pace / 20)
 			}
 			say("item/completed", map[string]any{"item": map[string]any{"type": "agentMessage", "id": "m1", "text": string(answer)}})
 			say("thread/tokenUsage/updated", map[string]any{"tokenUsage": map[string]any{"total": map[string]any{

@@ -1419,8 +1419,22 @@ for the new pair if the dictionary has one and otherwise waits for **Look
 Up**, so a stray change of pop-up never starts a session. A host without
 the Codex CLI still opens every entry it keeps, and answers the rest with
 **No Usable LLM Backend**; Codex must be signed in (`codex login`) for the
-rest to be written. The window remembers its languages and its word in
-this browser.
+rest to be written.
+
+Each lookup has a tab, along the top of the page. Looking up a word
+fills the tab you are on, unless that tab is still writing: then the new
+word opens in a tab of its own beside it and the first keeps writing.
+Looking up a word that a tab is already writing takes you to that tab.
+A tab writing out of sight wears the pulsing green dot, and one that
+finished while you looked elsewhere wears a black dot until you open it.
+Up to three words are written at once. A fourth waits until one of them
+is done, and the status line says so. Changing the languages while the
+open tab writes opens the word in the new pair in a new tab. Closing a
+tab that is writing does not stop its session: the entry is still
+written and kept. When the bar is full, a new lookup takes over the
+oldest tab that is not writing. The window remembers its tabs, the open
+one and its languages in this browser; after a reload, a tab that was
+writing rejoins its session.
 
 `GET /v1/dict?from=en&to=zh&q=word` answers a kept entry (for a known
 typo its word's, with `corrected` saying what was typed; `exact=1` reads

@@ -64,74 +64,118 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
     grid-template-areas: "from arrow to to" "q q q go"; }
 }
 
-/* the entry: a white page under the toolbar's line, flush with the window
+/* the tabs, one a lookup: the desktop's Platinum tab control (index.html
+   .tabbar and .tab, copied) standing on the toolbar's grey with their
+   foot on the pages' top line. The open tab is filled with the page's
+   white, not the panel grey, as the page is what it opens onto. A tab
+   holds a mark slot (the green dot while it writes unwatched, the black
+   dot when it finished unwatched — the session column's marks), the word
+   and a close box, at fixed widths so nothing moves as marks come and go;
+   the word gives way to an ellipsis as tabs crowd. The bar is there from
+   the first paint, a lone tab too, so the page never drops when a second
+   tab opens. */
+#tabs { flex: none; display: flex; align-items: flex-start; padding: 0 6px; position: relative; z-index: 2;
+  min-width: 0; }
+.tab {
+  height: 22px; color: #000; font-size: 11px; font-weight: bold; line-height: 14px;
+  text-align: center; padding: 0 2px; position: relative; white-space: nowrap;
+  border-style: solid; border-width: 8px 14px 0 14px;
+  border-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='22'><path d='M4.5 23 L11 5.5 Q11.8 1.5 14 1.5 L30 1.5 Q32.2 1.5 33 5.5 L39.5 23' fill='%23ccc' stroke='%23000'/><path d='M6.2 23 L12 5.8 Q12.6 2.5 14 2.5 L29.5 2.5' fill='none' stroke='%23ddd'/><path d='M30 2.5 Q31.6 2.5 32.2 5.8 L37.8 23' fill='none' stroke='%23aaa'/></svg>") 8 14 0 14 fill stretch;
+  display: flex; align-items: flex-start; gap: 4px; flex: 0 1 auto; min-width: 72px; max-width: 180px;
+}
+.tab + .tab { margin-left: -7px; }
+.tab.active {
+  height: 25px; margin-bottom: -3px; z-index: 3;
+  border-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='25'><path d='M3.8 25 L11 5.5 Q11.8 1.5 14 1.5 L30 1.5 Q32.2 1.5 33 5.5 L40.2 25 Z' fill='%23fff'/><path d='M4.9 22 L11 5.5 Q11.8 1.5 14 1.5 L30 1.5 Q32.2 1.5 33 5.5 L39.1 22' fill='none' stroke='%23000'/><path d='M6.6 22 L12 5.8 Q12.6 2.5 14 2.5 L29.5 2.5' fill='none' stroke='%23fff'/><path d='M30 2.5 Q31.6 2.5 32.2 5.8 L37.4 22' fill='none' stroke='%23bbb'/></svg>") 8 14 0 14 fill stretch;
+}
+.tab .mk { flex: none; width: 7px; height: 7px; margin-top: 4px; }
+.tab .mk svg { display: block; }
+.tab .mk.live { border-radius: 50%; background: var(--green); width: 6px; height: 6px; margin: 4px 0 0 1px;
+  animation: pulse 1.2s ease-in-out infinite; }
+.tab .lb { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tab .lb.untitled { color: #666; }
+/* the close box: a crisp x in an 11px cell, inverted while pressed; hidden
+   (its cell kept) while the tab is the only one */
+.tab .tx { flex: none; width: 11px; height: 11px; margin-top: 2px; display: grid; place-items: center; border-radius: 2px; }
+.tab .tx svg { display: block; }
+.tab .tx .fine { display: none; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  .tab .tx .crisp { display: none; } .tab .tx .fine { display: block; }
+}
+.tab .tx:active { background: #666; }
+.tab .tx:active svg { filter: invert(1); }
+body.lone .tab .tx { visibility: hidden; }
+
+/* the pages: one a tab, white, under the tabs' line, flush with the window
    frame at the sides and with the status bar below (its top line is the
-   one seam there); the scroll bar's right edge is the frame's line, and
-   the bar is always on so nothing reflows when an entry outgrows the
-   window */
-#pane { flex: 1; min-height: 0; background: #fff; border-top: 1px solid var(--black);
-  overflow-y: scroll; overflow-x: hidden; }
-#entry { padding: 12px 14px 16px; user-select: text; cursor: text; overflow-wrap: break-word; }
-#entry .hw { font-size: 18px; line-height: 24px; font-weight: bold; }
-#entry .hw.muted { color: #888; }
-#entry .prons { margin-top: 2px; }
-#entry .prons span + span { margin-left: 14px; }
-#entry .pl { color: #777; margin-right: 5px; }
-#entry .note { margin-top: 4px; color: #555; }
+   one seam there). Stacked in one box, the hidden ones visibility: hidden
+   so each keeps its scroll place (Chrome drops a display: none box's).
+   The scroll bar's right edge is the frame's line, and the bar is always
+   on so nothing reflows when an entry outgrows the window. */
+#pages { flex: 1; min-height: 0; position: relative; background: #fff; border-top: 1px solid var(--black); }
+.page { position: absolute; inset: 0; overflow-y: scroll; overflow-x: hidden; background: #fff; }
+.page.off { visibility: hidden; }
+.entry { padding: 12px 14px 16px; user-select: text; cursor: text; overflow-wrap: break-word; }
+.entry .hw { font-size: 18px; line-height: 24px; font-weight: bold; }
+.entry .hw.muted { color: #888; }
+.entry .prons { margin-top: 2px; }
+.entry .prons span + span { margin-left: 14px; }
+.entry .pl { color: #777; margin-right: 5px; }
+.entry .note { margin-top: 4px; color: #555; }
 /* a typo read as the word it stands for: said above the entry, with the
    way back to the text as typed */
-#entry .fix { margin-bottom: 6px; font-size: 11px; color: #555; }
-#entry .forms { margin-top: 4px; font-size: 11px; color: #555; }
-#entry h3 { font-size: 12px; margin: 16px 0 6px; padding-bottom: 2px; border-bottom: 1px solid var(--g400); }
-#entry ol { margin: 0; padding: 0 0 0 20px; }
-#entry ol li + li { margin-top: 6px; }
-#entry .pos { color: var(--hl); font-style: italic; margin-right: 6px; }
-#entry .gloss { font-weight: bold; }
-#entry .def { color: #444; }
-#entry .ex + .ex { margin-top: 8px; }
-#entry .tr { color: #555; }
-#entry p { margin: 0; }
-#entry table.rel { border-collapse: collapse; }
-#entry table.rel td { padding: 1px 12px 1px 0; vertical-align: top; }
-#entry table.rel td.rl { color: #777; white-space: nowrap; }
-#entry .quote { margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--g400); }
+.entry .fix { margin-bottom: 6px; font-size: 11px; color: #555; }
+.entry .forms { margin-top: 4px; font-size: 11px; color: #555; }
+.entry h3 { font-size: 12px; margin: 16px 0 6px; padding-bottom: 2px; border-bottom: 1px solid var(--g400); }
+.entry ol { margin: 0; padding: 0 0 0 20px; }
+.entry ol li + li { margin-top: 6px; }
+.entry .pos { color: var(--hl); font-style: italic; margin-right: 6px; }
+.entry .gloss { font-weight: bold; }
+.entry .def { color: #444; }
+.entry .ex + .ex { margin-top: 8px; }
+.entry .tr { color: #555; }
+.entry p { margin: 0; }
+.entry table.rel { border-collapse: collapse; }
+.entry table.rel td { padding: 1px 12px 1px 0; vertical-align: top; }
+.entry table.rel td.rl { color: #777; white-space: nowrap; }
+.entry .quote { margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--g400); }
 /* verse keeps its lines */
-#entry .quote .verse { white-space: pre-line; }
-#entry .quote .src { font-size: 11px; color: #777; }
+.entry .quote .verse { white-space: pre-line; }
+.entry .quote .src { font-size: 11px; color: #777; }
 /* a word that looks itself up: the status bar link's look (no pointing
    hand, no hover), pressed it goes black */
-#entry .link { color: var(--hl); text-decoration: underline; cursor: default; }
-#entry .link:active { color: #000; }
+.entry .link { color: var(--hl); text-decoration: underline; cursor: default; }
+.entry .link:active { color: #000; }
 /* what the page says when it holds no entry: centred, grey, in the page's
    own type */
-#entry .empty { padding: 40px 12px; text-align: center; color: #888; user-select: none; cursor: default; }
+.entry .empty { padding: 40px 12px; text-align: center; color: #888; user-select: none; cursor: default; }
 /* a session writing, watched: the word in grey, the model under it, then
    the session's steps as they come — the time each began in a column of
    its own, what it is, how long a reasoning pass took in grey at its end.
    The step under way wears the Chat list's pulsing green dot (green means
    live); a pass still without its summary reads grey. */
-#entry .wmeta { margin-top: 2px; font-size: 11px; color: #777; }
-#entry ol.log { list-style: none; margin: 12px 0 0; padding: 0; }
-#entry ol.log li { display: grid; grid-template-columns: 34px 12px 1fr; align-items: baseline; }
-#entry ol.log li + li { margin-top: 3px; }
-#entry ol.log .t { color: #888; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
-#entry ol.log .m { align-self: center; justify-self: center; width: 6px; height: 6px; }
-#entry ol.log .x.dim { color: #888; }
-#entry ol.log .d { color: #888; font-size: 11px; margin-left: 6px; white-space: nowrap; }
-#entry ol.log li.now .m { border-radius: 50%; background: var(--green); }
-#entry .live, #entry ol.log li.now .m {
+.entry .wmeta { margin-top: 2px; font-size: 11px; color: #777; }
+.entry ol.log { list-style: none; margin: 12px 0 0; padding: 0; }
+.entry ol.log li { display: grid; grid-template-columns: 34px 12px 1fr; align-items: baseline; }
+.entry ol.log li + li { margin-top: 3px; }
+.entry ol.log .t { color: #888; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
+.entry ol.log .m { align-self: center; justify-self: center; width: 6px; height: 6px; }
+.entry ol.log .x.dim { color: #888; }
+.entry ol.log .d { color: #888; font-size: 11px; margin-left: 6px; white-space: nowrap; }
+.entry ol.log li.now .m { border-radius: 50%; background: var(--green); }
+.entry .live, .entry ol.log li.now .m {
   animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.25; } }
-@media (prefers-reduced-motion: reduce) { #entry ol.log li.now .m { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .entry ol.log li.now .m, .tab .mk.live { animation: none; } }
 /* a lookup that went wrong: the alert's layout — the caution sign, a bold
    label beside it, the plain narrative under it */
-#entry .caution { display: flex; gap: 20px; align-items: flex-start; padding: 28px 12px 0; cursor: default; }
-#entry .caution .sign { flex: none; display: block; width: 32px; height: 32px; }
-#entry .caution .sign svg { display: block; }
-#entry .caution .body { flex: 1; min-width: 0; }
-#entry .caution .msg { font-weight: bold; line-height: 1.35; }
-#entry .caution .detail { font-size: 11px; line-height: 1.45; margin-top: 7px; }
-#entry .caution .btns { margin-top: 12px; }
+.entry .caution { display: flex; gap: 20px; align-items: flex-start; padding: 28px 12px 0; cursor: default; }
+.entry .caution .sign { flex: none; display: block; width: 32px; height: 32px; }
+.entry .caution .sign svg { display: block; }
+.entry .caution .body { flex: 1; min-width: 0; }
+.entry .caution .msg { font-weight: bold; line-height: 1.35; }
+.entry .caution .detail { font-size: 11px; line-height: 1.45; margin-top: 7px; }
+.entry .caution .btns { margin-top: 12px; }
 
 /* overflow: clip — the 11px text's line box is taller than the 14px face and
    hangs a pixel past the bar; clipped, that pixel is no scrollable overflow of
@@ -213,7 +257,8 @@ body.mobile #status { padding-right: 8px; }
   <button class="ghost default" id="go">Look Up</button>
 </div>
 
-<div id="pane"><div id="entry"></div></div>
+<div id="tabs"></div>
+<div id="pages"></div>
 
 <div id="status"><span id="st">Ready</span></div>
 
@@ -267,36 +312,151 @@ function el(tag, attrs = {}, ...kids) {
   return n;
 }
 
-const from = $("#from"), to = $("#to"), field = $("#q"), entryEl = $("#entry"), pane = $("#pane"), st = $("#st");
+const from = $("#from"), to = $("#to"), field = $("#q"), st = $("#st");
+const tabsEl = $("#tabs"), pagesEl = $("#pages");
 for (const [c, n] of FROM) from.append(el("option", { value: c }, n));
 for (const [c, n] of TO) to.append(el("option", { value: c }, n));
 
-// ---- this browser's own: the pair, the word, and whether it was being written ----
-let saved = {};
-try { saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) {}
-from.value = FROM.some(([c]) => c === saved.from) ? saved.from : "en";
-to.value = TO.some(([c]) => c === saved.to) ? saved.to : "zh";
-field.value = typeof saved.q === "string" ? saved.q : "";
-function remember(extra = {}) {
-  saved = Object.assign(saved, { from: from.value, to: to.value, q: field.value }, extra);
-  try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
-}
-
 const tidy = s => s.normalize("NFC").replace(/\s+/g, " ").trim();
-const pair = () => nameOf(FROM, from.value) + " → " + nameOf(TO, to.value);
-function status(text, err = false) {
-  st.textContent = text;
-  st.classList.toggle("err", err);
-}
+const pairOf = (f, t) => nameOf(FROM, f) + " → " + nameOf(TO, t);
 const clock = s => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 const day = ms => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+const num = n => Number(n).toLocaleString("en-US");
+const secs = s => Math.max(1, Math.round(s)) + " s";
+const article = name => (/^[AEIOU]/.test(name) ? "an " : "a ") + name;
 
-// ---- what the page shows ----
-function show(...kids) {
-  entryEl.replaceChildren(...kids);
-  pane.scrollTop = 0;
+// ---- tabs ----
+// A tab is one lookup: its pair of languages, its word, its page, its
+// status line, and — while a session writes its entry — the fetch that
+// follows the session. A lookup goes into the open tab, unless that tab is
+// writing: then it opens a tab of its own beside it, and the writing goes
+// on. A tab writing the very word asked for is opened instead. At most
+// three tabs write at once, as many as the daemon runs sessions (and a
+// browser on plain HTTP keeps six connections a host, the desktop's
+// streams among them); the tab bar holds as many tabs as fit, and past
+// that a new one takes the place of the oldest idle tab.
+const MAX_WRITING = 3, TAB_MIN = 72, TAB_OVERLAP = 7;
+const tabs = [];
+let active = null;
+const CLOSE_CRISP = '<svg class="crisp" width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path fill="#262626" d="M0 0h1v1H0zM6 0h1v1H6zM1 1h1v1H1zM5 1h1v1H5zM2 2h1v1H2zM4 2h1v1H4zM3 3h1v1H3zM2 4h1v1H2zM4 4h1v1H4zM1 5h1v1H1zM5 5h1v1H5zM0 6h1v1H0zM6 6h1v1H6z"/></svg>';
+const CLOSE_FINE = '<svg class="fine" width="7" height="7" viewBox="0 0 7 7" shape-rendering="geometricPrecision"><path d="M0.5 0.5L6.5 6.5M6.5 0.5L0.5 6.5" stroke="#262626" stroke-width="1"/></svg>';
+const BELL = '<svg width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M2 0h3v1h1v1h1v3h-1v1h-1v1h-3v-1h-1v-1h-1v-3h1v-1h1z" fill="currentColor"/></svg>';
+
+function newTab({ src = "en", dst = "zh", q = "", exact = false, after = null } = {}) {
+  const tab = { src, dst, q, exact, busy: false, unseen: false, ctrl: null, ticker: 0, watcher: null,
+    st: "", stErr: false };
+  tab.entry = el("div", { class: "entry" });
+  tab.page = el("div", { class: "page off" }, tab.entry);
+  pagesEl.append(tab.page);
+  tab.mark = el("span", { class: "mk" });
+  tab.label = el("span", { class: "lb" });
+  tab.close = el("span", { class: "tx" });
+  tab.close.innerHTML = CLOSE_CRISP + CLOSE_FINE;
+  tab.el = el("div", { class: "tab" }, tab.mark, tab.label, tab.close);
+  tab.el.addEventListener("click", () => { activate(tab); if (!IS_MOBILE) field.focus(); });
+  tab.close.addEventListener("click", e => { e.stopPropagation(); closeTab(tab); });
+  const i = after ? tabs.indexOf(after) + 1 : tabs.length;
+  tabs.splice(i, 0, tab);
+  tabsEl.insertBefore(tab.el, tabs[i + 1] ? tabs[i + 1].el : null);
+  drawTabs();
+  return tab;
 }
-function showEmpty(text) { show(el("div", { class: "empty" }, text)); }
+
+// the tab's mark, word and close box as they stand
+function drawTab(tab) {
+  tab.label.textContent = tab.q || "New Tab";
+  tab.label.classList.toggle("untitled", !tab.q);
+  tab.label.setAttribute("lang", tab.src);
+  tab.el.classList.toggle("active", tab === active);
+  const mark = tab.busy && tab !== active ? "live" : tab.unseen ? "bell" : "";
+  if (tab.mark.dataset.k !== mark) {
+    tab.mark.dataset.k = mark;
+    tab.mark.className = "mk" + (mark === "live" ? " live" : "");
+    tab.mark.innerHTML = mark === "bell" ? BELL : "";
+  }
+}
+function drawTabs() {
+  document.body.classList.toggle("lone", tabs.length < 2);
+  for (const t of tabs) drawTab(t);
+}
+
+function activate(tab) {
+  active = tab;
+  tab.unseen = false;
+  for (const t of tabs) t.page.classList.toggle("off", t !== tab);
+  from.value = tab.src;
+  to.value = tab.dst;
+  field.value = tab.q;
+  drawTabs();
+  paintStatus();
+  remember();
+}
+
+function closeTab(tab) {
+  stopTab(tab); // its session, if any, goes on in the daemon and is kept
+  const i = tabs.indexOf(tab);
+  tabs.splice(i, 1);
+  tab.el.remove();
+  tab.page.remove();
+  if (!tabs.length) newTab({ src: tab.src, dst: tab.dst });
+  if (tab === active) activate(tabs[Math.min(i, tabs.length - 1)]);
+  else { drawTabs(); remember(); }
+}
+
+// how many tabs the bar holds before they would crowd past its end
+function tabRoom() {
+  return Math.max(2, Math.floor((tabsEl.clientWidth - 12 - TAB_OVERLAP) / (TAB_MIN - TAB_OVERLAP)));
+}
+
+// the tab a lookup goes into: the open one, or — while that one writes —
+// a new one beside it (or, with the bar full, the oldest idle tab)
+function tabFor(q, src, dst, exact) {
+  const same = tabs.find(t => t.busy && t.src === src && t.dst === dst && t.exact === exact &&
+    t.q.toLowerCase() === q.toLowerCase());
+  if (same) return { tab: same, open: true };
+  if (!active.busy) return { tab: active };
+  if (tabs.filter(t => t.busy).length >= MAX_WRITING)
+    return { refused: "Three words are being written already: look this one up when one of them is done" };
+  if (tabs.length >= tabRoom()) {
+    const idle = tabs.find(t => !t.busy && t !== active);
+    if (idle) return { tab: idle };
+  }
+  return { tab: newTab({ src, dst, q, after: active }) };
+}
+
+// ---- this browser's own: the tabs, which is open, what the field holds ----
+function remember() {
+  const state = { tabs: tabs.map(t => ({ from: t.src, to: t.dst, q: t.q, exact: t.exact, pending: t.busy, unseen: t.unseen })),
+    active: tabs.indexOf(active), field: field.value };
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+// ---- the status line: the open tab's ----
+let flashUntil = 0;
+function setStatus(tab, text, err = false) {
+  tab.st = text;
+  tab.stErr = err;
+  if (tab === active) paintStatus();
+}
+function paintStatus() {
+  if (Date.now() < flashUntil) return;
+  st.textContent = active.st;
+  st.classList.toggle("err", active.stErr);
+}
+// a word for a moment, over whatever the open tab says
+function flash(text) {
+  flashUntil = Date.now() + 4000;
+  st.textContent = text;
+  st.classList.add("err");
+  setTimeout(paintStatus, 4100);
+}
+
+// ---- what a page shows ----
+function show(tab, ...kids) {
+  tab.entry.replaceChildren(...kids);
+  tab.page.scrollTop = 0;
+}
+function showEmpty(tab, text) { show(tab, el("div", { class: "empty" }, text)); }
 function caution(msg, detail, button) {
   const sign = el("span", { class: "sign" });
   sign.innerHTML = CAUTION;
@@ -306,8 +466,8 @@ function caution(msg, detail, button) {
       button ? el("div", { class: "btns" }, button) : null));
 }
 // a word of the source language that looks itself up when pressed
-function link(word) {
-  const a = el("span", { class: "link", lang: from.value }, word);
+function link(word, src) {
+  const a = el("span", { class: "link", lang: src }, word);
   a.addEventListener("click", () => {
     if (getSelection().toString()) return; // a drag to select is not a press
     field.value = word;
@@ -316,11 +476,11 @@ function link(word) {
   return a;
 }
 
-// renderEntry draws an entry. live is one still being written, its JSON
-// read as far as it goes (partialJSON): what has come so far is drawn, the
-// page keeps its scroll place, and follows the writing down while the
-// reader is at its foot.
-function renderEntry(k, live = false) {
+// renderEntry draws an entry on a tab's page. live is one still being
+// written, its JSON read as far as it goes (partialJSON): what has come so
+// far is drawn, the page keeps its scroll place, and follows the writing
+// down while the reader is at its foot.
+function renderEntry(tab, k, live = false) {
   const e = k.entry || {};
   const src = k.from, dst = k.to;
   const S = { lang: src }, T = { lang: LANG_TAG[dst] || dst };
@@ -358,7 +518,7 @@ function renderEntry(k, live = false) {
   if (rel.length) {
     kids.push(el("h3", {}, "Related Words"));
     kids.push(el("table", { class: "rel" }, ...rel.map(r => el("tr", {},
-      el("td", {}, r.word ? link(r.word) : ""),
+      el("td", {}, r.word ? link(r.word, src) : ""),
       el("td", Object.assign({ class: "rl" }, T), r.relation || ""),
       el("td", T, r.gloss || "")))));
   }
@@ -371,10 +531,11 @@ function renderEntry(k, live = false) {
       q.translation ? el("div", Object.assign({ class: "tr verse" }, T), q.translation) : null,
       q.source ? el("div", { class: "src" }, "— " + q.source) : null));
   }
-  if (!live) return show(...kids);
-  const follow = pane.scrollTop >= pane.scrollHeight - pane.clientHeight - 2;
-  entryEl.replaceChildren(...kids);
-  if (follow) pane.scrollTop = pane.scrollHeight;
+  if (!live) return show(tab, ...kids);
+  const pg = tab.page;
+  const follow = pg.scrollTop >= pg.scrollHeight - pg.clientHeight - 2;
+  tab.entry.replaceChildren(...kids);
+  if (follow) pg.scrollTop = pg.scrollHeight;
 }
 
 // partialJSON reads as much of a JSON text as has arrived: an object or a
@@ -444,32 +605,46 @@ function partialJSON(s) {
 }
 
 // ---- looking up ----
-let ctrl = null, ticker = 0, watching = null;
-// the ticker and the watched session's drawing stop together: whatever
-// replaces the page (an entry, another lookup, an error) stops them first
-function stopTicker() {
-  clearInterval(ticker);
-  ticker = 0;
-  if (watching) watching.stop();
-  watching = null;
+// stopTab lets go of what a tab is following: its fetch (the session, if
+// one is writing, goes on in the daemon), its clock and its drawing
+function stopTab(tab) {
+  if (tab.ctrl) tab.ctrl.abort();
+  tab.ctrl = null;
+  settle(tab);
 }
-const num = n => Number(n).toLocaleString("en-US");
-const secs = s => Math.max(1, Math.round(s)) + " s";
+// settle marks a tab's lookup over, whatever the end
+function settle(tab) {
+  clearInterval(tab.ticker);
+  tab.ticker = 0;
+  if (tab.watcher) tab.watcher.stop();
+  tab.watcher = null;
+  if (tab.busy && tab !== active) tab.unseen = true;
+  tab.busy = false;
+  drawTab(tab);
+  remember();
+}
 
-// watch follows one session as it writes: its steps fill a log under the
-// word; once the entry itself begins, the page draws it as it is written.
-function watch(q, src, dst, model, effort, word) {
+// watch follows one session as it writes, on a tab's page: its steps fill a
+// log under the word; once the entry itself begins, the page draws it as it
+// is written.
+function watch(tab, q, model, effort, word) {
+  const src = tab.src, dst = tab.dst;
   const log = el("ol", { class: "log" }), hw = el("div", { class: "hw muted", lang: src }, q);
-  show(hw, el("div", { class: "wmeta" }, "Codex · " + model + " · " + effort + " · an ephemeral session"), log);
+  show(tab, hw, el("div", { class: "wmeta" }, "Codex · " + model + " · " + effort + " · an ephemeral session"), log);
   // q is the word being written: what was typed, or the word a typo of it
   // was read as (corrected keeps what was typed) — known from the start
   // when the daemon says the session writes another word (a typo it
-  // remembers), or from the spelling pass's verdict
+  // remembers), or from the spelling pass's verdict; the tab, and the
+  // field while the tab is open, take it
   const w = { q, corrected: "", text: "", answering: false, drawn: false, usage: null, frame: 0, passes: new Map() };
+  // (the daemon names words by their keys, in lower case: a difference
+  // of case alone is no correction, and the reader's capitals stay)
   const correct = to => {
-    if (!to || to === w.q) return;
+    if (!to || to.toLowerCase() === w.q.toLowerCase()) return;
     w.corrected = w.q;
-    w.q = hw.textContent = field.value = to;
+    w.q = hw.textContent = tab.q = to;
+    if (tab === active) field.value = to;
+    drawTab(tab);
     remember();
   };
   correct(word);
@@ -499,8 +674,9 @@ function watch(q, src, dst, model, effort, word) {
         // reader's own text unless the reader joined it on the word
         const typed = st.typed || w.q;
         if (st.verdict === "typo" && st.word) {
-          say(li, "“" + typed + "” is a typo of “" + st.word + "”");
-          correct(st.word);
+          const shown = st.shown && st.shown.toLowerCase() === st.word ? st.shown : st.word;
+          say(li, "“" + typed + "” is a typo of “" + shown + "”");
+          correct(shown);
         } else if (st.verdict === "unknown") say(li, "“" + typed + "” is not " + article(nameOf(FROM, src)) + " word");
         else say(li, "Spelled right");
         li.querySelector(".b").append(el("span", { class: "d" }, secs(st.t - w.spell.t)));
@@ -522,7 +698,7 @@ function watch(q, src, dst, model, effort, word) {
         if (!p.parts.length) say(p.li, "Thought", true);
         p.last.querySelector(".b").append(el("span", { class: "d" }, secs(st.t - p.t))); // on the pass's last line
         break;
-      case "answer": w.answering = true; w.answerAt = st.t; line(st.t, "Writing the entry…"); break;
+      case "answer": w.answering = true; line(st.t, "Writing the entry…"); break;
       case "retry": line(st.t, "Retrying: " + (st.text || "")); break;
       case "usage": w.usage = st.usage; break;
     }
@@ -537,58 +713,69 @@ function watch(q, src, dst, model, effort, word) {
       w.frame = 0;
       const e = partialJSON(w.text);
       if (!e || e.found !== true || !e.headword) return;
-      if (!w.drawn) { w.drawn = true; pane.scrollTop = 0; }
-      renderEntry({ from: src, to: dst, q: w.q, corrected: w.corrected, entry: e }, true);
+      if (!w.drawn) { w.drawn = true; tab.page.scrollTop = 0; }
+      renderEntry(tab, { from: src, to: dst, q: w.q, corrected: w.corrected, entry: e }, true);
     });
   };
   w.stop = () => { if (w.frame) cancelAnimationFrame(w.frame); w.frame = 0; };
-  return watching = w;
+  return w;
 }
 
-// lookup asks the daemon for the word: an entry the dictionary keeps comes
-// back at once; one it lacks is written by a Codex session, which takes a
-// minute or two and goes on if the window closes — the next lookup finds
-// it kept, and one made while it is still writing joins it.
+// lookup looks up what the field holds, in the pop-ups' languages, in the
+// tab tabFor picks: an entry the dictionary keeps comes back at once; one
+// it lacks is written by a Codex session, which takes a minute or two and
+// goes on if the tab or the window closes — the next lookup finds it kept,
+// and one made while it is still writing joins it.
 //
 // Unless exact, the daemon checks the spelling first: an obvious typo is
-// read as the word it stands for (the field takes that word), and a
-// lookup that is no word ends there, with suggestions.
-async function lookup(exact = false) {
+// read as the word it stands for (the tab and the field take that word),
+// and a lookup that is no word ends there, with suggestions.
+function lookup(exact = false) {
   const q = tidy(field.value);
   if (!q) { field.focus(); return; }
   field.value = q;
-  if (ctrl) ctrl.abort();
-  stopTicker();
-  const my = ctrl = new AbortController();
-  remember({ pending: true, exact });
-  status("Looking up “" + q + "”…");
+  const pick = tabFor(q, from.value, to.value, exact);
+  if (pick.refused) return flash(pick.refused);
+  if (pick.open) return activate(pick.tab);
+  const tab = pick.tab;
+  if (tab !== active) activate(tab);
+  run(tab, q, from.value, to.value, exact);
+}
+
+// run is one lookup on one tab, followed to its end
+async function run(tab, q, src, dst, exact) {
+  stopTab(tab);
+  Object.assign(tab, { q, src, dst, exact, busy: true, unseen: false });
+  drawTab(tab);
+  remember();
+  const my = tab.ctrl = new AbortController();
+  setStatus(tab, "Looking up “" + q + "”…");
   let r;
   try {
     r = await api("/v1/dict", { method: "POST", signal: my.signal,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ from: from.value, to: to.value, q, exact }) });
+      body: JSON.stringify({ from: src, to: dst, q, exact }) });
   } catch (e) {
     if (my.signal.aborted) return;
-    return failed(q, exact, "The daemon did not answer.", e.message);
+    return failed(tab, q, exact, "The daemon did not answer.", e.message);
   }
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
-    if (my !== ctrl) return;
-    remember({ pending: false });
+    if (my !== tab.ctrl) return;
+    settle(tab);
     if (r.status === 503) {
-      status("No Usable LLM Backend", true);
-      return show(caution("No Usable LLM Backend",
+      setStatus(tab, "No Usable LLM Backend", true);
+      return show(tab, caution("No Usable LLM Backend",
         "Dict writes the entries it does not have yet with Codex, and this host has no Codex CLI. Words already in the dictionary still open."));
     }
-    return failed(q, exact, e.error || "HTTP " + r.status);
+    return failed(tab, q, exact, e.error || "HTTP " + r.status);
   }
   const reader = r.body.getReader(), dec = new TextDecoder();
-  const src = from.value, dst = to.value;
   let buf = "", base = 0, at = 0, w = null;
   const elapsed = () => base + Math.floor((Date.now() - at) / 1000);
   const tick = () => {
     if (!w) return;
-    status(w.answering
+    setStatus(tab, w.answering
       ? "Codex is writing “" + w.q + "”… " + num([...w.text].length) + " characters · " + clock(elapsed())
       : w.spell && !w.spell.done ? "Codex is checking the spelling of “" + w.q + "”… " + clock(elapsed())
       : "Codex is thinking about “" + w.q + "”… " + clock(elapsed()));
@@ -604,12 +791,12 @@ async function lookup(exact = false) {
         buf = buf.slice(i + 1);
         if (!line.trim()) continue;
         const m = JSON.parse(line);
-        if (my !== ctrl) return;
+        if (my !== tab.ctrl) return;
         if (m.writing) {
-          w = watch(q, src, dst, m.model, m.effort, m.q);
+          w = tab.watcher = watch(tab, q, m.model, m.effort, m.q);
           base = m.wait || 0; at = Date.now();
           tick();
-          ticker = setInterval(tick, 1000);
+          tab.ticker = setInterval(tick, 1000);
         } else if (m.step) {
           if (w) { w.step(m.step); tick(); }
         } else if (m.text !== undefined) {
@@ -617,73 +804,79 @@ async function lookup(exact = false) {
         } else if (m.wait !== undefined) {
           base = m.wait; at = Date.now();
         } else if (m.entry) {
-          stopTicker();
-          if (m.entry.corrected) field.value = m.entry.q; // a typo: the field takes its word
-          remember({ pending: false });
-          renderEntry(m.entry, !!(w && w.drawn)); // a page watched being written keeps its place
-          const tok = m.entry.tokens;
-          status(m.entry.written
-            ? "Written by " + m.entry.model + " (" + m.entry.effort + ") in " + clock(elapsed()) +
+          const k = m.entry, drawn = !!(w && w.drawn);
+          // a typo: the tab takes its word, as the session showed it
+          tab.q = !k.corrected ? q : w && w.q.toLowerCase() === k.q ? w.q : k.q;
+          if (tab === active) field.value = tab.q;
+          settle(tab);
+          renderEntry(tab, k, drawn); // a page watched being written keeps its place
+          const tok = k.tokens;
+          setStatus(tab, k.written
+            ? "Written by " + k.model + " (" + k.effort + ") in " + clock(elapsed()) +
               (tok ? " · " + num(tok.totalTokens) + " tokens, " + num(tok.reasoningOutputTokens) + " of them reasoning" : "") + " · kept"
-            : pair() + " · in the dictionary since " + day(m.entry.created));
+            : pairOf(src, dst) + " · in the dictionary since " + day(k.created));
           return;
         } else if (m.notfound) {
-          stopTicker();
-          remember({ pending: false });
+          settle(tab);
           const sugg = m.suggestions || [];
-          show(caution("“" + q + "” is not " + article(nameOf(FROM, from.value)) + " word Dict knows.",
+          show(tab, caution("“" + q + "” is not " + article(nameOf(FROM, src)) + " word Dict knows.",
             sugg.length ? el("span", {}, "Did you mean ", ...sugg.flatMap((s, j) =>
-              [j ? (j === sugg.length - 1 ? " or " : ", ") : "", link(s)]), "?") : "Check the spelling, or the language it is looked up from."));
-          status("Not " + article(nameOf(FROM, from.value)) + " word: nothing was kept");
+              [j ? (j === sugg.length - 1 ? " or " : ", ") : "", link(s, src)]), "?") : "Check the spelling, or the language it is looked up from."));
+          setStatus(tab, "Not " + article(nameOf(FROM, src)) + " word: nothing was kept");
           return;
         } else if (m.error) {
-          return failed(q, exact, m.error);
+          return failed(tab, q, exact, m.error);
         }
       }
     }
   } catch (e) {
     if (my.signal.aborted) return;
-    return failed(q, exact, "The answer broke off.", e.message);
+    return failed(tab, q, exact, "The answer broke off.", e.message);
   }
-  if (my === ctrl) failed(q, exact, "The answer broke off.");
+  if (my === tab.ctrl) failed(tab, q, exact, "The answer broke off.");
 }
-const article = name => (/^[AEIOU]/.test(name) ? "an " : "a ") + name;
-function failed(q, exact, msg, detail) {
-  stopTicker();
-  remember({ pending: false });
+function failed(tab, q, exact, msg, detail) {
+  settle(tab);
   const again = el("button", { class: "ghost" }, "Try Again");
-  again.addEventListener("click", () => { field.value = q; lookup(exact); });
-  show(caution("“" + q + "” could not be looked up.", detail ? msg + " " + detail : msg, again));
-  status(msg, true);
+  again.addEventListener("click", () => {
+    if (tab === active) field.value = q;
+    run(tab, q, tab.src, tab.dst, exact);
+  });
+  show(tab, caution("“" + q + "” could not be looked up.", detail ? msg + " " + detail : msg, again));
+  setStatus(tab, msg, true);
 }
 
-// peek answers from the dictionary alone and never starts a session: a
-// window reopening on its word, or the languages changed under it
-async function peek() {
-  const q = tidy(field.value);
-  if (ctrl) ctrl.abort();
-  ctrl = null;
-  stopTicker();
+// peek shows on a tab what the dictionary holds for its word, and never
+// starts a session: a tab coming back after a reload, or the languages
+// changed under it
+async function peek(tab) {
+  stopTab(tab);
+  const q = tidy(tab.q), pair = pairOf(tab.src, tab.dst);
   if (!q) {
-    showEmpty("Type a word or phrase and press Return.");
-    return status(pair());
+    showEmpty(tab, "Type a word or phrase and press Return.");
+    return setStatus(tab, pair);
   }
-  const my = ctrl = new AbortController();
+  const my = tab.ctrl = new AbortController();
   try {
-    const r = await api("/v1/dict?" + new URLSearchParams({ from: from.value, to: to.value, q }), { signal: my.signal });
-    if (my !== ctrl) return;
+    const r = await api("/v1/dict?" + new URLSearchParams({ from: tab.src, to: tab.dst, q }), { signal: my.signal });
+    if (my !== tab.ctrl) return;
     if (r.ok) {
       const k = await r.json();
-      if (my !== ctrl) return;
-      if (k.corrected) { field.value = k.q; remember(); }
-      renderEntry(k);
-      return status(pair() + " · in the dictionary since " + day(k.created));
+      if (my !== tab.ctrl) return;
+      if (k.corrected) {
+        tab.q = k.q;
+        if (tab === active) field.value = k.q;
+        drawTab(tab);
+        remember();
+      }
+      renderEntry(tab, k);
+      return setStatus(tab, pair + " · in the dictionary since " + day(k.created));
     }
   } catch (e) {
     if (my.signal.aborted) return;
   }
-  showEmpty("“" + q + "” is not in the " + pair() + " dictionary yet. Look Up writes it.");
-  status(pair());
+  showEmpty(tab, "“" + q + "” is not in the " + pair + " dictionary yet. Look Up writes it.");
+  setStatus(tab, pair);
 }
 
 field.addEventListener("keydown", e => {
@@ -694,17 +887,45 @@ field.addEventListener("keydown", e => {
 });
 field.addEventListener("input", () => remember());
 $("#go").addEventListener("click", () => lookup());
+// a change of languages shows the word in the new pair, on the open tab —
+// or, while that tab writes, on a new one beside it
 for (const s of [from, to]) s.addEventListener("change", () => {
-  remember({ pending: false });
-  peek();
+  const q = tidy(field.value);
+  let tab = active;
+  if (tab.busy) {
+    if (!q) return;
+    tab = newTab({ src: from.value, dst: to.value, q, after: active });
+    activate(tab);
+  }
+  Object.assign(tab, { src: from.value, dst: to.value, q, exact: false });
+  drawTab(tab);
+  remember();
+  peek(tab);
   field.focus();
 });
 
-// a window reopened while its word was being written goes back to the
-// session (the daemon joins it, or finds what it kept); otherwise it shows
-// what the dictionary holds and asks for nothing
-if (saved.pending && tidy(field.value)) lookup(!!saved.exact);
-else peek();
+// ---- the tabs this browser had open: each comes back as it was ----
+// a tab that was writing goes back to its session (the daemon joins it, or
+// finds what it kept); the others show what the dictionary holds and ask
+// for nothing. The single-word state of the first version comes back as
+// one tab.
+(function restore() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) {}
+  const okFrom = c => FROM.some(([x]) => x === c), okTo = c => TO.some(([x]) => x === c);
+  let list = Array.isArray(saved.tabs) ? saved.tabs : [{ from: saved.from, to: saved.to, q: saved.q, exact: saved.exact, pending: saved.pending }];
+  list = list.filter(t => t && typeof t === "object").slice(0, 12);
+  if (!list.length) list = [{}];
+  for (const t of list) Object.assign(newTab({ src: okFrom(t.from) ? t.from : "en", dst: okTo(t.to) ? t.to : "zh",
+    q: typeof t.q === "string" ? tidy(t.q) : "", exact: !!t.exact }), { pending: !!t.pending, unseen: !!t.unseen });
+  activate(tabs[Math.min(Math.max(0, saved.active | 0), tabs.length - 1)]);
+  if (typeof saved.field === "string") field.value = saved.field;
+  for (const t of tabs) {
+    if (t.pending && t.q) run(t, t.q, t.src, t.dst, t.exact);
+    else peek(t);
+    delete t.pending;
+  }
+})();
 if (!IS_MOBILE) field.focus();
 
 // ---- desktop window plumbing (same bridge as Notes and Hub) ----
