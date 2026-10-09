@@ -1375,7 +1375,8 @@ line. Leave it off when every call should sample afresh.
 The **Dict** app is a dictionary from English, German, French, Spanish,
 Italian or Latin into Chinese, Japanese or Korean. Pick the two languages
 in the pop-ups at the top (English → Chinese to begin with), type a word
-or a phrase and press Return. An entry gives the word's pronunciation in
+or a phrase and press Return (the circled × at the end of the field
+empties it). An entry gives the word's pronunciation in
 IPA (British and American for English, Classical and Ecclesiastical for
 Latin), the forms a learner needs (a German noun's article and plural, a
 Latin verb's principal parts), its senses, each with short equivalents and
