@@ -148,6 +148,12 @@ button.ghost.on { background: #888; color: #fff;
   border-right-color: #6666cc; box-shadow: inset 1px 0 0 #ccccff; }
 .at-x-end::-webkit-scrollbar-thumb:horizontal:active {
   border-right-color: #333399; box-shadow: inset 1px 0 0 #9999ff; }
+/* Safari redraws a custom scroll bar only when its element's own style
+   changes, and the classes above change nothing of the element's own: the
+   thumb's end merges stayed stale there and doubled the line against the
+   arrows. Each class sets a property of its own, so WebKit sees a change. */
+.scrolled-y { --sb-scrolled-y: 1; } .at-y-end { --sb-at-y-end: 1; }
+.scrolled-x { --sb-scrolled-x: 1; } .at-x-end { --sb-at-x-end: 1; }
 ::-webkit-scrollbar-button { display: block; width: 16px; height: 16px;
   background: #ddd; border: 1px solid var(--black);
   box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #bbb;

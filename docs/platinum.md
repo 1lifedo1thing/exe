@@ -248,7 +248,16 @@ restyling: `internal/server/ui/index.html` (the desktop),
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`
   end merges). Copy it whole. Against a frame the bar has no trailing
-  border; the frame's line is the bar's edge.
+  border; the frame's line is the bar's edge. The block's last lines give
+  each merge class a custom property of its own (`--sb-at-y-end: 1` and
+  so on), and they are not dead weight: Safari redraws a custom scroll bar
+  only when its element's own style changes, and a class that touches only
+  `::-webkit-scrollbar` pseudo-elements changes none of it, so the merges
+  stayed stale there and the thumb at the end doubled the line against the
+  arrows (Livid's catch, 2026-10-09). Chrome restyles either way. Borders
+  on `::-webkit-scrollbar-track-piece` would make the merges static, but
+  Chrome never paints them on an active bar. Playwright's WebKit
+  (`webkit.launch()`) shows the same as Safari; check a scroll bar there.
 
 ## Chrome the desktop draws
 
