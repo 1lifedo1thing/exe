@@ -237,13 +237,13 @@ restyling: `internal/server/ui/index.html` (the desktop),
   loud yellow and blue a step lighter, all in the 256-colour cube): the
   pad's sheet, its board card and the dog-ear's flap (the sampled greys
   multiplied by the tint) take it, and the next page's tint shows under
-  the fold. It is chosen from a row of small squares at the sheet's foot
-  right of the dog-ear, never in the toolbar: each square its tint inside
-  Stickies' edge colour, the chosen one ringed 2px in `--hl`. The note's
-  writing has the toolbar's 10px of room at the top and sides, and the
-  toolbar's middle (the window's, not the gap's) carries the open note's
-  date in 11px `#777`, in the longest form that keeps 16px from the
-  buttons, else none.
+  the fold. It is chosen from a row of small squares at the right of the
+  sheet's foot, 5px short of the scroll bar, never in the toolbar: each
+  square its tint inside Stickies' edge colour, the chosen one ringed 2px
+  in `--hl`. The note's writing has the toolbar's 10px of room at the top
+  and sides; the foot carries, left to right, the dog-ear, the note's date
+  in 11px `#777` (the longest form that keeps 16px from the page number,
+  else none), the page number and the squares.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`
