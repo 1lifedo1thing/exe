@@ -240,7 +240,10 @@ restyling: `internal/server/ui/index.html` (the desktop),
   the fold. It is chosen from a row of small squares at the sheet's foot
   right of the dog-ear, never in the toolbar: each square its tint inside
   Stickies' edge colour, the chosen one ringed 2px in `--hl`. The note's
-  writing has the toolbar's 10px of room at the top and sides.
+  writing has the toolbar's 10px of room at the top and sides, and the
+  toolbar's middle (the window's, not the gap's) carries the open note's
+  date in 11px `#777`, in the longest form that keeps 16px from the
+  buttons, else none.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`
