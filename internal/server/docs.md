@@ -1426,15 +1426,17 @@ this browser.
 typo its word's, with `corrected` saying what was typed; `exact=1` reads
 the text as typed), 404 when there is none. `POST /v1/dict` with `{"from",
 "to", "q"}` answers a kept entry at once as one `{"entry": …}` line of
-newline-delimited JSON, or writes it: `{"writing": true, …}`, then the
-session's `{"step": {"t", "kind", …}}` lines (`session`, `spell`,
-`spelled` with its `verdict`, `think`, `summary`, `thought`, `answer`,
-`usage`, `retry`) and `{"text": …}` lines, the entry's JSON a fragment at a time,
+newline-delimited JSON, or writes it: `{"writing": true, …}` (its `q` the
+word the session writes), then the session's `{"step": {"t", "kind", …}}`
+lines (`session`, `spell`, `spelled` with its `verdict` on the `typed`
+text, `think`, `summary`, `thought`, `answer`, `usage`, `retry`) and `{"text": …}` lines, the entry's JSON a fragment at a time,
 with a `{"wait": seconds}` line every five seconds besides; last comes
 `{"entry": …}` (with the session's `tokens`, and `corrected` for a typo),
 `{"notfound": true, "suggestions": […]}` or `{"error": …}`. `"exact":
 true` skips the spelling check. A lookup that joins a session reads every
-line from the start.
+line from the start, and joins only a session it can trust: a plain lookup
+never shares an exact one's, whose text may be a typo, and an exact lookup
+never shares a spelling check still out — each starts its own.
 
 ## Configuration
 

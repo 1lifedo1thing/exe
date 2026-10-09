@@ -458,12 +458,21 @@ const secs = s => Math.max(1, Math.round(s)) + " s";
 
 // watch follows one session as it writes: its steps fill a log under the
 // word; once the entry itself begins, the page draws it as it is written.
-function watch(q, src, dst, model, effort) {
+function watch(q, src, dst, model, effort, word) {
   const log = el("ol", { class: "log" }), hw = el("div", { class: "hw muted", lang: src }, q);
   show(hw, el("div", { class: "wmeta" }, "Codex · " + model + " · " + effort + " · an ephemeral session"), log);
   // q is the word being written: what was typed, or the word a typo of it
-  // was read as (corrected keeps what was typed)
+  // was read as (corrected keeps what was typed) — known from the start
+  // when the daemon says the session writes another word (a typo it
+  // remembers), or from the spelling pass's verdict
   const w = { q, corrected: "", text: "", answering: false, drawn: false, usage: null, frame: 0, passes: new Map() };
+  const correct = to => {
+    if (!to || to === w.q) return;
+    w.corrected = w.q;
+    w.q = hw.textContent = field.value = to;
+    remember();
+  };
+  correct(word);
   const line = (t, text, dim = false) => {
     for (const li of log.querySelectorAll("li.now")) li.classList.remove("now");
     const x = el("span", { class: "x" + (dim ? " dim" : "") }, text);
@@ -486,12 +495,13 @@ function watch(q, src, dst, model, effort) {
         if (!w.spell) break;
         w.spell.done = true;
         const li = w.spell.li;
+        // the session judged what its starter typed (typed), which is this
+        // reader's own text unless the reader joined it on the word
+        const typed = st.typed || w.q;
         if (st.verdict === "typo" && st.word) {
-          say(li, "“" + w.q + "” is a typo of “" + st.word + "”");
-          w.corrected = w.q;
-          w.q = hw.textContent = field.value = st.word;
-          remember();
-        } else if (st.verdict === "unknown") say(li, "Not " + article(nameOf(FROM, src)) + " word");
+          say(li, "“" + typed + "” is a typo of “" + st.word + "”");
+          correct(st.word);
+        } else if (st.verdict === "unknown") say(li, "“" + typed + "” is not " + article(nameOf(FROM, src)) + " word");
         else say(li, "Spelled right");
         li.querySelector(".b").append(el("span", { class: "d" }, secs(st.t - w.spell.t)));
         break;
@@ -596,7 +606,7 @@ async function lookup(exact = false) {
         const m = JSON.parse(line);
         if (my !== ctrl) return;
         if (m.writing) {
-          w = watch(q, src, dst, m.model, m.effort);
+          w = watch(q, src, dst, m.model, m.effort, m.q);
           base = m.wait || 0; at = Date.now();
           tick();
           ticker = setInterval(tick, 1000);

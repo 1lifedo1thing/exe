@@ -56,12 +56,23 @@ func fakeDictCodex(t *testing.T, dir, answer string) {
 // then plays each turn. A spelling pass (its schema asks for a verdict)
 // answers spell.json, a word by default. An entry turn plays a reasoning
 // pass with a summary, the answer in fragments and the tokens — or, with
-// no answer.json, fails.
+// no answer.json, fails. A turn waits, once begun, while a gate file
+// stands in dir: hold-spell holds the spelling verdict, hold-entry the
+// entry's reasoning — a test that needs two lookups in flight at once
+// makes the gate before the first and removes it after the second.
 func fakeCodexAppServer(dir string) {
 	note := func(name, text string) {
 		f, _ := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 		f.WriteString(text)
 		f.Close()
+	}
+	hold := func(gate string) {
+		for i := 0; i < 500; i++ {
+			if _, err := os.Stat(filepath.Join(dir, gate)); err != nil {
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
 	}
 	note("args", strings.Join(os.Args[1:], " ")+"\n")
 	note("runs", "run\n")
@@ -88,6 +99,7 @@ func fakeCodexAppServer(dir string) {
 			if strings.Contains(string(m.Params), `"verdict"`) {
 				note("turns", "spell\n")
 				note("spellturn", string(m.Params))
+				hold("hold-spell")
 				v, err := os.ReadFile(filepath.Join(dir, "spell.json"))
 				if err != nil {
 					v = []byte(`{"verdict":"word","word":"","suggestions":[]}`)
@@ -99,6 +111,7 @@ func fakeCodexAppServer(dir string) {
 			}
 			note("turns", "entry\n")
 			os.WriteFile(filepath.Join(dir, "turn"), m.Params, 0o600)
+			hold("hold-entry")
 			answer, err := os.ReadFile(filepath.Join(dir, "answer.json"))
 			if err != nil {
 				say("error", map[string]any{"error": map[string]any{"message": "boom"}, "willRetry": false})
@@ -358,6 +371,207 @@ func TestDictSpellingShortcuts(t *testing.T) {
 	}
 	if n, m := dictTurns(dir, "spell"), dictTurns(dir, "entry"); n != 3 || m != 2 {
 		t.Fatalf("spelling passes %d, entries written %d; want 3 and 2", n, m)
+	}
+}
+
+// A lookup started in the background: its lines come on done.
+type dictAsync struct {
+	t    *testing.T
+	done chan []map[string]any
+}
+
+func dictStart(t *testing.T, url, body string) *dictAsync {
+	a := &dictAsync{t: t, done: make(chan []map[string]any, 1)}
+	go func() {
+		resp, err := http.Post(url+"/v1/dict", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Error(err)
+			a.done <- nil
+			return
+		}
+		defer resp.Body.Close()
+		var lines []map[string]any
+		dec := json.NewDecoder(resp.Body)
+		for dec.More() {
+			var m map[string]any
+			if dec.Decode(&m) != nil {
+				break
+			}
+			lines = append(lines, m)
+		}
+		a.done <- lines
+	}()
+	return a
+}
+
+// entry is the lookup's last line's entry: its q and what it corrected.
+func (a *dictAsync) entry() (q, corrected string, lines []map[string]any) {
+	a.t.Helper()
+	select {
+	case lines = <-a.done:
+	case <-time.After(20 * time.Second):
+		a.t.Fatal("the lookup never finished")
+	}
+	if len(lines) == 0 {
+		a.t.Fatal("no lines")
+	}
+	e, _ := lines[len(lines)-1]["entry"].(map[string]any)
+	if e == nil {
+		a.t.Fatalf("last line = %v", lines[len(lines)-1])
+	}
+	q, _ = e["q"].(string)
+	corrected, _ = e["corrected"].(string)
+	return q, corrected, lines
+}
+
+// waitTurns waits until the stand-in has begun n turns of a kind.
+func waitTurns(t *testing.T, dir, kind string, n int) {
+	t.Helper()
+	for i := 0; i < 500; i++ {
+		if dictTurns(dir, kind) >= n {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("%d %s turns never began", n, kind)
+}
+
+// An exact lookup of a text never joins a session still spelling it: the
+// plain lookup of "recieve" is corrected, the exact one, made while the
+// spelling pass was out, gets "recieve" as typed from a session of its own.
+func TestDictExactNeverJoinsSpelling(t *testing.T) {
+	dir := t.TempDir()
+	fakeDictCodex(t, dir, dictAnswer)
+	os.WriteFile(filepath.Join(dir, "spell.json"), []byte(`{"verdict":"typo","word":"receive","suggestions":[]}`), 0o600)
+	os.WriteFile(filepath.Join(dir, "hold-spell"), nil, 0o600)
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	plain := dictStart(t, ts.URL, `{"from":"en","to":"zh","q":"recieve"}`)
+	waitTurns(t, dir, "spell", 1)
+	exact := dictStart(t, ts.URL, `{"from":"en","to":"zh","q":"recieve","exact":true}`)
+	waitTurns(t, dir, "entry", 1) // the exact session is writing already
+	os.Remove(filepath.Join(dir, "hold-spell"))
+
+	if q, c, _ := plain.entry(); q != "receive" || c != "recieve" {
+		t.Errorf("plain = %q corrected %q", q, c)
+	}
+	if q, c, _ := exact.entry(); q != "recieve" || c != "" {
+		t.Errorf("exact = %q corrected %q", q, c)
+	}
+	if n, m := dictTurns(dir, "spell"), dictTurns(dir, "entry"); n != 1 || m != 2 {
+		t.Fatalf("spelling passes %d, entries written %d; want 1 and 2", n, m)
+	}
+}
+
+// Nor does a plain lookup join an exact session for its text: it spells
+// the text itself and is corrected, while the exact one keeps its own.
+func TestDictPlainNeverJoinsExact(t *testing.T) {
+	dir := t.TempDir()
+	fakeDictCodex(t, dir, dictAnswer)
+	os.WriteFile(filepath.Join(dir, "spell.json"), []byte(`{"verdict":"typo","word":"receive","suggestions":[]}`), 0o600)
+	os.WriteFile(filepath.Join(dir, "hold-entry"), nil, 0o600)
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	exact := dictStart(t, ts.URL, `{"from":"en","to":"zh","q":"recieve","exact":true}`)
+	waitTurns(t, dir, "entry", 1)
+	plain := dictStart(t, ts.URL, `{"from":"en","to":"zh","q":"recieve"}`)
+	waitTurns(t, dir, "entry", 2) // its own session, on receive
+	os.Remove(filepath.Join(dir, "hold-entry"))
+
+	if q, c, _ := exact.entry(); q != "recieve" || c != "" {
+		t.Errorf("exact = %q corrected %q", q, c)
+	}
+	if q, c, _ := plain.entry(); q != "receive" || c != "recieve" {
+		t.Errorf("plain = %q corrected %q", q, c)
+	}
+	if n := dictTurns(dir, "spell"); n != 1 {
+		t.Fatalf("spelling passes %d; want 1", n)
+	}
+}
+
+// Lookups whose word matches still share: once "recieve" is read as
+// "receive", an exact lookup of "receive" joins that session, and so does
+// a plain one.
+func TestDictSharesOnceSpelled(t *testing.T) {
+	dir := t.TempDir()
+	fakeDictCodex(t, dir, dictAnswer)
+	os.WriteFile(filepath.Join(dir, "spell.json"), []byte(`{"verdict":"typo","word":"receive","suggestions":[]}`), 0o600)
+	os.WriteFile(filepath.Join(dir, "hold-entry"), nil, 0o600)
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	typo := dictStart(t, ts.URL, `{"from":"en","to":"zh","q":"recieve"}`)
+	waitTurns(t, dir, "entry", 1)
+	exact := dictStart(t, ts.URL, `{"from":"en","to":"zh","q":"receive","exact":true}`)
+	plain := dictStart(t, ts.URL, `{"from":"en","to":"zh","q":"receive"}`)
+	time.Sleep(400 * time.Millisecond) // both have joined, or started a session of their own
+	os.Remove(filepath.Join(dir, "hold-entry"))
+
+	if q, c, _ := typo.entry(); q != "receive" || c != "recieve" {
+		t.Errorf("typo = %q corrected %q", q, c)
+	}
+	q, c, lines := exact.entry()
+	if q != "receive" || c != "" {
+		t.Errorf("exact = %q corrected %q", q, c)
+	}
+	// the joined session's spelling lines name the text they judged
+	for _, l := range lines {
+		if st, ok := l["step"].(map[string]any); ok && st["kind"] == "spelled" && st["typed"] != "recieve" {
+			t.Errorf("spelled step = %v", st)
+		}
+	}
+	if q, c, _ := plain.entry(); q != "receive" || c != "" {
+		t.Errorf("plain = %q corrected %q", q, c)
+	}
+	if n, m := dictTurns(dir, "spell"), dictTurns(dir, "entry"); n != 1 || m != 1 {
+		t.Fatalf("spelling passes %d, entries written %d; want 1 and 1", n, m)
+	}
+}
+
+// A plain lookup that spells its text while an exact session writes the
+// same word does not write it again: it follows that session, and its
+// reader sees the session's steps and text after its own spelling lines.
+func TestDictFollowsASessionOnTheSameWord(t *testing.T) {
+	dir := t.TempDir()
+	fakeDictCodex(t, dir, dictAnswer)
+	os.WriteFile(filepath.Join(dir, "hold-entry"), nil, 0o600)
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	exact := dictStart(t, ts.URL, `{"from":"en","to":"zh","q":"receive","exact":true}`)
+	waitTurns(t, dir, "entry", 1)
+	plain := dictStart(t, ts.URL, `{"from":"en","to":"zh","q":"receive"}`)
+	waitTurns(t, dir, "spell", 1)
+	time.Sleep(400 * time.Millisecond) // the verdict is in, the follow begun
+	os.Remove(filepath.Join(dir, "hold-entry"))
+
+	if q, c, _ := exact.entry(); q != "receive" || c != "" {
+		t.Errorf("exact = %q corrected %q", q, c)
+	}
+	q, c, lines := plain.entry()
+	if q != "receive" || c != "" {
+		t.Errorf("plain = %q corrected %q", q, c)
+	}
+	var kinds []string
+	text := 0
+	for _, l := range lines {
+		if st, ok := l["step"].(map[string]any); ok {
+			kinds = append(kinds, st["kind"].(string))
+		} else if l["text"] != nil {
+			text++
+		}
+	}
+	if got := strings.Join(kinds, " "); got != "session spell spelled think summary thought answer usage" || text == 0 {
+		t.Errorf("followed steps = %q, %d text lines", got, text)
+	}
+	if n, m := dictTurns(dir, "spell"), dictTurns(dir, "entry"); n != 1 || m != 1 {
+		t.Fatalf("spelling passes %d, entries written %d; want 1 and 1", n, m)
 	}
 }
 

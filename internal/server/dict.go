@@ -21,7 +21,8 @@
 // {"writing":true,"model","effort","wait"}, then {"step":{"t","kind",…}}
 // lines — t the seconds since the session began; kind "session" (it
 // started), "spell" and "spelled" (the spelling pass began, and its
-// "verdict": "word", "typo" with the "word" it stands for, or "unknown"),
+// "verdict" on the "typed" text: "word", "typo" with the "word" it stands
+// for, or "unknown"),
 // "think" and "thought" (a reasoning pass, by "pass", began and ended),
 // "summary" (a line of a pass's summary as it stands: "pass", "part",
 // "text"), "answer" (the entry begins), "usage" (the tokens spent,
@@ -34,8 +35,11 @@
 // source language (that answer is not kept), or {"error":…}. "exact":true
 // in the body skips the spelling pass and looks the text up as typed. Two
 // lookups of one entry share one session, the later one reading every line
-// from the start; a session outlives the window that started it, and what
-// it writes is kept for the next lookup.
+// from the start — a plain lookup only a session whose spelling it can
+// trust, an exact one only a session writing its text as typed (the rules
+// on dictFlight); the "writing" line's "q" is the word the session writes.
+// A session outlives the window that started it, and what it writes is
+// kept for the next lookup.
 package server
 
 import (
@@ -413,14 +417,25 @@ func (s *Server) handleDictGet(w http.ResponseWriter, r *http.Request) {
 // A dictFlight is one session writing one entry, for every lookup of it.
 // What the session says as it works — a step, a fragment of the entry —
 // goes into events, in order: a lookup that joins late reads them all from
-// the start, then follows the rest as they come. A flight that read a typo
-// is also listed under the word it corrected it to, so a lookup of that
-// word joins it.
+// the start, then follows the rest as they come.
+//
+// Flights are listed in s.dictFlights under ids that say what they write
+// and whether its spelling is settled, so a lookup joins only work it can
+// share. A spelling flight for a text T (dictPlain) is listed under
+// spellID(T) for its whole life — a plain lookup of T joins it in any
+// phase, the verdict comes in the replay — and under entryID(W) once the
+// verdict names the word W it writes (T itself, or the word T was a typo
+// of), where an exact lookup of W joins, and a plain lookup of W, or of a
+// known typo of W. An exact flight (dictExact) is listed under entryID(T)
+// alone and never spelled, so no plain lookup of T joins it: T may be a
+// typo the reader insisted on. Two flights that resolve to one word do not
+// write it twice: the later follows the earlier.
 type dictFlight struct {
 	began time.Time
 	ids   []string // under which s.dictFlights lists it
 
 	mu       sync.Mutex
+	spelled  bool // its word is known to be one: a plain lookup may join it
 	events   []map[string]any
 	changed  chan struct{} // closed, and replaced, whenever the fields here move
 	done     bool
@@ -428,6 +443,15 @@ type dictFlight struct {
 	notFound []string // suggestions, when the lookup was no word
 	err      error
 }
+
+// A dictMode is how a lookup wants its text read.
+type dictMode int
+
+const (
+	dictPlain   dictMode = iota // spelling unknown: the pass first
+	dictChecked                 // a known word (a typo's, from the table): no pass
+	dictExact                   // as typed, whatever it is: no pass
+)
 
 // say adds one thing the session said.
 func (f *dictFlight) say(ev map[string]any) {
@@ -445,6 +469,53 @@ func (f *dictFlight) finish() {
 	close(f.changed)
 	f.changed = make(chan struct{})
 	f.mu.Unlock()
+}
+
+// follow makes g's work f's own: g's events, as they come, on f's clock
+// and without g's spelling lines (f's readers had their own), then g's
+// result.
+func (f *dictFlight) follow(g *dictFlight) {
+	offset := g.began.Sub(f.began).Seconds()
+	floor := 0.0
+	f.mu.Lock()
+	for _, ev := range f.events {
+		if st, ok := ev["step"].(map[string]any); ok {
+			if t, ok := st["t"].(float64); ok {
+				floor = t
+			}
+		}
+	}
+	f.mu.Unlock()
+	next := 0
+	for {
+		g.mu.Lock()
+		evs, done, changed := g.events[next:], g.done, g.changed
+		next = len(g.events)
+		g.mu.Unlock()
+		for _, ev := range evs {
+			if st, ok := ev["step"].(map[string]any); ok {
+				switch st["kind"] {
+				case "session", "spell", "spelled":
+					continue
+				}
+				cp := make(map[string]any, len(st))
+				for k, v := range st {
+					cp[k] = v
+				}
+				if t, ok := st["t"].(float64); ok {
+					floor = math.Max(floor, math.Round((t+offset)*10)/10)
+					cp["t"] = floor
+				}
+				ev = map[string]any{"step": cp}
+			}
+			f.say(ev)
+		}
+		if done {
+			f.kept, f.notFound, f.err = g.kept, g.notFound, g.err
+			return
+		}
+		<-changed
+	}
 }
 
 func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
@@ -485,15 +556,21 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 		enc.Encode(map[string]any{"entry": k})
 		return
 	}
-	// a known typo goes straight to its word's session, checked already
-	f, err := s.dictJoin(src, dst, word, req.Exact || word != key)
+	mode := dictPlain
+	switch {
+	case req.Exact:
+		mode = dictExact
+	case word != key:
+		mode = dictChecked // a known typo: its word, checked already
+	}
+	f, err := s.dictJoin(src, dst, word, mode)
 	if err != nil {
 		writeErr(w, http.StatusServiceUnavailable, err)
 		return
 	}
 	start()
 	since := func() int { return int(time.Since(f.began).Seconds()) }
-	enc.Encode(map[string]any{"writing": true, "model": dictModel, "effort": dictEffort, "wait": since()})
+	enc.Encode(map[string]any{"writing": true, "model": dictModel, "effort": dictEffort, "wait": since(), "q": word})
 	flush()
 	tick := time.NewTicker(dictTick)
 	defer tick.Stop()
@@ -538,16 +615,34 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// dictJoin is the session writing src→dst key, started now unless one is
-// already at it. errNoLLM when there is no Codex CLI to start one with.
-// checked skips the spelling pass: the reader asked for the text as typed,
-// or it is the word a known typo was read as.
-func (s *Server) dictJoin(src, dst dictLang, key string, checked bool) (*dictFlight, error) {
-	idOf := func(key string) string { return src.Code + "\x00" + dst.Code + "\x00" + key }
+// dictJoin is the flight writing src→dst key for a lookup of the given
+// mode: one already at it that the lookup can share (the rules on
+// dictFlight), else one started now. errNoLLM when there is no Codex CLI
+// to start one with.
+func (s *Server) dictJoin(src, dst dictLang, key string, mode dictMode) (*dictFlight, error) {
+	spellID := func(k string) string { return "spell\x00" + src.Code + "\x00" + dst.Code + "\x00" + k }
+	entryID := func(k string) string { return "entry\x00" + src.Code + "\x00" + dst.Code + "\x00" + k }
 	s.dictMu.Lock()
 	defer s.dictMu.Unlock()
-	if f := s.dictFlights[idOf(key)]; f != nil {
-		return f, nil
+	switch mode {
+	case dictExact:
+		if f := s.dictFlights[entryID(key)]; f != nil {
+			return f, nil
+		}
+	case dictChecked:
+		if f := s.dictFlights[entryID(key)]; f != nil {
+			return f, nil
+		}
+		if f := s.dictFlights[spellID(key)]; f != nil {
+			return f, nil
+		}
+	default:
+		if f := s.dictFlights[spellID(key)]; f != nil {
+			return f, nil
+		}
+		if f := s.dictFlights[entryID(key)]; f != nil && f.spelled {
+			return f, nil
+		}
 	}
 	bin := dictCodexPath()
 	if bin == "" {
@@ -556,8 +651,28 @@ func (s *Server) dictJoin(src, dst dictLang, key string, checked bool) (*dictFli
 	if s.dictFlights == nil {
 		s.dictFlights = map[string]*dictFlight{}
 	}
-	f := &dictFlight{began: time.Now(), changed: make(chan struct{}), ids: []string{idOf(key)}}
-	s.dictFlights[idOf(key)] = f
+	f := &dictFlight{began: time.Now(), changed: make(chan struct{}), spelled: mode == dictChecked}
+	id := entryID(key)
+	if mode == dictPlain {
+		id = spellID(key)
+	}
+	f.ids = []string{id}
+	s.dictFlights[id] = f
+	// file lists f under the entry id of the word its spelling settled on;
+	// when another flight holds it, that one is returned for f to follow
+	file := func(word string) *dictFlight {
+		s.dictMu.Lock()
+		defer s.dictMu.Unlock()
+		if g := s.dictFlights[entryID(word)]; g != nil && g != f {
+			return g
+		}
+		s.dictFlights[entryID(word)] = f
+		f.ids = append(f.ids, entryID(word))
+		f.mu.Lock()
+		f.spelled = true
+		f.mu.Unlock()
+		return nil
+	}
 	go func() {
 		defer func() {
 			s.dictMu.Lock()
@@ -571,18 +686,27 @@ func (s *Server) dictJoin(src, dst dictLang, key string, checked bool) (*dictFli
 		}()
 		ctx, cancel := context.WithTimeout(context.Background(), dictTimeout)
 		defer cancel()
+		held := false
 		select {
 		case dictSlots <- struct{}{}:
-			defer func() { <-dictSlots }()
+			held = true
+			defer func() {
+				if held {
+					<-dictSlots
+				}
+			}()
 		case <-ctx.Done():
 			f.err = errors.New("the dictionary is busy: try again in a minute")
 			return
 		}
 		// kept meanwhile: by a session that ended between this lookup's
-		// miss and its join, or while this one waited for a slot
-		if k, err := s.dictGet(src.Code, dst.Code, key); err == nil && k != nil {
+		// miss and its join, or while this one waited for a slot — or, for
+		// a plain lookup, read as a typo meanwhile
+		if k, word, err := s.dictFind(src.Code, dst.Code, key, mode == dictExact); err == nil && k != nil {
 			f.kept = k
 			return
+		} else if word != key {
+			key, mode = word, dictChecked
 		}
 		step := func(kind string, more map[string]any) {
 			st := map[string]any{"t": math.Round(time.Since(f.began).Seconds()*10) / 10, "kind": kind}
@@ -599,7 +723,7 @@ func (s *Server) dictJoin(src, dst dictLang, key string, checked bool) (*dictFli
 		defer app.close()
 		step("session", nil)
 
-		if !checked {
+		if mode == dictPlain {
 			// the spelling pass: a typo is read as the word it stands for,
 			// which is what gets looked up and kept; a lookup that is no
 			// word ends here, with suggestions, before the long session
@@ -611,30 +735,33 @@ func (s *Server) dictJoin(src, dst dictLang, key string, checked bool) (*dictFli
 			}
 			switch v.Verdict {
 			case "unknown":
-				step("spelled", map[string]any{"verdict": "unknown"})
+				step("spelled", map[string]any{"verdict": "unknown", "typed": key})
 				f.notFound = v.Suggestions
 				return
 			case "typo":
 				word := dictKey(v.Word)
 				if word == "" || word == key || utf8.RuneCountInString(word) > dictMaxQuery {
-					step("spelled", map[string]any{"verdict": "word"})
+					step("spelled", map[string]any{"verdict": "word", "typed": key})
 					break
 				}
-				step("spelled", map[string]any{"verdict": "typo", "word": word})
+				step("spelled", map[string]any{"verdict": "typo", "word": word, "typed": key})
 				s.dictPutTypo(src.Code, key, word)
 				key = word
 				if k, err := s.dictGet(src.Code, dst.Code, key); err == nil && k != nil {
 					f.kept = k
 					return
 				}
-				s.dictMu.Lock()
-				if s.dictFlights[idOf(key)] == nil {
-					s.dictFlights[idOf(key)] = f
-					f.ids = append(f.ids, idOf(key))
-				}
-				s.dictMu.Unlock()
 			default:
-				step("spelled", map[string]any{"verdict": "word"})
+				step("spelled", map[string]any{"verdict": "word", "typed": key})
+			}
+		}
+		if mode != dictExact {
+			if g := file(key); g != nil {
+				// another flight is writing this word: its work is f's
+				<-dictSlots
+				held = false
+				f.follow(g)
+				return
 			}
 		}
 
