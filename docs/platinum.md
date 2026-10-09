@@ -444,6 +444,15 @@ restyling: `internal/server/ui/index.html` (the desktop),
 
 - One `index.html`, vanilla JS, inline CSS, no frameworks or CDNs; the
   bundle folder is the app's identity; `app.json` sizes the window.
+- An app window follows its app's code: `/v1/apps` lists each app's
+  `version` (a fingerprint of its files) and the daemon announces a change
+  on the app-data stream as `{app: "@apps", path, version}`; the desk
+  reloads a window left on an older version once nobody is using it (at
+  once in a hidden tab, 3 quiet seconds for a closed window, 30 for one on
+  screen, never over a typed draft or an open menu), on its latest args, and
+  tells a closed one `hide` again. An app needs nothing new for it beyond
+  the contract: flush on pagehide, and mark a field it saves as typed
+  `data-autosave` (a field without it holds the reload while it has text).
 - The desktop bridge: `{exe:"focus"}` on pointerdown, `grow-start / grow /
   grow-end`, `hide` and `show` (pause loops and timers), `data-changed`,
   `workspace-changed` (a Workspace file moved: `path`, `deleted`, `client`).

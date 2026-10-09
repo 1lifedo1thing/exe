@@ -18,8 +18,9 @@ import (
 // the window-layout sync uses), which matters because apps auto-save on
 // every keystroke.
 type appEvents struct {
-	mu   sync.Mutex
-	subs map[chan []byte]struct{}
+	mu       sync.Mutex
+	subs     map[chan []byte]struct{}
+	watching bool // the code watch is running (appcode.go)
 }
 
 // BroadcastAppData announces a change to app's stored file rel. client is the
@@ -50,6 +51,7 @@ func (s *Server) handleAppDataEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	s.appEv.subs[ch] = struct{}{}
 	s.appEv.mu.Unlock()
+	s.watchAppCode() // while a desk listens, it hears an app's code change
 	defer func() {
 		s.appEv.mu.Lock()
 		delete(s.appEv.subs, ch)

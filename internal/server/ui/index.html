@@ -4005,7 +4005,21 @@ async function loadApps() {
     // resized (restored from the layout snapshot as an inline style)
     const fr = w.querySelector(".app-frame");
     if (a.window && a.window.height && !fr.style.height) fr.style.height = a.window.height + "px";
+    // a window restored before the list came loaded the code it names
+    if (fr._ver === undefined && a.version) fr._ver = a.version;
   }
+  appStaleCheck();
+}
+// An app window's address: the token, and on a phone ?mobile=1 so the app
+// can size its chrome for one (the Hub swaps its composer labels for
+// glyphs), and the args it was opened on.
+function appFrameSrc(name, args) {
+  const q = new URLSearchParams();
+  if (tokenInput.value) q.set("token", tokenInput.value);
+  if (IS_MOBILE) q.set("mobile", "1");
+  for (const [k, v] of Object.entries(args || {})) if (typeof v === "string") q.set(k, v);
+  const qs = q.toString(); // not .size: iOS 16 Safari lacks it
+  return "/apps/" + encodeURIComponent(name) + "/" + (qs ? "?" + qs : "");
 }
 // openAppWin opens or raises an app's window. args (the Writer's path)
 // ride the frame's query when the window is made and reach an open
@@ -4016,6 +4030,7 @@ function openAppWin(name, args) {
   let w = document.getElementById(id);
   if (w && args) {
     const fr = w.querySelector(".app-frame");
+    if (fr) fr._args = args; // a reload for an update reopens on these
     if (fr && fr.contentWindow) fr.contentWindow.postMessage({ exe: "open", ...args }, location.origin);
   }
   if (!w) {
@@ -4033,14 +4048,9 @@ function openAppWin(name, args) {
     if (app.window && app.window.grow) w.classList.add("grow");
     const fr = w.querySelector(".app-frame");
     if (app.window && app.window.height) fr.style.height = Math.min(app.window.height, Math.max(120, window.innerHeight - 150)) + "px";
-    // the token, and on a phone ?mobile=1 so the app can size its chrome
-    // for one (the Hub swaps its composer labels for glyphs)
-    const q = new URLSearchParams();
-    if (tokenInput.value) q.set("token", tokenInput.value);
-    if (IS_MOBILE) q.set("mobile", "1");
-    for (const [k, v] of Object.entries(args || {})) if (typeof v === "string") q.set(k, v);
-    const qs = q.toString(); // not .size: iOS 16 Safari lacks it
-    fr.src = "/apps/" + encodeURIComponent(name) + "/" + (qs ? "?" + qs : "");
+    fr._args = args;
+    fr._ver = appVer(name); // the code this window runs (appStaleCheck)
+    fr.src = appFrameSrc(name, args);
     $("#desktop").append(w);
     initWindow(w);
     // the app's grow box lives inside its iframe (postMessage bridge), so
@@ -10371,16 +10381,28 @@ function appDataSubscribe() {
   // whose changes were never announced: each app window hears
   // data-resync and reads its files again, so none is left typing on an
   // old copy.
+  // The code may have changed in the gap too: the list is read first, and a
+  // window left on an older version is not told to reread — it reloads, so
+  // its old code never acts on what it missed (the iPad's Notes wrote every
+  // note back without its colour on such a wake).
   appES.onopen = () => {
-    if (appESOpened) document.querySelectorAll(".app-window .app-frame").forEach(fr => {
-      if (fr.contentWindow) fr.contentWindow.postMessage({ exe: "data-resync" }, location.origin);
+    if (!appESOpened) { appESOpened = true; return; }
+    const resync = () => document.querySelectorAll(".app-window .app-frame").forEach(fr => {
+      if (fr.contentWindow && !appFrameStale(fr)) fr.contentWindow.postMessage({ exe: "data-resync" }, location.origin);
     });
-    appESOpened = true;
+    loadApps().then(resync, resync);
   };
   appES.onmessage = e => {
     let ev;
     try { ev = JSON.parse(e.data); } catch (err) { return; }
     if (!ev || !ev.app) return;
+    // an app's code changed on disk
+    if (ev.app === "@apps") {
+      const a = appsList.find(a => a.name === canonicalAppName(ev.path || ""));
+      if (a && typeof ev.version === "string") { a.version = ev.version; appStaleCheck(); }
+      else loadApps().catch(() => {});
+      return;
+    }
     if (ev.app === "@workspace") {
       workspaceChanged(ev.path, !!ev.deleted, ev.client || "");
       // apps that edit Workspace files (the Writer, Planet) hear every
@@ -10413,6 +10435,50 @@ function appDataSubscribe() {
   };
 }
 tokenInput.addEventListener("change", () => { if (appES) appDataSubscribe(); });
+
+// ---- app windows follow their app's code ----
+// Each window remembers the version of the app it loaded (/v1/apps lists a
+// fingerprint of every app's files, and the daemon announces a change as
+// "@apps"). A window left on an older version reloads once nobody is using
+// it — the desk's own update rules, a little more patient with a window on
+// screen: never while it holds a typed draft (a field saved as it is typed,
+// data-autosave, does not count) or a menu is up; at once when this tab is
+// hidden; after 3 quiet seconds for a closed window, 30 for one on screen.
+// The app's own pagehide flush saves whatever it held, and the window comes
+// back on the args it was last opened with (the Writer's current file).
+function appVer(name) {
+  const a = appsList.find(a => a.name === name);
+  return (a && a.version) || undefined;
+}
+function appFrameStale(fr) {
+  const w = fr.closest(".app-window"), v = w && appVer(w.id.slice(8));
+  return !!v && fr._ver !== undefined && fr._ver !== v;
+}
+function appFrameBusy(w, fr) {
+  let doc = null;
+  try { doc = fr.contentDocument; } catch (e) {}
+  for (const t of buildTyped) {
+    if (t.isConnected && t.ownerDocument === doc && (t.tagName === "TEXTAREA" ? t.value : t.textContent).trim()) return true;
+  }
+  if (openMenuEl || document.querySelector(".overlay:not([hidden])")) return true;
+  if (document.hidden) return false;
+  return performance.now() - buildInputAt < (w.hidden ? 3000 : 30000);
+}
+let appStaleTimer = 0;
+function appStaleCheck() {
+  const stale = [...document.querySelectorAll(".app-window .app-frame")].filter(appFrameStale);
+  if (!stale.length) { clearInterval(appStaleTimer); appStaleTimer = 0; return; }
+  if (!appStaleTimer) appStaleTimer = setInterval(appStaleCheck, 1000);
+  for (const fr of stale) {
+    const w = fr.closest(".app-window");
+    if (appFrameBusy(w, fr)) continue;
+    const name = w.id.slice(8);
+    fr._ver = appVer(name);
+    // a closed window is told so again once its new page is up
+    if (w.hidden) fr.addEventListener("load", () => { if (w.hidden) tellApp(w, "hide"); }, { once: true });
+    fr.src = appFrameSrc(name, fr._args);
+  }
+}
 
 // A workspace change landed — a peer's file synced in, or another window on
 // this node wrote one. Refresh every open Workspace window, plus any editor

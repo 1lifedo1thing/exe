@@ -990,9 +990,18 @@ work. Existing app data keeps its original storage and sync namespace.
 
 Icons beyond the built-ins are desktop apps: folders in `~/.exe/apps`, each
 just an `app.json` plus an `index.html`, served straight from disk — edit
-one and reopen its window, no rebuild. Each app gets private storage under
+one and its open windows pick up the change by themselves, no rebuild. Each app gets private storage under
 `~/.exe/appdata` plus the shared Workspace. Apps are a good thing to ask a
 coding agent to build for you.
+
+An app window keeps up with its app: when the app's files change, on this
+desk or while a tablet slept, each open window of it reloads once you are
+not using it — at once in a tab you are not looking at, after a few quiet
+seconds for a closed window, after half a minute without a key or a click
+for one on screen — and never while it holds words you have typed and not
+saved. It comes back on the file it last had open. Saves are guarded too:
+a window still on older code cannot take back a note, a to-do or a field
+that newer ones wrote.
 
 Two apps come with exe-planet, the site builder that runs beside exe (its
 `apps` folder goes in `apps_dirs`). Writer edits any Markdown file in the

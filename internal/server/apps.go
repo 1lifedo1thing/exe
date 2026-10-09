@@ -185,6 +185,9 @@ type appMeta struct {
 	Icon       string     `json:"icon,omitempty"`
 	SystemIcon string     `json:"system_icon,omitempty"` // trusted embedded SVG, never supplied by a disk bundle
 	Window     *appWindow `json:"window,omitempty"`
+	// Version fingerprints the code the app's window runs (appcode.go): the
+	// desk reloads a window left on an older one.
+	Version string `json:"version,omitempty"`
 }
 
 // loadAppMeta reads one bundle's app.json; a folder only counts as an app
@@ -214,11 +217,18 @@ func (s *Server) loadAppMeta(root, name string) (*appMeta, error) {
 }
 
 func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.listApps(true))
+}
+
+// listApps is every app the desk can open, with its code's version; quiet
+// leaves a broken bundle out without a word (the code watch asks often).
+func (s *Server) listApps(logSkips ...bool) []*appMeta {
+	loud := len(logSkips) > 0 && logSkips[0]
 	names := map[string]bool{}
 	for _, root := range s.appRoots() {
 		entries, err := os.ReadDir(root)
 		if err != nil {
-			if !os.IsNotExist(err) {
+			if loud && !os.IsNotExist(err) {
 				log.Printf("apps: reading %s: %v", root, err)
 			}
 			continue
@@ -243,12 +253,16 @@ func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
 		// Use the same resolution as static serving, so both spellings open
 		// the bundle described here and never produce duplicate app entries.
 		if root, folder, ok := s.findAppRoot(name); ok {
-			m, err = s.loadAppMeta(root, folder)
-		} else {
-			m, err = loadSysAppMeta(name)
+			if m, err = s.loadAppMeta(root, folder); err == nil {
+				m.Version = appCodeVersion(filepath.Join(root, folder))
+			}
+		} else if m, err = loadSysAppMeta(name); err == nil {
+			m.Version = sysAppVersion(name)
 		}
 		if err != nil {
-			log.Printf("apps: skipping %s: %v", name, err)
+			if loud {
+				log.Printf("apps: skipping %s: %v", name, err)
+			}
 			continue
 		}
 		apps = append(apps, m)
@@ -259,7 +273,7 @@ func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
 		}
 		return apps[i].Title < apps[j].Title
 	})
-	writeJSON(w, http.StatusOK, apps)
+	return apps
 }
 
 // appStatic serves app bundles from disk at /apps/<name>/, resolving each
