@@ -163,6 +163,32 @@ func TestMergeNotesDropsLegacySel(t *testing.T) {
 	}
 }
 
+// A note's colour rides with the note: kept through a merge, and taken
+// from whichever side's edit is newer, like its text.
+func TestMergeNotesKeepsColor(t *testing.T) {
+	a := []byte(`{"notes":[{"id":"n1","text":"t","color":"yellow","created":1,"updated":10},{"id":"n2","text":"u","created":2,"updated":5}]}`)
+	b := []byte(`{"notes":[{"id":"n1","text":"t","color":"pink","created":1,"updated":20},{"id":"n2","text":"u","created":2,"updated":5}]}`)
+	merged, ok := MergeFile("Notes/notes.json", a, b)
+	if !ok {
+		t.Fatal("merge not ok")
+	}
+	var d noteDoc
+	json.Unmarshal(merged, &d)
+	got := map[string]string{}
+	for _, n := range d.Notes {
+		got[n.ID] = n.Color
+	}
+	if got["n1"] != "pink" || got["n2"] != "" {
+		t.Fatalf("want n1 pink (the newer edit), n2 uncoloured: %s", merged)
+	}
+	if bytes.Contains(merged, []byte(`"color": ""`)) {
+		t.Fatalf("an uncoloured note must carry no color field: %s", merged)
+	}
+	if c, ok := CanonicalFile("Notes/notes.json", a); !ok || !bytes.Contains(c, []byte(`"color": "yellow"`)) {
+		t.Fatalf("the canonical form must keep the colour: %s", c)
+	}
+}
+
 func TestVersionVectorOrdering(t *testing.T) {
 	v := func(m map[string]int64) Version { return Version{Vec: m} }
 	base := v(map[string]int64{"a": 1})

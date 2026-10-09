@@ -15,7 +15,8 @@ import (
 // The schemas mirror what the apps write (exe-apps Todo, Notes, World Clock):
 //
 //	todos.json   {"version":2,"items":[{id,text,done,created,updated,order?,deleted?}]}
-//	notes.json   {"notes":[{id,text,created,updated,deleted?}]}
+//	notes.json   {"notes":[{id,text,color?,created,updated,deleted?}]}
+//	             (color is the sheet's Stickies colour name: yellow, blue…)
 //	clocks.json  {"version":1,"items":[{id,name,region,tz,created,updated,deleted?}]}
 //	             (World Clock only — the City app has a cities.json of its own shape)
 //	drafts.json  {"version":2,"drafts":[{id,text,checked,created,updated,deleted?}]}
@@ -171,6 +172,7 @@ func mergeTodos(local, remote []byte) ([]byte, bool) {
 type noteItem struct {
 	ID      string `json:"id"`
 	Text    string `json:"text"`
+	Color   string `json:"color,omitempty"`
 	Created int64  `json:"created"`
 	Updated int64  `json:"updated"`
 	Deleted int64  `json:"deleted,omitempty"`

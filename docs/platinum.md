@@ -232,7 +232,15 @@ restyling: `internal/server/ui/index.html` (the desktop),
   pattern). A sheet is white with a 1px black edge and a hard 2px shadow
   at 35% black, nudged whole pixels off the grid and never rotated, its
   13px pixel pushpin (vector between 1x and 2x) and nudge picked by a hash
-  of its id; no sheet is marked as the open one.
+  of its id; no sheet is marked as the open one. A note may take a
+  Stickies colour (sampled from Mac OS 9's Stickies: its pastels, the
+  loud yellow and blue a step lighter, all in the 256-colour cube): the
+  pad's sheet, its board card and the dog-ear's flap (the sampled greys
+  multiplied by the tint) take it, and the next page's tint shows under
+  the fold. It is chosen from a row of small squares at the sheet's foot
+  right of the dog-ear, never in the toolbar: each square its tint inside
+  Stickies' edge colour, the chosen one ringed 2px in `--hl`. The note's
+  writing has the toolbar's 10px of room at the top and sides.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`
