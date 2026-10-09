@@ -78,6 +78,9 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
 #entry .prons span + span { margin-left: 14px; }
 #entry .pl { color: #777; margin-right: 5px; }
 #entry .note { margin-top: 4px; color: #555; }
+/* a typo read as the word it stands for: said above the entry, with the
+   way back to the text as typed */
+#entry .fix { margin-bottom: 6px; font-size: 11px; color: #555; }
 #entry .forms { margin-top: 4px; font-size: 11px; color: #555; }
 #entry h3 { font-size: 12px; margin: 16px 0 6px; padding-bottom: 2px; border-bottom: 1px solid var(--g400); }
 #entry ol { margin: 0; padding: 0 0 0 20px; }
@@ -321,7 +324,17 @@ function renderEntry(k, live = false) {
   const e = k.entry || {};
   const src = k.from, dst = k.to;
   const S = { lang: src }, T = { lang: LANG_TAG[dst] || dst };
-  const kids = [el("div", Object.assign({ class: "hw" }, S), e.headword || k.q)];
+  const kids = [];
+  if (k.corrected) {
+    const typed = el("span", { class: "link", lang: src }, "Look up “" + k.corrected + "” as typed");
+    typed.addEventListener("click", () => {
+      if (getSelection().toString()) return;
+      field.value = k.corrected;
+      lookup(true);
+    });
+    kids.push(el("div", { class: "fix" }, "Corrected from “", el("span", { lang: src }, k.corrected), "”. ", typed));
+  }
+  kids.push(el("div", Object.assign({ class: "hw" }, S), e.headword || k.q));
   const prons = (e.pronunciations || []).filter(p => p.ipa);
   if (prons.length) kids.push(el("div", { class: "prons" }, ...prons.map(p =>
     el("span", {}, p.label ? el("span", Object.assign({ class: "pl" }, T), p.label) : null, p.ipa))));
@@ -446,11 +459,11 @@ const secs = s => Math.max(1, Math.round(s)) + " s";
 // watch follows one session as it writes: its steps fill a log under the
 // word; once the entry itself begins, the page draws it as it is written.
 function watch(q, src, dst, model, effort) {
-  const log = el("ol", { class: "log" });
-  show(el("div", { class: "hw muted", lang: src }, q),
-    el("div", { class: "wmeta" }, "Codex · " + model + " · " + effort + " · an ephemeral session"),
-    log);
-  const w = { q, text: "", answering: false, drawn: false, usage: null, frame: 0, passes: new Map() };
+  const log = el("ol", { class: "log" }), hw = el("div", { class: "hw muted", lang: src }, q);
+  show(hw, el("div", { class: "wmeta" }, "Codex · " + model + " · " + effort + " · an ephemeral session"), log);
+  // q is the word being written: what was typed, or the word a typo of it
+  // was read as (corrected keeps what was typed)
+  const w = { q, corrected: "", text: "", answering: false, drawn: false, usage: null, frame: 0, passes: new Map() };
   const line = (t, text, dim = false) => {
     for (const li of log.querySelectorAll("li.now")) li.classList.remove("now");
     const x = el("span", { class: "x" + (dim ? " dim" : "") }, text);
@@ -468,6 +481,21 @@ function watch(q, src, dst, model, effort) {
     const p = st.pass && w.passes.get(st.pass);
     switch (st.kind) {
       case "session": line(st.t, "Started the session"); break;
+      case "spell": w.spell = { t: st.t, li: line(st.t, "Checking the spelling…", true) }; break;
+      case "spelled": {
+        if (!w.spell) break;
+        w.spell.done = true;
+        const li = w.spell.li;
+        if (st.verdict === "typo" && st.word) {
+          say(li, "“" + w.q + "” is a typo of “" + st.word + "”");
+          w.corrected = w.q;
+          w.q = hw.textContent = field.value = st.word;
+          remember();
+        } else if (st.verdict === "unknown") say(li, "Not " + article(nameOf(FROM, src)) + " word");
+        else say(li, "Spelled right");
+        li.querySelector(".b").append(el("span", { class: "d" }, secs(st.t - w.spell.t)));
+        break;
+      }
       case "think": {
         const li = line(st.t, "Thinking…", true);
         w.passes.set(st.pass, { t: st.t, li, last: li, parts: [] });
@@ -500,7 +528,7 @@ function watch(q, src, dst, model, effort) {
       const e = partialJSON(w.text);
       if (!e || e.found !== true || !e.headword) return;
       if (!w.drawn) { w.drawn = true; pane.scrollTop = 0; }
-      renderEntry({ from: src, to: dst, q, entry: e }, true);
+      renderEntry({ from: src, to: dst, q: w.q, corrected: w.corrected, entry: e }, true);
     });
   };
   w.stop = () => { if (w.frame) cancelAnimationFrame(w.frame); w.frame = 0; };
@@ -511,23 +539,27 @@ function watch(q, src, dst, model, effort) {
 // back at once; one it lacks is written by a Codex session, which takes a
 // minute or two and goes on if the window closes — the next lookup finds
 // it kept, and one made while it is still writing joins it.
-async function lookup() {
+//
+// Unless exact, the daemon checks the spelling first: an obvious typo is
+// read as the word it stands for (the field takes that word), and a
+// lookup that is no word ends there, with suggestions.
+async function lookup(exact = false) {
   const q = tidy(field.value);
   if (!q) { field.focus(); return; }
   field.value = q;
   if (ctrl) ctrl.abort();
   stopTicker();
   const my = ctrl = new AbortController();
-  remember({ pending: true });
+  remember({ pending: true, exact });
   status("Looking up “" + q + "”…");
   let r;
   try {
     r = await api("/v1/dict", { method: "POST", signal: my.signal,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ from: from.value, to: to.value, q }) });
+      body: JSON.stringify({ from: from.value, to: to.value, q, exact }) });
   } catch (e) {
     if (my.signal.aborted) return;
-    return failed(q, "The daemon did not answer.", e.message);
+    return failed(q, exact, "The daemon did not answer.", e.message);
   }
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
@@ -538,7 +570,7 @@ async function lookup() {
       return show(caution("No Usable LLM Backend",
         "Dict writes the entries it does not have yet with Codex, and this host has no Codex CLI. Words already in the dictionary still open."));
     }
-    return failed(q, e.error || "HTTP " + r.status);
+    return failed(q, exact, e.error || "HTTP " + r.status);
   }
   const reader = r.body.getReader(), dec = new TextDecoder();
   const src = from.value, dst = to.value;
@@ -547,8 +579,9 @@ async function lookup() {
   const tick = () => {
     if (!w) return;
     status(w.answering
-      ? "Codex is writing “" + q + "”… " + num([...w.text].length) + " characters · " + clock(elapsed())
-      : "Codex is thinking about “" + q + "”… " + clock(elapsed()));
+      ? "Codex is writing “" + w.q + "”… " + num([...w.text].length) + " characters · " + clock(elapsed())
+      : w.spell && !w.spell.done ? "Codex is checking the spelling of “" + w.q + "”… " + clock(elapsed())
+      : "Codex is thinking about “" + w.q + "”… " + clock(elapsed()));
   };
   try {
     for (;;) {
@@ -575,6 +608,7 @@ async function lookup() {
           base = m.wait; at = Date.now();
         } else if (m.entry) {
           stopTicker();
+          if (m.entry.corrected) field.value = m.entry.q; // a typo: the field takes its word
           remember({ pending: false });
           renderEntry(m.entry, !!(w && w.drawn)); // a page watched being written keeps its place
           const tok = m.entry.tokens;
@@ -593,22 +627,22 @@ async function lookup() {
           status("Not " + article(nameOf(FROM, from.value)) + " word: nothing was kept");
           return;
         } else if (m.error) {
-          return failed(q, m.error);
+          return failed(q, exact, m.error);
         }
       }
     }
   } catch (e) {
     if (my.signal.aborted) return;
-    return failed(q, "The answer broke off.", e.message);
+    return failed(q, exact, "The answer broke off.", e.message);
   }
-  if (my === ctrl) failed(q, "The answer broke off.");
+  if (my === ctrl) failed(q, exact, "The answer broke off.");
 }
 const article = name => (/^[AEIOU]/.test(name) ? "an " : "a ") + name;
-function failed(q, msg, detail) {
+function failed(q, exact, msg, detail) {
   stopTicker();
   remember({ pending: false });
   const again = el("button", { class: "ghost" }, "Try Again");
-  again.addEventListener("click", () => { field.value = q; lookup(); });
+  again.addEventListener("click", () => { field.value = q; lookup(exact); });
   show(caution("“" + q + "” could not be looked up.", detail ? msg + " " + detail : msg, again));
   status(msg, true);
 }
@@ -631,6 +665,7 @@ async function peek() {
     if (r.ok) {
       const k = await r.json();
       if (my !== ctrl) return;
+      if (k.corrected) { field.value = k.q; remember(); }
       renderEntry(k);
       return status(pair() + " · in the dictionary since " + day(k.created));
     }
@@ -648,7 +683,7 @@ field.addEventListener("keydown", e => {
   }
 });
 field.addEventListener("input", () => remember());
-$("#go").addEventListener("click", lookup);
+$("#go").addEventListener("click", () => lookup());
 for (const s of [from, to]) s.addEventListener("change", () => {
   remember({ pending: false });
   peek();
@@ -658,7 +693,7 @@ for (const s of [from, to]) s.addEventListener("change", () => {
 // a window reopened while its word was being written goes back to the
 // session (the daemon joins it, or finds what it kept); otherwise it shows
 // what the dictionary holds and asks for nothing
-if (saved.pending && tidy(field.value)) lookup();
+if (saved.pending && tidy(field.value)) lookup(!!saved.exact);
 else peek();
 if (!IS_MOBILE) field.focus();
 

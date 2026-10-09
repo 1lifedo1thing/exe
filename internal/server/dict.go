@@ -1,31 +1,41 @@
 // The Dict app's dictionary.
 //
 // An entry is looked up in the node's own dictionary, ~/.exe/dict.db, and
-// written when it is not there: an ephemeral Codex session (a thread of
-// codex app-server's that is never saved and never joins the resume list)
-// on gpt-6-astra at xhigh, its answer held to a JSON schema, then kept, so
-// every later lookup of the same word in the same pair of languages is
-// answered from the database. A host without the Codex CLI can still read
-// what is kept, and says "No Usable LLM Backend" for the rest.
+// written when it is not there: an ephemeral Codex session (threads of
+// codex app-server's that are never saved and never join the resume list)
+// on gpt-6-astra, its answer held to a JSON schema, then kept, so every
+// later lookup of the same word in the same pair of languages is answered
+// from the database. Before the entry, a quick spelling pass (medium
+// effort, a few seconds) reads an obvious typo as the word it stands for:
+// that word is what gets written and kept, and the typo is remembered as
+// one, never given a page of its own; a lookup that is no word at all ends
+// there with suggestions, before the long session (xhigh). A host without
+// the Codex CLI can still read what is kept, and says "No Usable LLM
+// Backend" for the rest.
 //
-// GET /v1/dict?from=en&to=zh&q=word answers a kept entry, 404 when there
-// is none. POST /v1/dict with {"from","to","q"} answers newline-delimited
-// JSON: a kept entry at once, as one {"entry":…} line. Otherwise the
-// session is watched as it works: {"writing":true,"model","effort","wait"},
-// then {"step":{"t","kind",…}} lines — t the seconds since the session
-// began; kind "session" (it started), "think" and "thought" (a reasoning
-// pass, by "pass", began and ended), "summary" (a line of a pass's
-// summary as it stands: "pass", "part", "text"), "answer" (the entry
-// begins), "usage" (the tokens spent, "usage"), "retry" ("text") — and
-// {"text":…} lines, the entry's JSON a fragment at a time; a
-// {"wait":seconds} line every few seconds besides, as a write takes a
-// minute or two, longer than Cloudflare holds a silent request. The last
-// line is the {"entry":…} (with "written" and the session's "tokens"), or
+// GET /v1/dict?from=en&to=zh&q=word answers a kept entry — for a known
+// typo, its word's, with "corrected" saying what was typed (exact=1 reads
+// the text as typed) — and 404 when there is none. POST /v1/dict with
+// {"from","to","q"} answers newline-delimited JSON: a kept entry at once,
+// as one {"entry":…} line. Otherwise the session is watched as it works:
+// {"writing":true,"model","effort","wait"}, then {"step":{"t","kind",…}}
+// lines — t the seconds since the session began; kind "session" (it
+// started), "spell" and "spelled" (the spelling pass began, and its
+// "verdict": "word", "typo" with the "word" it stands for, or "unknown"),
+// "think" and "thought" (a reasoning pass, by "pass", began and ended),
+// "summary" (a line of a pass's summary as it stands: "pass", "part",
+// "text"), "answer" (the entry begins), "usage" (the tokens spent,
+// "usage"), "retry" ("text") — and {"text":…} lines, the entry's JSON a
+// fragment at a time; a {"wait":seconds} line every few seconds besides, as
+// a write takes a minute or two, longer than Cloudflare holds a silent
+// request. The last line is the {"entry":…} (with "written" and the
+// session's "tokens", and "corrected" when the lookup was a typo), or
 // {"notfound":true,"suggestions":[…]} when the lookup is no word of the
-// source language (that answer is not kept), or {"error":…}. Two lookups
-// of one entry share one session, the later one reading every line from
-// the start; a session outlives the window that started it, and what it
-// writes is kept for the next lookup.
+// source language (that answer is not kept), or {"error":…}. "exact":true
+// in the body skips the spelling pass and looks the text up as typed. Two
+// lookups of one entry share one session, the later one reading every line
+// from the start; a session outlives the window that started it, and what
+// it writes is kept for the next lookup.
 package server
 
 import (
@@ -280,6 +290,8 @@ type dictKept struct {
 	// the session spent.
 	Written bool       `json:"written,omitempty"`
 	Tokens  *dictUsage `json:"tokens,omitempty"`
+	// Corrected is what the reader typed, when it was a typo of Q.
+	Corrected string `json:"corrected,omitempty"`
 }
 
 func (s *Server) dictDatabase() (*sql.DB, error) {
@@ -292,12 +304,17 @@ func (s *Server) dictDatabase() (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// typos: what a reader typed in a source language, and the word the
+	// spelling pass read it as — never a page of its own
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS entries (
 		src TEXT NOT NULL, dst TEXT NOT NULL, key TEXT NOT NULL,
 		headword TEXT NOT NULL, entry TEXT NOT NULL,
 		model TEXT NOT NULL, effort TEXT NOT NULL,
 		created INTEGER NOT NULL, looked INTEGER NOT NULL, lookups INTEGER NOT NULL DEFAULT 0,
-		PRIMARY KEY (src, dst, key))`); err != nil {
+		PRIMARY KEY (src, dst, key));
+	CREATE TABLE IF NOT EXISTS typos (
+		src TEXT NOT NULL, key TEXT NOT NULL, word TEXT NOT NULL, created INTEGER NOT NULL,
+		PRIMARY KEY (src, key))`); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -338,6 +355,42 @@ func (s *Server) dictPut(k *dictKept, headword string) error {
 	return err
 }
 
+// dictTypo is the word a known typo stands for, "" when key is none.
+func (s *Server) dictTypo(src, key string) string {
+	db, err := s.dictDatabase()
+	if err != nil {
+		return ""
+	}
+	var word string
+	db.QueryRow(`SELECT word FROM typos WHERE src = ? AND key = ?`, src, key).Scan(&word)
+	return word
+}
+
+func (s *Server) dictPutTypo(src, key, word string) {
+	if db, err := s.dictDatabase(); err == nil {
+		db.Exec(`INSERT OR REPLACE INTO typos (src, key, word, created) VALUES (?, ?, ?, ?)`,
+			src, key, word, time.Now().UnixMilli())
+	}
+}
+
+// dictFind is the kept entry a lookup reads: its own, or — unless exact —
+// the one for the word it is a known typo of. word is the key the entry is
+// or would be kept under.
+func (s *Server) dictFind(src, dst, key string, exact bool) (k *dictKept, word string, err error) {
+	if k, err = s.dictGet(src, dst, key); k != nil || err != nil {
+		return k, key, err
+	}
+	if !exact {
+		if w := s.dictTypo(src, key); w != "" && w != key {
+			if k, err = s.dictGet(src, dst, w); k != nil {
+				k.Corrected = key
+			}
+			return k, w, err
+		}
+	}
+	return nil, key, nil
+}
+
 func (s *Server) handleDictGet(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	src, dst, key, err := dictQuery(q.Get("from"), q.Get("to"), q.Get("q"))
@@ -345,7 +398,7 @@ func (s *Server) handleDictGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	k, err := s.dictGet(src.Code, dst.Code, key)
+	k, _, err := s.dictFind(src.Code, dst.Code, key, q.Get("exact") == "1")
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -360,9 +413,12 @@ func (s *Server) handleDictGet(w http.ResponseWriter, r *http.Request) {
 // A dictFlight is one session writing one entry, for every lookup of it.
 // What the session says as it works — a step, a fragment of the entry —
 // goes into events, in order: a lookup that joins late reads them all from
-// the start, then follows the rest as they come.
+// the start, then follows the rest as they come. A flight that read a typo
+// is also listed under the word it corrected it to, so a lookup of that
+// word joins it.
 type dictFlight struct {
 	began time.Time
+	ids   []string // under which s.dictFlights lists it
 
 	mu       sync.Mutex
 	events   []map[string]any
@@ -392,7 +448,12 @@ func (f *dictFlight) finish() {
 }
 
 func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
-	var req struct{ From, To, Q string }
+	var req struct {
+		From, To, Q string
+		// Exact looks the text up as typed: no spelling pass, no typo
+		// read as the word it stands for.
+		Exact bool
+	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -414,7 +475,7 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Accel-Buffering", "no")
 		w.WriteHeader(http.StatusOK)
 	}
-	k, err := s.dictGet(src.Code, dst.Code, key)
+	k, word, err := s.dictFind(src.Code, dst.Code, key, req.Exact)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -424,7 +485,8 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 		enc.Encode(map[string]any{"entry": k})
 		return
 	}
-	f, err := s.dictJoin(src, dst, key)
+	// a known typo goes straight to its word's session, checked already
+	f, err := s.dictJoin(src, dst, word, req.Exact || word != key)
 	if err != nil {
 		writeErr(w, http.StatusServiceUnavailable, err)
 		return
@@ -455,7 +517,12 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 				}
 				enc.Encode(map[string]any{"notfound": true, "suggestions": sugg})
 			default:
-				enc.Encode(map[string]any{"entry": f.kept})
+				kept := *f.kept
+				kept.Corrected = ""
+				if kept.Q != key {
+					kept.Corrected = key // what this reader typed was a typo of it
+				}
+				enc.Encode(map[string]any{"entry": kept})
 			}
 			flush()
 			return
@@ -473,11 +540,13 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 
 // dictJoin is the session writing src→dst key, started now unless one is
 // already at it. errNoLLM when there is no Codex CLI to start one with.
-func (s *Server) dictJoin(src, dst dictLang, key string) (*dictFlight, error) {
-	id := src.Code + "\x00" + dst.Code + "\x00" + key
+// checked skips the spelling pass: the reader asked for the text as typed,
+// or it is the word a known typo was read as.
+func (s *Server) dictJoin(src, dst dictLang, key string, checked bool) (*dictFlight, error) {
+	idOf := func(key string) string { return src.Code + "\x00" + dst.Code + "\x00" + key }
 	s.dictMu.Lock()
 	defer s.dictMu.Unlock()
-	if f := s.dictFlights[id]; f != nil {
+	if f := s.dictFlights[idOf(key)]; f != nil {
 		return f, nil
 	}
 	bin := dictCodexPath()
@@ -487,12 +556,16 @@ func (s *Server) dictJoin(src, dst dictLang, key string) (*dictFlight, error) {
 	if s.dictFlights == nil {
 		s.dictFlights = map[string]*dictFlight{}
 	}
-	f := &dictFlight{began: time.Now(), changed: make(chan struct{})}
-	s.dictFlights[id] = f
+	f := &dictFlight{began: time.Now(), changed: make(chan struct{}), ids: []string{idOf(key)}}
+	s.dictFlights[idOf(key)] = f
 	go func() {
 		defer func() {
 			s.dictMu.Lock()
-			delete(s.dictFlights, id)
+			for _, id := range f.ids {
+				if s.dictFlights[id] == f {
+					delete(s.dictFlights, id)
+				}
+			}
 			s.dictMu.Unlock()
 			f.finish()
 		}()
@@ -518,8 +591,60 @@ func (s *Server) dictJoin(src, dst dictLang, key string) (*dictFlight, error) {
 			}
 			f.say(map[string]any{"step": st})
 		}
-		e, raw, usage, err := runDictCodex(ctx, bin, dictPrompt(src, dst, key), step,
+		app, err := startCodexAppServer(ctx, bin)
+		if err != nil {
+			f.err = err
+			return
+		}
+		defer app.close()
+		step("session", nil)
+
+		if !checked {
+			// the spelling pass: a typo is read as the word it stands for,
+			// which is what gets looked up and kept; a lookup that is no
+			// word ends here, with suggestions, before the long session
+			step("spell", nil)
+			v, err := dictSpell(ctx, app, src, key)
+			if err != nil {
+				f.err = err
+				return
+			}
+			switch v.Verdict {
+			case "unknown":
+				step("spelled", map[string]any{"verdict": "unknown"})
+				f.notFound = v.Suggestions
+				return
+			case "typo":
+				word := dictKey(v.Word)
+				if word == "" || word == key || utf8.RuneCountInString(word) > dictMaxQuery {
+					step("spelled", map[string]any{"verdict": "word"})
+					break
+				}
+				step("spelled", map[string]any{"verdict": "typo", "word": word})
+				s.dictPutTypo(src.Code, key, word)
+				key = word
+				if k, err := s.dictGet(src.Code, dst.Code, key); err == nil && k != nil {
+					f.kept = k
+					return
+				}
+				s.dictMu.Lock()
+				if s.dictFlights[idOf(key)] == nil {
+					s.dictFlights[idOf(key)] = f
+					f.ids = append(f.ids, idOf(key))
+				}
+				s.dictMu.Unlock()
+			default:
+				step("spelled", map[string]any{"verdict": "word"})
+			}
+		}
+
+		final, usage, err := app.turn(ctx, dictPrompt(src, dst, key), dictEffort, "detailed", dictSchema, step,
 			func(delta string) { f.say(map[string]any{"text": delta}) })
+		if err != nil {
+			f.err = err
+			return
+		}
+		e, raw, err := dictParse(final)
 		if err != nil {
 			f.err = err
 			return
@@ -542,6 +667,64 @@ func (s *Server) dictJoin(src, dst dictLang, key string) (*dictFlight, error) {
 	return f, nil
 }
 
+// dictParse reads a session's answer as an entry, and the entry in the
+// schema's own shape, whatever spacing the model chose.
+func dictParse(final string) (*dictEntry, json.RawMessage, error) {
+	var e dictEntry
+	if err := json.Unmarshal([]byte(final), &e); err != nil {
+		return nil, nil, fmt.Errorf("Codex wrote no entry: %v", err)
+	}
+	if e.Found && (strings.TrimSpace(e.Headword) == "" || len(e.Senses) == 0) {
+		return nil, nil, errors.New("Codex wrote an empty entry")
+	}
+	norm, err := json.Marshal(e)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &e, norm, nil
+}
+
+// The spelling pass runs before an entry is written: a quick turn, on the
+// same model at medium effort (two to four seconds), that tells a word
+// from a typo of one and from neither. Measured on nineteen lookups in
+// four languages, low and medium agreed on every one: serendipty, recieve,
+// Weltschmertz, beacoup and amorr read as typos; petrichor, irregardless,
+// colour, Strasse, ging and amavit as words; xqzt as neither.
+const (
+	dictSpellEffort = "medium"
+	dictSpellSchema = `{"type":"object","additionalProperties":false,"required":["verdict","word","suggestions"],
+"properties":{"verdict":{"type":"string","enum":["word","typo","unknown"]},"word":{"type":"string"},
+"suggestions":{"type":"array","items":{"type":"string"}}}}`
+)
+
+type dictSpelling struct {
+	Verdict     string   `json:"verdict"`
+	Word        string   `json:"word"`
+	Suggestions []string `json:"suggestions"`
+}
+
+func dictSpellPrompt(src dictLang, q string) string {
+	n := src.Name
+	return "This is a spelling check, not a coding task. Do not run commands, read files or call any tool, and no instructions from AGENTS.md files apply to it. Answer from your own knowledge with the JSON object alone.\n\n" +
+		fmt.Sprintf("A reader is about to look something up in a %s dictionary. They typed: %q\n\n", n, q) +
+		fmt.Sprintf("- verdict \"word\": it is %[1]s as typed — a word, an inflected form, a phrase, a name, however rare, old, technical, informal or regional, or a word typed without its accents, umlauts or macrons, or in other capitals. word: the text as typed. suggestions: [].\n", n) +
+		fmt.Sprintf("- verdict \"typo\": it is not %[1]s as typed, and it is plainly a slip in typing exactly one %[1]s word or phrase — a letter dropped, doubled, swapped or mistyped. word: that word, spelled right. suggestions: [].\n", n) +
+		fmt.Sprintf("- verdict \"unknown\": it is neither — not %[1]s, and no one word it obviously stands for. word: \"\". suggestions: up to five %[1]s words the reader may have meant, the likeliest first.\n\n", n) +
+		"Never take a real word for a typo of a commoner one. When in doubt between \"word\" and \"typo\", answer \"word\"."
+}
+
+func dictSpell(ctx context.Context, app *codexAppServer, src dictLang, q string) (*dictSpelling, error) {
+	final, _, err := app.turn(ctx, dictSpellPrompt(src, q), dictSpellEffort, "none", dictSpellSchema, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var v dictSpelling
+	if err := json.Unmarshal([]byte(final), &v); err != nil {
+		return nil, fmt.Errorf("Codex answered no spelling: %v", err)
+	}
+	return &v, nil
+}
+
 // dictUsage is what a session spent, as Codex counts it.
 type dictUsage struct {
 	Input     int64 `json:"inputTokens"`
@@ -557,127 +740,183 @@ type dictUsage struct {
 // are listed.
 var dictFeaturesOff = []string{"shell_tool", "unified_exec", "apps", "plugins", "hooks"}
 
-// runDictCodex runs one ephemeral Codex session on the prompt and reads its
-// answer, the entry, held to dictSchema. It speaks to `codex app-server`
-// over stdio (JSON-RPC, a line a message) rather than running codex exec,
-// because the app server tells what the session is doing while it does
-// it: step hears each reasoning pass begin and end, each summary line of
-// it as it is written, the answer begin and the tokens spent; text hears
-// the answer itself, a fragment at a time. The thread is ephemeral — never
-// saved, never in the resume list — read-only, approval-free, in an empty
-// folder of its own; the model, effort and summaries are said here.
-func runDictCodex(ctx context.Context, bin, prompt string, step func(kind string, more map[string]any),
-	text func(string)) (*dictEntry, json.RawMessage, *dictUsage, error) {
+// codexAppServer is one `codex app-server` spoken to over stdio (JSON-RPC,
+// a line a message) rather than codex exec, because the app server tells
+// what a session is doing while it does it: each reasoning pass beginning
+// and ending, each summary line of it as it is written, the answer as it
+// streams, the tokens spent. One process runs a lookup's turns one after
+// another — the spelling pass, then the entry — each on an ephemeral
+// thread of its own: never saved, never in the resume list, read-only,
+// approval-free, in an empty folder.
+type codexAppServer struct {
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	enc    *json.Encoder
+	sc     *bufio.Scanner
+	stderr *tailBuffer
+	work   string
+	id     int
+}
+
+type codexRPCError struct {
+	Message string `json:"message"`
+}
+
+type codexMsg struct {
+	ID     json.RawMessage `json:"id"`
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params"`
+	Result json.RawMessage `json:"result"`
+	Error  *codexRPCError  `json:"error"`
+}
+
+func startCodexAppServer(ctx context.Context, bin string) (*codexAppServer, error) {
 	work, err := os.MkdirTemp("", "exe-dict-")
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
-	defer os.RemoveAll(work)
 	args := []string{"app-server"}
 	for _, f := range dictFeaturesOff {
 		args = append(args, "--disable", f)
 	}
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Dir = work
-	cmd.Env = cliEnv(bin)
-	var stderr tailBuffer
-	cmd.Stderr = &stderr
-	stdin, err := cmd.StdinPipe()
+	a := &codexAppServer{work: work, stderr: &tailBuffer{}}
+	a.cmd = exec.CommandContext(ctx, bin, args...)
+	a.cmd.Dir = work
+	a.cmd.Env = cliEnv(bin)
+	a.cmd.Stderr = a.stderr
+	if a.stdin, err = a.cmd.StdinPipe(); err != nil {
+		os.RemoveAll(work)
+		return nil, err
+	}
+	stdout, err := a.cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, nil, err
+		os.RemoveAll(work)
+		return nil, err
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, nil, nil, err
+	if err := a.cmd.Start(); err != nil {
+		os.RemoveAll(work)
+		return nil, fmt.Errorf("Codex: %v", err)
 	}
-	if err := cmd.Start(); err != nil {
-		return nil, nil, nil, fmt.Errorf("Codex: %v", err)
-	}
-	defer func() {
-		stdin.Close() // the app server ends with its input
-		done := make(chan struct{})
-		go func() { cmd.Wait(); close(done) }()
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			cmd.Process.Kill()
-			<-done
-		}
-	}()
-	enc := json.NewEncoder(stdin)
-	send := func(v any) {
-		enc.Encode(v)
-	}
-	failed := func(why string) error {
-		if ctx.Err() != nil {
-			return errors.New("Codex took too long to write the entry")
-		}
-		if why == "" {
-			why = codexComplaint(stderr.String())
-		}
-		if why == "" {
-			why = "the session ended without an entry"
-		}
-		return fmt.Errorf("Codex: %s", why)
-	}
-
-	send(map[string]any{"id": 1, "method": "initialize", "params": map[string]any{
+	a.enc = json.NewEncoder(a.stdin)
+	a.sc = bufio.NewScanner(stdout)
+	a.sc.Buffer(make([]byte, 64<<10), 16<<20)
+	a.send(map[string]any{"id": a.nextID(), "method": "initialize", "params": map[string]any{
 		"clientInfo": map[string]any{"name": "exe-dict", "title": "exe Dict", "version": "1"}}})
-	send(map[string]any{"method": "initialized"})
-	send(map[string]any{"id": 2, "method": "thread/start", "params": map[string]any{
-		"ephemeral": true, "model": dictModel, "cwd": work,
-		"sandbox": "read-only", "approvalPolicy": "never"}})
-
-	type rpcError struct {
-		Message string `json:"message"`
+	if _, err := a.await(ctx, a.id, nil); err != nil {
+		a.close()
+		return nil, err
 	}
+	a.send(map[string]any{"method": "initialized"})
+	return a, nil
+}
+
+func (a *codexAppServer) nextID() int { a.id++; return a.id }
+
+func (a *codexAppServer) send(v any) { a.enc.Encode(v) }
+
+// close ends the app server with its input, and kills one that lingers.
+func (a *codexAppServer) close() {
+	a.stdin.Close()
+	done := make(chan struct{})
+	go func() { a.cmd.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		a.cmd.Process.Kill()
+		<-done
+	}
+	os.RemoveAll(a.work)
+}
+
+// failed is why a session went wrong, in Codex's own words where it said any.
+func (a *codexAppServer) failed(ctx context.Context, why string) error {
+	if ctx.Err() != nil {
+		return errors.New("Codex took too long to write the entry")
+	}
+	if why == "" {
+		why = codexComplaint(a.stderr.String())
+	}
+	if why == "" {
+		why = "the session ended without an answer"
+	}
+	return fmt.Errorf("Codex: %s", why)
+}
+
+// await reads messages until the answer to request id, handing every
+// notification on the way to note (nil drops them) and refusing any
+// request of the server's own — an approval, a question: this session has
+// nothing to approve and no one to ask.
+func (a *codexAppServer) await(ctx context.Context, id int, note func(codexMsg) (bool, error)) (json.RawMessage, error) {
+	want := strconv.Itoa(id)
+	for a.sc.Scan() {
+		var m codexMsg
+		if json.Unmarshal(a.sc.Bytes(), &m) != nil {
+			continue
+		}
+		switch {
+		case m.Method != "" && len(m.ID) > 0:
+			a.send(map[string]any{"id": m.ID, "error": map[string]any{"code": -32601, "message": "not supported by exe Dict"}})
+		case m.Method == "":
+			if string(m.ID) != want {
+				continue
+			}
+			if m.Error != nil {
+				return nil, a.failed(ctx, m.Error.Message)
+			}
+			return m.Result, nil
+		case note != nil:
+			if stop, err := note(m); err != nil || stop {
+				return nil, err
+			}
+		}
+	}
+	return nil, a.failed(ctx, "")
+}
+
+// turn runs one prompt on a fresh ephemeral thread and returns the answer,
+// held to schema. step hears each reasoning pass begin and end ("think",
+// "thought"), each line of its summary as it stands ("summary"), the
+// answer begin ("answer"), the tokens spent ("usage") and a retry; text
+// hears the answer a fragment at a time. Either may be nil.
+func (a *codexAppServer) turn(ctx context.Context, prompt, effort, summary, schema string,
+	step func(kind string, more map[string]any), text func(string)) (string, *dictUsage, error) {
+	if step == nil {
+		step = func(string, map[string]any) {}
+	}
+	if text == nil {
+		text = func(string) {}
+	}
+	a.send(map[string]any{"id": a.nextID(), "method": "thread/start", "params": map[string]any{
+		"ephemeral": true, "model": dictModel, "cwd": a.work,
+		"sandbox": "read-only", "approvalPolicy": "never"}})
+	res, err := a.await(ctx, a.id, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	var started struct {
+		Thread struct{ ID string } `json:"thread"`
+	}
+	json.Unmarshal(res, &started)
+	if started.Thread.ID == "" {
+		return "", nil, a.failed(ctx, "no thread was started")
+	}
+	a.send(map[string]any{"id": a.nextID(), "method": "turn/start", "params": map[string]any{
+		"threadId": started.Thread.ID,
+		"input":    []map[string]any{{"type": "text", "text": prompt}},
+		"effort":   effort, "summary": summary, "outputSchema": json.RawMessage(schema)}})
+
 	var (
 		answer   strings.Builder
 		final    string
 		usage    *dictUsage
 		passes   = map[string]int{} // reasoning item → its pass number, from 1
-		summary  = map[string]string{}
+		summ     = map[string]string{}
 		lastErr  string
 		finished bool
 	)
-	sc := bufio.NewScanner(stdout)
-	sc.Buffer(make([]byte, 64<<10), 16<<20)
-	for !finished && sc.Scan() {
-		var m struct {
-			ID     json.RawMessage `json:"id"`
-			Method string          `json:"method"`
-			Params json.RawMessage `json:"params"`
-			Result json.RawMessage `json:"result"`
-			Error  *rpcError       `json:"error"`
-		}
-		if json.Unmarshal(sc.Bytes(), &m) != nil {
-			continue
-		}
-		switch {
-		case m.Method != "" && len(m.ID) > 0:
-			// a request of the server's (an approval, a question): this
-			// session has nothing to approve and no one to ask
-			send(map[string]any{"id": m.ID, "error": map[string]any{"code": -32601, "message": "not supported by exe Dict"}})
-		case m.Method == "":
-			if m.Error != nil {
-				return nil, nil, nil, failed(m.Error.Message)
-			}
-			if string(m.ID) == "2" {
-				var res struct {
-					Thread struct{ ID string } `json:"thread"`
-				}
-				json.Unmarshal(m.Result, &res)
-				if res.Thread.ID == "" {
-					return nil, nil, nil, failed("no thread was started")
-				}
-				step("session", nil)
-				schema := json.RawMessage(dictSchema)
-				send(map[string]any{"id": 3, "method": "turn/start", "params": map[string]any{
-					"threadId": res.Thread.ID,
-					"input":    []map[string]any{{"type": "text", "text": prompt}},
-					"effort":   dictEffort, "summary": "detailed", "outputSchema": schema}})
-			}
-		case m.Method == "item/started" || m.Method == "item/completed":
+	note := func(m codexMsg) (bool, error) {
+		switch m.Method {
+		case "item/started", "item/completed":
 			var p struct {
 				Item struct {
 					Type, ID, Text string
@@ -695,7 +934,7 @@ func runDictCodex(ctx context.Context, bin, prompt string, step func(kind string
 			case p.Item.Type == "agentMessage":
 				final = p.Item.Text
 			}
-		case m.Method == "item/reasoning/summaryTextDelta":
+		case "item/reasoning/summaryTextDelta":
 			var p struct {
 				ItemID       string `json:"itemId"`
 				SummaryIndex int    `json:"summaryIndex"`
@@ -703,15 +942,15 @@ func runDictCodex(ctx context.Context, bin, prompt string, step func(kind string
 			}
 			json.Unmarshal(m.Params, &p)
 			k := p.ItemID + "/" + strconv.Itoa(p.SummaryIndex)
-			summary[k] += p.Delta
+			summ[k] += p.Delta
 			step("summary", map[string]any{"pass": passes[p.ItemID], "part": p.SummaryIndex,
-				"text": strings.TrimSpace(strings.ReplaceAll(summary[k], "**", ""))})
-		case m.Method == "item/agentMessage/delta":
+				"text": strings.TrimSpace(strings.ReplaceAll(summ[k], "**", ""))})
+		case "item/agentMessage/delta":
 			var p struct{ Delta string }
 			json.Unmarshal(m.Params, &p)
 			answer.WriteString(p.Delta)
 			text(p.Delta)
-		case m.Method == "thread/tokenUsage/updated":
+		case "thread/tokenUsage/updated":
 			var p struct {
 				TokenUsage struct{ Total dictUsage } `json:"tokenUsage"`
 			}
@@ -719,9 +958,9 @@ func runDictCodex(ctx context.Context, bin, prompt string, step func(kind string
 			u := p.TokenUsage.Total
 			usage = &u
 			step("usage", map[string]any{"usage": u})
-		case m.Method == "error":
+		case "error":
 			var p struct {
-				Error     rpcError
+				Error     codexRPCError
 				WillRetry bool `json:"willRetry"`
 			}
 			json.Unmarshal(m.Params, &p)
@@ -730,11 +969,11 @@ func runDictCodex(ctx context.Context, bin, prompt string, step func(kind string
 			} else {
 				lastErr = p.Error.Message
 			}
-		case m.Method == "turn/completed":
+		case "turn/completed":
 			var p struct {
 				Turn struct {
 					Status string
-					Error  *rpcError
+					Error  *codexRPCError
 				}
 			}
 			json.Unmarshal(m.Params, &p)
@@ -746,30 +985,30 @@ func runDictCodex(ctx context.Context, bin, prompt string, step func(kind string
 				if why == "" {
 					why = "the session " + p.Turn.Status
 				}
-				return nil, nil, nil, failed(why)
+				return true, a.failed(ctx, why)
 			}
 			finished = true
+			return true, nil
+		}
+		return false, nil
+	}
+	// the turn's own answer comes first; its notifications follow until
+	// turn/completed, which ends the wait (await never sees an id -1)
+	if _, err := a.await(ctx, a.id, note); err != nil {
+		return "", nil, err
+	}
+	if !finished {
+		if _, err := a.await(ctx, -1, note); err != nil {
+			return "", nil, err
 		}
 	}
 	if !finished {
-		return nil, nil, nil, failed(lastErr)
+		return "", nil, a.failed(ctx, lastErr)
 	}
 	if final == "" {
 		final = answer.String()
 	}
-	var e dictEntry
-	if err := json.Unmarshal([]byte(final), &e); err != nil {
-		return nil, nil, nil, fmt.Errorf("Codex wrote no entry: %v", err)
-	}
-	if e.Found && (strings.TrimSpace(e.Headword) == "" || len(e.Senses) == 0) {
-		return nil, nil, nil, errors.New("Codex wrote an empty entry")
-	}
-	// kept in the schema's own shape, whatever spacing the model chose
-	norm, err := json.Marshal(e)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return &e, norm, usage, nil
+	return final, usage, nil
 }
 
 // codexComplaint picks what a failed session said: its last line naming

@@ -52,9 +52,11 @@ func fakeDictCodex(t *testing.T, dir, answer string) {
 
 // fakeCodexAppServer speaks just enough of the app server's JSON-RPC: it
 // notes its arguments and what thread/start and turn/start asked for in
-// dir, a line per run in runs, then plays one turn — a reasoning pass with
-// a summary, the answer in fragments, the tokens — or, with no answer.json,
-// a turn that fails.
+// dir, a line per run in runs and per turn in turns ("spell" or "entry"),
+// then plays each turn. A spelling pass (its schema asks for a verdict)
+// answers spell.json, a word by default. An entry turn plays a reasoning
+// pass with a summary, the answer in fragments and the tokens — or, with
+// no answer.json, fails.
 func fakeCodexAppServer(dir string) {
 	note := func(name, text string) {
 		f, _ := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
@@ -79,11 +81,24 @@ func fakeCodexAppServer(dir string) {
 		case "initialize":
 			enc.Encode(map[string]any{"id": m.ID, "result": map[string]any{"userAgent": "fake"}})
 		case "thread/start":
-			note("thread", string(m.Params))
+			os.WriteFile(filepath.Join(dir, "thread"), m.Params, 0o600)
 			enc.Encode(map[string]any{"id": m.ID, "result": map[string]any{"thread": map[string]any{"id": "t1"}}})
 		case "turn/start":
-			note("turn", string(m.Params))
 			enc.Encode(map[string]any{"id": m.ID, "result": map[string]any{"turn": map[string]any{"id": "u1"}}})
+			if strings.Contains(string(m.Params), `"verdict"`) {
+				note("turns", "spell\n")
+				note("spellturn", string(m.Params))
+				v, err := os.ReadFile(filepath.Join(dir, "spell.json"))
+				if err != nil {
+					v = []byte(`{"verdict":"word","word":"","suggestions":[]}`)
+				}
+				say("item/started", map[string]any{"item": map[string]any{"type": "agentMessage", "id": "s1", "text": ""}})
+				say("item/completed", map[string]any{"item": map[string]any{"type": "agentMessage", "id": "s1", "text": string(v)}})
+				say("turn/completed", map[string]any{"turn": map[string]any{"status": "completed"}})
+				continue
+			}
+			note("turns", "entry\n")
+			os.WriteFile(filepath.Join(dir, "turn"), m.Params, 0o600)
 			answer, err := os.ReadFile(filepath.Join(dir, "answer.json"))
 			if err != nil {
 				say("error", map[string]any{"error": map[string]any{"message": "boom"}, "willRetry": false})
@@ -174,7 +189,7 @@ func TestDictWritesThenKeeps(t *testing.T) {
 			text.WriteString(d)
 		}
 	}
-	if got := strings.Join(kinds, " "); got != "session think summary thought answer usage" {
+	if got := strings.Join(kinds, " "); got != "session spell spelled think summary thought answer usage" {
 		t.Errorf("steps = %q", got)
 	}
 	if summary != "Checking the senses" {
@@ -218,6 +233,10 @@ func TestDictWritesThenKeeps(t *testing.T) {
 	if turn.Effort != "xhigh" || turn.Summary != "detailed" || turn.OutputSchema["type"] != "object" || len(turn.Input) != 1 {
 		t.Fatalf("turn/start = %s", b)
 	}
+	b, _ = os.ReadFile(filepath.Join(dir, "spellturn"))
+	if !strings.Contains(string(b), `"effort":"medium"`) || !strings.Contains(string(b), `They typed: \"serendipity\"`) {
+		t.Errorf("spelling turn = %s", b)
+	}
 	prompt := turn.Input[0].Text
 	for _, want := range []string{"English–Chinese", `"serendipity"`, "Simplified Chinese", `"英" and "美"`} {
 		if !strings.Contains(prompt, want) {
@@ -244,6 +263,101 @@ func TestDictWritesThenKeeps(t *testing.T) {
 	// another pair of languages is another entry
 	if r, _ := http.Get(ts.URL + "/v1/dict?from=en&to=ja&q=serendipity"); r.StatusCode != http.StatusNotFound {
 		t.Fatalf("en→ja = %d, want 404", r.StatusCode)
+	}
+}
+
+// dictTurns counts the turns the stand-in played, by kind.
+func dictTurns(dir, kind string) int {
+	b, _ := os.ReadFile(filepath.Join(dir, "turns"))
+	return strings.Count(string(b), kind+"\n")
+}
+
+// An obvious typo gets no page of its own: the spelling pass reads it as
+// the word it stands for, which is what is written and kept; the typo is
+// remembered, so looking it up again reads that word's entry at once.
+func TestDictFixesTypo(t *testing.T) {
+	dir := t.TempDir()
+	fakeDictCodex(t, dir, dictAnswer)
+	os.WriteFile(filepath.Join(dir, "spell.json"), []byte(`{"verdict":"typo","word":"serendipity","suggestions":[]}`), 0o600)
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	lines := dictLines(t, dictPost(t, ts.URL, `{"from":"en","to":"zh","q":"serendipty"}`))
+	var spelled map[string]any
+	for _, l := range lines {
+		if st, ok := l["step"].(map[string]any); ok && st["kind"] == "spelled" {
+			spelled = st
+		}
+	}
+	if spelled["verdict"] != "typo" || spelled["word"] != "serendipity" {
+		t.Fatalf("spelled = %v", spelled)
+	}
+	got, _ := lines[len(lines)-1]["entry"].(map[string]any)
+	if got == nil || got["q"] != "serendipity" || got["corrected"] != "serendipty" {
+		t.Fatalf("last line = %v", lines[len(lines)-1])
+	}
+	turn, _ := os.ReadFile(filepath.Join(dir, "turn"))
+	if !strings.Contains(string(turn), `\"serendipity\"`) || strings.Contains(string(turn), "serendipty") {
+		t.Fatalf("the entry was asked for the typo: %s", turn)
+	}
+
+	// the typo has no page; it reads the word's
+	r, _ := http.Get(ts.URL + "/v1/dict?from=en&to=zh&q=serendipty&exact=1")
+	if r.StatusCode != http.StatusNotFound {
+		t.Fatalf("the typo was kept as a page: %d", r.StatusCode)
+	}
+	r, _ = http.Get(ts.URL + "/v1/dict?from=en&to=zh&q=serendipty")
+	var k map[string]any
+	json.NewDecoder(r.Body).Decode(&k)
+	r.Body.Close()
+	if k["q"] != "serendipity" || k["corrected"] != "serendipty" {
+		t.Fatalf("GET of the typo = %v", k)
+	}
+	// again: no session at all, and in another language pair the known
+	// typo goes straight to its word, with no second spelling pass
+	lines = dictLines(t, dictPost(t, ts.URL, `{"from":"en","to":"zh","q":"serendipty"}`))
+	if len(lines) != 1 || lines[0]["entry"].(map[string]any)["corrected"] != "serendipty" {
+		t.Fatalf("second lookup = %v", lines)
+	}
+	lines = dictLines(t, dictPost(t, ts.URL, `{"from":"en","to":"ja","q":"serendipty"}`))
+	if last := lines[len(lines)-1]["entry"].(map[string]any); last["q"] != "serendipity" || last["corrected"] != "serendipty" {
+		t.Fatalf("en→ja = %v", lines[len(lines)-1])
+	}
+	if n, m := dictTurns(dir, "spell"), dictTurns(dir, "entry"); n != 1 || m != 2 {
+		t.Fatalf("spelling passes %d, entries written %d; want 1 and 2", n, m)
+	}
+}
+
+// A typo of a word the dictionary keeps costs the spelling pass alone; a
+// lookup that is no word stops after it, with its suggestions; and Exact
+// looks the text up as typed, with no pass.
+func TestDictSpellingShortcuts(t *testing.T) {
+	dir := t.TempDir()
+	fakeDictCodex(t, dir, dictAnswer)
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	dictLines(t, dictPost(t, ts.URL, `{"from":"en","to":"zh","q":"serendipity"}`))
+
+	os.WriteFile(filepath.Join(dir, "spell.json"), []byte(`{"verdict":"typo","word":"Serendipity","suggestions":[]}`), 0o600)
+	lines := dictLines(t, dictPost(t, ts.URL, `{"from":"en","to":"zh","q":"serendipitty"}`))
+	if last := lines[len(lines)-1]["entry"].(map[string]any); last["q"] != "serendipity" || last["corrected"] != "serendipitty" {
+		t.Fatalf("typo of a kept word = %v", lines[len(lines)-1])
+	}
+
+	os.WriteFile(filepath.Join(dir, "spell.json"), []byte(`{"verdict":"unknown","word":"","suggestions":["quartz"]}`), 0o600)
+	lines = dictLines(t, dictPost(t, ts.URL, `{"from":"en","to":"zh","q":"xqzt"}`))
+	if last := lines[len(lines)-1]; last["notfound"] != true || last["suggestions"].([]any)[0] != "quartz" {
+		t.Fatalf("no word = %v", last)
+	}
+
+	lines = dictLines(t, dictPost(t, ts.URL, `{"from":"en","to":"zh","q":"teh","exact":true}`))
+	if last := lines[len(lines)-1]["entry"].(map[string]any); last["q"] != "teh" || last["corrected"] != nil {
+		t.Fatalf("exact = %v", lines[len(lines)-1])
+	}
+	if n, m := dictTurns(dir, "spell"), dictTurns(dir, "entry"); n != 3 || m != 2 {
+		t.Fatalf("spelling passes %d, entries written %d; want 3 and 2", n, m)
 	}
 }
 
