@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dict</title>
+<link rel="stylesheet" href="/platinum/popup.css">
+<style>
+/* Platinum values match the exe desktop (same block as Blue Pencil and Notes) */
+:root {
+  --black: #262626;
+  --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999;
+  --hl: #333399; --red: #cc3333; --green: #1f9e33;
+  --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { height: 100%; }
+body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: var(--g200);
+  user-select: none; cursor: default; overflow: hidden; display: flex; flex-direction: column; }
+
+button { font: inherit; cursor: default; }
+button.ghost { background: var(--g300); color: var(--black);
+  border: 1px solid var(--black); border-radius: 3px;
+  padding: 2px 13px; font-size: 12px; line-height: 14px; font-weight: bold; height: 20px;
+  box-shadow: inset 1px 1px 0 var(--g300), inset -1px -1px 0 #777,
+    inset 2px 2px 0 #fff, inset -2px -2px 0 #aaa; }
+button.ghost:active { background: #666; color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
+    inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
+button.ghost:disabled { color: #777; border-color: #888; background: var(--g300); box-shadow: none; }
+/* the one button Return presses wears the ring */
+button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
+button:focus:not(.default) { outline: none; }
+
+/* the sunken text field (Weather's) */
+input[type=text] { background: #fff; color: var(--black);
+  border: 1px solid var(--black); border-radius: 0; padding: 2px 5px; font: inherit; font-size: 12px;
+  height: 20px; line-height: 14px; min-width: 0;
+  box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
+    1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff;
+  user-select: text; cursor: text; }
+input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
+/* The pop-up menu button is the shared block the daemon serves
+   (/platinum/popup.css, exe-stats popup.css): linked above, never copied. */
+
+/* the lookup row: the two languages, the word, Look Up. 12px from the
+   window's edges (the HIG's distance), 8px between the controls; the
+   arrow between the languages is a glyph, not a control. A narrow window
+   (a phone) puts the languages on a row of their own above the word. */
+#bar { flex: none; display: grid; align-items: center; column-gap: 8px; row-gap: 8px;
+  grid-template-columns: 104px 9px 104px minmax(80px, 1fr) auto;
+  grid-template-areas: "from arrow to q go"; padding: 12px 12px 0; }
+#from-pop { grid-area: from; } #to-pop { grid-area: to; }
+#arrow { grid-area: arrow; display: block; width: 9px; height: 7px; }
+#arrow svg { display: block; }
+#arrow .fine { display: none; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  #arrow .crisp { display: none; } #arrow .fine { display: block; }
+}
+#q { grid-area: q; width: 100%; }
+#go { grid-area: go; width: 72px; padding-left: 0; padding-right: 0; }
+@media (max-width: 459px) {
+  #bar { grid-template-columns: 1fr 9px 1fr auto;
+    grid-template-areas: "from arrow to to" "q q q go"; }
+}
+
+/* the entry: a white sunken page under the row, 12px all round, its bar
+   always on so nothing reflows when an entry grows past the window */
+#pane { flex: 1; min-height: 0; margin: 12px; background: #fff; border: 1px solid var(--black);
+  overflow-y: scroll; overflow-x: hidden;
+  box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
+    1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
+#entry { padding: 12px 14px 16px; user-select: text; cursor: text; overflow-wrap: break-word; }
+#entry .hw { font-size: 18px; line-height: 24px; font-weight: bold; }
+#entry .hw.muted { color: #888; }
+#entry .prons { margin-top: 2px; }
+#entry .prons span + span { margin-left: 14px; }
+#entry .pl { color: #777; margin-right: 5px; }
+#entry .note { margin-top: 4px; color: #555; }
+#entry .forms { margin-top: 4px; font-size: 11px; color: #555; }
+#entry h3 { font-size: 12px; margin: 16px 0 6px; padding-bottom: 2px; border-bottom: 1px solid var(--g400); }
+#entry ol { margin: 0; padding: 0 0 0 20px; }
+#entry ol li + li { margin-top: 6px; }
+#entry .pos { color: var(--hl); font-style: italic; margin-right: 6px; }
+#entry .gloss { font-weight: bold; }
+#entry .def { color: #444; }
+#entry .ex + .ex { margin-top: 8px; }
+#entry .ex .lvl { font-size: 10px; color: #888; }
+#entry .tr { color: #555; }
+#entry p { margin: 0; }
+#entry table.rel { border-collapse: collapse; }
+#entry table.rel td { padding: 1px 12px 1px 0; vertical-align: top; }
+#entry table.rel td.rl { color: #777; white-space: nowrap; }
+#entry .quote { margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--g400); }
+/* verse keeps its lines */
+#entry .quote .verse { white-space: pre-line; }
+#entry .quote .src { font-size: 11px; color: #777; }
+/* a word that looks itself up: the status bar link's look (no pointing
+   hand, no hover), pressed it goes black */
+#entry .link { color: var(--hl); text-decoration: underline; cursor: default; }
+#entry .link:active { color: #000; }
+/* what the page says when it holds no entry: centred, grey, in the page's
+   own type */
+#entry .empty { padding: 40px 12px; text-align: center; color: #888; user-select: none; cursor: default; }
+/* a session writing: the Chat list's pulsing green dot — green means live */
+#entry .writing { margin-top: 10px; color: #555; display: flex; align-items: center; gap: 7px; }
+#entry .live { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+  animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { #entry .live { animation: none; } }
+/* a lookup that went wrong: the alert's layout — the caution sign, a bold
+   label beside it, the plain narrative under it */
+#entry .caution { display: flex; gap: 20px; align-items: flex-start; padding: 28px 12px 0; cursor: default; }
+#entry .caution .sign { flex: none; display: block; width: 32px; height: 32px; }
+#entry .caution .sign svg { display: block; }
+#entry .caution .body { flex: 1; min-width: 0; }
+#entry .caution .msg { font-weight: bold; line-height: 1.35; }
+#entry .caution .detail { font-size: 11px; line-height: 1.45; margin-top: 7px; }
+#entry .caution .btns { margin-top: 12px; }
+
+/* overflow: clip — the 11px text's line box is taller than the 14px face and
+   hangs a pixel past the bar; clipped, that pixel is no scrollable overflow of
+   the page (docs/platinum.md, status bar) */
+#status { flex: none; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--black);
+  background: var(--g300); font-size: 11px; color: #333; padding: 0 20px 0 8px; height: 15px;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; overflow: clip; }
+#st { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#st.err { color: var(--red); }
+#grow { position: fixed; right: 0; bottom: 0; width: 15px; height: 15px;
+  touch-action: none; z-index: 6; }
+body.mobile #grow { display: none; }
+body.mobile #status { padding-right: 8px; }
+
+/* Mac OS 9 scrollbars — the desktop's pixel-sampled spec (same as Notes) */
+::-webkit-scrollbar { width: 15px; height: 15px; }
+::-webkit-scrollbar-track:vertical { border-left: 1px solid var(--black);
+  background: linear-gradient(to right, #777 0, #777 1px, #888 1px, #888 2px, #aaa 2px, #aaa 12px, #bbb 12px, #bbb 13px, #ccc 13px, #ccc 14px); }
+::-webkit-scrollbar-thumb:vertical { border: 1px solid var(--black); border-right: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="0" width="6" height="1" fill="%23ccccff"/><rect x="4" y="1" width="7" height="1" fill="%23333399"/><rect x="3" y="2" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="2" width="6" height="1" fill="%23ccccff"/><rect x="4" y="3" width="7" height="1" fill="%23333399"/><rect x="3" y="4" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="4" width="6" height="1" fill="%23ccccff"/><rect x="4" y="5" width="7" height="1" fill="%23333399"/><rect x="3" y="6" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="6" width="6" height="1" fill="%23ccccff"/><rect x="4" y="7" width="7" height="1" fill="%23333399"/></svg>') center no-repeat,
+    linear-gradient(to right, #ccccff 0 1px, #9999ff 1px 13px, #6666cc 13px 14px);
+  box-shadow: inset 0 1px 0 #ccccff, inset 0 -1px 0 #6666cc; }
+::-webkit-scrollbar-thumb:vertical:active {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23ccccff"/><rect x="4" y="0" width="6" height="1" fill="%239999ff"/><rect x="4" y="1" width="7" height="1" fill="%23000066"/><rect x="3" y="2" width="1" height="1" fill="%23ccccff"/><rect x="4" y="2" width="6" height="1" fill="%239999ff"/><rect x="4" y="3" width="7" height="1" fill="%23000066"/><rect x="3" y="4" width="1" height="1" fill="%23ccccff"/><rect x="4" y="4" width="6" height="1" fill="%239999ff"/><rect x="4" y="5" width="7" height="1" fill="%23000066"/><rect x="3" y="6" width="1" height="1" fill="%23ccccff"/><rect x="4" y="6" width="6" height="1" fill="%239999ff"/><rect x="4" y="7" width="7" height="1" fill="%23000066"/></svg>') center no-repeat,
+    linear-gradient(to right, #9999ff 0 1px, #6666cc 1px 13px, #333399 13px 14px);
+  box-shadow: inset 0 1px 0 #9999ff, inset 0 -1px 0 #333399; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical {
+  border-top-color: #ccccff; box-shadow: inset 0 -1px 0 #6666cc; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical:active {
+  border-top-color: #9999ff; box-shadow: inset 0 -1px 0 #333399; }
+.at-y-end::-webkit-scrollbar-thumb:vertical {
+  border-bottom-color: #6666cc; box-shadow: inset 0 1px 0 #ccccff; }
+.at-y-end::-webkit-scrollbar-thumb:vertical:active {
+  border-bottom-color: #333399; box-shadow: inset 0 1px 0 #9999ff; }
+/* Safari redraws a custom scroll bar only when its element's own style
+   changes, and the classes above change nothing of the element's own: the
+   thumb's end merges stayed stale there and doubled the line against the
+   arrows. Each class sets a property of its own, so WebKit sees a change. */
+.scrolled-y { --sb-scrolled-y: 1; } .at-y-end { --sb-at-y-end: 1; }
+.scrolled-x { --sb-scrolled-x: 1; } .at-x-end { --sb-at-x-end: 1; }
+::-webkit-scrollbar-button { display: block; width: 16px; height: 16px;
+  background: #ddd; border: 1px solid var(--black);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #bbb;
+  background-position: center; background-repeat: no-repeat; }
+::-webkit-scrollbar-button:vertical { border-right: 0; }
+::-webkit-scrollbar-button:vertical:end:increment:enabled { height: 14px; border-top: 0; border-bottom: 0; }
+::-webkit-scrollbar-button:vertical:decrement {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M0 3h8v1h-8z"/></svg>'); }
+::-webkit-scrollbar-button:vertical:increment {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M0 0h8v1h-8z M1 1h6v1h-6z M2 2h4v1h-4z M3 3h2v1h-2z"/></svg>'); }
+::-webkit-scrollbar-button:active { background-color: #777;
+  box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 #999; }
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:start:increment,
+::-webkit-scrollbar-button:horizontal:start:decrement,
+::-webkit-scrollbar-button:horizontal:start:increment { display: none; }
+::-webkit-scrollbar-track:disabled { background: #eee; }
+::-webkit-scrollbar-button:disabled { background-color: #eee; box-shadow: none; border: 0;
+  border-left: 1px solid var(--black); }
+::-webkit-scrollbar-button:vertical:end:increment:disabled { border-top: 1px solid #888; }
+::-webkit-scrollbar-button:vertical:end:decrement:disabled { border-top: 1px solid #555; }
+::-webkit-scrollbar-button:vertical:decrement:disabled {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="%23888888" d="M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M0 3h8v1h-8z"/></svg>'); }
+::-webkit-scrollbar-button:vertical:increment:disabled {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="%23888888" d="M0 0h8v1h-8z M1 1h6v1h-6z M2 2h4v1h-4z M3 3h2v1h-2z"/></svg>'); }
+::-webkit-scrollbar-corner { background: var(--g300); }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <span class="popup" id="from-pop"><select id="from" aria-label="From"></select><span class="well"><i><b></b></i></span></span>
+  <span id="arrow" aria-hidden="true"><svg class="crisp" width="9" height="7" viewBox="0 0 9 7" shape-rendering="crispEdges"><path fill="#262626" d="M0 3h6v1H0zM5 0h1v7H5zM6 1h1v5H6zM7 2h1v3H7zM8 3h1v1H8z"/></svg><svg class="fine" width="9" height="7" viewBox="0 0 9 7" shape-rendering="geometricPrecision"><path fill="#262626" d="M0 3h5.5v1H0zM5 0l4 3.5L5 7z"/></svg></span>
+  <span class="popup" id="to-pop"><select id="to" aria-label="To"></select><span class="well"><i><b></b></i></span></span>
+  <!-- data-autosave: what is typed here is kept per browser as it is
+       typed, so the desktop does not hold its update reload for it -->
+  <input type="text" id="q" placeholder="Word or phrase" spellcheck="false" autocomplete="off"
+    autocapitalize="off" autocorrect="off" maxlength="80" data-autosave>
+  <button class="ghost default" id="go">Look Up</button>
+</div>
+
+<div id="pane"><div id="entry"></div></div>
+
+<div id="status"><span id="st">Ready</span></div>
+
+<!-- grow box sampled pixel-for-pixel from Mac OS 9 (Infinite Mac) -->
+<svg id="grow" width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges">
+  <rect width="15" height="15" fill="#ccc"/>
+  <path fill="#000" d="M0 0h15v1H0zM0 1h1v14H0z"/>
+  <path fill="#fff" d="M1 1h14v1H1zM1 2h1v13H1z"/>
+  <path fill="#fff" d="M9 4h2v1H9zM8 5h1v1H8zM7 6h1v1H7zM6 7h1v1H6zM5 8h1v1H5zM4 9h1v1H4zM11 6h2v1h-2zM10 7h1v1h-1zM9 8h1v1H9zM8 9h1v1H8zM7 10h1v1H7zM6 11h1v1H6zM13 8h2v1h-2zM12 9h1v1h-1zM11 10h1v1h-1zM10 11h1v1h-1zM9 12h1v1H9zM8 13h1v1H8z"/>
+  <path fill="#777" d="M10 5h1v1h-1zM9 6h1v1H9zM8 7h1v1H8zM7 8h1v1H7zM6 9h1v1H6zM5 10h1v1H5zM12 7h1v1h-1zM11 8h1v1h-1zM10 9h1v1h-1zM9 10h1v1H9zM8 11h1v1H8zM7 12h1v1H7zM14 9h1v1h-1zM13 10h1v1h-1zM12 11h1v1h-1zM11 12h1v1h-1zM10 13h1v1h-1zM9 14h1v1H9z"/>
+  <path fill="#aaa" d="M4 10h1v1H4zM6 12h1v1H6zM8 14h1v1H8z"/>
+</svg>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const TOKEN = new URLSearchParams(location.search).get("token") || "";
+const APP = decodeURIComponent(location.pathname.split("/")[2] || "dict");
+const KEY = "exe-dict:" + APP; // the languages and the word: this browser's own
+// A phone shows no grow tile. The desktop passes its own verdict as
+// ?mobile=1 (it also honours ?mobile=0); opened bare, the app runs the
+// desktop's test itself: phone UA, or a small coarse-pointer screen.
+const IS_MOBILE = new URLSearchParams(location.search).has("mobile")
+  ? new URLSearchParams(location.search).get("mobile") !== "0"
+  : /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(navigator.userAgent)
+    || (matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 700);
+if (IS_MOBILE) document.body.classList.add("mobile");
+
+// The languages the daemon looks up from and writes entries in (dict.go
+// holds the same two lists).
+const FROM = [["en", "English"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"], ["la", "Latin"]];
+const TO = [["zh", "Chinese"], ["ja", "Japanese"], ["ko", "Korean"]];
+const nameOf = (list, code) => (list.find(([c]) => c === code) || [, code])[1];
+// what to call each lookup's languages in the entry's lang attribute, so
+// the browser picks the right CJK glyphs (a Japanese entry is not drawn in
+// Chinese forms)
+const LANG_TAG = { zh: "zh-Hans", ja: "ja", ko: "ko" };
+
+const CAUTION = '<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges"><path d="M16 2 L30.5 29.5 L1.5 29.5 Z" fill="#FFDD30" stroke="#000"/><path d="M16 6 L27 27 L5 27 Z" fill="#FFF3A0"/><rect x="14" y="11" width="4" height="10" fill="#000"/><rect x="14" y="23" width="4" height="3" fill="#000"/></svg>';
+
+async function api(url, opts = {}) {
+  opts.cache = "no-store";
+  opts.headers = Object.assign({}, opts.headers);
+  if (TOKEN) opts.headers["Authorization"] = "Bearer " + TOKEN;
+  return fetch(url, opts);
+}
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  n.append(...kids.filter(k => k !== null && k !== undefined && k !== false));
+  return n;
+}
+
+const from = $("#from"), to = $("#to"), field = $("#q"), entryEl = $("#entry"), pane = $("#pane"), st = $("#st");
+for (const [c, n] of FROM) from.append(el("option", { value: c }, n));
+for (const [c, n] of TO) to.append(el("option", { value: c }, n));
+
+// ---- this browser's own: the pair, the word, and whether it was being written ----
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) {}
+from.value = FROM.some(([c]) => c === saved.from) ? saved.from : "en";
+to.value = TO.some(([c]) => c === saved.to) ? saved.to : "zh";
+field.value = typeof saved.q === "string" ? saved.q : "";
+function remember(extra = {}) {
+  saved = Object.assign(saved, { from: from.value, to: to.value, q: field.value }, extra);
+  try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+}
+
+const tidy = s => s.normalize("NFC").replace(/\s+/g, " ").trim();
+const pair = () => nameOf(FROM, from.value) + " → " + nameOf(TO, to.value);
+function status(text, err = false) {
+  st.textContent = text;
+  st.classList.toggle("err", err);
+}
+const clock = s => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+const day = ms => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+// ---- what the page shows ----
+function show(...kids) {
+  entryEl.replaceChildren(...kids);
+  pane.scrollTop = 0;
+}
+function showEmpty(text) { show(el("div", { class: "empty" }, text)); }
+function caution(msg, detail, button) {
+  const sign = el("span", { class: "sign" });
+  sign.innerHTML = CAUTION;
+  return el("div", { class: "caution" }, sign,
+    el("div", { class: "body" }, el("div", { class: "msg" }, msg),
+      detail ? el("div", { class: "detail" }, detail) : null,
+      button ? el("div", { class: "btns" }, button) : null));
+}
+// a word of the source language that looks itself up when pressed
+function link(word) {
+  const a = el("span", { class: "link", lang: from.value }, word);
+  a.addEventListener("click", () => {
+    if (getSelection().toString()) return; // a drag to select is not a press
+    field.value = word;
+    lookup();
+  });
+  return a;
+}
+
+function renderEntry(k) {
+  const e = k.entry || {};
+  const src = k.from, dst = k.to;
+  const S = { lang: src }, T = { lang: LANG_TAG[dst] || dst };
+  const kids = [el("div", Object.assign({ class: "hw" }, S), e.headword || k.q)];
+  const prons = (e.pronunciations || []).filter(p => p.ipa);
+  if (prons.length) kids.push(el("div", { class: "prons" }, ...prons.map(p =>
+    el("span", {}, p.label ? el("span", Object.assign({ class: "pl" }, T), p.label) : null, p.ipa))));
+  if (e.note) kids.push(el("div", Object.assign({ class: "note" }, T), e.note));
+  if (e.forms) kids.push(el("div", Object.assign({ class: "forms" }, S), e.forms));
+
+  kids.push(el("h3", {}, "Definition"));
+  kids.push(el("ol", {}, ...(e.senses || []).map(s => el("li", T,
+    s.pos ? el("span", { class: "pos" }, s.pos) : null,
+    el("span", { class: "gloss" }, s.gloss || ""),
+    s.definition ? el("div", { class: "def" }, s.definition) : null))));
+
+  const ex = e.examples || [];
+  if (ex.length) {
+    kids.push(el("h3", {}, "Examples"));
+    ex.forEach((x, i) => kids.push(el("div", { class: "ex" },
+      ex.length === 2 ? el("div", { class: "lvl" }, i ? "Complex" : "Simple") : null,
+      el("div", S, x.text), el("div", Object.assign({ class: "tr" }, T), x.translation))));
+  }
+  if (e.etymology) kids.push(el("h3", {}, "Etymology"), el("p", T, e.etymology));
+  const rel = e.related || [];
+  if (rel.length) {
+    kids.push(el("h3", {}, "Related Words"));
+    kids.push(el("table", { class: "rel" }, ...rel.map(r => el("tr", {},
+      el("td", {}, link(r.word)),
+      el("td", Object.assign({ class: "rl" }, T), r.relation || ""),
+      el("td", T, r.gloss || "")))));
+  }
+  const lit = e.literary || {};
+  if (lit.note || (lit.quotes || []).length) {
+    kids.push(el("h3", {}, "In Literature"));
+    if (lit.note) kids.push(el("p", T, lit.note));
+    for (const q of lit.quotes || []) kids.push(el("div", { class: "quote" },
+      el("div", Object.assign({ class: "verse" }, S), "“" + q.text + "”"),
+      q.translation ? el("div", Object.assign({ class: "tr verse" }, T), q.translation) : null,
+      q.source ? el("div", { class: "src" }, "— " + q.source) : null));
+  }
+  show(...kids);
+}
+
+// ---- looking up ----
+let ctrl = null, ticker = 0;
+function stopTicker() { clearInterval(ticker); ticker = 0; }
+
+// lookup asks the daemon for the word: an entry the dictionary keeps comes
+// back at once; one it lacks is written by a Codex session, which takes a
+// minute or two and goes on if the window closes — the next lookup finds
+// it kept, and one made while it is still writing joins it.
+async function lookup() {
+  const q = tidy(field.value);
+  if (!q) { field.focus(); return; }
+  field.value = q;
+  if (ctrl) ctrl.abort();
+  stopTicker();
+  const my = ctrl = new AbortController();
+  remember({ pending: true });
+  status("Looking up “" + q + "”…");
+  let r;
+  try {
+    r = await api("/v1/dict", { method: "POST", signal: my.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from: from.value, to: to.value, q }) });
+  } catch (e) {
+    if (my.signal.aborted) return;
+    return failed(q, "The daemon did not answer.", e.message);
+  }
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    if (my !== ctrl) return;
+    remember({ pending: false });
+    if (r.status === 503) {
+      status("No Usable LLM Backend", true);
+      return show(caution("No Usable LLM Backend",
+        "Dict writes the entries it does not have yet with Codex, and this host has no Codex CLI. Words already in the dictionary still open."));
+    }
+    return failed(q, e.error || "HTTP " + r.status);
+  }
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = "", base = 0, at = 0;
+  const tick = () => {
+    const s = base + Math.floor((Date.now() - at) / 1000);
+    status("Writing “" + q + "” with Codex… " + clock(s));
+    const w = entryEl.querySelector(".writing .t");
+    if (w) w.textContent = "Codex is writing this entry… " + clock(s);
+  };
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 1);
+        if (!line.trim()) continue;
+        const m = JSON.parse(line);
+        if (my !== ctrl) return;
+        if (m.writing) {
+          show(el("div", { class: "hw muted", lang: from.value }, q),
+            el("div", { class: "writing" }, el("span", { class: "live" }), el("span", { class: "t" }, "")));
+          base = m.wait || 0; at = Date.now();
+          tick();
+          ticker = setInterval(tick, 1000);
+        } else if (m.wait !== undefined) {
+          base = m.wait; at = Date.now();
+        } else if (m.entry) {
+          stopTicker();
+          remember({ pending: false });
+          renderEntry(m.entry);
+          status(m.entry.written
+            ? "Written by " + m.entry.model + " (" + m.entry.effort + ") in " + clock(base + Math.floor((Date.now() - at) / 1000)) + " and kept"
+            : pair() + " · in the dictionary since " + day(m.entry.created));
+          return;
+        } else if (m.notfound) {
+          stopTicker();
+          remember({ pending: false });
+          const sugg = m.suggestions || [];
+          show(caution("“" + q + "” is not " + article(nameOf(FROM, from.value)) + " word Dict knows.",
+            sugg.length ? el("span", {}, "Did you mean ", ...sugg.flatMap((s, j) =>
+              [j ? (j === sugg.length - 1 ? " or " : ", ") : "", link(s)]), "?") : "Check the spelling, or the language it is looked up from."));
+          status("Not " + article(nameOf(FROM, from.value)) + " word: nothing was kept");
+          return;
+        } else if (m.error) {
+          return failed(q, m.error);
+        }
+      }
+    }
+  } catch (e) {
+    if (my.signal.aborted) return;
+    return failed(q, "The answer broke off.", e.message);
+  }
+  if (my === ctrl) failed(q, "The answer broke off.");
+}
+const article = name => (/^[AEIOU]/.test(name) ? "an " : "a ") + name;
+function failed(q, msg, detail) {
+  stopTicker();
+  remember({ pending: false });
+  const again = el("button", { class: "ghost" }, "Try Again");
+  again.addEventListener("click", () => { field.value = q; lookup(); });
+  show(caution("“" + q + "” could not be looked up.", detail ? msg + " " + detail : msg, again));
+  status(msg, true);
+}
+
+// peek answers from the dictionary alone and never starts a session: a
+// window reopening on its word, or the languages changed under it
+async function peek() {
+  const q = tidy(field.value);
+  if (ctrl) ctrl.abort();
+  ctrl = null;
+  stopTicker();
+  if (!q) {
+    showEmpty("Type a word or phrase and press Return.");
+    return status(pair());
+  }
+  const my = ctrl = new AbortController();
+  try {
+    const r = await api("/v1/dict?" + new URLSearchParams({ from: from.value, to: to.value, q }), { signal: my.signal });
+    if (my !== ctrl) return;
+    if (r.ok) {
+      const k = await r.json();
+      if (my !== ctrl) return;
+      renderEntry(k);
+      return status(pair() + " · in the dictionary since " + day(k.created));
+    }
+  } catch (e) {
+    if (my.signal.aborted) return;
+  }
+  showEmpty("“" + q + "” is not in the " + pair() + " dictionary yet. Look Up writes it.");
+  status(pair());
+}
+
+field.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
+    e.preventDefault();
+    lookup();
+  }
+});
+field.addEventListener("input", () => remember());
+$("#go").addEventListener("click", lookup);
+for (const s of [from, to]) s.addEventListener("change", () => {
+  remember({ pending: false });
+  peek();
+  field.focus();
+});
+
+// a window reopened while its word was being written goes back to the
+// session (the daemon joins it, or finds what it kept); otherwise it shows
+// what the dictionary holds and asks for nothing
+if (saved.pending && tidy(field.value)) lookup();
+else peek();
+if (!IS_MOBILE) field.focus();
+
+// ---- desktop window plumbing (same bridge as Notes and Hub) ----
+window.addEventListener("pointerdown", () => {
+  if (window.parent !== window) parent.postMessage({ exe: "focus" }, location.origin);
+}, { capture: true, passive: true });
+const grow = $("#grow");
+if (window.parent === window) grow.style.display = "none";
+grow.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  grow.setPointerCapture(e.pointerId);
+  const sx = e.clientX, sy = e.clientY;
+  const move = ev =>
+    parent.postMessage({ exe: "grow", dx: ev.clientX - sx, dy: ev.clientY - sy }, location.origin);
+  const up = () => {
+    grow.removeEventListener("pointermove", move);
+    grow.removeEventListener("pointerup", up);
+    parent.postMessage({ exe: "grow-end" }, location.origin);
+  };
+  grow.addEventListener("pointermove", move);
+  grow.addEventListener("pointerup", up);
+  parent.postMessage({ exe: "grow-start" }, location.origin);
+});
+document.addEventListener("scroll", e => {
+  const t = e.target;
+  if (!(t instanceof Element)) return;
+  t.classList.toggle("scrolled-y", t.scrollTop >= 1);
+  t.classList.toggle("at-y-end", t.scrollTop >= 1 && t.scrollTop >= t.scrollHeight - t.clientHeight - 1);
+}, { capture: true, passive: true });
+</script>
+</body>
+</html>

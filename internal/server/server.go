@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"crypto/ecdsa"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -179,6 +180,12 @@ type Server struct {
 	completeMu      sync.Mutex
 	completeFlights map[string]*completeFlight
 
+	// The Dict app's dictionary: its database, opened on first use, and
+	// the entries Codex is writing, by key (see dict.go).
+	dictMu      sync.Mutex
+	dictDB      *sql.DB
+	dictFlights map[string]*dictFlight
+
 	// One-writer guard for this node's Newsfeed journal (see newsfeed.go).
 	newsMu  sync.Mutex
 	newsSeq int64
@@ -294,6 +301,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/chat/sessions/{id}/confirm", s.handleChatConfirm)
 	mux.HandleFunc("POST /v1/chat/send", s.handleChatSend)
 	mux.HandleFunc("POST /v1/chat/complete", s.handleChatComplete)
+	mux.HandleFunc("GET /v1/dict", s.handleDictGet)
+	mux.HandleFunc("POST /v1/dict", s.handleDictLookup)
 	mux.HandleFunc("GET /v1/vms/{name}/publish/scan", s.handlePublishScan)
 	mux.HandleFunc("POST /v1/vms/{name}/publish", s.handlePublish)
 	mux.HandleFunc("POST /v1/github/oauth/start", s.handleGitHubStart)

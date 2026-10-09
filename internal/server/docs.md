@@ -1370,6 +1370,49 @@ call ends when the last asker hangs up, and a finished answer is kept ten
 minutes for whoever asks next — those read `"shared": true` on the done
 line. Leave it off when every call should sample afresh.
 
+## Dict
+
+The **Dict** app is a dictionary from English, German, French, Spanish,
+Italian or Latin into Chinese, Japanese or Korean. Pick the two languages
+in the pop-ups at the top (English → Chinese to begin with), type a word
+or a phrase and press Return. An entry gives the word's pronunciation in
+IPA (British and American for English, Classical and Ecclesiastical for
+Latin), the forms a learner needs (a German noun's article and plural, a
+Latin verb's principal parts), its senses, each with short equivalents and
+a definition, two example sentences with their translations — one simple,
+one more complex — its etymology, related words, and how it lives in
+literature, with a quotation or two when the model knows one word for word.
+Look up an inflected form (*ran*, *ging*, *amāvī*) and you get the
+headword's entry, with a line saying which form you typed. A related word,
+or a suggestion offered for a misspelling, looks itself up when clicked.
+
+<img src="https://hub.v2core.com/v1/embed/bafybeifdljqu32ihlwtwvo6qkeq3v5yinsgv2pfknzf6nda3v4ehbebxpa" alt="Dict open on serendipity, English into Chinese: the pronunciations, the sense with its definition, a simple and a complex example, the etymology and related words" width="562" height="647">
+
+Entries are kept in the node's own dictionary, `~/.exe/dict.db` (SQLite),
+so a word looked up before opens at once. A word the dictionary does not
+have yet is written by Codex: an ephemeral session of the Codex CLI on
+this host (`codex exec --ephemeral`, so no conversation is saved and none
+joins Codex's resume list) on `gpt-6-astra` at extra-high reasoning, run
+read-only in an empty folder with its shell tools off. That takes a minute
+or two; the window shows how long it has been writing. The session belongs
+to the daemon, not the window: close the window and the entry is still
+written and kept, and a window that asks for the word meanwhile — this
+one reopened, or another desk — joins it rather than starting another. A
+lookup that is not a word of the source language comes back with
+suggestions and is not kept. Changing the languages shows the word's entry
+for the new pair if the dictionary has one and otherwise waits for **Look
+Up**, so a stray change of pop-up never starts a session. A host without
+the Codex CLI still opens every entry it keeps, and answers the rest with
+**No Usable LLM Backend**; Codex must be signed in (`codex login`) for the
+rest to be written. The window remembers its languages and its word in
+this browser.
+
+`GET /v1/dict?from=en&to=zh&q=word` answers a kept entry, 404 when there
+is none. `POST /v1/dict` with `{"from", "to", "q"}` answers a kept entry at
+once as one `{"entry": …}` line of newline-delimited JSON, or writes it:
+`{"writing": true, …}`, a `{"wait": seconds}` line every five seconds, then
+`{"entry": …}`, `{"notfound": true, "suggestions": […]}` or `{"error": …}`.
+
 ## Configuration
 
 **Windows → Configuration** edits `~/.exe/config.json` in place; most fields

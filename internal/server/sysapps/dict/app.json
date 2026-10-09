@@ -1,0 +1,5 @@
+{
+  "title": "Dict",
+  "icon": "icon.svg",
+  "window": { "width": 560, "height": 620, "grow": true }
+}
