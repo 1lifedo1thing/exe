@@ -243,7 +243,12 @@ restyling: `internal/server/ui/index.html` (the desktop),
   in `--hl`. The note's writing has the toolbar's 10px of room at the top
   and sides; the foot carries, left to right, the dog-ear, the note's date
   in 11px `#777` (the longest form that keeps 16px from the page number,
-  else none), the page number and the squares.
+  else none), the page number and the squares. With a note open the
+  toolbar carries − + for the text's size (never 13px) and a Sans Serif |
+  Serif segment (joined push buttons, the chosen one pressed; the serif
+  Charter, then Georgia), and gives way a step at a time where the words
+  will not fit: "Aa" samples for the faces, Corkboard as its pushpin, then
+  tighter sides and gaps.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`
