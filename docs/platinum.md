@@ -83,8 +83,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   0 #ddd, inset -1px -1px 0 #777, inset 2px 2px 0 #fff, inset -2px -2px 0
   #aaa`. Pressed: `#666` face, white text, bevel `#444 / #888 / #555 /
   #777`. Disabled: `#777` text, `#888` border, no bevel. Notes adds `.danger`
-  (`#7a1010` text), `.armed` (red, the two-click delete), `.sm`; Tides adds
-  `.on` (a depressed segment, `#888`).
+  (`#7a1010` text) and `.armed` (red, the two-click delete); Todo, Weather
+  and World Clock the `.sm` × of a list row; Tides adds `.on` (a depressed
+  segment, `#888`).
 - Default button: only the one Return triggers wears the ring, `outline: 2px
   solid #262626; outline-offset: 1px; border-radius: 4px` (the HIG's 2px
   black ring 3px out around a bevelled gap).
@@ -216,6 +217,15 @@ restyling: `internal/server/ui/index.html` (the desktop),
   topmost line in view (with the two after it, as a log repeats itself)
   and how far down it sat, and finds it again as the backlog streams in.
   Only a wholesale change of content — a new filter — goes to the tail.
+- A pad of pages (Notes, `/www/exe-apps/Notes`): Mac OS's Note Pad,
+  sampled from the guest's Apple Extras. A white sheet flush with the
+  frame, its bar running down to the grow box; under the sheet's bottom
+  line two page edges, `#eee` then `#444` twice, then `#eee`; the page
+  number centred on the window's width with its baseline on the grow box's
+  top line; at the bottom left a 23px dog-ear under a black top line and a
+  black right line that stops one row short, the flap's real pixels above
+  the fold and the next page's `#eee` below it, a vector copy at
+  fractional scales. The flap turns forward, below the fold turns back.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`
