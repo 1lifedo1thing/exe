@@ -43,13 +43,13 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
 /* The pop-up menu button is the shared block the daemon serves
    (/platinum/popup.css, exe-stats popup.css): linked above, never copied. */
 
-/* the lookup row: the two languages, the word, Look Up. 12px from the
-   window's edges (the HIG's distance), 8px between the controls; the
-   arrow between the languages is a glyph, not a control. A narrow window
-   (a phone) puts the languages on a row of their own above the word. */
+/* the toolbar, like Notes' and Todo's: the two languages, the word, Look
+   Up, 8px apart with 10px of room round them; the arrow between the
+   languages is a glyph, not a control. A narrow window (a phone) puts the
+   languages on a row of their own above the word. */
 #bar { flex: none; display: grid; align-items: center; column-gap: 8px; row-gap: 8px;
   grid-template-columns: 104px 9px 104px minmax(80px, 1fr) auto;
-  grid-template-areas: "from arrow to q go"; padding: 12px 12px 0; }
+  grid-template-areas: "from arrow to q go"; padding: 10px 10px 8px; }
 #from-pop { grid-area: from; } #to-pop { grid-area: to; }
 #arrow { grid-area: arrow; display: block; width: 9px; height: 7px; }
 #arrow svg { display: block; }
@@ -64,12 +64,13 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
     grid-template-areas: "from arrow to to" "q q q go"; }
 }
 
-/* the entry: a white sunken page under the row, 12px all round, its bar
-   always on so nothing reflows when an entry grows past the window */
-#pane { flex: 1; min-height: 0; margin: 12px; background: #fff; border: 1px solid var(--black);
-  overflow-y: scroll; overflow-x: hidden;
-  box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
-    1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
+/* the entry: a white page under the toolbar's line, flush with the window
+   frame at the sides and with the status bar below (its top line is the
+   one seam there); the scroll bar's right edge is the frame's line, and
+   the bar is always on so nothing reflows when an entry outgrows the
+   window */
+#pane { flex: 1; min-height: 0; background: #fff; border-top: 1px solid var(--black);
+  overflow-y: scroll; overflow-x: hidden; }
 #entry { padding: 12px 14px 16px; user-select: text; cursor: text; overflow-wrap: break-word; }
 #entry .hw { font-size: 18px; line-height: 24px; font-weight: bold; }
 #entry .hw.muted { color: #888; }
@@ -85,7 +86,6 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
 #entry .gloss { font-weight: bold; }
 #entry .def { color: #444; }
 #entry .ex + .ex { margin-top: 8px; }
-#entry .ex .lvl { font-size: 10px; color: #888; }
 #entry .tr { color: #555; }
 #entry p { margin: 0; }
 #entry table.rel { border-collapse: collapse; }
@@ -102,12 +102,24 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
 /* what the page says when it holds no entry: centred, grey, in the page's
    own type */
 #entry .empty { padding: 40px 12px; text-align: center; color: #888; user-select: none; cursor: default; }
-/* a session writing: the Chat list's pulsing green dot — green means live */
-#entry .writing { margin-top: 10px; color: #555; display: flex; align-items: center; gap: 7px; }
-#entry .live { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+/* a session writing, watched: the word in grey, the model under it, then
+   the session's steps as they come — the time each began in a column of
+   its own, what it is, how long a reasoning pass took in grey at its end.
+   The step under way wears the Chat list's pulsing green dot (green means
+   live); a pass still without its summary reads grey. */
+#entry .wmeta { margin-top: 2px; font-size: 11px; color: #777; }
+#entry ol.log { list-style: none; margin: 12px 0 0; padding: 0; }
+#entry ol.log li { display: grid; grid-template-columns: 34px 12px 1fr; align-items: baseline; }
+#entry ol.log li + li { margin-top: 3px; }
+#entry ol.log .t { color: #888; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
+#entry ol.log .m { align-self: center; justify-self: center; width: 6px; height: 6px; }
+#entry ol.log .x.dim { color: #888; }
+#entry ol.log .d { color: #888; font-size: 11px; margin-left: 6px; white-space: nowrap; }
+#entry ol.log li.now .m { border-radius: 50%; background: var(--green); }
+#entry .live, #entry ol.log li.now .m {
   animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.25; } }
-@media (prefers-reduced-motion: reduce) { #entry .live { animation: none; } }
+@media (prefers-reduced-motion: reduce) { #entry ol.log li.now .m { animation: none; } }
 /* a lookup that went wrong: the alert's layout — the caution sign, a bold
    label beside it, the plain narrative under it */
 #entry .caution { display: flex; gap: 20px; align-items: flex-start; padding: 28px 12px 0; cursor: default; }
@@ -301,7 +313,11 @@ function link(word) {
   return a;
 }
 
-function renderEntry(k) {
+// renderEntry draws an entry. live is one still being written, its JSON
+// read as far as it goes (partialJSON): what has come so far is drawn, the
+// page keeps its scroll place, and follows the writing down while the
+// reader is at its foot.
+function renderEntry(k, live = false) {
   const e = k.entry || {};
   const src = k.from, dst = k.to;
   const S = { lang: src }, T = { lang: LANG_TAG[dst] || dst };
@@ -312,8 +328,8 @@ function renderEntry(k) {
   if (e.note) kids.push(el("div", Object.assign({ class: "note" }, T), e.note));
   if (e.forms) kids.push(el("div", Object.assign({ class: "forms" }, S), e.forms));
 
-  kids.push(el("h3", {}, "Definition"));
-  kids.push(el("ol", {}, ...(e.senses || []).map(s => el("li", T,
+  if (e.senses) kids.push(el("h3", {}, "Definition"));
+  if (e.senses) kids.push(el("ol", {}, ...e.senses.map(s => el("li", T,
     s.pos ? el("span", { class: "pos" }, s.pos) : null,
     el("span", { class: "gloss" }, s.gloss || ""),
     s.definition ? el("div", { class: "def" }, s.definition) : null))));
@@ -321,16 +337,15 @@ function renderEntry(k) {
   const ex = e.examples || [];
   if (ex.length) {
     kids.push(el("h3", {}, "Examples"));
-    ex.forEach((x, i) => kids.push(el("div", { class: "ex" },
-      ex.length === 2 ? el("div", { class: "lvl" }, i ? "Complex" : "Simple") : null,
-      el("div", S, x.text), el("div", Object.assign({ class: "tr" }, T), x.translation))));
+    for (const x of ex) kids.push(el("div", { class: "ex" },
+      el("div", S, x.text || ""), el("div", Object.assign({ class: "tr" }, T), x.translation || "")));
   }
   if (e.etymology) kids.push(el("h3", {}, "Etymology"), el("p", T, e.etymology));
   const rel = e.related || [];
   if (rel.length) {
     kids.push(el("h3", {}, "Related Words"));
     kids.push(el("table", { class: "rel" }, ...rel.map(r => el("tr", {},
-      el("td", {}, link(r.word)),
+      el("td", {}, r.word ? link(r.word) : ""),
       el("td", Object.assign({ class: "rl" }, T), r.relation || ""),
       el("td", T, r.gloss || "")))));
   }
@@ -339,16 +354,158 @@ function renderEntry(k) {
     kids.push(el("h3", {}, "In Literature"));
     if (lit.note) kids.push(el("p", T, lit.note));
     for (const q of lit.quotes || []) kids.push(el("div", { class: "quote" },
-      el("div", Object.assign({ class: "verse" }, S), "“" + q.text + "”"),
+      el("div", Object.assign({ class: "verse" }, S), "“" + (q.text || "") + (live && !q.source ? "" : "”")),
       q.translation ? el("div", Object.assign({ class: "tr verse" }, T), q.translation) : null,
       q.source ? el("div", { class: "src" }, "— " + q.source) : null));
   }
-  show(...kids);
+  if (!live) return show(...kids);
+  const follow = pane.scrollTop >= pane.scrollHeight - pane.clientHeight - 2;
+  entryEl.replaceChildren(...kids);
+  if (follow) pane.scrollTop = pane.scrollHeight;
+}
+
+// partialJSON reads as much of a JSON text as has arrived: an object or a
+// list cut short ends where the text does, a string cut short keeps what
+// it has, and a key or a value not yet begun is left out.
+function partialJSON(s) {
+  let i = 0;
+  const n = s.length, END = {};
+  const ws = () => { while (i < n && " \t\n\r".includes(s[i])) i++; };
+  const ESC = { n: "\n", t: "\t", r: "\r", b: "\b", f: "\f" };
+  function str() { // at the opening quote
+    i++;
+    let v = "";
+    while (i < n) {
+      const c = s[i];
+      if (c === '"') { i++; return { v, done: true }; }
+      if (c === "\\") {
+        if (i + 1 >= n) break;
+        const e = s[i + 1];
+        if (e === "u") {
+          if (i + 6 > n) break;
+          v += String.fromCharCode(parseInt(s.slice(i + 2, i + 6), 16));
+          i += 6;
+        } else { v += ESC[e] ?? e; i += 2; }
+        continue;
+      }
+      v += c; i++;
+    }
+    i = n;
+    return { v, done: false };
+  }
+  function val() {
+    ws();
+    if (i >= n) return END;
+    const c = s[i];
+    if (c === "{" || c === "[") {
+      const obj = c === "{", out = obj ? {} : [];
+      i++;
+      for (;;) {
+        ws();
+        if (i >= n) return out;
+        if (s[i] === (obj ? "}" : "]")) { i++; return out; }
+        if (s[i] === ",") { i++; continue; }
+        let key;
+        if (obj) {
+          if (s[i] !== '"') return out;
+          const k = str();
+          if (!k.done) return out;
+          ws();
+          if (s[i] !== ":") return out;
+          i++;
+          key = k.v;
+        }
+        const v = val();
+        if (v === END) return out;
+        if (obj) out[key] = v; else out.push(v);
+      }
+    }
+    if (c === '"') return str().v;
+    const m = /^(true|false|null|-?\d+(\.\d+)?([eE][+-]?\d+)?)/.exec(s.slice(i));
+    if (m && i + m[0].length < n) { i += m[0].length; return JSON.parse(m[0]); }
+    i = n;
+    return END;
+  }
+  const v = val();
+  return v === END ? null : v;
 }
 
 // ---- looking up ----
-let ctrl = null, ticker = 0;
-function stopTicker() { clearInterval(ticker); ticker = 0; }
+let ctrl = null, ticker = 0, watching = null;
+// the ticker and the watched session's drawing stop together: whatever
+// replaces the page (an entry, another lookup, an error) stops them first
+function stopTicker() {
+  clearInterval(ticker);
+  ticker = 0;
+  if (watching) watching.stop();
+  watching = null;
+}
+const num = n => Number(n).toLocaleString("en-US");
+const secs = s => Math.max(1, Math.round(s)) + " s";
+
+// watch follows one session as it writes: its steps fill a log under the
+// word; once the entry itself begins, the page draws it as it is written.
+function watch(q, src, dst, model, effort) {
+  const log = el("ol", { class: "log" });
+  show(el("div", { class: "hw muted", lang: src }, q),
+    el("div", { class: "wmeta" }, "Codex · " + model + " · " + effort + " · an ephemeral session"),
+    log);
+  const w = { q, text: "", answering: false, drawn: false, usage: null, frame: 0, passes: new Map() };
+  const line = (t, text, dim = false) => {
+    for (const li of log.querySelectorAll("li.now")) li.classList.remove("now");
+    const x = el("span", { class: "x" + (dim ? " dim" : "") }, text);
+    const li = el("li", { class: "now" }, el("span", { class: "t" }, clock(Math.floor(t))), el("span", { class: "m" }),
+      el("span", { class: "b" }, x));
+    log.append(li);
+    return li;
+  };
+  const say = (li, text, dim = false) => {
+    const x = li.querySelector(".x");
+    x.textContent = text;
+    x.classList.toggle("dim", dim);
+  };
+  w.step = st => {
+    const p = st.pass && w.passes.get(st.pass);
+    switch (st.kind) {
+      case "session": line(st.t, "Started the session"); break;
+      case "think": {
+        const li = line(st.t, "Thinking…", true);
+        w.passes.set(st.pass, { t: st.t, li, last: li, parts: [] });
+        break;
+      }
+      case "summary":
+        if (!p) break;
+        if (p.parts[st.part]) say(p.parts[st.part], st.text);
+        else if (st.part === 0 || !p.parts.length) { p.parts[st.part] = p.li; say(p.li, st.text); }
+        else p.parts[st.part] = p.last = line(st.t, st.text);
+        break;
+      case "thought":
+        if (!p) break;
+        if (!p.parts.length) say(p.li, "Thought", true);
+        p.last.querySelector(".b").append(el("span", { class: "d" }, secs(st.t - p.t))); // on the pass's last line
+        break;
+      case "answer": w.answering = true; w.answerAt = st.t; line(st.t, "Writing the entry…"); break;
+      case "retry": line(st.t, "Retrying: " + (st.text || "")); break;
+      case "usage": w.usage = st.usage; break;
+    }
+  };
+  // the entry as written so far, drawn once a frame at most; the log gives
+  // way to it as soon as there is a word to show (an answer that the
+  // lookup is no word never replaces the log)
+  w.more = delta => {
+    w.text += delta;
+    if (w.frame) return;
+    w.frame = requestAnimationFrame(() => {
+      w.frame = 0;
+      const e = partialJSON(w.text);
+      if (!e || e.found !== true || !e.headword) return;
+      if (!w.drawn) { w.drawn = true; pane.scrollTop = 0; }
+      renderEntry({ from: src, to: dst, q, entry: e }, true);
+    });
+  };
+  w.stop = () => { if (w.frame) cancelAnimationFrame(w.frame); w.frame = 0; };
+  return watching = w;
+}
 
 // lookup asks the daemon for the word: an entry the dictionary keeps comes
 // back at once; one it lacks is written by a Codex session, which takes a
@@ -384,12 +541,14 @@ async function lookup() {
     return failed(q, e.error || "HTTP " + r.status);
   }
   const reader = r.body.getReader(), dec = new TextDecoder();
-  let buf = "", base = 0, at = 0;
+  const src = from.value, dst = to.value;
+  let buf = "", base = 0, at = 0, w = null;
+  const elapsed = () => base + Math.floor((Date.now() - at) / 1000);
   const tick = () => {
-    const s = base + Math.floor((Date.now() - at) / 1000);
-    status("Writing “" + q + "” with Codex… " + clock(s));
-    const w = entryEl.querySelector(".writing .t");
-    if (w) w.textContent = "Codex is writing this entry… " + clock(s);
+    if (!w) return;
+    status(w.answering
+      ? "Codex is writing “" + q + "”… " + num([...w.text].length) + " characters · " + clock(elapsed())
+      : "Codex is thinking about “" + q + "”… " + clock(elapsed()));
   };
   try {
     for (;;) {
@@ -404,19 +563,24 @@ async function lookup() {
         const m = JSON.parse(line);
         if (my !== ctrl) return;
         if (m.writing) {
-          show(el("div", { class: "hw muted", lang: from.value }, q),
-            el("div", { class: "writing" }, el("span", { class: "live" }), el("span", { class: "t" }, "")));
+          w = watch(q, src, dst, m.model, m.effort);
           base = m.wait || 0; at = Date.now();
           tick();
           ticker = setInterval(tick, 1000);
+        } else if (m.step) {
+          if (w) { w.step(m.step); tick(); }
+        } else if (m.text !== undefined) {
+          if (w) w.more(m.text);
         } else if (m.wait !== undefined) {
           base = m.wait; at = Date.now();
         } else if (m.entry) {
           stopTicker();
           remember({ pending: false });
-          renderEntry(m.entry);
+          renderEntry(m.entry, !!(w && w.drawn)); // a page watched being written keeps its place
+          const tok = m.entry.tokens;
           status(m.entry.written
-            ? "Written by " + m.entry.model + " (" + m.entry.effort + ") in " + clock(base + Math.floor((Date.now() - at) / 1000)) + " and kept"
+            ? "Written by " + m.entry.model + " (" + m.entry.effort + ") in " + clock(elapsed()) +
+              (tok ? " · " + num(tok.totalTokens) + " tokens, " + num(tok.reasoningOutputTokens) + " of them reasoning" : "") + " · kept"
             : pair() + " · in the dictionary since " + day(m.entry.created));
           return;
         } else if (m.notfound) {

@@ -1386,18 +1386,25 @@ Look up an inflected form (*ran*, *ging*, *amāvī*) and you get the
 headword's entry, with a line saying which form you typed. A related word,
 or a suggestion offered for a misspelling, looks itself up when clicked.
 
-<img src="https://hub.v2core.com/v1/embed/bafybeifdljqu32ihlwtwvo6qkeq3v5yinsgv2pfknzf6nda3v4ehbebxpa" alt="Dict open on serendipity, English into Chinese: the pronunciations, the sense with its definition, a simple and a complex example, the etymology and related words" width="562" height="647">
+<img src="https://hub.v2core.com/v1/embed/bafybeic5ko7amlhalzkaoqu5qw5lakdmvvvklalvghfilwridvi4yhxlvm" alt="Dict open on serendipity, English into Chinese: the pronunciations, the sense with its definition, a simple and a complex example, the etymology and related words" width="562" height="647">
 
 Entries are kept in the node's own dictionary, `~/.exe/dict.db` (SQLite),
 so a word looked up before opens at once. A word the dictionary does not
 have yet is written by Codex: an ephemeral session of the Codex CLI on
-this host (`codex exec --ephemeral`, so no conversation is saved and none
+this host (a thread of `codex app-server` that is never saved and never
 joins Codex's resume list) on `gpt-6-astra` at extra-high reasoning, run
-read-only in an empty folder with its shell tools off. That takes a minute
-or two; the window shows how long it has been writing. The session belongs
-to the daemon, not the window: close the window and the entry is still
-written and kept, and a window that asks for the word meanwhile — this
-one reopened, or another desk — joins it rather than starting another. A
+read-only in an empty folder with its shell tools, apps, plugins and hooks
+off. That takes a minute or two, and you can watch it work: under the
+word, a line for each step as it comes, with the time it began — the
+session starting, each pass of reasoning (Codex's one-line summary of it
+once there is one, how long it took at its end), the entry beginning —
+and from then on the entry itself, drawn as it is written, the page
+following the writing down while you stay at its foot. The status line
+counts the time and the characters written, and at the end the tokens
+the session spent. The session belongs to the daemon, not the window:
+close the window and the entry is still written and kept, and a window
+that asks for the word meanwhile — this one reopened, or another desk —
+joins it, every step so far included, rather than starting another. A
 lookup that is not a word of the source language comes back with
 suggestions and is not kept. Changing the languages shows the word's entry
 for the new pair if the dictionary has one and otherwise waits for **Look
@@ -1410,8 +1417,13 @@ this browser.
 `GET /v1/dict?from=en&to=zh&q=word` answers a kept entry, 404 when there
 is none. `POST /v1/dict` with `{"from", "to", "q"}` answers a kept entry at
 once as one `{"entry": …}` line of newline-delimited JSON, or writes it:
-`{"writing": true, …}`, a `{"wait": seconds}` line every five seconds, then
-`{"entry": …}`, `{"notfound": true, "suggestions": […]}` or `{"error": …}`.
+`{"writing": true, …}`, then the session's `{"step": {"t", "kind", …}}`
+lines (`session`, `think`, `summary`, `thought`, `answer`, `usage`,
+`retry`) and `{"text": …}` lines, the entry's JSON a fragment at a time,
+with a `{"wait": seconds}` line every five seconds besides; last comes
+`{"entry": …}` (with the session's `tokens`), `{"notfound": true,
+"suggestions": […]}` or `{"error": …}`. A lookup that joins a session
+reads every line from the start.
 
 ## Configuration
 

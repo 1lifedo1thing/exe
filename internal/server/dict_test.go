@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,36 +10,101 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"exe/internal/config"
 )
 
-// fakeDictCodex stands in for the Codex CLI: a script that notes its
-// arguments and its stdin in dir, one line per run in runs, and writes
-// answer as the session's last message.
+// The test binary is its own stand-in for the Codex CLI: run with
+// EXE_DICT_FAKE set to a folder, it answers as `codex app-server` would
+// (fakeCodexAppServer) instead of running the tests.
+func TestMain(m *testing.M) {
+	if dir := os.Getenv("EXE_DICT_FAKE"); dir != "" {
+		fakeCodexAppServer(dir)
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
+// fakeDictCodex points the dictionary at the stand-in: a script that runs
+// this test binary as a Codex app server working in dir, whose answer is
+// answer ("" for a session that fails).
 func fakeDictCodex(t *testing.T, dir, answer string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, "answer.json"), []byte(answer), 0o600); err != nil {
+	if answer != "" {
+		if err := os.WriteFile(filepath.Join(dir, "answer.json"), []byte(answer), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	self, err := os.Executable()
+	if err != nil {
 		t.Fatal(err)
 	}
-	script := `#!/bin/sh
-dir=` + shQuote(dir) + `
-printf '%s\n' "$*" > "$dir/args"
-cat > "$dir/prompt"
-echo run >> "$dir/runs"
-sleep 0.3
-while [ $# -gt 0 ]; do
-  if [ "$1" = "--output-last-message" ]; then cp "$dir/answer.json" "$2"; fi
-  shift
-done
-`
 	bin := filepath.Join(dir, "codex")
+	script := "#!/bin/sh\nEXE_DICT_FAKE=" + shQuote(dir) + " exec " + shQuote(self) + " \"$@\"\n"
 	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	was := dictCodexPath
 	dictCodexPath = func() string { return bin }
 	t.Cleanup(func() { dictCodexPath = was })
+}
+
+// fakeCodexAppServer speaks just enough of the app server's JSON-RPC: it
+// notes its arguments and what thread/start and turn/start asked for in
+// dir, a line per run in runs, then plays one turn — a reasoning pass with
+// a summary, the answer in fragments, the tokens — or, with no answer.json,
+// a turn that fails.
+func fakeCodexAppServer(dir string) {
+	note := func(name, text string) {
+		f, _ := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		f.WriteString(text)
+		f.Close()
+	}
+	note("args", strings.Join(os.Args[1:], " ")+"\n")
+	note("runs", "run\n")
+	time.Sleep(300 * time.Millisecond) // long enough for a second lookup to join
+	enc := json.NewEncoder(os.Stdout)
+	say := func(method string, params any) { enc.Encode(map[string]any{"method": method, "params": params}) }
+	sc := bufio.NewScanner(os.Stdin)
+	sc.Buffer(make([]byte, 64<<10), 4<<20)
+	for sc.Scan() {
+		var m struct {
+			ID     json.RawMessage
+			Method string
+			Params json.RawMessage
+		}
+		json.Unmarshal(sc.Bytes(), &m)
+		switch m.Method {
+		case "initialize":
+			enc.Encode(map[string]any{"id": m.ID, "result": map[string]any{"userAgent": "fake"}})
+		case "thread/start":
+			note("thread", string(m.Params))
+			enc.Encode(map[string]any{"id": m.ID, "result": map[string]any{"thread": map[string]any{"id": "t1"}}})
+		case "turn/start":
+			note("turn", string(m.Params))
+			enc.Encode(map[string]any{"id": m.ID, "result": map[string]any{"turn": map[string]any{"id": "u1"}}})
+			answer, err := os.ReadFile(filepath.Join(dir, "answer.json"))
+			if err != nil {
+				say("error", map[string]any{"error": map[string]any{"message": "boom"}, "willRetry": false})
+				say("turn/completed", map[string]any{"turn": map[string]any{"status": "failed", "error": map[string]any{"message": "boom"}}})
+				continue
+			}
+			say("item/started", map[string]any{"item": map[string]any{"type": "reasoning", "id": "r1"}})
+			say("item/reasoning/summaryTextDelta", map[string]any{"itemId": "r1", "summaryIndex": 0, "delta": "**Checking the senses**"})
+			say("item/completed", map[string]any{"item": map[string]any{"type": "reasoning", "id": "r1"}})
+			say("item/started", map[string]any{"item": map[string]any{"type": "agentMessage", "id": "m1", "text": ""}})
+			for r := []rune(string(answer)); len(r) > 0; {
+				n := min(len(r), 10)
+				say("item/agentMessage/delta", map[string]any{"itemId": "m1", "delta": string(r[:n])})
+				r = r[n:]
+			}
+			say("item/completed", map[string]any{"item": map[string]any{"type": "agentMessage", "id": "m1", "text": string(answer)}})
+			say("thread/tokenUsage/updated", map[string]any{"tokenUsage": map[string]any{"total": map[string]any{
+				"totalTokens": 100, "inputTokens": 80, "cachedInputTokens": 0, "outputTokens": 20, "reasoningOutputTokens": 5}}})
+			say("turn/completed", map[string]any{"turn": map[string]any{"status": "completed"}})
+		}
+	}
 }
 
 func dictLines(t *testing.T, resp *http.Response) []map[string]any {
@@ -91,27 +157,70 @@ func TestDictWritesThenKeeps(t *testing.T) {
 		t.Fatalf("content-type = %q", ct)
 	}
 	lines := dictLines(t, resp)
-	if len(lines) != 2 || lines[0]["writing"] != true || lines[0]["model"] != "gpt-6-astra" || lines[0]["effort"] != "xhigh" {
+	if len(lines) < 3 || lines[0]["writing"] != true || lines[0]["model"] != "gpt-6-astra" || lines[0]["effort"] != "xhigh" {
 		t.Fatalf("lines = %v", lines)
 	}
-	got, _ := lines[1]["entry"].(map[string]any)
+	// on the way: the session's steps, and the entry a fragment at a time
+	var kinds []string
+	var text strings.Builder
+	summary := ""
+	for _, l := range lines[1 : len(lines)-1] {
+		if st, ok := l["step"].(map[string]any); ok {
+			kinds = append(kinds, st["kind"].(string))
+			if st["kind"] == "summary" {
+				summary, _ = st["text"].(string)
+			}
+		} else if d, ok := l["text"].(string); ok {
+			text.WriteString(d)
+		}
+	}
+	if got := strings.Join(kinds, " "); got != "session think summary thought answer usage" {
+		t.Errorf("steps = %q", got)
+	}
+	if summary != "Checking the senses" {
+		t.Errorf("summary = %q", summary)
+	}
+	if text.String() != dictAnswer {
+		t.Errorf("streamed text = %q", text.String())
+	}
+	got, _ := lines[len(lines)-1]["entry"].(map[string]any)
 	if got == nil || got["q"] != "serendipity" || got["written"] != true || got["model"] != "gpt-6-astra" {
-		t.Fatalf("entry line = %v", lines[1])
+		t.Fatalf("entry line = %v", lines[len(lines)-1])
 	}
 	if e, _ := got["entry"].(map[string]any); e == nil || e["headword"] != "serendipity" {
 		t.Fatalf("entry = %v", got["entry"])
 	}
+	if tok, _ := got["tokens"].(map[string]any); tok == nil || tok["totalTokens"] != 100.0 {
+		t.Errorf("tokens = %v", got["tokens"])
+	}
 
 	args, _ := os.ReadFile(filepath.Join(dir, "args"))
-	for _, want := range []string{"exec", "--ephemeral", "--model gpt-6-astra", `model_reasoning_effort="xhigh"`,
-		"--sandbox read-only", "--output-schema"} {
+	for _, want := range []string{"app-server", "--disable shell_tool", "--disable unified_exec"} {
 		if !strings.Contains(string(args), want) {
 			t.Errorf("codex args %q lack %q", args, want)
 		}
 	}
-	prompt, _ := os.ReadFile(filepath.Join(dir, "prompt"))
+	var thread, turn struct {
+		Ephemeral           bool
+		Model, Sandbox, Cwd string
+		ApprovalPolicy      string
+		Effort, Summary     string
+		OutputSchema        map[string]any
+		Input               []struct{ Text string }
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "thread"))
+	json.Unmarshal(b, &thread)
+	if !thread.Ephemeral || thread.Model != "gpt-6-astra" || thread.Sandbox != "read-only" || thread.ApprovalPolicy != "never" {
+		t.Errorf("thread/start = %s", b)
+	}
+	b, _ = os.ReadFile(filepath.Join(dir, "turn"))
+	json.Unmarshal(b, &turn)
+	if turn.Effort != "xhigh" || turn.Summary != "detailed" || turn.OutputSchema["type"] != "object" || len(turn.Input) != 1 {
+		t.Fatalf("turn/start = %s", b)
+	}
+	prompt := turn.Input[0].Text
 	for _, want := range []string{"English–Chinese", `"serendipity"`, "Simplified Chinese", `"英" and "美"`} {
-		if !strings.Contains(string(prompt), want) {
+		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt)
 		}
 	}
@@ -173,9 +282,9 @@ func TestDictSharesASession(t *testing.T) {
 	if runs, _ := os.ReadFile(filepath.Join(dir, "runs")); strings.Count(string(runs), "run") != 1 {
 		t.Fatalf("codex ran %d times", strings.Count(string(runs), "run"))
 	}
-	prompt, _ := os.ReadFile(filepath.Join(dir, "prompt"))
-	if !strings.Contains(string(prompt), "Latin–Chinese") || !strings.Contains(string(prompt), "macrons") {
-		t.Fatalf("prompt:\n%s", prompt)
+	turn, _ := os.ReadFile(filepath.Join(dir, "turn"))
+	if !strings.Contains(string(turn), "Latin–Chinese") || !strings.Contains(string(turn), "macrons") {
+		t.Fatalf("turn/start:\n%s", turn)
 	}
 }
 
@@ -196,6 +305,23 @@ func TestDictNotAWord(t *testing.T) {
 	}
 	if r, _ := http.Get(ts.URL + "/v1/dict?from=en&to=ko&q=serendipty"); r.StatusCode != http.StatusNotFound {
 		t.Fatalf("a non-word was kept: %d", r.StatusCode)
+	}
+}
+
+// A session that fails says why, and nothing is kept.
+func TestDictSessionFails(t *testing.T) {
+	dir := t.TempDir()
+	fakeDictCodex(t, dir, "")
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	lines := dictLines(t, dictPost(t, ts.URL, `{"from":"fr","to":"zh","q":"maison"}`))
+	if last := lines[len(lines)-1]; last["error"] != "Codex: boom" {
+		t.Fatalf("lines = %v", lines)
+	}
+	if r, _ := http.Get(ts.URL + "/v1/dict?from=fr&to=zh&q=maison"); r.StatusCode != http.StatusNotFound {
+		t.Fatalf("a failed session kept something: %d", r.StatusCode)
 	}
 }
 

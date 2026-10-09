@@ -1,27 +1,35 @@
 // The Dict app's dictionary.
 //
 // An entry is looked up in the node's own dictionary, ~/.exe/dict.db, and
-// written when it is not there: an ephemeral Codex session (codex exec
-// --ephemeral — no thread is saved, none joins the resume list) on
-// gpt-6-astra at xhigh, its answer held to a JSON schema, then kept, so
+// written when it is not there: an ephemeral Codex session (a thread of
+// codex app-server's that is never saved and never joins the resume list)
+// on gpt-6-astra at xhigh, its answer held to a JSON schema, then kept, so
 // every later lookup of the same word in the same pair of languages is
 // answered from the database. A host without the Codex CLI can still read
 // what is kept, and says "No Usable LLM Backend" for the rest.
 //
 // GET /v1/dict?from=en&to=zh&q=word answers a kept entry, 404 when there
 // is none. POST /v1/dict with {"from","to","q"} answers newline-delimited
-// JSON: a kept entry at once, as one {"entry":…} line; otherwise
-// {"writing":true,"model","effort","wait"}, a {"wait":seconds} line every
-// few seconds — the seconds the session has been writing; a write takes a
-// minute or two, longer than Cloudflare holds a silent request — and then
-// the {"entry":…} line, or {"notfound":true,
-// "suggestions":[…]} when the lookup is no word of the source language
-// (that answer is not kept), or {"error":…}. Two lookups of one entry
-// share one session, and a session outlives the window that started it:
-// what it writes is kept for the next lookup.
+// JSON: a kept entry at once, as one {"entry":…} line. Otherwise the
+// session is watched as it works: {"writing":true,"model","effort","wait"},
+// then {"step":{"t","kind",…}} lines — t the seconds since the session
+// began; kind "session" (it started), "think" and "thought" (a reasoning
+// pass, by "pass", began and ended), "summary" (a line of a pass's
+// summary as it stands: "pass", "part", "text"), "answer" (the entry
+// begins), "usage" (the tokens spent, "usage"), "retry" ("text") — and
+// {"text":…} lines, the entry's JSON a fragment at a time; a
+// {"wait":seconds} line every few seconds besides, as a write takes a
+// minute or two, longer than Cloudflare holds a silent request. The last
+// line is the {"entry":…} (with "written" and the session's "tokens"), or
+// {"notfound":true,"suggestions":[…]} when the lookup is no word of the
+// source language (that answer is not kept), or {"error":…}. Two lookups
+// of one entry share one session, the later one reading every line from
+// the start; a session outlives the window that started it, and what it
+// writes is kept for the next lookup.
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql"
@@ -29,11 +37,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -265,8 +276,10 @@ type dictKept struct {
 	Model   string          `json:"model"`
 	Effort  string          `json:"effort"`
 	Created int64           `json:"created"` // unix ms
-	// Written is set on the answer of the lookup that wrote it.
-	Written bool `json:"written,omitempty"`
+	// Written is set on the answer of the lookup that wrote it, with what
+	// the session spent.
+	Written bool       `json:"written,omitempty"`
+	Tokens  *dictUsage `json:"tokens,omitempty"`
 }
 
 func (s *Server) dictDatabase() (*sql.DB, error) {
@@ -345,12 +358,37 @@ func (s *Server) handleDictGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // A dictFlight is one session writing one entry, for every lookup of it.
+// What the session says as it works — a step, a fragment of the entry —
+// goes into events, in order: a lookup that joins late reads them all from
+// the start, then follows the rest as they come.
 type dictFlight struct {
-	began    time.Time
-	done     chan struct{} // closed when the fields below are set
+	began time.Time
+
+	mu       sync.Mutex
+	events   []map[string]any
+	changed  chan struct{} // closed, and replaced, whenever the fields here move
+	done     bool
 	kept     *dictKept
 	notFound []string // suggestions, when the lookup was no word
 	err      error
+}
+
+// say adds one thing the session said.
+func (f *dictFlight) say(ev map[string]any) {
+	f.mu.Lock()
+	f.events = append(f.events, ev)
+	close(f.changed)
+	f.changed = make(chan struct{})
+	f.mu.Unlock()
+}
+
+// finish sets how the session ended; set the result fields first.
+func (f *dictFlight) finish() {
+	f.mu.Lock()
+	f.done = true
+	close(f.changed)
+	f.changed = make(chan struct{})
+	f.mu.Unlock()
 }
 
 func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
@@ -366,8 +404,7 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 	}
 	fl, _ := w.(http.Flusher)
 	enc := json.NewEncoder(w)
-	emit := func(v any) {
-		enc.Encode(v)
+	flush := func() {
 		if fl != nil {
 			fl.Flush()
 		}
@@ -384,7 +421,7 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 	}
 	if k != nil {
 		start()
-		emit(map[string]any{"entry": k})
+		enc.Encode(map[string]any{"entry": k})
 		return
 	}
 	f, err := s.dictJoin(src, dst, key)
@@ -394,29 +431,42 @@ func (s *Server) handleDictLookup(w http.ResponseWriter, r *http.Request) {
 	}
 	start()
 	since := func() int { return int(time.Since(f.began).Seconds()) }
-	emit(map[string]any{"writing": true, "model": dictModel, "effort": dictEffort, "wait": since()})
+	enc.Encode(map[string]any{"writing": true, "model": dictModel, "effort": dictEffort, "wait": since()})
+	flush()
 	tick := time.NewTicker(dictTick)
 	defer tick.Stop()
+	next := 0
 	for {
-		select {
-		case <-r.Context().Done():
-			return // the session goes on; what it writes is kept
-		case <-tick.C:
-			emit(map[string]any{"wait": since()})
-		case <-f.done:
+		f.mu.Lock()
+		evs, done, changed := f.events[next:], f.done, f.changed
+		next = len(f.events)
+		f.mu.Unlock()
+		for _, ev := range evs {
+			enc.Encode(ev)
+		}
+		if done {
 			switch {
 			case f.err != nil:
-				emit(map[string]any{"error": f.err.Error()})
+				enc.Encode(map[string]any{"error": f.err.Error()})
 			case f.kept == nil:
 				sugg := f.notFound
 				if sugg == nil {
 					sugg = []string{}
 				}
-				emit(map[string]any{"notfound": true, "suggestions": sugg})
+				enc.Encode(map[string]any{"notfound": true, "suggestions": sugg})
 			default:
-				emit(map[string]any{"entry": f.kept})
+				enc.Encode(map[string]any{"entry": f.kept})
 			}
+			flush()
 			return
+		}
+		flush()
+		select {
+		case <-r.Context().Done():
+			return // the session goes on; what it writes is kept
+		case <-tick.C:
+			enc.Encode(map[string]any{"wait": since()})
+		case <-changed:
 		}
 	}
 }
@@ -437,14 +487,14 @@ func (s *Server) dictJoin(src, dst dictLang, key string) (*dictFlight, error) {
 	if s.dictFlights == nil {
 		s.dictFlights = map[string]*dictFlight{}
 	}
-	f := &dictFlight{began: time.Now(), done: make(chan struct{})}
+	f := &dictFlight{began: time.Now(), changed: make(chan struct{})}
 	s.dictFlights[id] = f
 	go func() {
 		defer func() {
 			s.dictMu.Lock()
 			delete(s.dictFlights, id)
 			s.dictMu.Unlock()
-			close(f.done)
+			f.finish()
 		}()
 		ctx, cancel := context.WithTimeout(context.Background(), dictTimeout)
 		defer cancel()
@@ -461,7 +511,15 @@ func (s *Server) dictJoin(src, dst dictLang, key string) (*dictFlight, error) {
 			f.kept = k
 			return
 		}
-		e, raw, err := runDictCodex(ctx, bin, dictPrompt(src, dst, key))
+		step := func(kind string, more map[string]any) {
+			st := map[string]any{"t": math.Round(time.Since(f.began).Seconds()*10) / 10, "kind": kind}
+			for k, v := range more {
+				st[k] = v
+			}
+			f.say(map[string]any{"step": st})
+		}
+		e, raw, usage, err := runDictCodex(ctx, bin, dictPrompt(src, dst, key), step,
+			func(delta string) { f.say(map[string]any{"text": delta}) })
 		if err != nil {
 			f.err = err
 			return
@@ -478,67 +536,240 @@ func (s *Server) dictJoin(src, dst dictLang, key string) (*dictFlight, error) {
 		}
 		written := *kept
 		written.Written = true
+		written.Tokens = usage
 		f.kept = &written
 	}()
 	return f, nil
 }
 
+// dictUsage is what a session spent, as Codex counts it.
+type dictUsage struct {
+	Input     int64 `json:"inputTokens"`
+	Cached    int64 `json:"cachedInputTokens"`
+	Output    int64 `json:"outputTokens"`
+	Reasoning int64 `json:"reasoningOutputTokens"`
+	Total     int64 `json:"totalTokens"`
+}
+
+// dictFeaturesOff are the Codex features a dictionary session goes without:
+// its shells, the apps and plugins it would start MCP servers for, and the
+// user's hooks. Codex refuses a name it does not know, so only names it has
+// are listed.
+var dictFeaturesOff = []string{"shell_tool", "unified_exec", "apps", "plugins", "hooks"}
+
 // runDictCodex runs one ephemeral Codex session on the prompt and reads its
-// last message, the entry, held to dictSchema. The session starts in an
-// empty folder of its own, read-only, with its shell tools switched off
-// and without the user's config.toml (MCP servers, hooks, plugins) — it is
-// a model call, nothing more; the model and effort are said here.
-func runDictCodex(ctx context.Context, bin, prompt string) (*dictEntry, json.RawMessage, error) {
-	dir, err := os.MkdirTemp("", "exe-dict-")
+// answer, the entry, held to dictSchema. It speaks to `codex app-server`
+// over stdio (JSON-RPC, a line a message) rather than running codex exec,
+// because the app server tells what the session is doing while it does
+// it: step hears each reasoning pass begin and end, each summary line of
+// it as it is written, the answer begin and the tokens spent; text hears
+// the answer itself, a fragment at a time. The thread is ephemeral — never
+// saved, never in the resume list — read-only, approval-free, in an empty
+// folder of its own; the model, effort and summaries are said here.
+func runDictCodex(ctx context.Context, bin, prompt string, step func(kind string, more map[string]any),
+	text func(string)) (*dictEntry, json.RawMessage, *dictUsage, error) {
+	work, err := os.MkdirTemp("", "exe-dict-")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	defer os.RemoveAll(dir)
-	schema, out, work := filepath.Join(dir, "schema.json"), filepath.Join(dir, "entry.json"), filepath.Join(dir, "work")
-	if err := os.WriteFile(schema, []byte(dictSchema), 0o600); err != nil {
-		return nil, nil, err
+	defer os.RemoveAll(work)
+	args := []string{"app-server"}
+	for _, f := range dictFeaturesOff {
+		args = append(args, "--disable", f)
 	}
-	if err := os.Mkdir(work, 0o700); err != nil {
-		return nil, nil, err
-	}
-	cmd := exec.CommandContext(ctx, bin, "exec",
-		"--ephemeral", "--ignore-user-config", "--skip-git-repo-check",
-		"--sandbox", "read-only", "--disable", "shell_tool", "--disable", "unified_exec",
-		"--model", dictModel, "-c", `model_reasoning_effort="`+dictEffort+`"`,
-		"--output-schema", schema, "--output-last-message", out,
-		"--cd", work, "--color", "never", "-")
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = work
 	cmd.Env = cliEnv(bin)
-	cmd.Stdin = strings.NewReader(prompt)
 	var stderr tailBuffer
-	cmd.Stdout = io.Discard
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() != nil {
-			return nil, nil, errors.New("Codex took too long to write the entry")
-		}
-		if why := codexComplaint(stderr.String()); why != "" {
-			return nil, nil, fmt.Errorf("Codex: %s", why)
-		}
-		return nil, nil, fmt.Errorf("Codex: %v", err)
-	}
-	raw, err := os.ReadFile(out)
+	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, nil, errors.New("Codex finished without an entry")
+		return nil, nil, nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, nil, nil, fmt.Errorf("Codex: %v", err)
+	}
+	defer func() {
+		stdin.Close() // the app server ends with its input
+		done := make(chan struct{})
+		go func() { cmd.Wait(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			cmd.Process.Kill()
+			<-done
+		}
+	}()
+	enc := json.NewEncoder(stdin)
+	send := func(v any) {
+		enc.Encode(v)
+	}
+	failed := func(why string) error {
+		if ctx.Err() != nil {
+			return errors.New("Codex took too long to write the entry")
+		}
+		if why == "" {
+			why = codexComplaint(stderr.String())
+		}
+		if why == "" {
+			why = "the session ended without an entry"
+		}
+		return fmt.Errorf("Codex: %s", why)
+	}
+
+	send(map[string]any{"id": 1, "method": "initialize", "params": map[string]any{
+		"clientInfo": map[string]any{"name": "exe-dict", "title": "exe Dict", "version": "1"}}})
+	send(map[string]any{"method": "initialized"})
+	send(map[string]any{"id": 2, "method": "thread/start", "params": map[string]any{
+		"ephemeral": true, "model": dictModel, "cwd": work,
+		"sandbox": "read-only", "approvalPolicy": "never"}})
+
+	type rpcError struct {
+		Message string `json:"message"`
+	}
+	var (
+		answer   strings.Builder
+		final    string
+		usage    *dictUsage
+		passes   = map[string]int{} // reasoning item → its pass number, from 1
+		summary  = map[string]string{}
+		lastErr  string
+		finished bool
+	)
+	sc := bufio.NewScanner(stdout)
+	sc.Buffer(make([]byte, 64<<10), 16<<20)
+	for !finished && sc.Scan() {
+		var m struct {
+			ID     json.RawMessage `json:"id"`
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
+			Result json.RawMessage `json:"result"`
+			Error  *rpcError       `json:"error"`
+		}
+		if json.Unmarshal(sc.Bytes(), &m) != nil {
+			continue
+		}
+		switch {
+		case m.Method != "" && len(m.ID) > 0:
+			// a request of the server's (an approval, a question): this
+			// session has nothing to approve and no one to ask
+			send(map[string]any{"id": m.ID, "error": map[string]any{"code": -32601, "message": "not supported by exe Dict"}})
+		case m.Method == "":
+			if m.Error != nil {
+				return nil, nil, nil, failed(m.Error.Message)
+			}
+			if string(m.ID) == "2" {
+				var res struct {
+					Thread struct{ ID string } `json:"thread"`
+				}
+				json.Unmarshal(m.Result, &res)
+				if res.Thread.ID == "" {
+					return nil, nil, nil, failed("no thread was started")
+				}
+				step("session", nil)
+				schema := json.RawMessage(dictSchema)
+				send(map[string]any{"id": 3, "method": "turn/start", "params": map[string]any{
+					"threadId": res.Thread.ID,
+					"input":    []map[string]any{{"type": "text", "text": prompt}},
+					"effort":   dictEffort, "summary": "detailed", "outputSchema": schema}})
+			}
+		case m.Method == "item/started" || m.Method == "item/completed":
+			var p struct {
+				Item struct {
+					Type, ID, Text string
+				} `json:"item"`
+			}
+			json.Unmarshal(m.Params, &p)
+			switch {
+			case p.Item.Type == "reasoning" && m.Method == "item/started":
+				passes[p.Item.ID] = len(passes) + 1
+				step("think", map[string]any{"pass": passes[p.Item.ID]})
+			case p.Item.Type == "reasoning":
+				step("thought", map[string]any{"pass": passes[p.Item.ID]})
+			case p.Item.Type == "agentMessage" && m.Method == "item/started":
+				step("answer", nil)
+			case p.Item.Type == "agentMessage":
+				final = p.Item.Text
+			}
+		case m.Method == "item/reasoning/summaryTextDelta":
+			var p struct {
+				ItemID       string `json:"itemId"`
+				SummaryIndex int    `json:"summaryIndex"`
+				Delta        string `json:"delta"`
+			}
+			json.Unmarshal(m.Params, &p)
+			k := p.ItemID + "/" + strconv.Itoa(p.SummaryIndex)
+			summary[k] += p.Delta
+			step("summary", map[string]any{"pass": passes[p.ItemID], "part": p.SummaryIndex,
+				"text": strings.TrimSpace(strings.ReplaceAll(summary[k], "**", ""))})
+		case m.Method == "item/agentMessage/delta":
+			var p struct{ Delta string }
+			json.Unmarshal(m.Params, &p)
+			answer.WriteString(p.Delta)
+			text(p.Delta)
+		case m.Method == "thread/tokenUsage/updated":
+			var p struct {
+				TokenUsage struct{ Total dictUsage } `json:"tokenUsage"`
+			}
+			json.Unmarshal(m.Params, &p)
+			u := p.TokenUsage.Total
+			usage = &u
+			step("usage", map[string]any{"usage": u})
+		case m.Method == "error":
+			var p struct {
+				Error     rpcError
+				WillRetry bool `json:"willRetry"`
+			}
+			json.Unmarshal(m.Params, &p)
+			if p.WillRetry {
+				step("retry", map[string]any{"text": p.Error.Message})
+			} else {
+				lastErr = p.Error.Message
+			}
+		case m.Method == "turn/completed":
+			var p struct {
+				Turn struct {
+					Status string
+					Error  *rpcError
+				}
+			}
+			json.Unmarshal(m.Params, &p)
+			if p.Turn.Status != "completed" {
+				why := lastErr
+				if p.Turn.Error != nil && p.Turn.Error.Message != "" {
+					why = p.Turn.Error.Message
+				}
+				if why == "" {
+					why = "the session " + p.Turn.Status
+				}
+				return nil, nil, nil, failed(why)
+			}
+			finished = true
+		}
+	}
+	if !finished {
+		return nil, nil, nil, failed(lastErr)
+	}
+	if final == "" {
+		final = answer.String()
 	}
 	var e dictEntry
-	if err := json.Unmarshal(raw, &e); err != nil {
-		return nil, nil, fmt.Errorf("Codex wrote no entry: %v", err)
+	if err := json.Unmarshal([]byte(final), &e); err != nil {
+		return nil, nil, nil, fmt.Errorf("Codex wrote no entry: %v", err)
 	}
 	if e.Found && (strings.TrimSpace(e.Headword) == "" || len(e.Senses) == 0) {
-		return nil, nil, errors.New("Codex wrote an empty entry")
+		return nil, nil, nil, errors.New("Codex wrote an empty entry")
 	}
 	// kept in the schema's own shape, whatever spacing the model chose
 	norm, err := json.Marshal(e)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return &e, norm, nil
+	return &e, norm, usage, nil
 }
 
 // codexComplaint picks what a failed session said: its last line naming
