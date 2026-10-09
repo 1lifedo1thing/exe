@@ -191,7 +191,16 @@ func (c *Client) ZoneName(ctx context.Context) (string, error) {
 
 // DeleteDNS removes the CNAME record(s) for fqdn, if any.
 func (c *Client) DeleteDNS(ctx context.Context, fqdn string) error {
-	q := url.Values{"type": {"CNAME"}, "name": {fqdn}}
+	return c.deleteRecords(ctx, "CNAME", fqdn)
+}
+
+// DeleteTXT removes the TXT record(s) at fqdn, if any.
+func (c *Client) DeleteTXT(ctx context.Context, fqdn string) error {
+	return c.deleteRecords(ctx, "TXT", fqdn)
+}
+
+func (c *Client) deleteRecords(ctx context.Context, typ, fqdn string) error {
+	q := url.Values{"type": {typ}, "name": {fqdn}}
 	var existing []struct {
 		ID string `json:"id"`
 	}
@@ -200,6 +209,33 @@ func (c *Client) DeleteDNS(ctx context.Context, fqdn string) error {
 	}
 	for _, rec := range existing {
 		if err := c.do(ctx, "DELETE", "/zones/"+c.ZoneID+"/dns_records/"+rec.ID, nil, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SetTXT makes fqdn hold one TXT record whose single string is text: the
+// first record there is rewritten and any others deleted, so a name such
+// as _dnslink.<host> never answers two values. The content goes in
+// quotation marks, the form Cloudflare asks for.
+func (c *Client) SetTXT(ctx context.Context, fqdn, text string, ttl int) error {
+	q := url.Values{"type": {"TXT"}, "name": {fqdn}}
+	var existing []struct {
+		ID string `json:"id"`
+	}
+	if err := c.do(ctx, "GET", "/zones/"+c.ZoneID+"/dns_records?"+q.Encode(), nil, &existing); err != nil {
+		return err
+	}
+	rec := map[string]any{"type": "TXT", "name": fqdn, "content": `"` + text + `"`, "ttl": ttl}
+	if len(existing) == 0 {
+		return c.do(ctx, "POST", "/zones/"+c.ZoneID+"/dns_records", rec, nil)
+	}
+	if err := c.do(ctx, "PUT", "/zones/"+c.ZoneID+"/dns_records/"+existing[0].ID, rec, nil); err != nil {
+		return err
+	}
+	for _, extra := range existing[1:] {
+		if err := c.do(ctx, "DELETE", "/zones/"+c.ZoneID+"/dns_records/"+extra.ID, nil, nil); err != nil {
 			return err
 		}
 	}

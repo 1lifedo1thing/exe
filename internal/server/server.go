@@ -324,6 +324,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/host/monitor", s.handleHostMonitor)
 	mux.HandleFunc("GET /v1/routes", s.handleRoutes)
 	mux.HandleFunc("DELETE /v1/routes/{host}", s.handleRouteDelete)
+	mux.HandleFunc("PUT /v1/routes/{host}/dnslink", s.handleDNSLinkSet)
+	mux.HandleFunc("DELETE /v1/routes/{host}/dnslink", s.handleDNSLinkDelete)
 	mux.HandleFunc("GET /v1/appicons/{host}", s.handleAppIcon)
 	mux.HandleFunc("GET /v1/logs", s.handleLogs)
 	mux.HandleFunc("GET /v1/logs/access", s.handleAccessLogs)
@@ -972,6 +974,11 @@ func (s *Server) removeRoute(ctx context.Context, host string) (map[string]any, 
 				return nil, fmt.Errorf("dns: %w", err)
 			}
 			res["dns"] = "removed"
+			// a DNSLink record names content at a host that is no longer ours
+			if err := cfc.DeleteTXT(ctx, dnslinkName(host)); err != nil {
+				log.Printf("unexpose %s: dnslink: %v", host, err)
+				return nil, fmt.Errorf("dnslink: %w", err)
+			}
 		}
 		if err := cfc.RemoveIngress(ctx, host); err != nil {
 			log.Printf("unexpose %s: ingress: %v", host, err)

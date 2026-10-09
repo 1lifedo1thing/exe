@@ -840,6 +840,14 @@ several names. The same DNS record, tunnel ingress and proxy route are
 created, and `exe unexpose <host>` removes them. The API form is `POST
 /v1/routes` with `host` and `backend`.
 
+A route can also say where the same site lives on IPFS. `PUT
+/v1/routes/<host>/dnslink` with `{"path": "/ipfs/<cid>"}` writes the DNSLink
+record, the TXT record `_dnslink.<host>` holding `dnslink=/ipfs/<cid>`, so
+`ipfs resolve /ipns/<host>` and IPFS gateways find that content. `DELETE` on
+the same path removes it, and so does `exe unexpose <host>`. exe-planet
+does this for an exposed site that also publishes to IPFS: every publish
+writes its new CID there.
+
 ### Local services
 
 A daemon on this machine's loopback, such as `127.0.0.1:7799`, is out of a
@@ -998,7 +1006,9 @@ can be ticked in that page: click an item's box and its line in the
 Markdown flips, on a site that wears Paper, Platinum or Sepia. Publish… is where a site leaves this
 node: expose it under a name in your domain (the same route, DNS record
 and tunnel rule a VM's Expose makes), or send every changed build to
-IPFS under a key this node keeps, or both. Both are off until you turn
+IPFS under a key this node keeps, or both. With both on, each new CID
+also goes to the name's DNSLink record (`_dnslink.<name>`), so IPFS
+gateways find the site by its name too. Both are off until you turn
 them on, and Export… bundles the site with its key for another node.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreiawlo2odksnfrqdqi4txaanzhb4b2cq6enapldb6a3e3uusvlj4ny" alt="The Planet window: sites on the left, the chosen site's posts in the middle, and the built page on the right" width="762" height="467">

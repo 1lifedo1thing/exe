@@ -83,3 +83,43 @@ func TestPublishLocalBackend(t *testing.T) {
 		t.Fatalf("unconfigured domain: %d", w.Code)
 	}
 }
+
+// A DNSLink record is only for a hostname exe routes, and only points at
+// an IPFS path; each refusal comes before Cloudflare is asked.
+func TestDNSLinkRefusals(t *testing.T) {
+	p, err := proxy.New(filepath.Join(t.TempDir(), "routes.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Set("blog.example.com", "http://127.0.0.1:7799"); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{Proxy: p}
+	s.cfg.Store(&config.Config{Cloudflare: config.CloudflareConfig{Domain: "example.com"}})
+	for _, tc := range []struct {
+		host, body string
+		code       int
+	}{
+		{"blog.example.com", `{"path":"bafyx"}`, http.StatusBadRequest},
+		{"blog.example.com", `{"path":"/ipfs/"}`, http.StatusBadRequest},
+		{"blog.example.com", `{"path":"/ipfs/bafyx/index.html"}`, http.StatusBadRequest},
+		{"blog.example.com", `{"path":"/ipfs/bafy\"x"}`, http.StatusBadRequest},
+		{"blog.example.com", `{"path":"/http/bafyx"}`, http.StatusBadRequest},
+		{"blog.example.com", `{`, http.StatusBadRequest},
+		{"other.example.com", `{"path":"/ipfs/bafyx"}`, http.StatusNotFound},
+		{"evil-example.com", `{"path":"/ipfs/bafyx"}`, http.StatusBadRequest},
+		// a route, but no token or zone to write with
+		{"blog.example.com", `{"path":"/ipfs/bafyx"}`, http.StatusBadRequest},
+	} {
+		r := httptest.NewRequest("PUT", "/v1/routes/"+tc.host+"/dnslink", strings.NewReader(tc.body))
+		r.SetPathValue("host", tc.host)
+		w := httptest.NewRecorder()
+		s.handleDNSLinkSet(w, r)
+		if w.Code != tc.code {
+			t.Errorf("%s %s: %d %s", tc.host, tc.body, w.Code, w.Body.String())
+		}
+	}
+	if !dnslinkPath.MatchString("/ipfs/bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi") || !dnslinkPath.MatchString("/ipns/k51qzi5uqu5dgutdk6i1ynyzgkqngpha5xpgia3a5qqp4jsh0u4csozksxel3r") {
+		t.Fatal("a real CID or IPNS name is refused")
+	}
+}
