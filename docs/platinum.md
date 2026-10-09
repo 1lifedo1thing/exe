@@ -346,7 +346,10 @@ restyling: `internal/server/ui/index.html` (the desktop),
   scales to 1.35 and fades to nothing over 120ms ease-in, then the window
   covers it and the tile resets unseen (`launchIcon`). That, and the 200ms
   flight of Show All Windows, is all the motion on the desktop; both honour
-  `prefers-reduced-motion`.
+  `prefers-reduced-motion`. In an app the one motion so far is Notes'
+  zoom between its corkboard and a note (240ms ease-in-out: the sheet grows
+  from its card's rectangle and fades in, and shrinks back into it), which
+  honours it too and leaves nothing transformed.
 - A picture window on a phone is put away by swiping it down: the window
   follows the finger from 6px of vertical travel (a sideways drag and a
   second finger stay the browser's), springs back over 160ms under 90px,
