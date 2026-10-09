@@ -12,6 +12,7 @@
 package server
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -498,7 +499,7 @@ func (s *Server) handleAppDataPut(w http.ResponseWriter, r *http.Request) {
 		// saves race on unload and the older rename lands last. It is judged
 		// among one writer's saves only (seqKey).
 		seq, _ := strconv.ParseInt(r.Header.Get("X-Exe-Seq"), 10, 64)
-		wrote := false
+		wrote, guarded := false, false
 		// The file write and its versioning run under the sync engine's file
 		// lock so a concurrent ApplyRemote can't clobber a write the API is
 		// about to acknowledge (last-writer-loses race).
@@ -507,6 +508,22 @@ func (s *Server) handleAppDataPut(w http.ResponseWriter, r *http.Request) {
 			if seq > 0 && !s.seqNewer(key, seq) {
 				writeJSON(w, http.StatusOK, map[string]any{"status": "stale", "path": rel})
 				return
+			}
+			// A record-bearing document is judged record by record against
+			// the copy on disk (peer.GuardLocalWrite), so a window running
+			// older code cannot take back a newer record or a field it never
+			// knew: an iPad still on the Notes from before colours wrote every
+			// note back without its colour.
+			if p, err := scopedPath(root, rel); err == nil && peer.Mergeable(app+"/"+rel) {
+				body, err := io.ReadAll(io.LimitReader(r.Body, fileMax+1))
+				if err != nil {
+					writeErr(w, http.StatusBadRequest, err)
+					return
+				}
+				if disk, err := os.ReadFile(p); err == nil && len(body) <= fileMax {
+					body, guarded = peer.GuardLocalWrite(app+"/"+rel, disk, body)
+				}
+				r.Body = io.NopCloser(bytes.NewReader(body))
 			}
 			if handleFilePut(w, r, root, rel) {
 				wrote = true
@@ -519,9 +536,15 @@ func (s *Server) handleAppDataPut(w http.ResponseWriter, r *http.Request) {
 			}
 		})
 		// Notify any OTHER open window on this node; the writing window
-		// ignores its own echo via the client tag.
+		// ignores its own echo via the client tag — unless the guard kept
+		// something of disk's, when the writer must read the file again too.
 		if wrote {
-			s.BroadcastAppData(app, rel, false, r.Header.Get("X-Exe-Client"))
+			client := r.Header.Get("X-Exe-Client")
+			if guarded {
+				client = ""
+				log.Printf("app data: %s/%s kept records or fields a save left out", app, rel)
+			}
+			s.BroadcastAppData(app, rel, false, client)
 		}
 	})
 }

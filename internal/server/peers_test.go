@@ -259,6 +259,57 @@ func TestAppDataSeqDropsOlderContent(t *testing.T) {
 	}
 }
 
+// A window running older Notes — an iPad asleep since before colours —
+// saves its whole copy: every note at the stamp disk has, none with its
+// colour. The colour stays, and the writer itself is told to read the file
+// again (the change event carries no client tag to skip).
+func TestAppDataGuardKeepsWhatAnOldWindowNeverKnew(t *testing.T) {
+	a := newTestNode(t)
+	a.installBundle(t, "Notes")
+	events := make(chan []byte, 8)
+	a.srv.appEv.mu.Lock()
+	if a.srv.appEv.subs == nil {
+		a.srv.appEv.subs = make(map[chan []byte]struct{})
+	}
+	a.srv.appEv.subs[events] = struct{}{}
+	a.srv.appEv.mu.Unlock()
+	put := func(client, body string) {
+		req, _ := http.NewRequest("PUT", a.ts.URL+"/v1/apps/Notes/data/notes.json", strings.NewReader(body))
+		req.Header.Set("X-Exe-Client", client)
+		req.Header.Set("X-Exe-Seq", "1")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+	lastClient := func() string {
+		var got string
+		for {
+			select {
+			case ev := <-events:
+				var m map[string]any
+				json.Unmarshal(ev, &m)
+				got = fmt.Sprint(m["client"])
+			case <-time.After(200 * time.Millisecond):
+				return got
+			}
+		}
+	}
+	put("chrome", `{"notes":[{"id":"n1","text":"Groceries","color":"yellow","created":1,"updated":50}]}`)
+	if c := lastClient(); c != "chrome" {
+		t.Fatalf("a plain save is announced with its writer's tag: %q", c)
+	}
+	put("ipad", `{"notes":[{"id":"n1","text":"Groceries","created":1,"updated":50}]}`)
+	got, _ := os.ReadFile(a.dataFile("Notes", "notes.json"))
+	if !strings.Contains(string(got), `"color": "yellow"`) {
+		t.Fatalf("the old window's save dropped the colour:\n%s", got)
+	}
+	if c := lastClient(); c != "" {
+		t.Fatalf("a guarded save must reach its own writer too: client %q", c)
+	}
+}
+
 // The seq mark orders one writer's own saves. Two desks stamp it off two
 // clocks: a save from the desk whose clock runs behind must not be dropped
 // as older than the other desk's — it is the newest thing written, and
