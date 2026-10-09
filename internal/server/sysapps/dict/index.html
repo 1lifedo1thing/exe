@@ -28,7 +28,10 @@
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-html, body { height: 100%; }
+/* on its own on a phone, --vvh is the visual viewport's height (fitViewport,
+   below): a document no taller than what shows above the keyboard leaves
+   iOS nothing to pan to (the desktop's own rule, index.html) */
+html, body { height: var(--vvh, 100%); }
 body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: var(--g200);
   user-select: none; cursor: default; overflow: hidden; display: flex; flex-direction: column;
   /* on its own on a phone: clear of the notch and the rounded corners in
@@ -237,8 +240,8 @@ body.lone .tab .tx { visibility: hidden; }
    top-aligned a pixel up is exactly where centring put the 16px line box
    on the 14px face, and the line height is left alone */
 #status { flex: none; display: flex; align-items: flex-start; gap: 10px; border-top: 1px solid var(--black);
-  background: var(--g300); font-size: 11px; color: #333; padding: 0 20px env(safe-area-inset-bottom, 0px) 8px;
-  height: calc(15px + env(safe-area-inset-bottom, 0px));
+  background: var(--g300); font-size: 11px; color: #333; padding: 0 20px var(--sab) 8px;
+  height: calc(15px + var(--sab)); --sab: env(safe-area-inset-bottom, 0px);
   box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; overflow: clip; }
 #st { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: -1px; }
 #st.err { color: var(--red); }
@@ -246,6 +249,9 @@ body.lone .tab .tx { visibility: hidden; }
   touch-action: none; z-index: 6; }
 body.mobile #grow { display: none; }
 body.mobile #status { padding-right: 8px; }
+/* the keyboard is up: it covers the home indicator, so the bar sits on the
+   keys at its plain 15px */
+body.kb #status { --sab: 0px; }
 
 /* Mac OS 9 scrollbars — the desktop's pixel-sampled spec (same as Notes) */
 ::-webkit-scrollbar { width: 15px; height: 15px; }
@@ -1059,6 +1065,31 @@ for (const s of [from, to]) s.addEventListener("change", () => {
   }
 })();
 if (!IS_MOBILE) field.focus();
+
+// ---- on its own on a phone: the keyboard ----
+// iOS keeps the layout viewport at full height under the keyboard and pans
+// it to show the focused field, which took the toolbar — the field itself —
+// off the top of the screen. The visual viewport knows what shows: the page
+// takes its height (--vvh), the pan is undone, and the status line drops
+// the home indicator's room while the keys cover it. The desktop's
+// fitViewport, for a Dict opened as a home-screen app or a bare page; in the
+// desktop's window, the desktop does this for the whole window.
+if (IS_MOBILE && window.parent === window && window.visualViewport) {
+  const vv = window.visualViewport;
+  let lastH = 0;
+  const fitViewport = () => {
+    if (vv.offsetTop > 0 || window.scrollY > 0) window.scrollTo(0, 0);
+    const h = Math.round(vv.height);
+    if (h === lastH) return;
+    lastH = h;
+    document.documentElement.style.setProperty("--vvh", h + "px");
+    document.body.classList.toggle("kb", h < window.innerHeight - 120);
+  };
+  vv.addEventListener("resize", fitViewport);
+  vv.addEventListener("scroll", fitViewport);
+  window.addEventListener("scroll", fitViewport);
+  fitViewport();
+}
 
 // ---- desktop window plumbing (same bridge as Notes and Hub) ----
 window.addEventListener("pointerdown", () => {
