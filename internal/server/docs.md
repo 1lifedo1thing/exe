@@ -1442,7 +1442,8 @@ Dict also works on its own, outside the desktop: open `/apps/dict/` on
 your exe's address (`https://<host>.ts.net/apps/dict/` over Tailscale
 Serve) and, on an iPhone, **Share → Add to Home Screen**. It opens full
 screen with its own icon, the red dictionary on the desk's lavender,
-keeps clear of the notch and the home indicator, and uses the API token
+keeps clear of the notch, the home indicator and the blur iOS lays under
+the status bar of a home-screen app, and uses the API token
 the desktop saved in that browser, if your exe has one.
 
 `GET /v1/dict?from=en&to=zh&q=word` answers a kept entry (for a known
