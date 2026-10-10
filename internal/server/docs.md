@@ -1515,8 +1515,10 @@ restart. Highlights:
 - `listen` — the address of this UI and API. Bind it to your Tailscale IP
   to use exe from your phone.
 - `api_token` — set it before listening beyond localhost; every API call
-  then needs it. Paste it into **Special → Set API Token…** in each browser
-  (it is kept in localStorage).
+  then needs it. The desktop asks for it by itself the first time a
+  browser opens it, and checks it before keeping it (in localStorage);
+  `exe token`, run on the machine that runs exe, shows it again, and
+  **Special → Set API Token…** brings the dialog back.
 - `ssh_user` — the user created in every VM (default `dev`).
 - `ollama.*`, `chat_provider`, `openai.model`, `cloudflare.*` — the agent
   and publishing sections above.

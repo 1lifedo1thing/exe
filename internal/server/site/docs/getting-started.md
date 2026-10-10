@@ -82,7 +82,8 @@ only, and no sudo.
    for Tailscale (default yes). On all interfaces there is no question: a
    token is generated and shown, because whoever reaches the API has this
    machine's Terminal. exe speaks plain HTTP, so all interfaces is for a
-   network you trust.
+   network you trust. The desktop asks for the token the first time a
+   browser opens it; `exe token` shows it again.
 3. **Install the extra desktop apps?** Notes, Paint, Tides, Todo, Weather
    and World Clock, from [exe-apps](https://github.com/livid/exe-apps),
    into `~/.exe/apps`.

@@ -244,6 +244,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, "ok") })
 	mux.HandleFunc("GET /skill.md", handleSkill)
 	mux.HandleFunc("GET /docs.md", handleDocs)
+	// What the desk asks to learn whether the token it holds is the one
+	// (auth, below, stands before every /v1/ route): reaching this at all
+	// is the answer. With no token it tells a desk that none is asked for.
+	mux.HandleFunc("GET /v1/auth", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /v1/vms", s.handleList)
 	mux.HandleFunc("POST /v1/vms", s.handleCreate)
 	mux.HandleFunc("GET /v1/vms/{name}", s.handleGet)
@@ -405,6 +409,11 @@ func (s *Server) auth(next http.Handler) http.Handler {
 				got = r.URL.Query().Get("token")
 			}
 			if got != tok {
+				// The scheme is named so that a client can tell this 401,
+				// "your token", from one a route gives for a reason of its
+				// own: the desk raises its API Token dialog on this one
+				// alone. Bearer brings up no dialog of the browser's.
+				w.Header().Set("WWW-Authenticate", `Bearer realm="exe"`)
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}

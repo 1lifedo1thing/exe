@@ -279,6 +279,16 @@ restyling: `internal/server/ui/index.html` (the desktop),
   raises over itself when the hub refuses a file or a post: change them in
   all three. An app's alert sits on its dialog veil, 380px at most and
   16px from a phone's edges, and holds the whole message, selectable.
+- A modal dialog that asks for something (the desktop's API Token, raised
+  by itself when the API answers 401): a title, no close box, 380px at
+  most. A bold line says why it is there, the guide follows in 16px
+  lines, a command to run stands apart in the mono face and can be
+  selected. Under its 20px field one status line is always present: what
+  the field is for, then what became of the answer (`#7a1010` when it was
+  refused), each short enough for one line at 320px in a phone's wide
+  face, so the dialog never changes height. Cancel and OK are 58px, 12px
+  apart, at the lower right; OK asks the daemon first and the dialog
+  stays up on a no.
 - Menu bar: 20px `#ddd`, inset white top and left, `#999` bottom and right,
   1px black bottom line; bold titles with 10px side padding; an open title
   inverts to `#333399`. Menus: `#eee`, 1px black, hard shadow `2px 2px 0

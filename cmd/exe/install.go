@@ -1750,7 +1750,7 @@ func runSetup(l layout, h *host, from string) error {
 	}
 	h.say("  Desk     %s\n", url)
 	if a.Token != "" {
-		h.say("  Token    %s\n           paste it into Special → Set API Token… in each browser\n", a.Token)
+		h.say("  Token    %s\n           the desk asks for it once in each browser; `exe token` shows it again\n", a.Token)
 	}
 	h.say("  Update   exe update\n  Remove   exe uninstall\n")
 

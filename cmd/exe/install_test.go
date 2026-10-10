@@ -272,7 +272,7 @@ func TestSetupAllInterfacesAlwaysHasAToken(t *testing.T) {
 	if strings.Contains(out, "Require an API token?") {
 		t.Error("the token was asked about though it is not a choice here")
 	}
-	for _, want := range []string{"2. API token: required when exe listens on every interface", "  Token    " + c.APIToken, "  Desk     http://192.168.1.20:7777\n"} {
+	for _, want := range []string{"2. API token: required when exe listens on every interface", "  Token    " + c.APIToken, "the desk asks for it once in each browser; `exe token` shows it again", "  Desk     http://192.168.1.20:7777\n"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("did not say %q:\n%s", want, out)
 		}

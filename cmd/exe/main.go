@@ -54,6 +54,7 @@ Usage:
   exe unexpose <host>                      remove a proxy route
   exe routes                               show proxy routes
   exe version                              say which release this is
+  exe token                                show the API token the desk asks for in a new browser
   exe daemon restart                       restart the daemon (its VMs stop and start again)
 
 An exe installed from https://exe.v2core.com/install.sh (Linux, macOS) also has:
@@ -106,6 +107,8 @@ func main() {
 		err = cmdRoutes()
 	case "version", "-v", "--version":
 		err = cmdVersion()
+	case "token":
+		err = cmdToken()
 	case "update":
 		err = cmdUpdate(args)
 	case "setup":

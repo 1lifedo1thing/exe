@@ -714,6 +714,24 @@ td.actions button + button { margin-left: 8px; }
   display: flex; align-items: center; justify-content: center; }
 .window.modal { position: relative; z-index: 2001; width: 92%; max-width: 540px; }
 .window.modal .win-body { max-height: 74vh; }
+/* The API token dialog. A bold line says why it is here, the guide under
+   it is in the dialog's 16px lines, and the command to run stands apart,
+   to be selected. Under the field one line is always there (what the
+   field is for, then what became of the token), and everything it says
+   is short enough for one line on a 320px phone in the wide face a phone
+   draws it in, so nothing in the dialog moves when the daemon answers.
+   The field is the guide's 20px one, and OK and Cancel the HIG's 58px,
+   12px apart. It stands over the other modals: whatever they asked the
+   API for was refused, and this is why. */
+#tok-overlay { z-index: 2100; }
+.tok-head { font-weight: bold; line-height: 16px; margin-bottom: 6px; user-select: text; cursor: text; }
+.tok-text { line-height: 16px; user-select: text; cursor: text; }
+.tok-cmd { font: 12px/16px var(--mono); margin: 8px 0 12px 12px; user-select: text; cursor: text; }
+.tok-fb { font-size: 11px; line-height: 16px; min-height: 16px; margin-top: 4px; color: #555; user-select: text; }
+.tok-fb.bad { color: #7a1010; }
+#token { height: 20px; padding: 2px 5px; line-height: 14px; }
+.row.tok-btns { justify-content: flex-end; gap: 12px; margin: 12px 0 2px; }
+.row.tok-btns button { width: 58px; padding-left: 0; padding-right: 0; }
 
 /* ---------- Platinum tab control ----------
    Geometry measured from a real OS 9 Appearance control panel screenshot:
@@ -786,7 +804,7 @@ button.btn, button.ghost {
 }
 /* OS 9 draws the black ring only around a dialog's default button; window
    content buttons are plain (Extensions Manager's Duplicate Set… has none) */
-.window.modal .btn, #win-newvm .btn, #win-token .btn, #win-upload .btn {
+.window.modal .btn, #win-newvm .btn, #win-upload .btn {
   outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
 button.btn:active, button.ghost:active {
   background: #666; color: #fff;
@@ -1789,22 +1807,6 @@ body.mobile th.sorted {
     </div>
   </div>
 
-  <!-- API token dialog -->
-  <div class="window" id="win-token" style="left:260px; top:150px; width:330px;" hidden>
-    <div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
-      <div class="title">API Token</div>
-      <div class="stripe"></div></div>
-    <div class="win-frame">
-      <div class="win-body">
-        <div class="muted" style="margin-bottom:8px">Only needed if <span class="mono">api_token</span> is set in the daemon config. Stored in this browser.</div>
-        <input id="token" type="password" placeholder="API token" style="width:100%">
-        <div class="row" style="justify-content:flex-end; margin:12px 0 2px">
-          <button class="btn" id="token-done">OK</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- About This Computer (Apple menu), laid out like OS 9's box: a sunken
        white logo panel, the memory lines on the platinum field, and below
        the rule one memory bar per running VM (see renderAbout) -->
@@ -2072,6 +2074,37 @@ body.mobile th.sorted {
   </div>
 </div>
 
+<!-- API token (modal). The desk raises it by itself the first time the
+     API answers 401: a token is asked for and this browser has none, or
+     the one it has is no longer the one. Special → Set API Token… raises
+     it by hand. It says where the token is to be found, and OK asks the
+     daemon (GET /v1/auth) before anything is kept, so a wrong token is
+     answered here and not by every window failing behind the dialog. A
+     movable modal dialog: a title, no close box, Cancel beside OK. -->
+<div id="tok-overlay" class="overlay" hidden>
+  <div class="window modal front" style="max-width:380px">
+    <div class="titlebar"><div class="stripe"></div>
+      <div class="title">API Token</div>
+      <div class="stripe"></div></div>
+    <div class="win-frame">
+      <div class="win-body" style="padding:14px 14px 12px">
+        <div id="tok-head" class="tok-head"></div>
+        <div class="tok-text">It was shown when exe was installed, on the line <b>Token</b>. To see it again, run this on the machine that runs exe:</div>
+        <div class="tok-cmd">exe token</div>
+        <div class="field">
+          <label for="token">API token</label>
+          <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+        </div>
+        <div id="tok-fb" class="tok-fb"></div>
+        <div class="row tok-btns">
+          <button class="ghost" id="tok-cancel">Cancel</button>
+          <button class="btn" id="tok-ok">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal confirm for destructive actions without a persistent button to
      arm — a movable alert box per HIG OS 8 fig. 3-4: red-striped title bar
      with no title or close box (alerts hold only icon, text and buttons),
@@ -2291,7 +2324,12 @@ function el(tag, attrs = {}, ...kids) {
   for (const kid of kids) n.append(kid);
   return n;
 }
+// What a request says when the daemon wants a token this browser does not
+// have (see the API token dialog, below).
+const TOK_HINT = "This exe asks for its API token: Special → Set API Token…";
 function toast(msg) {
+  // while the token dialog is up it is saying this itself
+  if (msg === TOK_HINT && !$("#tok-overlay").hidden) return;
   const b = $("#status-bar");
   b.textContent = msg;
   b.classList.add("show");
@@ -2301,12 +2339,15 @@ function toast(msg) {
 const fmtTime = iso => new Date(iso).toLocaleString();
 
 // ---- api ----
+// The API token this browser holds (the daemon's api_token): sent with
+// every request, and on the URL where a header cannot go. It changes only
+// once the daemon has accepted it (tokDone), never while it is being typed.
+let apiToken = "";
+try { apiToken = localStorage.getItem("exe_token") || ""; } catch (e) {}
 const tokenInput = $("#token");
-tokenInput.value = localStorage.getItem("exe_token") || "";
-tokenInput.addEventListener("change", () => localStorage.setItem("exe_token", tokenInput.value));
 async function api(path, opts = {}) {
   opts.headers = Object.assign({}, opts.headers);
-  if (tokenInput.value) opts.headers["Authorization"] = "Bearer " + tokenInput.value;
+  if (apiToken) opts.headers["Authorization"] = "Bearer " + apiToken;
   opts.headers["X-Exe-Client"] = WIN_CLIENT; // lets change events skip our own echo
   if (opts.json !== undefined) {
     opts.body = JSON.stringify(opts.json);
@@ -2315,6 +2356,12 @@ async function api(path, opts = {}) {
   }
   const r = await fetch(path, opts);
   buildSeen(r.headers.get("X-Exe-Build"));
+  // the daemon's own 401 (it names the scheme; a route's 401 does not):
+  // the token is missing or wrong, and that is for the dialog to say
+  if (r.status === 401 && r.headers.get("WWW-Authenticate")) {
+    tokAsk();
+    throw new Error(TOK_HINT);
+  }
   if (!r.ok) {
     let m = "HTTP " + r.status;
     try { const j = await r.json(); if (j.error) m = j.error; } catch (e) {}
@@ -2323,6 +2370,76 @@ async function api(path, opts = {}) {
   return r;
 }
 const j = (p, o) => api(p, o).then(r => r.json());
+
+// ---- the API token dialog ----
+// A 401 from the API means this browser has no token, or not the one the
+// daemon wants. The desk says so once, with the dialog, and after a Cancel
+// leaves it to the Special menu: the desk polls, and a dialog that came
+// back with every poll could not be put away. What fails meanwhile says
+// where the dialog is (TOK_HINT, above toast) instead of "HTTP 401".
+let tokRefused = false, tokAsked = false;
+function tokAsk() {
+  tokRefused = true;
+  if (tokAsked) return;
+  tokAsked = true;
+  tokOpen();
+}
+function tokSay(text, bad) {
+  const fb = $("#tok-fb");
+  fb.textContent = text;
+  fb.classList.toggle("bad", !!bad);
+}
+function tokOpen() {
+  if (!$("#tok-overlay").hidden) return;
+  $("#tok-head").textContent = !tokRefused ? "The API token of this exe."
+    : apiToken ? "This exe no longer accepts the token this browser has."
+    : "This exe asks for its API token.";
+  tokenInput.value = apiToken;
+  tokSay("It is kept in this browser.");
+  $("#tok-ok").disabled = false;
+  $("#tok-overlay").hidden = false;
+  tokenInput.focus();
+  tokenInput.select();
+}
+function tokClose() { $("#tok-overlay").hidden = true; }
+// OK asks the daemon about the token before the desk keeps it. /v1/auth
+// answers 204 to the right token — and to any, when none is asked for.
+async function tokDone() {
+  const ok = $("#tok-ok");
+  if (ok.disabled) return;
+  const tok = tokenInput.value.trim();
+  ok.disabled = true;
+  tokSay("Asking exe…");
+  let status = 0;
+  try {
+    status = (await fetch("/v1/auth", { cache: "no-store", headers: tok ? { Authorization: "Bearer " + tok } : {} })).status;
+  } catch (e) {}
+  ok.disabled = false;
+  if (status !== 204) {
+    tokSay(status !== 401 ? "exe did not answer. Try again."
+      : tok ? "exe did not accept this token."
+      : "Type or paste the token first.", true);
+    tokenInput.focus();
+    tokenInput.select();
+    return;
+  }
+  const changed = tok !== apiToken;
+  apiToken = tok;
+  let kept = true;
+  try { localStorage.setItem("exe_token", tok); } catch (e) { kept = false; }
+  tokClose();
+  // Everything the desk asked for so far was refused: it starts over, with
+  // the token. (Where the browser keeps nothing, a reload would only ask
+  // again; the streams reconnect and the next poll fills the windows.)
+  if (tokRefused && kept) { location.reload(); return; }
+  tokRefused = tokAsked = false;
+  if (changed) document.dispatchEvent(new Event("exe-token"));
+}
+$("#tok-ok").onclick = tokDone;
+$("#tok-cancel").onclick = tokClose;
+tokenInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); tokDone(); }
+});
 
 // ---- a new build reloads the desktop ----
 // The daemon stamps this page with the build it shipped in (the /ui/ files
@@ -3017,7 +3134,7 @@ let winES = null, winEST = 0;
 function winSubscribe() {
   if (winES) winES.close();
   clearTimeout(winEST);
-  const tok = tokenInput.value ? "?token=" + encodeURIComponent(tokenInput.value) : "";
+  const tok = apiToken ? "?token=" + encodeURIComponent(apiToken) : "";
   winES = new EventSource("/v1/ui/events" + tok);
   // a dropped stream reconnects by itself, but an HTTP error ends it for
   // good — and a proxy in front (Tailscale Serve) answers 502 while the
@@ -3034,7 +3151,7 @@ function winSubscribe() {
     applyWinState(ev.state);
   };
 }
-tokenInput.addEventListener("change", () => { if (winES) winSubscribe(); });
+document.addEventListener("exe-token", () => { if (winES) winSubscribe(); });
 function winRestore() {
   // mobile restores its own phone-local state, never the desktop snapshot
   if (IS_MOBILE) { mobRestore(); return; }
@@ -3153,7 +3270,7 @@ const ACTIONS = {
   cfstatus: () => sumOpen(),
   cfwizard: () => wizOpen(false),
   join: () => joinOpen(),
-  token: () => { openWin("#win-token"); tokenInput.focus(); },
+  token: () => tokOpen(),
   docs: () => openDocsWin(),
   skillguide: () => openSkillWin(),
 };
@@ -4021,7 +4138,7 @@ async function loadApps() {
 // glyphs), and the args it was opened on.
 function appFrameSrc(name, args) {
   const q = new URLSearchParams();
-  if (tokenInput.value) q.set("token", tokenInput.value);
+  if (apiToken) q.set("token", apiToken);
   if (IS_MOBILE) q.set("mobile", "1");
   for (const [k, v] of Object.entries(args || {})) if (typeof v === "string") q.set(k, v);
   const qs = q.toString(); // not .size: iOS 16 Safari lacks it
@@ -5991,7 +6108,7 @@ function wireMovie(w) {
 // cannot send the Authorization header, and a blob: URL would download the
 // whole movie before the first frame
 function movieURL(path) {
-  return wsUrl(path) + (tokenInput.value ? "?token=" + encodeURIComponent(tokenInput.value) : "");
+  return wsUrl(path) + (apiToken ? "?token=" + encodeURIComponent(apiToken) : "");
 }
 async function loadMovie(w, refresh) {
   const v = w.querySelector("video");
@@ -6189,10 +6306,6 @@ async function vmAction(name, action) {
 $("#vms-new").onclick = ACTIONS.newvm;
 $("#vms-refresh").onclick = ACTIONS.refresh;
 $("#c-cancel").onclick = () => closeWin($("#win-newvm"));
-$("#token-done").onclick = () => {
-  localStorage.setItem("exe_token", tokenInput.value);
-  closeWin($("#win-token"));
-};
 $("#c-go").onclick = async () => {
   const name = $("#c-name").value.trim();
   if (!name) { toast("name required"); return; }
@@ -6546,7 +6659,7 @@ $("#term-open").onclick = () => {
   term.open(box);
   fitAddon.fit();
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const tok = tokenInput.value ? "?token=" + encodeURIComponent(tokenInput.value) : "";
+  const tok = apiToken ? "?token=" + encodeURIComponent(apiToken) : "";
   termWS = new WebSocket(`${proto}://${location.host}/v1/vms/${currentVM}/terminal${tok}`);
   termWS.binaryType = "arraybuffer";
   const enc = new TextEncoder();
@@ -6954,7 +7067,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
   });
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const qs = new URLSearchParams();
-  if (tokenInput.value) qs.set("token", tokenInput.value);
+  if (apiToken) qs.set("token", apiToken);
   if (app) qs.set("app", app);
   if (cmd) qs.set("cmd", cmd);
   if (sess) qs.set("term", sess);
@@ -9165,6 +9278,7 @@ document.addEventListener("keydown", e => {
   if (!$("#ni-overlay").hidden) niClose();
   if (!$("#pub-overlay").hidden) pubClose();
   if (!$("#cfm-overlay").hidden) cfmClose(false);
+  if (!$("#tok-overlay").hidden) tokClose();
 });
 
 function wizFeedback(kind, text) {
@@ -10379,7 +10493,7 @@ let appES = null, appEST = 0, appESOpened = false;
 function appDataSubscribe() {
   if (appES) appES.close();
   clearTimeout(appEST);
-  const tok = tokenInput.value ? "?token=" + encodeURIComponent(tokenInput.value) : "";
+  const tok = apiToken ? "?token=" + encodeURIComponent(apiToken) : "";
   appES = new EventSource("/v1/apps/events" + tok);
   // reopen after an HTTP error, as winSubscribe does
   appES.onerror = () => { if (appES.readyState === 2) appEST = setTimeout(appDataSubscribe, 3000); };
@@ -10440,7 +10554,7 @@ function appDataSubscribe() {
     }
   };
 }
-tokenInput.addEventListener("change", () => { if (appES) appDataSubscribe(); });
+document.addEventListener("exe-token", () => { if (appES) appDataSubscribe(); });
 
 // ---- app windows follow their app's code ----
 // Each window remembers the version of the app it loaded (/v1/apps lists a
