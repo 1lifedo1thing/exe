@@ -1082,6 +1082,8 @@ them another way: no varnish, a longer movie. **Save to Workspace** puts
 the picture and the movie in the Workspace's `Easel` folder. While no
 painter is at work, the **Easel** tab paints by hand, from the same Lua.
 
+<img src="https://hub.v2core.com/v1/embed/bafybeidqcyzdmsmky5tftee7ddeyinaqdcevgaim74prfjma2cpxvl22na" alt="The Easel window: its studios down the left, and on the Canvas tab a finished painting of an open fridge lighting a dark kitchen" width="762" height="497">
+
 ## Joining desks together
 
 **Special → Join…** pairs this exe with another one (say, your laptop's)
