@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -156,6 +158,24 @@ func ValidateName(name string) error {
 	return nil
 }
 
+// LocalNetworkBlocked is what to tell someone whose Mac keeps the daemon
+// from its own VMs. Since macOS 15 a program needs the Local Network
+// privilege to reach a private address, the VMs' network included. A tool
+// run from Terminal or over SSH is let through, so `exe serve` typed by
+// hand never met this; the installer's launchd agent does, and until its
+// owner answers the alert macOS shows — or allows it in System Settings —
+// every connection to a VM fails with "no route to host".
+const LocalNetworkBlocked = "macOS is keeping exe off this Mac's local network, which is where its VMs are: allow exe in System Settings → Privacy & Security → Local Network (macOS asks in an alert the first time)"
+
+// ReachHint is LocalNetworkBlocked, led by a separator, when err is that
+// refusal; empty for every other error and on every other system.
+func ReachHint(err error) string {
+	if runtime.GOOS == "darwin" && errors.Is(err, syscall.EHOSTUNREACH) {
+		return " — " + LocalNetworkBlocked
+	}
+	return ""
+}
+
 func waitTCP(ctx context.Context, addr string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
@@ -165,7 +185,9 @@ func waitTCP(ctx context.Context, addr string, timeout time.Duration) error {
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out after %s", timeout)
+			// with the last refusal: "no route to host" on a Mac is not
+			// a guest that is slow to boot (ReachHint)
+			return fmt.Errorf("timed out after %s: %w", timeout, err)
 		}
 		select {
 		case <-ctx.Done():

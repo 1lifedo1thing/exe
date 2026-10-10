@@ -5,9 +5,20 @@
 // without hunting for the terminal it was started from.
 package menubar
 
+// Info.plist is linked into the binary (the __info_plist section, the
+// one place macOS looks for a property list in a program that is not an
+// app bundle). exe is a single file with a menu-bar item and a launchd
+// agent, and macOS wants to know such a program by more than its path:
+// the identifier names it in Login Items and in Privacy & Security, and
+// NSLocalNetworkUsageDescription is the sentence in the alert that asks
+// to let it reach the local network — which is where its VMs are, and
+// which a launchd agent, unlike a tool typed into Terminal, has to be
+// granted (Apple's TN3179). The identifier is the one the release is
+// signed with and the launchd agent is named for.
+
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc
-#cgo LDFLAGS: -framework Cocoa -framework CoreGraphics
+#cgo LDFLAGS: -framework Cocoa -framework CoreGraphics -Wl,-sectcreate,__TEXT,__info_plist,${SRCDIR}/Info.plist
 
 #include <stdlib.h>
 

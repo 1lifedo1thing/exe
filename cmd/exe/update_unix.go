@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package main
 
@@ -61,7 +61,7 @@ func cmdUpdate(args []string) error {
 		},
 	}
 	if _, ours := unitOurs(l); ours {
-		u.RestartHint = "systemctl --user restart exe"
+		u.RestartHint, _ = u.Host.serviceWords()
 	}
 	// the daemon is asked the way the rest of the CLI asks it
 	if cfg, err := config.Load(); err == nil {
@@ -112,7 +112,7 @@ func (u *updater) run(ctx context.Context, check, yes bool) error {
 		return err
 	}
 	defer os.RemoveAll(scratch)
-	binary := release.BinaryAsset(runtime.GOARCH)
+	binary := release.BinaryAsset(runtime.GOOS, runtime.GOARCH)
 	names := []string{binary}
 	apps := release.AppsTracked(l.AppsManifest())
 	if apps { // the apps came with the install, so they follow it
@@ -146,8 +146,10 @@ func (u *updater) run(ctx context.Context, check, yes bool) error {
 	unfinished := func(err error) error {
 		return fmt.Errorf("%w — exe is still %s; run `exe update` again to finish", err, release.Version)
 	}
-	if err := stageRelease(l, scratch); err != nil {
-		return unfinished(err)
+	if h.OS == "linux" { // the network helper is a Linux thing
+		if err := stageRelease(l, scratch); err != nil {
+			return unfinished(err)
+		}
 	}
 	if apps {
 		dir, _, _, err := unpackApps(scratch, scratch)

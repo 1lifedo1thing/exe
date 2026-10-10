@@ -41,14 +41,16 @@ const DefaultBase = "https://github.com/livid/exe/releases"
 // the local copy a release is tested against before it is published.
 const BaseEnv = "EXE_RELEASE_URL"
 
-// The files of a release. A binary tarball holds exe and exe-net-helper.
+// The files of a release. A binary tarball holds exe — and on Linux
+// exe-net-helper beside it.
 const (
 	AppsAsset = "exe-apps.tar.gz"
 	SumsAsset = "SHA256SUMS"
 )
 
-// BinaryAsset is the tarball for one architecture ("amd64", "arm64").
-func BinaryAsset(goarch string) string { return "exe-linux-" + goarch + ".tar.gz" }
+// BinaryAsset is the tarball for one system ("linux", "darwin") and
+// processor ("amd64", "arm64").
+func BinaryAsset(goos, goarch string) string { return "exe-" + goos + "-" + goarch + ".tar.gz" }
 
 // Base is the release address in use.
 func Base() string {

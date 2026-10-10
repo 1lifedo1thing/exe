@@ -158,7 +158,23 @@ func (m *vzManager) Start(ctx context.Context, name string) (*Info, error) {
 		return nil, fmt.Errorf("no DHCP lease appeared: %w (see %s)", err, filepath.Join(m.vmDir(name), "console.log"))
 	}
 	log.Printf("vm %s: ip %s, waiting for SSH", name, ip)
-	if err := waitTCP(ctx, net.JoinHostPort(ip, "22"), 3*time.Minute); err != nil {
+	// A guest that has just taken its lease is "no route to host" for a
+	// second or two anyway (seen on a Mac that had the privilege), so the
+	// refusal has to outlast that before it is called macOS's doing. Then
+	// it is said at once, not after the minutes below: while macOS's
+	// alert waits for an answer, this line is why nothing is happening.
+	addr := net.JoinHostPort(ip, "22")
+	err = waitTCP(ctx, addr, 15*time.Second)
+	if err != nil && ReachHint(err) != "" {
+		log.Printf("vm %s: %s", name, LocalNetworkBlocked)
+	}
+	if err != nil {
+		err = waitTCP(ctx, addr, 3*time.Minute)
+	}
+	if err != nil {
+		if ReachHint(err) != "" {
+			return nil, fmt.Errorf("vm has IP %s but exe cannot reach it%s; then start the VM again", ip, ReachHint(err))
+		}
 		return nil, fmt.Errorf("vm has IP %s but SSH did not come up: %w", ip, err)
 	}
 	log.Printf("vm %s: ready at %s", name, ip)

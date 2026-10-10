@@ -877,6 +877,20 @@ func (s *Server) RestartDaemon(delay time.Duration, running []string) {
 		log.Printf("restart: under systemd, exiting for the manager to start the new binary (autostart: %s)", strings.Join(running, ","))
 		return
 	}
+	// Under the installer's launchd agent (a Mac; the agent names itself
+	// in EXE_LAUNCHD) launchd does the restart too, but has to be asked:
+	// the agent comes back by itself only after a failure, so that Quit
+	// in the menu bar stays quit. kickstart -k sends this process the
+	// SIGTERM that runs the same shutdown path, then starts the binary
+	// that is in place now.
+	if target := os.Getenv("EXE_LAUNCHD"); target != "" {
+		if err := exec.Command("launchctl", "kickstart", "-k", target).Start(); err == nil {
+			log.Printf("restart: under launchd, asked it to restart %s (autostart: %s)", target, strings.Join(running, ","))
+			return
+		} else {
+			log.Printf("restart: launchctl kickstart -k %s: %v — handing over without it", target, err)
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	// Let detached chat replies persist what they have and tell their

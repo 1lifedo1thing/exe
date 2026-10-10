@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +25,7 @@ func TestSiteHandler(t *testing.T) {
 		{"/icon.svg", "image/svg+xml", "max-age=14400", "<svg"},
 		{"/icon-192.png", "image/png", "max-age=14400", "PNG"},
 		{"/robots.txt", "text/plain; charset=utf-8", "max-age=14400", "Disallow: /stats\nDisallow: /v1/stats\n"},
-		{"/install.sh", "text/plain; charset=utf-8", "no-cache", "#!/bin/sh\n# exe installer for Linux"},
+		{"/install.sh", "text/plain; charset=utf-8", "no-cache", "#!/bin/sh\n# exe installer for Linux and macOS"},
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", "http://exe.example.com"+tc.path, nil))
@@ -203,11 +204,11 @@ func TestSiteInstallScript(t *testing.T) {
 	if !strings.HasSuffix(script, "\nmain \"$@\"\n") {
 		t.Fatalf("the script does not end by calling main; its last lines:\n%s", script[max(0, len(script)-200):])
 	}
-	// outside main and fail there is only `set -eu` and that last call
+	// outside its functions there is only `set -eu` and that last call
 	depth0 := 0
+	define := regexp.MustCompile(`^[a-z0-9_]+\(\) \{$`)
 	for _, line := range strings.Split(script, "\n") {
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "\t") || line == "}" ||
-			line == "main() {" || line == "fail() {" {
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "\t") || line == "}" || define.MatchString(line) {
 			continue
 		}
 		depth0++

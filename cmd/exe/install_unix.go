@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package main
 
@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"flag"
 	"fmt"
@@ -46,7 +47,10 @@ import (
 type layout struct {
 	Bin   string // ~/.local/bin/exe
 	State string // ~/.exe (or $EXE_HOME)
-	Unit  string // ~/.config/systemd/user/exe.service
+	// Unit is the service that runs the daemon: a systemd user unit,
+	// ~/.config/systemd/user/exe.service, or on a Mac a launchd agent,
+	// ~/Library/LaunchAgents/com.v2core.exe.plist.
+	Unit string
 }
 
 func (l layout) Config() string       { return filepath.Join(l.State, "config.json") }
@@ -60,11 +64,15 @@ func installLayout() (layout, error) {
 	if err != nil {
 		return layout{}, err
 	}
-	return layout{
+	l := layout{
 		Bin:   filepath.Join(home, ".local", "bin", "exe"),
 		State: config.Dir(),
 		Unit:  filepath.Join(home, ".config", "systemd", "user", "exe.service"),
-	}, nil
+	}
+	if runtime.GOOS == "darwin" {
+		l.Unit = filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist")
+	}
+	return l, nil
 }
 
 // What the VM step puts in place, as root. The helper's path is the
@@ -85,7 +93,9 @@ var firecrackerArchives = map[string]struct{ arch, sum string }{
 // host is the machine as the installer sees and touches it. The real one
 // is realHost; a test hands in its own.
 type host struct {
+	OS          string // "linux" or "darwin": which service manager, and whether VMs need setting up
 	User, Group string // who exe will run as, and their primary group
+	UID         string
 	Home        string
 	Root        bool
 	TailscaleIP string
@@ -111,11 +121,11 @@ type host struct {
 }
 
 func realHost() *host {
-	h := &host{Env: os.Getenv, In: bufio.NewReader(os.Stdin), Out: os.Stdout}
+	h := &host{OS: runtime.GOOS, Env: os.Getenv, In: bufio.NewReader(os.Stdin), Out: os.Stdout}
 	h.Tty = term.IsTerminal(int(os.Stdin.Fd()))
 	h.Home, _ = os.UserHomeDir()
 	if u, err := user.Current(); err == nil {
-		h.User, h.Group, h.Root = u.Username, u.Gid, u.Uid == "0"
+		h.User, h.Group, h.UID, h.Root = u.Username, u.Gid, u.Uid, u.Uid == "0"
 		if g, err := user.LookupGroupId(u.Gid); err == nil {
 			h.Group = g.Name
 		}
@@ -796,7 +806,10 @@ func untarMember(tgz, member, to string) error {
 
 // unitMark heads a unit this installer wrote. One without it is somebody
 // else's — a checkout's own deployment, say — and is never touched.
-const unitMark = "# Written by exe setup."
+const (
+	serviceMark = "Written by exe setup."
+	unitMark    = "# " + serviceMark
+)
 
 func unitText(l layout, home string) string {
 	quote := func(s string) string {
@@ -844,16 +857,183 @@ func unitOurs(l layout) (present, ours bool) {
 	if err != nil {
 		return false, false
 	}
-	return true, strings.HasPrefix(string(b), unitMark)
+	return true, strings.Contains(string(b), serviceMark)
 }
 
-// startService puts the unit in place and (re)starts the daemon under the
-// user's own systemd. started is false, with the reason in notes, where
-// that cannot be done — the binary is installed all the same.
+// startService puts the service in place and (re)starts the daemon under
+// the user's own service manager: systemd on Linux, launchd on a Mac.
+// started is false, with the reason in notes, where that cannot be done —
+// the binary is installed all the same.
 func (h *host) startService(l layout) (started bool, notes []string) {
 	if present, ours := unitOurs(l); present && !ours {
 		return false, []string{fmt.Sprintf("%s was not written by this installer, so it is left as it is — and so is the daemon it runs.", h.tilde(l.Unit))}
 	}
+	if h.OS == "darwin" {
+		return h.startLaunchd(l)
+	}
+	return h.startSystemd(l)
+}
+
+// serviceWords are what a person types to restart the service and to read
+// its log, for the messages that send them there.
+func (h *host) serviceWords() (restart, log string) {
+	if h.OS == "darwin" {
+		return "launchctl kickstart -k " + h.launchdTarget(), "~/.exe/daemon.log"
+	}
+	return "systemctl --user restart exe", "journalctl --user -u exe"
+}
+
+// stopService stops the daemon and takes the installer's service away.
+func (h *host) stopService(l layout) error {
+	if h.OS == "darwin" {
+		h.Quiet("launchctl", "bootout", h.launchdTarget())
+		return os.Remove(l.Unit)
+	}
+	h.Quiet("systemctl", "--user", "disable", "--now", "exe")
+	if err := os.Remove(l.Unit); err != nil {
+		return err
+	}
+	h.Quiet("systemctl", "--user", "daemon-reload")
+	return nil
+}
+
+// ---- launchd (macOS) ---------------------------------------------------------
+
+// launchdLabel names the agent. It is also the identifier the release's
+// code signature carries, so macOS shows one name for both.
+const launchdLabel = "com.v2core.exe"
+
+// launchdTarget is the agent as launchctl names it: in the domain of the
+// user's login session, which is where the menu bar is.
+func (h *host) launchdTarget() string { return "gui/" + h.UID + "/" + launchdLabel }
+
+// launchdPlist is the agent that runs the daemon for a logged-in user.
+//
+// KeepAlive only after a failure: a daemon that crashed comes back, and
+// one that was told to quit from its menu-bar item stays quit until the
+// next login. A restart is therefore not "exit and be started again" as
+// under systemd but `launchctl kickstart -k`, which the daemon runs on
+// itself when it finds EXE_LAUNCHD (server.RestartDaemon).
+//
+// AssociatedBundleIdentifiers tells macOS which program an agent that no
+// app installed belongs to — the identifier in the binary's own embedded
+// Info.plist — so Login Items and the Local Network alert name it.
+//
+// AbandonProcessGroup is this file's KillMode=process: the tmux servers
+// behind the Terminal, Claude Code and Codex windows outlive a restart.
+// ExitTimeOut gives the daemon the time it gives itself to shut down.
+// ProcessType Interactive keeps macOS from throttling a process that runs
+// VMs as if it were background housekeeping.
+func launchdPlist(l layout, h *host) string {
+	x := func(s string) string {
+		var b strings.Builder
+		xml.EscapeText(&b, []byte(s))
+		return b.String()
+	}
+	env := [][2]string{
+		// Homebrew's folders hold what the desk's windows run (tmux, the
+		// agents' CLIs); launchd starts an agent with a bare PATH
+		{"PATH", filepath.Dir(l.Bin) + ":/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"},
+		{"EXE_LAUNCHD", h.launchdTarget()},
+	}
+	if l.State != filepath.Join(h.Home, ".exe") {
+		env = append(env, [2]string{"EXE_HOME", l.State})
+	}
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- ` + serviceMark + " `exe uninstall` removes it; an update leaves it as it is. -->" + `
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>` + launchdLabel + `</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>` + x(l.Bin) + `</string>
+		<string>serve</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+`)
+	for _, kv := range env {
+		fmt.Fprintf(&b, "\t\t<key>%s</key>\n\t\t<string>%s</string>\n", kv[0], x(kv[1]))
+	}
+	b.WriteString(`	</dict>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>` + launchdLabel + `</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+	<key>ExitTimeOut</key>
+	<integer>75</integer>
+	<key>AbandonProcessGroup</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>` + x(filepath.Join(l.State, "launchd.log")) + `</string>
+	<key>StandardErrorPath</key>
+	<string>` + x(filepath.Join(l.State, "launchd.log")) + `</string>
+</dict>
+</plist>
+`)
+	return b.String()
+}
+
+// startLaunchd loads the agent into the user's login session, or restarts
+// it there. With nobody logged in at the screen there is no such session:
+// the agent is left where launchd finds it at the next login.
+func (h *host) startLaunchd(l layout) (started bool, notes []string) {
+	want := []byte(launchdPlist(l, h))
+	have, _ := os.ReadFile(l.Unit)
+	if err := os.MkdirAll(filepath.Dir(l.Unit), 0o755); err != nil {
+		return false, []string{err.Error()}
+	}
+	if err := os.MkdirAll(l.State, 0o755); err != nil { // the agent's log goes there
+		return false, []string{err.Error()}
+	}
+	domain := "gui/" + h.UID
+	if h.Quiet("launchctl", "print", domain) != nil {
+		if err := os.WriteFile(l.Unit, want, 0o644); err != nil {
+			return false, []string{err.Error()}
+		}
+		return false, []string{"Nobody is logged in at this Mac's screen, so exe starts at the next login. To run it now: exe serve"}
+	}
+	target := h.launchdTarget()
+	loaded := h.Quiet("launchctl", "print", target) == nil
+	if loaded && string(have) == string(want) {
+		// the agent as it is, with the binary that is in place now
+		if err := h.Quiet("launchctl", "kickstart", "-k", target); err != nil {
+			return false, []string{fmt.Sprintf("launchctl kickstart -k %s: %v", target, err)}
+		}
+		return true, nil
+	}
+	if loaded {
+		// launchd keeps the agent it read; a changed one is loaded anew,
+		// once the old one has let go
+		h.Quiet("launchctl", "bootout", target)
+		for i := 0; i < 100 && h.Quiet("launchctl", "print", target) == nil; i++ {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	if err := os.WriteFile(l.Unit, want, 0o644); err != nil {
+		return false, []string{err.Error()}
+	}
+	if err := h.Quiet("launchctl", "bootstrap", domain, l.Unit); err != nil {
+		return false, []string{fmt.Sprintf("launchctl bootstrap %s %s: %v", domain, h.tilde(l.Unit), err)}
+	}
+	return true, nil
+}
+
+// ---- systemd (Linux) ---------------------------------------------------------
+
+func (h *host) startSystemd(l layout) (started bool, notes []string) {
 	if h.Quiet("systemctl", "--user", "show-environment") != nil {
 		return false, []string{"There is no systemd user session here, so nothing starts exe for you. Start it with: exe serve"}
 	}
@@ -1016,11 +1196,18 @@ func cmdSetup(args []string) error {
 	return fmt.Errorf("exe setup %s: there is `exe setup` and `exe setup vms`", fs.Arg(0))
 }
 
-func archWords() string {
-	if runtime.GOARCH == "amd64" {
-		return "x86-64"
+// platformWords names what this binary was built for, as a person says it.
+func platformWords(goos, goarch string) string {
+	if goos == "darwin" {
+		if goarch == "amd64" {
+			return "macOS (Intel)"
+		}
+		return "macOS (Apple silicon)"
 	}
-	return "ARM64"
+	if goarch == "amd64" {
+		return "Linux x86-64"
+	}
+	return "Linux ARM64"
 }
 
 // runSetup is the installer. from is the folder a release was unpacked
@@ -1032,7 +1219,7 @@ func runSetup(l layout, h *host, from string) error {
 	}
 	defer os.RemoveAll(scratch)
 
-	h.say("\nexe %s for Linux %s\n", release.Version, archWords())
+	h.say("\nexe %s for %s\n", release.Version, platformWords(runtime.GOOS, runtime.GOARCH))
 	h.say("  binary   %s\n  data     %s\n", h.tilde(l.Bin), h.tilde(l.State))
 
 	_, cfgErr := os.Stat(l.Config())
@@ -1062,6 +1249,9 @@ func runSetup(l layout, h *host, from string) error {
 	}
 	var vmNotes []string
 	switch {
+	case h.OS != "linux":
+		// a Mac runs VMs through Virtualization.framework, which asks for
+		// nothing but the entitlement the release is signed with
 	case !h.KVM:
 		h.say("\nThere is no /dev/kvm on this machine: exe will run the desktop without VMs.\n")
 	default:
@@ -1084,8 +1274,10 @@ func runSetup(l layout, h *host, from string) error {
 			return err
 		}
 		defer discard()
-		if err := stageRelease(l, from); err != nil {
-			return err
+		if h.OS == "linux" { // the network helper is a Linux thing
+			if err := stageRelease(l, from); err != nil {
+				return err
+			}
 		}
 	}
 	var notes []string
@@ -1133,7 +1325,8 @@ func runSetup(l layout, h *host, from string) error {
 			}
 		}
 		if !up {
-			return fmt.Errorf("exe %s is installed and was started, but it is not answering at %s — its log: journalctl --user -u exe", release.Version, url)
+			_, log := h.serviceWords()
+			return fmt.Errorf("exe %s is installed and was started, but it is not answering at %s — its log: %s", release.Version, url, log)
 		}
 		h.say("exe %s is running.\n\n", release.Version)
 	} else {
@@ -1145,6 +1338,9 @@ func runSetup(l layout, h *host, from string) error {
 	}
 	h.say("  Update   exe update\n  Remove   exe uninstall\n")
 
+	if h.OS == "darwin" {
+		notes = append(notes, "The first time exe starts a VM, macOS asks to let it reach devices on your local network: its VMs are there. Choose Allow.")
+	}
 	if !onPath(h.Env("PATH"), filepath.Dir(l.Bin)) {
 		notes = append(notes, fmt.Sprintf("%s is not on your PATH. For this shell:\n  export PATH=\"%s:$PATH\"",
 			h.tilde(filepath.Dir(l.Bin)), strings.Replace(filepath.Dir(l.Bin), h.Home, "$HOME", 1)))
@@ -1167,6 +1363,10 @@ func onPath(path, dir string) bool {
 // runSetupVMs is the VM step by itself, for a machine that was installed
 // without it.
 func runSetupVMs(l layout, h *host) error {
+	if h.OS != "linux" {
+		h.say("A Mac needs no setup to run VMs.\n")
+		return nil
+	}
 	if !h.KVM {
 		return errors.New("there is no /dev/kvm on this machine, so it cannot run VMs; exe runs the desktop without them")
 	}
@@ -1246,11 +1446,9 @@ func runUninstall(l layout, h *host, yes bool) error {
 		}
 	}
 	if _, ours := unitOurs(l); ours {
-		h.Quiet("systemctl", "--user", "disable", "--now", "exe")
-		if err := os.Remove(l.Unit); err != nil {
+		if err := h.stopService(l); err != nil {
 			return err
 		}
-		h.Quiet("systemctl", "--user", "daemon-reload")
 		h.say("Stopped exe and removed %s\n", h.tilde(l.Unit))
 	} else if present, _ := unitOurs(l); present {
 		h.say("%s was not written by the installer and is left as it is.\n", h.tilde(l.Unit))
@@ -1276,7 +1474,7 @@ func runUninstall(l layout, h *host, yes bool) error {
 	if err := os.RemoveAll(l.Release()); err != nil {
 		return err
 	}
-	if sum, _ := h.Helper(helperPath); sum != "" {
+	if sum, _ := h.Helper(helperPath); h.OS == "linux" && sum != "" {
 		h.say("\nThe network helper is root's. Remove it with:\n  sudo rm %s\n", helperPath)
 	}
 	h.say("\nYour data is still in %s.\n", h.tilde(l.State))

@@ -6,3 +6,7 @@
 
 # Local runtime data and verification artifacts.
 /output/
+
+# Which machines build a release (deploy/release.sh): names and addresses
+# that belong to one network, not to the repository.
+/deploy/release.env

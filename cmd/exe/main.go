@@ -55,9 +55,9 @@ Usage:
   exe routes                               show proxy routes
   exe version                              say which release this is
 
-An exe installed from https://exe.v2core.com/install.sh (Linux) also has:
+An exe installed from https://exe.v2core.com/install.sh (Linux, macOS) also has:
   exe update [-check] [-y]                 move to the latest release; -y restarts the daemon unasked
-  exe setup [vms]                          the installer's questions again, or only its VM step
+  exe setup [vms]                          the installer's questions again, or only its VM step (Linux)
   exe uninstall [-y]                       remove exe; the data in ~/.exe stays
 
 The daemon also speaks SSH on :2222 (config ssh_listen):

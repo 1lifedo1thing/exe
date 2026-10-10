@@ -184,7 +184,7 @@ func (g *SSHGate) bridgeVM(sconn *ssh.ServerConn, chans <-chan ssh.NewChannel, r
 	}
 	vconn, vchans, vreqs, err := dialVMRaw(ctx, info.IP, cfg.SSHUser, g.s.KeyPath, g.s.guestDial())
 	if err != nil {
-		failAll(fmt.Errorf("dial: %w", err))
+		failAll(fmt.Errorf("dial: %w%s", err, vmm.ReachHint(err)))
 		return
 	}
 	defer vconn.Close()

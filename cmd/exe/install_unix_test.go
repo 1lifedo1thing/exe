@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package main
 
@@ -43,6 +43,9 @@ type fakeHost struct {
 	noSystemd bool
 	kvmOpens  bool
 	fetched   int
+	// a Mac's launchd, as far as the installer talks to it
+	noGUI  bool // nobody is logged in at the screen
+	loaded bool // the agent is loaded
 }
 
 func newFake(t *testing.T, input string) (*fakeHost, layout) {
@@ -58,7 +61,7 @@ func newFake(t *testing.T, input string) (*fakeHost, layout) {
 		groups: map[string][2]bool{},
 	}
 	f.host = &host{
-		User: "ada", Group: "ada", Home: home, Tty: true,
+		OS: "linux", User: "ada", Group: "ada", UID: "1000", Home: home, Tty: true,
 		Env:      func(k string) string { return f.env[k] },
 		In:       bufio.NewReader(strings.NewReader(input)),
 		Out:      &f.out,
@@ -87,6 +90,21 @@ func newFake(t *testing.T, input string) (*fakeHost, layout) {
 		f.quiet = append(f.quiet, strings.Join(argv, " "))
 		if f.noSystemd && argv[0] == "systemctl" {
 			return errors.New("Failed to connect to bus")
+		}
+		if argv[0] == "launchctl" {
+			switch argv[1] {
+			case "print":
+				if f.noGUI || (strings.Count(argv[2], "/") == 2 && !f.loaded) {
+					return errors.New("Could not find service")
+				}
+			case "bootstrap":
+				if f.noGUI {
+					return errors.New("Bootstrap failed: 125: Domain does not support specified action")
+				}
+				f.loaded = true
+			case "bootout":
+				f.loaded = false
+			}
 		}
 		return nil
 	}
@@ -214,7 +232,7 @@ func TestSetupReturnOnEverything(t *testing.T) {
 		t.Errorf("unit:\n%s", unit)
 	}
 	for _, want := range []string{
-		"exe 2026.10.09 for Linux",
+		"exe 2026.10.09 for " + platformWords(runtime.GOOS, runtime.GOARCH) + "\n",
 		"1. Where should exe listen?",
 		"2. Require an API token?",
 		"3. Install the extra desktop apps?\n   Notes, Todo and World Clock (0.0 MB, into ~/.exe/apps)",
@@ -652,14 +670,14 @@ func rig(t *testing.T, latest string, tamper bool) *updateRig {
 	bin := tgz(t, map[string]string{"exe": "exe " + latest, "exe-net-helper": "helper " + latest})
 	apps := appsTgz(t, "two", "Notes", "Todo", "World Clock", "Weather")
 	sums := ""
-	for name, b := range map[string][]byte{release.BinaryAsset(runtime.GOARCH): bin, release.AppsAsset: apps} {
+	for name, b := range map[string][]byte{release.BinaryAsset(runtime.GOOS, runtime.GOARCH): bin, release.AppsAsset: apps} {
 		s := sha256.Sum256(b)
 		sums += hex.EncodeToString(s[:]) + "  " + name + "\n"
 	}
 	if tamper {
 		bin = tgz(t, map[string]string{"exe": "not what was released", "exe-net-helper": "x"})
 	}
-	files := map[string][]byte{release.BinaryAsset(runtime.GOARCH): bin, release.AppsAsset: apps, release.SumsAsset: []byte(sums)}
+	files := map[string][]byte{release.BinaryAsset(runtime.GOOS, runtime.GOARCH): bin, release.AppsAsset: apps, release.SumsAsset: []byte(sums)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/releases/latest", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/releases/tag/"+latest, http.StatusFound)
@@ -1040,5 +1058,283 @@ func TestSetupIsRunAgainAfterAFailure(t *testing.T) {
 	}
 	if !strings.Contains(f.out.String(), "Removed the apps it installed: Notes\n") {
 		t.Errorf("said:\n%s", f.out.String())
+	}
+}
+
+// ---- a Mac: launchd instead of systemd, and no VM step ----
+
+// newMac is newFake as a Mac: the agent lives in ~/Library/LaunchAgents,
+// and a release holds no network helper.
+func newMac(t *testing.T, input string) (*fakeHost, layout, string) {
+	t.Helper()
+	f, l := newFake(t, input)
+	f.OS, f.UID = "darwin", "501"
+	l.Unit = filepath.Join(f.Home, "Library", "LaunchAgents", launchdLabel+".plist")
+	from := t.TempDir()
+	os.WriteFile(filepath.Join(from, "exe"), []byte("the released exe"), 0o755)
+	os.WriteFile(filepath.Join(from, release.AppsAsset), appsTgz(t, "one", "Notes", "Todo"), 0o644)
+	return f, l, from
+}
+
+func launchctl(f *fakeHost) []string {
+	var out []string
+	for _, q := range f.quiet {
+		if strings.HasPrefix(q, "launchctl ") {
+			out = append(out, strings.TrimPrefix(q, "launchctl "))
+		}
+	}
+	return out
+}
+
+func TestSetupOnAMac(t *testing.T) {
+	setVersion(t, "2026.10.09")
+	f, l, from := newMac(t, "\n\n\n")
+	f.KVM = false // there is no /dev/kvm on a Mac, and none is needed
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatalf("%v\n%s", err, f.out.String())
+	}
+	out := f.out.String()
+	if c := readConfig(t, l); c.Listen != "127.0.0.1:7777" || c.APIToken != "" {
+		t.Errorf("config %+v", c)
+	}
+	if b, _ := os.ReadFile(l.Bin); string(b) != "the released exe" {
+		t.Errorf("binary = %q", b)
+	}
+	// three questions: a Mac has nothing to set up for VMs, and says nothing of /dev/kvm
+	for _, want := range []string{"1. Where should exe listen?", "2. Require an API token?", "3. Install the extra desktop apps?", "exe 2026.10.09 is running.",
+		"macOS asks to let it reach devices on your local network: its VMs are there. Choose Allow."} {
+		if !strings.Contains(out, want) {
+			t.Errorf("did not say %q:\n%s", want, out)
+		}
+	}
+	for _, not := range []string{"4.", "/dev/kvm", "run VMs", "sudo", "systemctl", "linger"} {
+		if strings.Contains(out, not) {
+			t.Errorf("a Mac install said %q:\n%s", not, out)
+		}
+	}
+	if _, err := os.Stat(l.Release()); err == nil {
+		if _, err := os.Stat(l.Helper()); err == nil {
+			t.Error("a network helper was staged on a Mac")
+		}
+	}
+	plist, _ := os.ReadFile(l.Unit)
+	for _, want := range []string{
+		"<!-- " + serviceMark,
+		"<string>com.v2core.exe</string>",
+		"<string>" + l.Bin + "</string>\n\t\t<string>serve</string>",
+		"<key>EXE_LAUNCHD</key>\n\t\t<string>gui/501/com.v2core.exe</string>",
+		"<key>KeepAlive</key>\n\t<dict>\n\t\t<key>SuccessfulExit</key>\n\t\t<false/>",
+		"<key>RunAtLoad</key>\n\t<true/>",
+		"<key>AssociatedBundleIdentifiers</key>\n\t<array>\n\t\t<string>com.v2core.exe</string>\n\t</array>",
+		"<key>AbandonProcessGroup</key>\n\t<true/>",
+		"<string>" + filepath.Join(l.State, "launchd.log") + "</string>",
+	} {
+		if !strings.Contains(string(plist), want) {
+			t.Errorf("the agent lacks %q:\n%s", want, plist)
+		}
+	}
+	if strings.Contains(string(plist), "EXE_HOME") {
+		t.Error("EXE_HOME was pinned for the default state folder")
+	}
+	want := []string{"print gui/501", "print gui/501/com.v2core.exe", "bootstrap gui/501 " + l.Unit}
+	if got := launchctl(f); strings.Join(got, "; ") != strings.Join(want, "; ") {
+		t.Errorf("launchctl ran %v, want %v", got, want)
+	}
+	for _, q := range f.quiet {
+		if strings.HasPrefix(q, "systemctl") || strings.HasPrefix(q, "loginctl") {
+			t.Errorf("ran %q on a Mac", q)
+		}
+	}
+	if len(f.ran) != 0 {
+		t.Errorf("ran %v", f.ran)
+	}
+
+	// installing over it: the same agent is only restarted, with the new binary
+	f.quiet = nil
+	f.In = bufio.NewReader(strings.NewReader(""))
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	want = []string{"print gui/501", "print gui/501/com.v2core.exe", "kickstart -k gui/501/com.v2core.exe"}
+	if got := launchctl(f); strings.Join(got, "; ") != strings.Join(want, "; ") {
+		t.Errorf("over an install, launchctl ran %v, want %v", got, want)
+	}
+}
+
+// launchd keeps the agent it read: one that changed is unloaded and loaded anew.
+func TestSetupOnAMacReloadsAChangedAgent(t *testing.T) {
+	setVersion(t, "2026.10.09")
+	f, l, from := newMac(t, "\n\n\n")
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	old, _ := os.ReadFile(l.Unit)
+	os.WriteFile(l.Unit, []byte(strings.Replace(string(old), "<integer>75</integer>", "<integer>20</integer>", 1)), 0o644)
+	f.quiet = nil
+	f.In = bufio.NewReader(strings.NewReader(""))
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(launchctl(f), "; ")
+	if !strings.Contains(got, "bootout gui/501/com.v2core.exe") || !strings.HasSuffix(got, "bootstrap gui/501 "+l.Unit) {
+		t.Errorf("launchctl ran %s", got)
+	}
+	if now, _ := os.ReadFile(l.Unit); string(now) != string(old) {
+		t.Error("the agent was not rewritten")
+	}
+}
+
+// Over SSH, with nobody at the screen, there is no login session to load
+// the agent into: it waits for the next login.
+func TestSetupOnAMacWithNobodyLoggedIn(t *testing.T) {
+	setVersion(t, "2026.10.09")
+	f, l, from := newMac(t, "\n\n\n")
+	f.noGUI = true
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(l.Unit); err != nil {
+		t.Error("the agent was not left for the next login")
+	}
+	out := f.out.String()
+	if !strings.Contains(out, "exe 2026.10.09 is installed.") || !strings.Contains(out, "exe starts at the next login. To run it now: exe serve") {
+		t.Errorf("said:\n%s", out)
+	}
+	for _, c := range launchctl(f) {
+		if strings.HasPrefix(c, "bootstrap") || strings.HasPrefix(c, "kickstart") {
+			t.Errorf("ran launchctl %s with no session to run it in", c)
+		}
+	}
+}
+
+func TestSetupOnAMacLeavesAForeignAgent(t *testing.T) {
+	setVersion(t, "2026.10.09")
+	f, l, from := newMac(t, "\n\n\n")
+	theirs := "<plist><dict><key>Label</key><string>com.v2core.exe</string></dict></plist>"
+	os.MkdirAll(filepath.Dir(l.Unit), 0o755)
+	os.WriteFile(l.Unit, []byte(theirs), 0o644)
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(l.Unit); string(b) != theirs {
+		t.Fatal("an agent the installer did not write was rewritten")
+	}
+	if len(launchctl(f)) != 0 {
+		t.Errorf("launchctl ran %v against an agent that is not the installer's", launchctl(f))
+	}
+}
+
+func TestLaunchdPlist(t *testing.T) {
+	h := &host{OS: "darwin", UID: "502", Home: "/Users/a&b"}
+	l := layout{Bin: "/Users/a&b/.local/bin/exe", State: "/Volumes/Big <disk>/exe", Unit: "/Users/a&b/Library/LaunchAgents/com.v2core.exe.plist"}
+	p := launchdPlist(l, h)
+	for _, want := range []string{
+		"<string>/Users/a&amp;b/.local/bin/exe</string>",
+		"<key>EXE_HOME</key>\n\t\t<string>/Volumes/Big &lt;disk&gt;/exe</string>",
+		"<key>PATH</key>\n\t\t<string>/Users/a&amp;b/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>",
+		"<string>gui/502/com.v2core.exe</string>",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("the agent lacks %q:\n%s", want, p)
+		}
+	}
+	if !strings.HasPrefix(p, "<?xml ") {
+		t.Error("a property list starts with its XML declaration; the installer's mark comes after")
+	}
+}
+
+func TestUninstallOnAMac(t *testing.T) {
+	setVersion(t, "2026.10.09")
+	f, l, from := newMac(t, "\n\n\n")
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	f.quiet = nil
+	if err := runUninstall(l, f.host, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, gone := range []string{l.Bin, l.Unit, filepath.Join(l.Apps(), "Notes")} {
+		if _, err := os.Stat(gone); !os.IsNotExist(err) {
+			t.Errorf("%s is still there", gone)
+		}
+	}
+	if got := launchctl(f); len(got) != 1 || got[0] != "bootout gui/501/com.v2core.exe" {
+		t.Errorf("launchctl ran %v", got)
+	}
+	if out := f.out.String(); strings.Contains(out, "network helper") {
+		t.Errorf("a Mac was told about the network helper:\n%s", out)
+	}
+	if _, err := os.Stat(l.Config()); err != nil {
+		t.Error("the configuration was removed")
+	}
+}
+
+// An update on a Mac: no helper in the release, and the restart that is
+// put off is launchd's to do.
+func TestUpdateOnAMac(t *testing.T) {
+	setVersion(t, "2026.10.09")
+	f, l, from := newMac(t, "\n\n\n")
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	f.out.Reset()
+	latest := "2026.10.10"
+	bin := tgz(t, map[string]string{"exe": "exe " + latest}) // a Mac's tarball holds exe alone
+	apps := appsTgz(t, "two", "Notes", "Todo")
+	sums := ""
+	for name, b := range map[string][]byte{release.BinaryAsset(runtime.GOOS, runtime.GOARCH): bin, release.AppsAsset: apps} {
+		sum := sha256.Sum256(b)
+		sums += hex.EncodeToString(sum[:]) + "  " + name + "\n"
+	}
+	files := map[string][]byte{release.BinaryAsset(runtime.GOOS, runtime.GOARCH): bin, release.AppsAsset: apps, release.SumsAsset: []byte(sums)}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/releases/tag/"+latest, http.StatusFound)
+	})
+	mux.HandleFunc("/releases/download/"+latest+"/", func(w http.ResponseWriter, r *http.Request) {
+		if b, ok := files[filepath.Base(r.URL.Path)]; ok {
+			w.Write(b)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	restart, _ := f.serviceWords()
+	u := &updater{
+		Layout: l, Host: f.host, RestartHint: restart,
+		Client:  &release.Client{Base: srv.URL + "/releases", HTTP: srv.Client()},
+		Probe:   func(string) (string, error) { return "exe " + latest + " (darwin/arm64)", nil },
+		Running: func() bool { return true },
+		Restart: func() error { t.Error("restarted without being asked"); return nil },
+	}
+	f.Tty = false
+	if err := u.run(context.Background(), false, false); err != nil {
+		t.Fatalf("%v\n%s", err, f.out.String())
+	}
+	if b, _ := os.ReadFile(l.Bin); string(b) != "exe "+latest {
+		t.Errorf("binary = %q", b)
+	}
+	if readApp(l, "Todo") != "two" {
+		t.Errorf("Todo = %q", readApp(l, "Todo"))
+	}
+	if _, err := os.Stat(l.Helper()); err == nil {
+		t.Error("a network helper was staged on a Mac")
+	}
+	if out := f.out.String(); !strings.Contains(out, "until you run: launchctl kickstart -k gui/501/com.v2core.exe\n") || strings.Contains(out, "network helper") {
+		t.Errorf("said:\n%s", out)
+	}
+}
+
+func TestPlatformWords(t *testing.T) {
+	for in, want := range map[[2]string]string{
+		{"linux", "amd64"}:  "Linux x86-64",
+		{"linux", "arm64"}:  "Linux ARM64",
+		{"darwin", "amd64"}: "macOS (Intel)",
+		{"darwin", "arm64"}: "macOS (Apple silicon)",
+	} {
+		if got := platformWords(in[0], in[1]); got != want {
+			t.Errorf("%v: %q, want %q", in, got, want)
+		}
 	}
 }
