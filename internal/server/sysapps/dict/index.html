@@ -410,11 +410,14 @@ const article = name => (/^[AEIOU]/.test(name) ? "an " : "a ") + name;
 // A tab is one lookup: its pair of languages, its word, its page, its
 // status line, and — while a session writes its entry — the flight it
 // follows on the window's shared stream. A lookup goes into the open tab,
-// unless that tab is writing: then it opens a tab of its own beside it,
-// and the writing goes on. A tab writing the very word asked for is opened
-// instead. There is no ceiling: as many tabs write at once as are asked
-// to, all on the one stream, and the tab bar scrolls sideways when they
-// outgrow it.
+// with two exceptions. A tab that is writing is left to it: the lookup
+// opens a tab of its own beside it. And an entry on the page gives way
+// only to another entry, one the dictionary keeps and shows at once: a
+// word that has to be written (a minute or two) opens in a tab of its own
+// beside the entry, which stays to be read meanwhile (run's spare). A tab
+// writing the very word asked for is opened instead. There is no ceiling:
+// as many tabs write at once as are asked to, all on the one stream, and
+// the tab bar scrolls sideways when they outgrow it.
 const tabs = [];
 let active = null;
 const CLOSE_CRISP = '<svg class="crisp" width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path fill="#262626" d="M0 0h1v1H0zM6 0h1v1H6zM1 1h1v1H1zM5 1h1v1H5zM2 2h1v1H2zM4 2h1v1H4zM3 3h1v1H3zM2 4h1v1H2zM4 4h1v1H4zM1 5h1v1H1zM5 5h1v1H5zM0 6h1v1H0zM6 6h1v1H6z"/></svg>';
@@ -422,8 +425,12 @@ const CLOSE_FINE = '<svg class="fine" width="7" height="7" viewBox="0 0 7 7" sha
 const BELL = '<svg width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M2 0h3v1h1v1h1v3h-1v1h-1v1h-3v-1h-1v-1h-1v-3h1v-1h1z" fill="currentColor"/></svg>';
 
 function newTab({ src = "en", dst = "zh", q = "", exact = false, after = null } = {}) {
+  // filled: the page shows an entry. ask: a lookup made from this tab whose
+  // start has not answered yet, the tab's own word and page standing until
+  // it does (run's spare)
   const tab = { src, dst, q, exact, busy: false, unseen: false, ctrl: null, ticker: 0, watcher: null,
-    fid: "", key: "", word: "", typed: "", model: "", effort: "", base: 0, at: 0, st: "", stErr: false };
+    fid: "", key: "", word: "", typed: "", model: "", effort: "", base: 0, at: 0, st: "", stErr: false,
+    filled: false, ask: null };
   tab.entry = el("div", { class: "entry" });
   tab.page = el("div", { class: "page off" }, tab.entry);
   pagesEl.append(tab.page);
@@ -497,11 +504,13 @@ function closeTab(tab) {
   else { drawTabs(); remember(); }
 }
 
-// the tab a lookup goes into: the open one, or — while that one writes —
-// a new one beside it
+// the tab a lookup goes into: the open one, or — while that one writes, or
+// waits to hear whether its own lookup is kept — a new one beside it
 function tabFor(q, src, dst, exact) {
-  const same = tabs.find(t => t.busy && t.src === src && t.dst === dst && t.exact === exact &&
-    t.q.toLowerCase() === q.toLowerCase());
+  const same = tabs.find(t => {
+    const a = t.ask || t;
+    return t.busy && a.src === src && a.dst === dst && a.exact === exact && a.q.toLowerCase() === q.toLowerCase();
+  });
   if (same) return { tab: same, open: true };
   if (!active.busy) return { tab: active };
   return { tab: newTab({ src, dst, q, after: active }) };
@@ -509,7 +518,7 @@ function tabFor(q, src, dst, exact) {
 
 // ---- this browser's own: the tabs, which is open, what the field holds ----
 function remember() {
-  const state = { tabs: tabs.map(t => ({ from: t.src, to: t.dst, q: t.q, exact: t.exact, pending: t.busy, unseen: t.unseen })),
+  const state = { tabs: tabs.map(t => ({ from: t.src, to: t.dst, q: t.q, exact: t.exact, pending: t.busy && !t.ask, unseen: t.unseen })),
     active: tabs.indexOf(active), field: field.value };
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
 }
@@ -527,6 +536,7 @@ function paintStatus() {
 
 // ---- what a page shows ----
 function show(tab, ...kids) {
+  tab.filled = false;
   tab.entry.replaceChildren(...kids);
   tab.page.scrollTop = 0;
 }
@@ -605,10 +615,15 @@ function renderEntry(tab, k, live = false) {
       q.translation ? el("div", Object.assign({ class: "tr verse" }, T), q.translation) : null,
       q.source ? el("div", { class: "src" }, "— " + q.source) : null));
   }
-  if (!live) return show(tab, ...kids);
+  if (!live) {
+    show(tab, ...kids);
+    tab.filled = true;
+    return;
+  }
   const pg = tab.page;
   const follow = pg.scrollTop >= pg.scrollHeight - pg.clientHeight - 2;
   tab.entry.replaceChildren(...kids);
+  tab.filled = true;
   if (follow) pg.scrollTop = pg.scrollHeight;
 }
 
@@ -693,6 +708,7 @@ function settle(tab) {
   if (tab.watcher) tab.watcher.stop();
   tab.watcher = null;
   tab.fid = "";
+  tab.ask = null;
   if (tab.busy && tab !== active) tab.unseen = true;
   tab.busy = false;
   drawTab(tab);
@@ -919,7 +935,9 @@ function take(tab, m) {
 // tab tabFor picks: an entry the dictionary keeps comes back at once; one
 // it lacks is written by a Codex session, which takes a minute or two and
 // goes on if the tab or the window closes — the next lookup finds it kept,
-// and one made while it is still writing joins it.
+// and one made while it is still writing joins it. Which of the two it is
+// only the start's answer says, so a tab showing an entry is spared until
+// then (run's spare).
 //
 // Unless exact, the daemon checks the spelling first: an obvious typo is
 // read as the word it stands for (the tab and the field take that word),
@@ -929,22 +947,34 @@ function lookup(exact = false) {
   if (!q) { field.focus(); return; }
   field.value = q;
   const pick = tabFor(q, from.value, to.value, exact);
-  if (pick.open) return activate(pick.tab);
+  if (pick.open) { // (the open tab itself, asked twice, keeps the field as typed)
+    if (pick.tab !== active) activate(pick.tab);
+    return;
+  }
   const tab = pick.tab;
   if (tab !== active) activate(tab);
-  run(tab, q, from.value, to.value, exact);
+  run(tab, q, from.value, to.value, exact, true);
 }
 
 // run is one lookup on one tab: its start answers with the entry, or with
-// the flight the tab then follows on the shared stream
-async function run(tab, q, src, dst, exact) {
+// the flight the tab then follows on the shared stream.
+//
+// spare is a lookup the reader made from the tab, which may show an entry:
+// that page gives way only to another entry. The tab keeps its word and
+// its page until the start answers (busy meanwhile, what was asked in
+// tab.ask); a kept entry then takes the tab, and anything else — a session
+// writing the word, a failure — opens in a tab of its own beside it, the
+// entry left as it was.
+async function run(tab, q, src, dst, exact, spare = false) {
   stopTab(tab);
-  Object.assign(tab, { q, typed: q, src, dst, exact, busy: true, unseen: false });
+  const was = spare && tab.filled ? { st: tab.st, stErr: tab.stErr } : null;
+  if (was) Object.assign(tab, { ask: { q, src, dst, exact }, busy: true, unseen: false });
+  else Object.assign(tab, { q, typed: q, src, dst, exact, busy: true, unseen: false });
   drawTab(tab);
   remember();
   const my = tab.ctrl = new AbortController();
   setStatus(tab, "Looking up “" + q + "”…");
-  let r, m;
+  let r = null, m = {}, down = "";
   try {
     r = await api("/v1/dict/start", { method: "POST", signal: my.signal,
       headers: { "Content-Type": "application/json" },
@@ -952,10 +982,26 @@ async function run(tab, q, src, dst, exact) {
     m = await r.json().catch(() => ({}));
   } catch (e) {
     if (my.signal.aborted) return;
-    return failed(tab, q, exact, "The daemon did not answer.", e.message);
+    down = e.message;
   }
   if (my !== tab.ctrl) return;
   tab.ctrl = null;
+  if (was) {
+    tab.ask = null;
+    if (r && r.ok && m.entry) {
+      Object.assign(tab, { q, typed: q, src, dst, exact });
+      if (tab === active) { from.value = src; to.value = dst; }
+    } else {
+      tab.busy = false;
+      setStatus(tab, was.st, was.stErr);
+      const own = newTab({ src, dst, q, exact, after: tab });
+      Object.assign(own, { typed: q, busy: true });
+      if (tab === active) activate(own);
+      else { drawTab(own); remember(); }
+      tab = own;
+    }
+  }
+  if (!r) return failed(tab, q, exact, "The daemon did not answer.", down);
   if (!r.ok) {
     settle(tab);
     if (r.status === 503) {

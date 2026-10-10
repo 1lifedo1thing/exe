@@ -1422,9 +1422,13 @@ the Codex CLI still opens every entry it keeps, and answers the rest with
 **No Usable LLM Backend**; Codex must be signed in (`codex login`) for the
 rest to be written.
 
-Each lookup has a tab, along the top of the page. Looking up a word
-fills the tab you are on, unless that tab is still writing: then the new
-word opens in a tab of its own beside it and the first keeps writing.
+Each lookup has a tab, along the top of the page. A word the dictionary
+keeps opens at once in the tab you are on, in place of what was there. A
+word that has to be written opens in a tab of its own beside the entry
+you were reading, which stays as it was for the minute or two the
+writing takes; only a tab with no entry on it (a new one, or one whose
+lookup came to nothing) is written in. A lookup made while the tab you
+are on is still writing opens beside it too, and the first keeps writing.
 Looking up a word that a tab is already writing takes you to that tab.
 A tab writing out of sight wears the pulsing green dot, and one that
 finished while you looked elsewhere wears a black dot until you open it.
