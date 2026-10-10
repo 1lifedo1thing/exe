@@ -139,6 +139,15 @@ type Config struct {
 	// APIToken, when set, is required as a Bearer token on every API call.
 	APIToken string `json:"api_token"`
 
+	// VMDir is where the VMs' disks and the base images are kept: its
+	// vms/ and images/ folders. Empty means the state folder itself
+	// (~/.exe), which is where they have always been. It is the one part
+	// of the state that is large — a base image is 3 GB, a VM up to its
+	// disk size — so it is the part that may want another drive: a PC
+	// whose system drive is nearly full, a Linux box with a data volume.
+	// Read at start; moving VMs that exist means moving the two folders.
+	VMDir string `json:"vm_dir,omitempty"`
+
 	// AppsDirs lists extra folders scanned for desktop app bundles in
 	// addition to ~/.exe/apps — e.g. a separate git repo of experimental
 	// apps. A leading ~ expands to the daemon user's home.
@@ -188,6 +197,15 @@ func Dir() string {
 }
 
 func Path() string { return filepath.Join(Dir(), "config.json") }
+
+// VMRoot is the folder that holds vms/ and images/: vm_dir, or the state
+// folder when none is set.
+func (c *Config) VMRoot() string {
+	if c.VMDir != "" {
+		return c.VMDir
+	}
+	return Dir()
+}
 
 func Default() *Config {
 	arch := "arm64"
@@ -327,6 +345,7 @@ func (c *Config) Normalize() {
 	c.ProxyListen = NormalizeListen(c.ProxyListen)
 	c.SSHListen = NormalizeListen(c.SSHListen)
 	c.AdvertiseHost = strings.TrimSpace(c.AdvertiseHost)
+	c.VMDir = strings.TrimSpace(c.VMDir)
 	c.ChatProvider = strings.ToLower(strings.TrimSpace(c.ChatProvider))
 	c.Ollama.Effort = strings.ToLower(strings.TrimSpace(c.Ollama.Effort))
 	c.OpenAI.Model = strings.TrimSpace(c.OpenAI.Model)

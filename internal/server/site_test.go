@@ -26,6 +26,7 @@ func TestSiteHandler(t *testing.T) {
 		{"/icon-192.png", "image/png", "max-age=14400", "PNG"},
 		{"/robots.txt", "text/plain; charset=utf-8", "max-age=14400", "Disallow: /stats\nDisallow: /v1/stats\n"},
 		{"/install.sh", "text/plain; charset=utf-8", "no-cache", "#!/bin/sh\n# exe installer for Linux and macOS"},
+		{"/install.ps1", "text/plain; charset=utf-8", "no-cache", "# exe installer for Windows"},
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", "http://exe.example.com"+tc.path, nil))
@@ -227,5 +228,35 @@ func TestSiteInstallScript(t *testing.T) {
 	cmd.Stdin = strings.NewReader(script)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("sh -n: %v\n%s", err, out)
+	}
+}
+
+// The Windows installer is piped into PowerShell (irm | iex). It has to be
+// one block that runs on its last line, plain ASCII — Windows PowerShell
+// reads a download without a byte-order mark as it pleases — and it must
+// never say exit, which would close the terminal it was pasted into.
+func TestSiteInstallScriptForWindows(t *testing.T) {
+	rec := httptest.NewRecorder()
+	SiteHandler(nil).ServeHTTP(rec, httptest.NewRequest("GET", "http://exe.example.com/install.ps1", nil))
+	script := rec.Body.String()
+	for i, r := range script {
+		if r > 126 || (r < 32 && r != '\n') {
+			t.Fatalf("byte %d is %q: the script has to be plain ASCII with Unix line ends", i, r)
+		}
+	}
+	code := ""
+	for _, line := range strings.Split(script, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			code += line + "\n"
+		}
+	}
+	if !strings.HasPrefix(code, "& {\n") || !strings.HasSuffix(strings.TrimRight(code, "\n"), "\n}") {
+		t.Error("the script is not one block run on its last line")
+	}
+	if regexp.MustCompile(`(?m)^\s*exit\b`).MatchString(code) {
+		t.Error("the script calls exit, which closes the terminal it was pasted into")
+	}
+	if strings.Count(code, "{") != strings.Count(code, "}") {
+		t.Errorf("%d { and %d }", strings.Count(code, "{"), strings.Count(code, "}"))
 	}
 }

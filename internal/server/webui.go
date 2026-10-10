@@ -373,7 +373,7 @@ func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 // It lives beside the transcripts so it survives VM stop/start and, like
 // them, outlives the VM itself.
 func (s *Server) notesPath(vm string) string {
-	return filepath.Join(s.StateDir, "vms", vm, "notes.md")
+	return filepath.Join(s.vmRoot(), "vms", vm, "notes.md")
 }
 
 // notesMax caps a VM's notes blob.

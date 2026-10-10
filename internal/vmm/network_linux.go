@@ -21,7 +21,7 @@ import (
 // reconcileNetworks removes host networking left by a previous daemon. The
 // state lock is held before this runs, so another daemon cannot own these VMs.
 func (m *fcManager) reconcileNetworks() error {
-	entries, err := os.ReadDir(filepath.Join(m.opts.StateDir, "vms"))
+	entries, err := os.ReadDir(filepath.Join(m.opts.vmRoot(), "vms"))
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func (m *fcManager) reconcileNetworks() error {
 
 func (m *fcManager) allocateNetwork() (*vmNetwork, error) {
 	used := make(map[string]bool)
-	entries, err := os.ReadDir(filepath.Join(m.opts.StateDir, "vms"))
+	entries, err := os.ReadDir(filepath.Join(m.opts.vmRoot(), "vms"))
 	if err != nil {
 		return nil, err
 	}

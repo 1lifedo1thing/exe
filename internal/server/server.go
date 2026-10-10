@@ -48,6 +48,10 @@ type Server struct {
 	Proxy      *proxy.Proxy
 	KeyPath    string
 	StateDir   string
+	// VMDir is where the VMs' folders are (config.VMRoot): each VM's
+	// notes, memory and transcripts sit beside its disk and go with it.
+	// Empty means StateDir.
+	VMDir string
 
 	// Logs, when set by main, holds the daemon log ring that GET /v1/logs
 	// streams to the web UI; AccessLogs the access log's, for
@@ -205,8 +209,16 @@ type Server struct {
 	hubAgent hubAgent
 }
 
+// vmRoot is the folder that holds vms/: VMDir, or the state folder.
+func (s *Server) vmRoot() string {
+	if s.VMDir != "" {
+		return s.VMDir
+	}
+	return s.StateDir
+}
+
 func New(cfg *config.Config, vms vmm.Manager, px *proxy.Proxy, keyPath, stateDir string) *Server {
-	s := &Server{VMs: vms, Proxy: px, KeyPath: keyPath, StateDir: stateDir}
+	s := &Server{VMs: vms, Proxy: px, KeyPath: keyPath, StateDir: stateDir, VMDir: cfg.VMDir}
 	// The homepage is a backend of the daemon's own (site.go): a route
 	// pointing at it is served from this binary, not dialled, and its
 	// readers are counted into the node's own stats.db. Tests build a
@@ -535,7 +547,7 @@ func (s *Server) runningVM(ctx context.Context, name string) (*vmm.Info, error) 
 }
 
 func (s *Server) transcriptDir(vm string) string {
-	return filepath.Join(s.StateDir, "vms", vm, "transcripts")
+	return filepath.Join(s.vmRoot(), "vms", vm, "transcripts")
 }
 
 // agentPrecheck validates a vibecode request and resolves the running VM.
@@ -899,11 +911,11 @@ func (s *Server) RestartDaemon(delay time.Duration, running []string) {
 	s.DrainChatRuns(dctx, "stopped: the daemon is restarting")
 	dcancel()
 	s.StopVMs(ctx, running)
-	cmd := exec.Command(exePath, os.Args[1:]...)
+	cmd := restartCommand(exePath, os.Args[1:])
 	cmd.Env = append(os.Environ(), "EXE_AUTOSTART="+strings.Join(running, ","))
 	cmd.Stdout, cmd.Stderr = restartStdio(s.StateDir)
 	cmd.SysProcAttr = restartSysProcAttr()
-	if err := cmd.Start(); err != nil {
+	if err := startHandover(cmd); err != nil {
 		log.Printf("restart: spawn failed: %v", err)
 		return
 	}

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build and publish a release of exe: the Linux and macOS binaries, x86-64
-# and ARM64 each, that the installer (https://exe.v2core.com/install.sh)
-# and `exe update` fetch.
+# and ARM64 each, and the Windows one for x86-64, that the installers
+# (https://exe.v2core.com/install.sh and install.ps1) and `exe update`
+# fetch.
 #
 #   deploy/release.sh build [version]            build dist/release/<version>/ from HEAD
 #   deploy/release.sh build --worktree <version> the same from the files on disk, to test with
@@ -36,15 +37,18 @@
 set -euo pipefail
 
 root=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
+# what the caller says wins over what the file says
+asked_mac=${EXE_MAC_BUILDER:-}
 # shellcheck disable=SC1091
 [ ! -f "$root/deploy/release.env" ] || . "$root/deploy/release.env"
 apps=${EXE_APPS:-$root/../exe-apps}
 repo=${EXE_RELEASE_REPO:-livid/exe}
-mac=${EXE_MAC_BUILDER:-}
+mac=${asked_mac:-${EXE_MAC_BUILDER:-}}
 export PATH="$PATH:/usr/local/go/bin"
 
-binaries=(exe-linux-amd64.tar.gz exe-linux-arm64.tar.gz exe-darwin-amd64.tar.gz exe-darwin-arm64.tar.gz)
-assets=("${binaries[@]}" exe-apps.tar.gz install.sh SHA256SUMS)
+binaries=(exe-linux-amd64.tar.gz exe-linux-arm64.tar.gz exe-darwin-amd64.tar.gz exe-darwin-arm64.tar.gz exe-windows-amd64.tar.gz)
+scripts=(install.sh install.ps1)
+assets=("${binaries[@]}" exe-apps.tar.gz "${scripts[@]}" SHA256SUMS)
 
 die() {
 	echo "release: $*" >&2
@@ -194,6 +198,15 @@ build() {
 		pack "$work/$arch" "$work/out/exe-linux-$arch.tar.gz" "$stamp" exe exe-net-helper
 	done
 
+	# Windows is built here too: no cgo, and nothing of its own to sign
+	# with yet. x86-64 only, which is what its VM backend runs on.
+	echo "building windows/amd64"
+	mkdir -p "$work/windows"
+	(cd "$work/src" &&
+		CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -buildvcs=false \
+			-ldflags "-s -w -X exe/internal/release.Version=$version" -o "$work/windows/exe.exe" ./cmd/exe)
+	pack "$work/windows" "$work/out/exe-windows-amd64.tar.gz" "$stamp" exe.exe
+
 	# macOS: a release is signed with the Developer ID and notarized; a
 	# test build gets an ad-hoc signature
 	local sign=${EXE_MAC_SIGN:-developer-id}
@@ -201,7 +214,7 @@ build() {
 	if [ "$mac" = none ]; then
 		[ -n "$worktree" ] || die "EXE_MAC_BUILDER=none is for test builds; a build from a commit has its macOS binaries"
 		echo "note: no macOS binaries in this build (EXE_MAC_BUILDER=none)"
-		binaries=(exe-linux-amd64.tar.gz exe-linux-arm64.tar.gz)
+		binaries=(exe-linux-amd64.tar.gz exe-linux-arm64.tar.gz exe-windows-amd64.tar.gz)
 		sign=none
 	else
 		mkdir -p "$work/darwin"
@@ -235,8 +248,8 @@ build() {
 	[ ${#bundles[@]} -gt 0 ] || die "no app bundles in $apps"
 	pack "$work/apps" "$work/out/exe-apps.tar.gz" "$apps_stamp" "${bundles[@]}"
 
-	cp "$work/src/internal/server/site/install.sh" "$work/out/install.sh"
-	(cd "$work/out" && sha256sum "${binaries[@]}" exe-apps.tar.gz install.sh >SHA256SUMS)
+	cp "$work/src/internal/server/site/install.sh" "$work/src/internal/server/site/install.ps1" "$work/out/"
+	(cd "$work/out" && sha256sum "${binaries[@]}" exe-apps.tar.gz "${scripts[@]}" >SHA256SUMS)
 	printf '%s\n' "$commit" >"$work/out/.commit"
 	printf '%s\n' "$sign" >"$work/out/.mac-sign"
 	printf '%s\n' "$apps_commit" >"$work/out/.apps-commit"
@@ -246,7 +259,7 @@ build() {
 	mv "$work/out" "$out"
 	echo
 	echo "exe $version, from ${commit:0:12} (apps ${apps_commit:0:12}, ${#bundles[@]} bundles):"
-	(cd "$out" && ls -l "${binaries[@]}" exe-apps.tar.gz install.sh SHA256SUMS | awk '{printf "  %9d  %s\n", $5, $9}')
+	(cd "$out" && ls -l "${binaries[@]}" exe-apps.tar.gz "${scripts[@]}" SHA256SUMS | awk '{printf "  %9d  %s\n", $5, $9}')
 	[ "$sign" = developer-id ] || echo "macOS signature: $sign — a build to test with, not one to publish"
 	echo "in $out"
 }

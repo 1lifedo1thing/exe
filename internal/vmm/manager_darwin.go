@@ -35,7 +35,7 @@ type vzManager struct {
 
 func New(opts Options) (Manager, error) {
 	for _, d := range []string{"vms", "images"} {
-		if err := os.MkdirAll(filepath.Join(opts.StateDir, d), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(opts.vmRoot(), d), 0o755); err != nil {
 			return nil, err
 		}
 	}
@@ -43,7 +43,7 @@ func New(opts Options) (Manager, error) {
 }
 
 func (m *vzManager) vmDir(name string) string {
-	return filepath.Join(m.opts.StateDir, "vms", name)
+	return filepath.Join(m.opts.vmRoot(), "vms", name)
 }
 
 func (m *vzManager) loadMeta(name string) (*vmMeta, error) {
@@ -320,7 +320,7 @@ func (m *vzManager) Delete(ctx context.Context, name string) error {
 }
 
 func (m *vzManager) List(ctx context.Context) ([]*Info, error) {
-	entries, err := os.ReadDir(filepath.Join(m.opts.StateDir, "vms"))
+	entries, err := os.ReadDir(filepath.Join(m.opts.vmRoot(), "vms"))
 	if err != nil {
 		return nil, err
 	}
@@ -435,7 +435,7 @@ func cloneFile(ctx context.Context, base, dst string) error {
 func (m *vzManager) EnsureImage(ctx context.Context) (string, error) {
 	m.dlMu.Lock()
 	defer m.dlMu.Unlock()
-	dest := filepath.Join(m.opts.StateDir, "images", filepath.Base(m.opts.ImageURL))
+	dest := filepath.Join(m.opts.vmRoot(), "images", filepath.Base(m.opts.ImageURL))
 	partial := dest + ".partial"
 
 	var last int64 = -1

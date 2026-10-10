@@ -77,8 +77,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         m = re.match(r"^/releases/download/([^/]+)/([^/]+)$", path)
         if m:
             return self.file(m.group(1), m.group(2))
-        if path == "/install.sh" and now:
-            return self.file(now, "install.sh")
+        if path in ("/install.sh", "/install.ps1") and now:
+            return self.file(now, path[1:])
         if path.startswith("/releases"):
             body = b"releases\n"
             self.send_response(200)

@@ -153,7 +153,7 @@ func New(opts Options) (Manager, error) {
 	}
 	network.IP = ip.To4().Mask(network.Mask)
 
-	for _, d := range []string{opts.StateDir, filepath.Join(opts.StateDir, "vms"), filepath.Join(opts.StateDir, "images")} {
+	for _, d := range []string{opts.StateDir, filepath.Join(opts.vmRoot(), "vms"), filepath.Join(opts.vmRoot(), "images")} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return nil, err
 		}
@@ -166,7 +166,7 @@ func New(opts Options) (Manager, error) {
 	if err := checkKVMAccess(uid, gid, groups); err != nil {
 		return nil, err
 	}
-	for _, d := range []string{filepath.Join(opts.StateDir, "vms"), filepath.Join(opts.StateDir, "images")} {
+	for _, d := range []string{filepath.Join(opts.vmRoot(), "vms"), filepath.Join(opts.vmRoot(), "images")} {
 		if err := os.Chown(d, int(uid), int(gid)); err != nil {
 			return nil, err
 		}
@@ -320,7 +320,7 @@ func checkKVMAccess(uid, gid uint32, groups []uint32) error {
 }
 
 func (m *fcManager) vmDir(name string) string {
-	return filepath.Join(m.opts.StateDir, "vms", name)
+	return filepath.Join(m.opts.vmRoot(), "vms", name)
 }
 
 func (m *fcManager) vmLock(name string) *sync.Mutex {
@@ -1045,7 +1045,7 @@ func (m *fcManager) Delete(ctx context.Context, name string) error {
 }
 
 func (m *fcManager) List(ctx context.Context) ([]*Info, error) {
-	entries, err := os.ReadDir(filepath.Join(m.opts.StateDir, "vms"))
+	entries, err := os.ReadDir(filepath.Join(m.opts.vmRoot(), "vms"))
 	if err != nil {
 		return nil, err
 	}
@@ -1168,7 +1168,7 @@ func (m *fcManager) ensureDownload(ctx context.Context, sourceURL, prefix string
 	if unpackRaw {
 		name = strings.TrimSuffix(name, ".tar.gz")
 	}
-	dest := filepath.Join(m.opts.StateDir, "images", prefix+name)
+	dest := filepath.Join(m.opts.vmRoot(), "images", prefix+name)
 	if st, err := os.Stat(dest); err == nil && st.Size() > 0 {
 		return dest, nil
 	}

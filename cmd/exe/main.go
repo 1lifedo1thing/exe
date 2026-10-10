@@ -54,11 +54,13 @@ Usage:
   exe unexpose <host>                      remove a proxy route
   exe routes                               show proxy routes
   exe version                              say which release this is
+  exe daemon restart                       restart the daemon (its VMs stop and start again)
 
 An exe installed from https://exe.v2core.com/install.sh (Linux, macOS) also has:
   exe update [-check] [-y]                 move to the latest release; -y restarts the daemon unasked
   exe setup [vms]                          the installer's questions again, or only its VM step (Linux)
   exe uninstall [-y]                       remove exe; the data in ~/.exe stays
+  exe daemon start                         start the installed daemon when it is not running
 
 The daemon also speaks SSH on :2222 (config ssh_listen):
   ssh -p 2222 exe@<mac>     lobby: ls / new / rm / code / expose ... (--json for scripts)
@@ -110,6 +112,8 @@ func main() {
 		err = cmdSetup(args)
 	case "uninstall":
 		err = cmdUninstall(args)
+	case "daemon":
+		err = cmdDaemon(args)
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -147,6 +151,7 @@ func cmdServe() error {
 	}
 	mgr, err := vmm.New(vmm.Options{
 		StateDir:       stateDir,
+		VMDir:          cfg.VMDir,
 		ImageURL:       cfg.ImageURL,
 		AlpineImageURL: cfg.AlpineImageURL,
 		SSHUser:        cfg.SSHUser,

@@ -1,5 +1,3 @@
-//go:build linux || darwin
-
 package main
 
 import (
@@ -51,6 +49,7 @@ func cmdUpdate(args []string) error {
 	if real, err := filepath.EvalSymlinks(self); err == nil {
 		self = real
 	}
+	defaultLayout := l // where the installer put things, whatever binary runs this
 	l.Bin = self
 
 	u := updater{
@@ -60,7 +59,7 @@ func cmdUpdate(args []string) error {
 			return strings.TrimSpace(string(out)), err
 		},
 	}
-	if _, ours := unitOurs(l); ours {
+	if _, ours := u.Host.serviceState(defaultLayout); ours {
 		u.RestartHint, _ = u.Host.serviceWords()
 	}
 	// the daemon is asked the way the rest of the CLI asks it
@@ -127,7 +126,7 @@ func (u *updater) run(ctx context.Context, check, yes bool) error {
 	}
 	// before it replaces this one, the new binary has to run here and be
 	// the release that was asked for
-	fresh := filepath.Join(scratch, "exe")
+	fresh := filepath.Join(scratch, binName(h.OS))
 	said, err := u.Probe(fresh)
 	if err != nil {
 		return fmt.Errorf("the downloaded exe does not run on this machine: %w", err)

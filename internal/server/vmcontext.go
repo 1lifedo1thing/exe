@@ -25,7 +25,7 @@ import (
 const memoryMax = 8 << 10
 
 func (s *Server) memoryPath(vm string) string {
-	return filepath.Join(s.StateDir, "vms", vm, "memory.md")
+	return filepath.Join(s.vmRoot(), "vms", vm, "memory.md")
 }
 
 func (s *Server) readVMMemory(vm string) string {

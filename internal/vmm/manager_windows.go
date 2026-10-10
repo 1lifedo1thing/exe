@@ -91,7 +91,7 @@ func New(opts Options) (Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, d := range []string{opts.StateDir, filepath.Join(opts.StateDir, "vms"), filepath.Join(opts.StateDir, "images")} {
+	for _, d := range []string{opts.StateDir, filepath.Join(opts.vmRoot(), "vms"), filepath.Join(opts.vmRoot(), "images")} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			network.Close()
 			return nil, err
@@ -242,7 +242,7 @@ func assignToJob(job windows.Handle, pid int) error {
 }
 
 func (m *qemuManager) vmDir(name string) string {
-	return filepath.Join(m.opts.StateDir, "vms", name)
+	return filepath.Join(m.opts.vmRoot(), "vms", name)
 }
 
 func (m *qemuManager) vmLock(name string) *sync.Mutex {
@@ -381,7 +381,7 @@ func (m *qemuManager) Create(ctx context.Context, spec Spec) (*Info, error) {
 // allocateIP picks the first guest address not claimed by an existing VM.
 func (m *qemuManager) allocateIP() (string, error) {
 	used := make(map[string]bool)
-	entries, err := os.ReadDir(filepath.Join(m.opts.StateDir, "vms"))
+	entries, err := os.ReadDir(filepath.Join(m.opts.vmRoot(), "vms"))
 	if err != nil {
 		return "", err
 	}
@@ -765,7 +765,7 @@ func (m *qemuManager) Delete(ctx context.Context, name string) error {
 }
 
 func (m *qemuManager) List(ctx context.Context) ([]*Info, error) {
-	entries, err := os.ReadDir(filepath.Join(m.opts.StateDir, "vms"))
+	entries, err := os.ReadDir(filepath.Join(m.opts.vmRoot(), "vms"))
 	if err != nil {
 		return nil, err
 	}
@@ -851,7 +851,7 @@ func (m *qemuManager) ensureDownload(ctx context.Context, sourceURL string) (str
 	if name == "." || name == "/" || name == "" {
 		return "", fmt.Errorf("URL has no filename: %s", sourceURL)
 	}
-	dest := filepath.Join(m.opts.StateDir, "images", name)
+	dest := filepath.Join(m.opts.vmRoot(), "images", name)
 	if st, err := os.Stat(dest); err == nil && st.Size() > 0 {
 		return dest, nil
 	}
@@ -889,4 +889,14 @@ func (m *qemuManager) ensureDownload(ctx context.Context, sourceURL string) (str
 	}
 	log.Printf("download ready: %s", dest)
 	return dest, nil
+}
+
+// WHPXAvailable reports whether the Windows Hypervisor Platform is there
+// to run VMs on, for the installer to ask before the daemon does.
+func WHPXAvailable() bool { return checkWHPX() == nil }
+
+// FindQEMU is the QEMU the backend would run by default, or "".
+func FindQEMU() string {
+	p, _ := findQEMU("")
+	return p
 }

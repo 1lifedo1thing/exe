@@ -26,10 +26,11 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   record the CID, a working download URL and SHA-256 in the relevant doc.
   Verify the pin and a fresh download; keep the binaries out of Git.
   Releases are the exception: they live on GitHub only.
-- Releases (Linux and macOS, x86-64 and ARM64 each; `docs/release.md`):
-  build with `deploy/release.sh build` — the macOS binaries are built and
-  signed on the Mac named in `deploy/release.env` — test on `lab`,
-  `precision` and the Mac `birdie` through `deploy/release-mirror.py`, and
+- Releases (Linux and macOS, x86-64 and ARM64 each, and Windows x86-64;
+  `docs/release.md`): build with `deploy/release.sh build` — the macOS
+  binaries are built and signed on the Mac named in `deploy/release.env` —
+  test on `lab`, `precision`, the Mac `birdie` and the PC `world` through
+  `deploy/release-mirror.py`, and
   publish with `deploy/release.sh publish` only when Livid says "release a
   new version": it pushes `main` and a tag, and a published release cannot
   be changed. The version is the UTC date. The hub carries the

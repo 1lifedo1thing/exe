@@ -1,5 +1,3 @@
-//go:build linux || darwin
-
 package main
 
 import (
@@ -15,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -1336,5 +1335,521 @@ func TestPlatformWords(t *testing.T) {
 		if got := platformWords(in[0], in[1]); got != want {
 			t.Errorf("%v: %q, want %q", in, got, want)
 		}
+	}
+}
+
+// ---- Windows: a registry entry instead of a service, QEMU instead of a
+// helper, and a drive to choose ----
+
+type fakeWin struct {
+	login    string
+	path     []string
+	started  [][]string
+	killed   []string
+	later    []string
+	restarts int
+	running  bool // a daemon answers
+}
+
+const gb = int64(1) << 30
+
+// worldDrives is the PC the installer was first tried on: a system drive
+// that is nearly full, a network disk with the most room, and a second SSD.
+func worldDrives() []drive {
+	return []drive{
+		{Letter: "C:", Free: 14 * gb, Size: 937 * gb, Kind: "SSD", Home: true},
+		{Letter: "D:", Free: 1011 * gb, Size: 2038 * gb, Kind: "network disk (iSCSI)", Network: true},
+		{Letter: "G:", Free: 192 * gb, Size: 3726 * gb, Kind: "SSD"},
+	}
+}
+
+func newWin(t *testing.T, input string) (*fakeHost, *fakeWin, layout, string) {
+	t.Helper()
+	f, l := newFake(t, input)
+	w := &fakeWin{}
+	f.OS = "windows"
+	f.env["SystemRoot"] = `C:\Windows`
+	f.tools["winget"] = true
+	l.Bin = filepath.Join(f.Home, "AppData", "Local", "Programs", "exe", "exe.exe")
+	l.Unit = ""
+	f.Win = &winHost{
+		Session: true, CanVM: true,
+		Drives:   worldDrives,
+		WHPX:     func() bool { return true },
+		QEMU:     func() string { return "" },
+		Login:    func() string { return w.login },
+		SetLogin: func(cmd string) error { w.login = cmd; return nil },
+		AddPath: func(dir string) (bool, error) {
+			if has(w.path, dir) {
+				return false, nil
+			}
+			w.path = append(w.path, dir)
+			return true, nil
+		},
+		DelPath:     func(dir string) error { w.path = nil; return nil },
+		Start:       func(argv []string) error { w.started = append(w.started, argv); w.running = true; return nil },
+		Kill:        func(bin string) int { w.killed = append(w.killed, bin); w.running = false; return 1 },
+		DeleteLater: func(p string) error { w.later = append(w.later, p); return nil },
+	}
+	f.Reach = func(string) bool { return w.running }
+	f.RestartDaemon = func(string, string) error { w.restarts++; return nil }
+	from := t.TempDir()
+	os.WriteFile(filepath.Join(from, "exe.exe"), []byte("the released exe"), 0o755)
+	os.WriteFile(filepath.Join(from, release.AppsAsset), appsTgz(t, "one", "Notes", "Todo"), 0o644)
+	return f, w, l, from
+}
+
+func vmDirOf(t *testing.T, l layout) string {
+	t.Helper()
+	return readConfig(t, l).VMDir
+}
+
+func TestSetupOnWindows(t *testing.T) {
+	setVersion(t, "2026.10.11")
+	// Return on the first three, yes to the VM step, Return on the drive
+	f, w, l, from := newWin(t, "\n\n\ny\n\n")
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatalf("%v\n%s", err, f.out.String())
+	}
+	out := f.out.String()
+	for _, want := range []string{
+		"1. Where should exe listen?",
+		"2. Require an API token?",
+		"3. Install the extra desktop apps?",
+		"4. Set this machine up to run VMs? Windows asks for an administrator's approval. This would run:\n" +
+			"     winget install --id SoftwareFreedomConservancy.QEMU -e --accept-package-agreements --accept-source-agreements   # QEMU\n",
+		"5. Which drive should hold the VMs?\n   A VM takes up to its disk size (20 GB by default); the base image takes 3 GB.\n",
+		"     1) C:    14 GB free of  937 GB   SSD, your home folder\n",
+		"     2) D:  1011 GB free of 2038 GB   network disk (iSCSI)\n",
+		"     3) G:   192 GB free of 3726 GB   SSD\n",
+		"   Choice [3]: ",
+		"exe 2026.10.11 is running.",
+		"exe is on your PATH in every terminal you open from now on.",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("did not say %q:\n%s", want, out)
+		}
+	}
+	for _, not := range []string{"sudo", "/dev/kvm", "systemctl", "launchctl", "linger", "~", "export PATH"} {
+		if strings.Contains(out, not) {
+			t.Errorf("a Windows install said %q:\n%s", not, out)
+		}
+	}
+	// the default was the second SSD: the home drive has no room, and a
+	// network disk is never chosen for anyone
+	if got := vmDirOf(t, l); got != `G:\exe` {
+		t.Errorf("vm_dir = %q, want G:\\exe", got)
+	}
+	if b, _ := os.ReadFile(l.Bin); string(b) != "the released exe" {
+		t.Errorf("binary at %s = %q", l.Bin, b)
+	}
+	// at sign-in Windows runs the starter, hidden; the daemon itself is
+	// started with a console of its own
+	wantLogin := `C:\Windows\System32\conhost.exe --headless ` + l.Bin + ` daemon start`
+	if w.login != wantLogin {
+		t.Errorf("sign-in entry = %q, want %q", w.login, wantLogin)
+	}
+	if len(w.started) != 1 || strings.Join(w.started[0], " ") != l.Bin+" serve" {
+		t.Errorf("started %v", w.started)
+	}
+	if len(f.ran) != 1 || !strings.HasPrefix(f.ran[0], "winget install --id SoftwareFreedomConservancy.QEMU") {
+		t.Errorf("the VM step ran %v — winget asks for its own approval and is run as it is", f.ran)
+	}
+	if len(w.path) != 1 || w.path[0] != filepath.Dir(l.Bin) {
+		t.Errorf("PATH got %v", w.path)
+	}
+	for _, q := range f.quiet {
+		t.Errorf("ran %q", q)
+	}
+	if _, err := os.Stat(l.Helper()); err == nil {
+		t.Error("a network helper was staged on Windows")
+	}
+
+	// installing over it: the configuration is kept, the drive is not asked
+	// about again, and the daemon that is running restarts itself
+	f.In = bufio.NewReader(strings.NewReader(""))
+	f.out.Reset()
+	f.Win.QEMU = func() string { return `C:\Program Files\qemu\qemu-system-x86_64.exe` }
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	if out := f.out.String(); strings.Contains(out, "drive") || strings.Contains(out, "?") {
+		t.Errorf("installing over an install asked again:\n%s", out)
+	}
+	if w.restarts != 1 || len(w.started) != 1 {
+		t.Errorf("restarts %d, starts %d — a running daemon is asked to restart, not started twice", w.restarts, len(w.started))
+	}
+}
+
+func TestSetupOnWindowsChoosingADrive(t *testing.T) {
+	setVersion(t, "2026.10.11")
+	for input, want := range map[string]string{
+		"\n\n\n\n":        `G:\exe`, // nothing to set up, Return on the drive
+		"\n\n\n1\n":       ``,       // the home drive: the VMs stay beside everything else
+		"\n\n\n2\n":       `D:\exe`, // a network disk may be chosen, it is only never the default
+		"\n\n\ng:\n":      `G:\exe`,
+		"\n\n\n9\nQ\nd\n": `D:\exe`, // asked again until it is a drive
+	} {
+		f, _, l, from := newWin(t, input)
+		f.Win.QEMU = func() string { return `C:\Program Files\qemu\qemu-system-x86_64.exe` }
+		if err := runSetup(l, f.host, from); err != nil {
+			t.Fatal(err)
+		}
+		if got := vmDirOf(t, l); got != want {
+			t.Errorf("answers %q: vm_dir = %q, want %q", input, got, want)
+		}
+		if strings.Contains(f.out.String(), "run VMs?") {
+			t.Errorf("a PC with everything for VMs was asked to set them up:\n%s", f.out.String())
+		}
+	}
+
+	// room on the home drive: it is the default, and no folder of its own
+	f, _, l, from := newWin(t, "\n\n\n\n")
+	f.Win.QEMU = func() string { return "qemu" }
+	f.Win.Drives = func() []drive {
+		d := worldDrives()
+		d[0].Free = 300 * gb
+		return d
+	}
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	if got := vmDirOf(t, l); got != "" || !strings.Contains(f.out.String(), "Choice [1]: ") {
+		t.Errorf("vm_dir = %q\n%s", got, f.out.String())
+	}
+
+	// one drive: there is nothing to ask
+	f, _, l, from = newWin(t, "\n\n\n")
+	f.Win.QEMU = func() string { return "qemu" }
+	f.Win.Drives = func() []drive { return worldDrives()[:1] }
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(f.out.String(), "drive") {
+		t.Errorf("asked about drives on a PC with one:\n%s", f.out.String())
+	}
+
+	// the VM step declined: no VMs, so no drive for them
+	f, _, l, from = newWin(t, "\n\n\nn\n")
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(f.out.String(), "Which drive") || vmDirOf(t, l) != "" || len(f.ran) != 0 {
+		t.Errorf("after no to VMs: vm_dir %q, ran %v\n%s", vmDirOf(t, l), f.ran, f.out.String())
+	}
+
+	// nobody to ask: the same default, or the drive the environment names
+	f, _, l, from = newWin(t, "")
+	f.Tty = false
+	f.Win.QEMU = func() string { return "qemu" }
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	if vmDirOf(t, l) != `G:\exe` || !strings.Contains(f.out.String(), "VMs on G:, 192 GB free") {
+		t.Errorf("with nobody to ask: %q\n%s", vmDirOf(t, l), f.out.String())
+	}
+	f, _, l, from = newWin(t, "")
+	f.Tty = false
+	f.Win.QEMU = func() string { return "qemu" }
+	f.env[envVMDrive] = "d"
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	if vmDirOf(t, l) != `D:\exe` {
+		t.Errorf("%s=d: vm_dir = %q", envVMDrive, vmDirOf(t, l))
+	}
+	f, _, l, from = newWin(t, "")
+	f.Tty = false
+	f.Win.QEMU = func() string { return "qemu" }
+	f.env[envVMDrive] = "Z:"
+	if err := runSetup(l, f.host, from); err == nil {
+		t.Errorf("%s=Z: passed on a PC without a Z:", envVMDrive)
+	}
+}
+
+func TestPickDrive(t *testing.T) {
+	d := worldDrives()
+	if got := pickDrive(d); d[got].Letter != "G:" {
+		t.Errorf("picked %s", d[got].Letter)
+	}
+	d[0].Free = vmRoom
+	if got := pickDrive(d); d[got].Letter != "C:" {
+		t.Errorf("with room at home, picked %s", d[got].Letter)
+	}
+	// only a full home drive and a network disk: the network disk is still not it
+	d = worldDrives()[:2]
+	if got := pickDrive(d); d[got].Letter != "C:" {
+		t.Errorf("picked %s over the PC's own drive", d[got].Letter)
+	}
+}
+
+// The hypervisor platform is two Windows features that need an
+// administrator and a restart; without elevation the command is started
+// again through the approval dialog.
+func TestSetupOnWindowsTurnsTheHypervisorOn(t *testing.T) {
+	setVersion(t, "2026.10.11")
+	f, _, l, from := newWin(t, "\n\n\ny\n\n")
+	f.Win.WHPX = func() bool { return false }
+	f.Win.QEMU = func() string { return "qemu" }
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	out := f.out.String()
+	dism := "dism /online /enable-feature /featurename:HypervisorPlatform /featurename:VirtualMachinePlatform /all /norestart"
+	if !strings.Contains(out, "     "+dism+"\n") || !strings.Contains(out, "Restart Windows before creating a VM") {
+		t.Errorf("said:\n%s", out)
+	}
+	if len(f.ran) != 1 || !strings.HasPrefix(f.ran[0], "powershell -NoProfile -Command $p = Start-Process -FilePath 'dism' -ArgumentList '/online','/enable-feature',") ||
+		!strings.Contains(f.ran[0], "-Verb RunAs -Wait -PassThru; exit $p.ExitCode") {
+		t.Errorf("ran %v", f.ran)
+	}
+
+	// already an administrator: the command itself, and no talk of approval
+	f, _, l, from = newWin(t, "\n\n\ny\n\n")
+	f.Win.WHPX = func() bool { return false }
+	f.Win.QEMU = func() string { return "qemu" }
+	f.Win.Elevated = true
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.ran) != 1 || f.ran[0] != dism || strings.Contains(f.out.String(), "approval") {
+		t.Errorf("elevated: ran %v\n%s", f.ran, f.out.String())
+	}
+}
+
+// dism answers 3010 when it has done its work and Windows must restart.
+func TestStepFineExitCodes(t *testing.T) {
+	err := exec.Command("sh", "-c", "exit 3").Run()
+	if err == nil {
+		t.Skip("no sh to exit 3 with")
+	}
+	if !(step{Fine: []int{3}}).fine(err) || (step{Fine: []int{4}}).fine(err) || (step{}).fine(err) {
+		t.Error("exit codes a step counts as success are not read right")
+	}
+}
+
+// Over ssh the installer is not in the user's desktop session: what it
+// started there would end with the connection. A task that runs once, in
+// the signed-in user's session, starts the daemon where it stays.
+func TestSetupOnWindowsOverSSH(t *testing.T) {
+	setVersion(t, "2026.10.11")
+	f, w, l, from := newWin(t, "")
+	f.Tty = false
+	f.Win.Session = false
+	f.Win.QEMU = func() string { return "qemu" }
+	reach := 0
+	f.Reach = func(string) bool { reach++; return reach > 1 } // down until the task has run
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatalf("%v\n%s", err, f.out.String())
+	}
+	if len(w.started) != 0 {
+		t.Errorf("started %v in a session that ends with the connection", w.started)
+	}
+	// the task runs the starter, not the daemon: a task's own process
+	// is ended with the task
+	want := []string{
+		`schtasks /Create /TN exe daemon start /TR C:\Windows\System32\conhost.exe --headless ` + l.Bin + ` daemon start /SC ONCE /ST 23:59 /IT /F`,
+		`schtasks /Run /TN exe daemon start`,
+		`schtasks /Delete /TN exe daemon start /F`,
+	}
+	if strings.Join(f.quiet, "\n") != strings.Join(want, "\n") {
+		t.Errorf("ran:\n%s\nwant:\n%s", strings.Join(f.quiet, "\n"), strings.Join(want, "\n"))
+	}
+	if !strings.Contains(f.out.String(), "is running.") {
+		t.Errorf("said:\n%s", f.out.String())
+	}
+
+	// nobody signed in: the task cannot run, and the installer says when exe starts
+	f, w, l, from = newWin(t, "")
+	f.Tty = false
+	f.Win.Session = false
+	f.Win.QEMU = func() string { return "qemu" }
+	f.host.Quiet = func(argv ...string) error {
+		if argv[1] == "/Run" {
+			return errors.New("ERROR: The operator or administrator has refused the request")
+		}
+		return nil
+	}
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	if out := f.out.String(); !strings.Contains(out, "is installed.") || !strings.Contains(out, "exe starts the next time you sign in to Windows (nobody is signed in at this PC)") {
+		t.Errorf("said:\n%s", out)
+	}
+	if want := `C:\Windows\System32\conhost.exe --headless ` + l.Bin + ` daemon start`; w.login != want {
+		t.Errorf("sign-in entry = %q", w.login)
+	}
+}
+
+func TestSetupOnWindowsLeavesAForeignEntry(t *testing.T) {
+	setVersion(t, "2026.10.11")
+	f, w, l, from := newWin(t, "\n\n\n\n")
+	f.Win.QEMU = func() string { return "qemu" }
+	w.login = `"D:\src\exe\exe.exe" serve`
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	if w.login != `"D:\src\exe\exe.exe" serve` || len(w.started) != 0 {
+		t.Errorf("sign-in entry %q, started %v", w.login, w.started)
+	}
+	if out := f.out.String(); !strings.Contains(out, "That entry is left as it is") || !strings.Contains(out, "is installed.") {
+		t.Errorf("said:\n%s", out)
+	}
+}
+
+func TestSetupOnAWindowsPCThatCannotRunVMs(t *testing.T) {
+	setVersion(t, "2026.10.11")
+	f, _, l, from := newWin(t, "\n\n\n")
+	f.Win.CanVM = false
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	out := f.out.String()
+	if !strings.Contains(out, "exe runs VMs on x86-64 Windows only") || strings.Contains(out, "drive") || strings.Contains(out, "run VMs?") {
+		t.Errorf("said:\n%s", out)
+	}
+}
+
+func TestUninstallOnWindows(t *testing.T) {
+	setVersion(t, "2026.10.11")
+	f, w, l, from := newWin(t, "\n\n\n\n")
+	f.Win.QEMU = func() string { return "qemu" }
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	// an update moved the running binary aside, and the daemon has not
+	// restarted since: it is that file which is running
+	aside := l.Bin + ".old"
+	if err := os.WriteFile(aside, []byte("the release before"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f.out.Reset()
+	if err := runUninstall(l, f.host, true); err != nil {
+		t.Fatal(err)
+	}
+	if w.login != "" || strings.Join(w.killed, " ") != l.Bin+" "+aside || len(w.path) != 0 {
+		t.Errorf("sign-in entry %q, killed %v, PATH %v", w.login, w.killed, w.path)
+	}
+	if left, _ := os.ReadDir(filepath.Dir(l.Bin)); len(left) != 0 {
+		t.Errorf("left in the program folder: %v", left)
+	}
+	out := f.out.String()
+	if !strings.Contains(out, "Stopped exe; it no longer starts when you sign in.") || !strings.Contains(out, `Your VMs are in G:\exe.`) {
+		t.Errorf("said:\n%s", out)
+	}
+	if _, err := os.Stat(l.Config()); err != nil {
+		t.Error("the configuration was removed")
+	}
+}
+
+func TestWinCommandLine(t *testing.T) {
+	got := winCommandLine([]string{`C:\Windows\System32\conhost.exe`, "--headless", `C:\Users\Ada Lovelace\AppData\Local\Programs\exe\exe.exe`, "serve"})
+	want := `C:\Windows\System32\conhost.exe --headless "C:\Users\Ada Lovelace\AppData\Local\Programs\exe\exe.exe" serve`
+	if got != want {
+		t.Errorf("%s", got)
+	}
+}
+
+// Windows will not let a running program's file be replaced, only renamed:
+// the old binary is moved aside, and cleared out by a later update.
+func TestReplaceARunningProgram(t *testing.T) {
+	dir := t.TempDir()
+	dst, tmp := filepath.Join(dir, "exe.exe"), filepath.Join(dir, "exe.exe.new")
+	os.WriteFile(dst, []byte("running"), 0o755)
+	os.WriteFile(tmp, []byte("new"), 0o755)
+	real := renameFile
+	t.Cleanup(func() { renameFile = real })
+	locked := true // the file at dst is a program that is running
+	renameFile = func(from, to string) error {
+		if to == dst && locked {
+			if _, err := os.Stat(dst); err == nil {
+				return errors.New("Access is denied.")
+			}
+		}
+		return real(from, to)
+	}
+	if err := replaceFile(tmp, dst); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(dst); string(b) != "new" {
+		t.Errorf("in place: %q", b)
+	}
+	if b, _ := os.ReadFile(dst + ".old"); string(b) != "running" {
+		t.Errorf("moved aside: %q", b)
+	}
+	// the next update: the daemon has restarted, the old file is nobody's
+	locked = false
+	os.WriteFile(tmp, []byte("newer"), 0o755)
+	if err := replaceFile(tmp, dst); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(dst + ".old"); !os.IsNotExist(err) {
+		t.Error("what an earlier update moved aside was left for good")
+	}
+	if b, _ := os.ReadFile(dst); string(b) != "newer" {
+		t.Errorf("in place: %q", b)
+	}
+	// a second file that cannot go: the next one gets a name of its own
+	locked = true
+	os.WriteFile(dst+".old", []byte("still in use"), 0o755)
+	os.WriteFile(tmp, []byte("newest"), 0o755)
+	if err := replaceFile(tmp, dst); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(dst); string(b) != "newest" {
+		t.Errorf("in place: %q", b)
+	}
+}
+
+func TestUpdateOnWindows(t *testing.T) {
+	setVersion(t, "2026.10.11")
+	f, w, l, from := newWin(t, "\n\n\n\n")
+	f.Win.QEMU = func() string { return "qemu" }
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatal(err)
+	}
+	f.out.Reset()
+	latest := "2026.10.12"
+	bin := tgz(t, map[string]string{"exe.exe": "exe " + latest})
+	apps := appsTgz(t, "two", "Notes", "Todo")
+	sums := ""
+	for name, b := range map[string][]byte{release.BinaryAsset(runtime.GOOS, runtime.GOARCH): bin, release.AppsAsset: apps} {
+		sum := sha256.Sum256(b)
+		sums += hex.EncodeToString(sum[:]) + "  " + name + "\n"
+	}
+	files := map[string][]byte{release.BinaryAsset(runtime.GOOS, runtime.GOARCH): bin, release.AppsAsset: apps, release.SumsAsset: []byte(sums)}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/releases/latest", func(rw http.ResponseWriter, r *http.Request) {
+		http.Redirect(rw, r, "/releases/tag/"+latest, http.StatusFound)
+	})
+	mux.HandleFunc("/releases/download/"+latest+"/", func(rw http.ResponseWriter, r *http.Request) {
+		if b, ok := files[filepath.Base(r.URL.Path)]; ok {
+			rw.Write(b)
+			return
+		}
+		http.NotFound(rw, r)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	restart, _ := f.serviceWords()
+	u := &updater{
+		Layout: l, Host: f.host, RestartHint: restart,
+		Client:  &release.Client{Base: srv.URL + "/releases", HTTP: srv.Client()},
+		Probe:   func(string) (string, error) { return "exe " + latest + " (windows/amd64)", nil },
+		Running: func() bool { return w.running },
+		Restart: func() error { t.Error("restarted without being asked"); return nil },
+	}
+	f.Tty = false
+	if err := u.run(context.Background(), false, false); err != nil {
+		t.Fatalf("%v\n%s", err, f.out.String())
+	}
+	if b, _ := os.ReadFile(l.Bin); string(b) != "exe "+latest {
+		t.Errorf("binary = %q", b)
+	}
+	if readApp(l, "Todo") != "two" {
+		t.Errorf("Todo = %q", readApp(l, "Todo"))
+	}
+	if out := f.out.String(); !strings.Contains(out, "until you run: exe daemon restart\n") || strings.Contains(out, "network helper") {
+		t.Errorf("said:\n%s", out)
 	}
 }

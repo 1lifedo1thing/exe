@@ -52,3 +52,17 @@ func TestNormalizeServices(t *testing.T) {
 		t.Fatalf("empty services became %v", c.Services)
 	}
 }
+
+// vm_dir moves the VMs and nothing else; without it they stay where they were.
+func TestVMRoot(t *testing.T) {
+	t.Setenv("EXE_HOME", t.TempDir())
+	c := Default()
+	if c.VMRoot() != Dir() {
+		t.Errorf("VMRoot = %q, want the state folder %q", c.VMRoot(), Dir())
+	}
+	c.VMDir = "  /data/exe  "
+	c.Normalize()
+	if c.VMRoot() != "/data/exe" {
+		t.Errorf("VMRoot = %q", c.VMRoot())
+	}
+}

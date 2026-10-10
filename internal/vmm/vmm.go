@@ -94,7 +94,10 @@ type PortForwarder interface {
 }
 
 type Options struct {
-	StateDir       string
+	StateDir string
+	// VMDir holds the VMs' disks and the base images (its vms/ and
+	// images/ folders); empty means StateDir. See config.VMDir.
+	VMDir          string
 	ImageURL       string
 	AlpineImageURL string
 	SSHUser        string
@@ -102,6 +105,14 @@ type Options struct {
 	PrivateKeyPath string
 	Firecracker    FirecrackerOptions
 	QEMU           QEMUOptions
+}
+
+// vmRoot is the folder vms/ and images/ live in.
+func (o Options) vmRoot() string {
+	if o.VMDir != "" {
+		return o.VMDir
+	}
+	return o.StateDir
 }
 
 type FirecrackerOptions struct {
