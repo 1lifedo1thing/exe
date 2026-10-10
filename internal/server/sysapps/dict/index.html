@@ -158,6 +158,12 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
 /* the open tab keeps its whole word (up to the widest a tab gets); the
    others narrow, then the bar scrolls */
 .tab.active { flex-shrink: 0; }
+/* the desktop's block sets the label on the tab's lowest 14px, which leaves
+   capitals 9px clear under the top line and 3px over the pages' line; here
+   the word, its mark and its close box stand 3px higher, 6px clear each
+   way. Lifted as they are rather than by moving the 8px top border: that
+   is the shape's own slice, and stays whole device pixels at 150 percent. */
+.tab > span { position: relative; top: -3px; }
 .tab .mk { flex: none; width: 7px; height: 7px; margin-top: 4px; }
 .tab .mk svg { display: block; }
 .tab .mk.live { border-radius: 50%; background: var(--green); width: 6px; height: 6px; margin: 4px 0 0 1px;
