@@ -256,6 +256,10 @@ func TestUpdateNow(t *testing.T) {
 	if a.Job == nil || a.Job.State != "restarting" || a.Installed != "2026.10.11" {
 		t.Errorf("while restarting: job %+v, installed %q", a.Job, a.Installed)
 	}
+	// the installer's word on the restart it left alone never was the status
+	if strings.Contains(a.Job.Message, "keeps running") {
+		t.Errorf("the job's message is the installer's closing line: %q", a.Job.Message)
+	}
 	if f.asked.Load() != 1 {
 		t.Errorf("the release address was asked %d times during one update", f.asked.Load())
 	}
@@ -290,6 +294,13 @@ func TestUpdateNow(t *testing.T) {
 	next.upd.version = func() string { return "2026.10.10" }
 	if _, a = g.call(t, "GET", "/v1/update", ""); a.Last == nil || a.Last.OK {
 		t.Errorf("back as the old version: %+v", a.Last)
+	}
+	// but one that has since moved on past that release has not failed at
+	// anything: the record is about a restart long done
+	next.upd.version = func() string { return "2026.10.12" }
+	next.upd.now = time.Now
+	if _, a = g.call(t, "GET", "/v1/update", ""); a.Last != nil {
+		t.Errorf("a record of an older update is still reported: %+v", a.Last)
 	}
 }
 

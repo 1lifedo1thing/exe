@@ -135,6 +135,23 @@ printf '[Service]\nEnvironment=EXE_RELEASE_URL=http://<this machine>:7796/releas
 systemctl --user daemon-reload && systemctl --user restart exe
 ```
 
+On a Mac the service is the launchd agent, and `launchctl setenv` does not
+reach it: add the variable to `EnvironmentVariables` in
+`~/Library/LaunchAgents/com.v2core.exe.plist` (keep the comment that marks
+the file as the installer's), then `launchctl bootout gui/$(id -u)/com.v2core.exe`
+and `launchctl bootstrap gui/$(id -u) <the file>`, which is how the
+installer reloads a changed agent. Running the installer again afterwards
+puts the file back. Give the mirror's Tailscale address there, not a LAN
+one: a launchd-started exe that reaches for the local network before it
+has been allowed to raises macOS's Local Network alert on the Mac's
+screen and gets "no route to host" until somebody answers it. A VM needs
+that permission in any case, so say so to whoever sits at the Mac before
+creating one. And a Mac's exe that listens on its Tailscale address must
+not be restarted while Tailscale is stopped there.
+
+A daemon keeps its answer about the newest release for twelve hours, so
+after moving `LATEST` on press Check Now (or ask `/v1/update?check=1`).
+
 Then move `dist/release/LATEST` on and open the machine's desktop (through
 `ssh -L` when it listens on itself only): the Apple wears a diamond, the
 window names the new release with what its `NOTES.md` says, and Update Now
@@ -145,6 +162,15 @@ the download, open the desktop again while exe restarts, and find one
 shell's `exe update` without `-y` and without a terminal installs and
 leaves the daemon alone, and the window offers Restart Now. Remove the
 drop-in afterwards, and `~/.exe/update.json`.
+
+With a VM, look inside it as well as at the window. "Running again" is
+the daemon's word for a VM it has started; whether the guest was shut
+down or had its power cut shows in the guest: `sudo journalctl -b -1 | tail -1`
+ends in "Journal stopped" after a shutdown, and after a power cut the next
+boot's journal says `EXT4-fs (vda1): recovery required`. This is how the
+Mac's restart was found to cut the power (2026-10-10, fixed the same day):
+the window was right that the VM had come back once and stayed stopped
+the second time, and the guest said why.
 
 `NOTES.md` is not built: `publish` writes it (below). For a test, put one
 in the version's folder by hand; without it the window links the release's

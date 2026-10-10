@@ -316,7 +316,10 @@ func (s *Server) updateStatus(ctx context.Context) map[string]any {
 		}
 	}
 	res["running"] = running
-	if rec := s.readUpdateRecord(); rec != nil {
+	// The record is about the restart it was written for. An exe that has
+	// since moved past that release (a shell's update, say) is not a failed
+	// restart, and the record has nothing more to tell.
+	if rec := s.readUpdateRecord(); rec != nil && (version == "" || release.Compare(version, rec.To) <= 0) {
 		last := map[string]any{"from": rec.From, "to": rec.To, "at": rec.At.UTC(), "notes": rec.Notes,
 			"ok": version != "" && release.Compare(version, rec.To) == 0}
 		if now.Sub(rec.At) < updateRecentFor {
@@ -436,7 +439,9 @@ func (s *Server) updateRun(target string) {
 	defer cancel()
 	err := u.install(ctx, u.exe, func(line string) {
 		out = append(out, line)
-		if strings.TrimSpace(line) == "" {
+		// its closing word on the restart it left alone is not the job's
+		// status: the restart is the daemon's next step
+		if strings.TrimSpace(line) == "" || installerClosing(line) {
 			return
 		}
 		u.mu.Lock()
@@ -530,11 +535,18 @@ func installerNotes(out []string) string {
 		switch {
 		case !seen:
 			seen = strings.HasPrefix(l, "Installed exe ")
-		case strings.HasPrefix(l, "The daemon keeps running"), strings.HasPrefix(l, "exe is not running"):
+		case installerClosing(l):
 			return strings.TrimSpace(strings.Join(keep, "\n"))
 		default:
 			keep = append(keep, l)
 		}
 	}
 	return strings.TrimSpace(strings.Join(keep, "\n"))
+}
+
+// installerClosing is the installer's last line, on the restart it did not
+// do: said to a person at a prompt, and of no use once the daemon restarts
+// by itself.
+func installerClosing(line string) bool {
+	return strings.HasPrefix(line, "The daemon keeps running") || strings.HasPrefix(line, "exe is not running")
 }
