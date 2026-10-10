@@ -72,7 +72,7 @@ var deskMenuActions = map[string]deskMenuAction{
 	"about": {}, "newvm": {}, "upload": {}, "closewin": {}, "showall": {}, "refresh": {},
 	"winvms": {}, "winmyapps": {}, "winchat": {}, "winnews": {}, "winicons": {},
 	"winconfig": {}, "winlog": {}, "join": {}, "cfstatus": {}, "cfwizard": {},
-	"token": {}, "docs": {}, "skillguide": {},
+	"token": {}, "docs": {}, "skillguide": {}, "welcome": {},
 	// desktop icons and windows
 	"claude": {}, "codex": {}, "search": {}, "trash": {}, "customize": {},
 	// a bare terminal is a shell; with a command line it's a shortcut to a
@@ -124,7 +124,7 @@ const deskMenuDefault = `# Desktop menu — right-click the desktop (long-press 
 #   winvms  winmyapps  winchat  winnews  winicons  winconfig  winlog
 #   vm <name> [svc|term|vibe|expose|sess|notes]  app <name>  chat [vm]
 #   join  cfstatus  cfwizard  token  url <https://…>
-#   about  docs  skillguide
+#   about  docs  skillguide  welcome
 # Lists that fill themselves in: @vms  @apps  @windows
 #   alone on a line they expand in place; after a label they fill a submenu.
 # A shortcut to a CLI tool: "btop  terminal btop" opens it in a Terminal window.
@@ -152,6 +152,7 @@ Cloudflare
   Status…            cfstatus
   Setup Wizard…      cfwizard
 Help
+  Welcome…             welcome
   exe Documentation…   docs
   Agent Skill Guide…   skillguide
   About This Computer  about

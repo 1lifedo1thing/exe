@@ -31,7 +31,9 @@ make build        # also builds exe-net-helper on Linux
 ```
 
 Open http://127.0.0.1:7777: the desktop is the first thing that works, and it
-needs nothing else. A Linux machine without KVM or Firecracker still gets
+needs nothing else. A new install opens on a **Welcome** window: six short
+cards on what exe does, each saying whether this machine is ready for it
+and where to go to set it up. A Linux machine without KVM or Firecracker still gets
 it, with the apps, the Terminal and the Hub, and an empty VM list; see
 [Running without VMs](#running-without-vms-a-nas-a-container).
 

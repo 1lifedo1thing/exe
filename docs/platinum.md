@@ -51,6 +51,23 @@ restyling: `internal/server/ui/index.html` (the desktop),
   half over the picture. Measure on a screenshot of the whole viewport; one
   clipped to an element that stands between device pixels is resampled and
   shows blends the screen does not have.
+- Bitmap art that moves (the Welcome window's header, a night sky over a
+  row of Macs): draw it small on a canvas of its own and blit it, smoothing
+  off, onto a canvas that holds one device pixel a cell (`width` and
+  `height` the CSS box times the density, rounded; `image-rendering:
+  pixelated`). An art pixel is 2 CSS pixels, so 2, 3 or 4 device pixels at
+  100, 150 and 200 percent, and the nearest whole number at any other
+  scale. Lay the scene out for the width it gets rather than scaling it,
+  and stand it on the box's last row, so a row cut by an odd height is the
+  sky's first. With the window half a device pixel off the grid the
+  picture is still cell for cell; only its outermost column blends with
+  the frame. The band's colour is the canvas's own background, so nothing
+  flashes before the first frame. Ten frames a second on a fixed clock
+  (`setInterval`, a step of 0.1s, so a frame is the same frame every
+  time); stop on the bridge's `hide` and on a hidden tab; with
+  `prefers-reduced-motion` draw one settled frame and start no timer.
+  `~/tools/playwright/exe-welcome-test.js` reads the canvas back and
+  compares it with the screen.
 - Where two bevels of different colours meet at a corner, the browser
   splits the corner pixel; when the original leaves that pixel as face
   colour, give each L its own box (the Control Strip's wells and tiles).
@@ -70,7 +87,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - Type is `12px/1.45 "Charcoal", "Chicago", "Geneva", "Lucida Grande",
   "Lucida Sans", Geneva, Verdana, sans-serif`. Bold for menu titles, window
   titles and buttons. 11px for status lines and icon labels, 10px for
-  secondary meta. Never 13px, never a system font stack.
+  secondary meta. Never 13px, never a system font stack. There is one line
+  of display type: the Welcome window's heading, 18px bold on a 22px line,
+  beside its 64px icon. Nothing else is set larger than 12px.
 - Chrome is `user-select: none; cursor: default`. OS 9 had no pointing
   hand and no hover states: a control changes only while pressed (`:active`),
   menus alone highlight under the pointer (and, asked for by name, the
@@ -373,7 +392,25 @@ restyling: `internal/server/ui/index.html` (the desktop),
   `prefers-reduced-motion`. In an app the one motion so far is Notes'
   zoom between its corkboard and a note (240ms ease-in-out: the sheet grows
   from its card's rectangle and fades in, and shrinks back into it), which
-  honours it too and leaves nothing transformed.
+  honours it too and leaves nothing transformed. Welcome has two: its
+  pages slide (a feature's card comes in from the right as the first page
+  leaves by the left, 220ms `cubic-bezier(.3, .7, .2, 1)`, and back the
+  other way; Web Animations with no fill, so nothing stays transformed,
+  and with less motion the other page is simply there), and its header
+  moves on its own (above, Pixels at every scale). The header stays where
+  it is while the pages slide: a page is the whole window with its first
+  120px clear, and its 64px icon rides across the header's bottom line
+  with it.
+- A window that greets (Welcome, after the Planet app's welcome screen): a
+  dark picture across the top, the icon at twice its size across the
+  picture's bottom line, one heading and a line under it, the features two
+  to a row — a 32px icon, a bold name, a blurb in 11px `#444` — and a
+  button row under a separator: a button at the left, a check box in the
+  middle (Show this window when the desktop opens), OK at the right,
+  wearing the ring. A feature is pressed the way a desktop icon is picked
+  (`--hl`, white words, the art darkened) and has no other state. What a
+  card says of this machine keeps two lines from the first paint; the
+  green check beside a ready feature's name keeps its 10px.
 - A picture window on a phone is put away by swiping it down: the window
   follows the finger from 6px of vertical travel (a sideways drag and a
   second finger stay the browser's), springs back over 160ms under 90px,
@@ -486,6 +523,17 @@ restyling: `internal/server/ui/index.html` (the desktop),
   An app opens another with `{exe:"open-app", app, path}`: the desk opens
   that app's window with `?path=` on a first open, or posts `{exe:"open",
   path}` into the window already there (Planet hands a post to the Writer).
+  `{exe:"close"}` puts the app's own window away (Welcome's OK). A system
+  app — one embedded in the binary, never a disk bundle — may also ask for
+  something of the desktop's with `{exe:"desk", act, args}`: `act` is one
+  of the desktop menu's action names that open a window (`newvm`,
+  `winconfig`, `cfwizard`, `docs`, `app`…, the `BRIDGE_ACTS` set), `args`
+  its strings, and an action the menu would show greyed does nothing.
+  `winconfig` takes a pane's name and `docs` a chapter's heading there.
+- An app that is opened from a menu and not from the desktop says
+  `"hidden": true` in app.json (Welcome, under Help): it is listed, so its
+  window, its icon in the window lists and the Icon Editor all work, but
+  it has no desktop icon and is left out of the menu's `@apps`.
 - State goes through `/v1/apps/<Name>/data/<file>` under the sync contract
   in `/www/exe-apps/CLAUDE.md`: debounced serialized whole-document PUT
   with `X-Exe-Seq` and `X-Exe-Client`, keepalive flush on pagehide, a

@@ -356,6 +356,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/tailscale/set", s.handleTailscaleSet)
 	mux.HandleFunc("GET /v1/hostinfo", s.handleHostInfo)
 	mux.HandleFunc("GET /v1/host/monitor", s.handleHostMonitor)
+	mux.HandleFunc("GET /v1/welcome", s.handleWelcomeGet)
+	mux.HandleFunc("PUT /v1/welcome", s.handleWelcomePut)
 	mux.HandleFunc("GET /v1/routes", s.handleRoutes)
 	mux.HandleFunc("DELETE /v1/routes/{host}", s.handleRouteDelete)
 	mux.HandleFunc("PUT /v1/routes/{host}/dnslink", s.handleDNSLinkSet)
@@ -991,6 +993,10 @@ func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 	// empty VM list instead of inviting a New VM… that cannot happen.
 	if u, ok := s.VMs.(*vmm.Unavailable); ok {
 		info["vms_error"] = u.Reason()
+	}
+	// A new install opens the Welcome window by itself (welcome.go).
+	if config.Welcome(s.StateDir) {
+		info["welcome"] = true
 	}
 	writeJSON(w, http.StatusOK, info)
 }

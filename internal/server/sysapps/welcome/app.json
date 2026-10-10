@@ -1,0 +1,6 @@
+{
+  "title": "Welcome",
+  "icon": "icon.svg",
+  "hidden": true,
+  "window": { "width": 600, "height": 472, "grow": false }
+}

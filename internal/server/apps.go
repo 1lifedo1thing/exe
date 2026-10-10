@@ -185,6 +185,9 @@ type appMeta struct {
 	Icon       string     `json:"icon,omitempty"`
 	SystemIcon string     `json:"system_icon,omitempty"` // trusted embedded SVG, never supplied by a disk bundle
 	Window     *appWindow `json:"window,omitempty"`
+	// Hidden keeps an app off the desktop's icons and its lists of apps: it
+	// is opened from a menu (Welcome, under Help).
+	Hidden bool `json:"hidden,omitempty"`
 	// Version fingerprints the code the app's window runs (appcode.go): the
 	// desk reloads a window left on an older one.
 	Version string `json:"version,omitempty"`

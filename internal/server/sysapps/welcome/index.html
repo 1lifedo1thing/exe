@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Welcome</title>
+<style>
+/* Platinum values match the exe desktop (same block as Dict and Notes) */
+:root {
+  --black: #262626;
+  --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999;
+  --hl: #333399; --red: #7a1010; --green: #1f9e33;
+  --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sky: 120px; /* the header's height */
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { height: 100%; }
+body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: var(--g200);
+  user-select: none; -webkit-user-select: none; cursor: default; overflow: hidden; position: relative; }
+
+button { font: inherit; cursor: default; }
+button.ghost { background: var(--g300); color: var(--black);
+  border: 1px solid var(--black); border-radius: 3px;
+  padding: 2px 13px; font-size: 12px; line-height: 14px; font-weight: bold; height: 20px;
+  white-space: nowrap; flex: none;
+  box-shadow: inset 1px 1px 0 var(--g300), inset -1px -1px 0 #777,
+    inset 2px 2px 0 #fff, inset -2px -2px 0 #aaa; }
+button.ghost:active { background: #666; color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
+    inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
+button.ghost:disabled { color: #777; border-color: #888; background: var(--g300); box-shadow: none; }
+/* the one button Return presses wears the ring */
+button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
+button:focus:not(.default) { outline: none; }
+button.ghost.ok { width: 58px; padding-left: 0; padding-right: 0; }
+
+/* a Platinum check box: sunken white square, a black check when on
+   (Blue Pencil's options) */
+label.check { display: flex; align-items: center; gap: 5px; }
+input[type=checkbox] { appearance: none; -webkit-appearance: none; margin: 0; width: 12px; height: 12px; flex: none;
+  background: #fff; border: 1px solid var(--black); border-radius: 0;
+  box-shadow: inset 1px 1px 0 #999, 1px 1px 0 #fff; }
+input[type=checkbox]:checked { background: #fff url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" shape-rendering="crispEdges"><path fill="black" d="M1 4h1v1H1zM2 5h1v1H2zM3 6h1v1H3zM4 7h1v1H4zM5 6h1v1H5zM6 5h1v1H6zM7 4h1v1H7zM8 3h1v1H8zM8 2h1v1H8zM2 4h1v1H2zM3 5h1v1H3zM4 6h1v1H4zM5 5h1v1H5zM6 4h1v1H6zM7 3h1v1H7z"/></svg>') center no-repeat; }
+input[type=checkbox]:focus { outline: none; }
+input[type=checkbox]:focus-visible { outline: 2px solid #9999fe; }
+
+/* The header: a night sky over a row of Macs, drawn a frame at a time on a
+   canvas of device pixels (the script's "header" section). The band's
+   colour is the canvas's own background, so it is dark from the first
+   paint and nothing moves when the picture arrives. */
+#sky { position: absolute; left: 0; top: 0; width: 100%; height: var(--sky); display: block;
+  background: #06061a; image-rendering: pixelated; }
+
+/* Two pages lie over the window, the six features and one feature's card,
+   and a click slides one out as the other comes in. A page is the whole
+   window: its first 120px are clear, so the header shows through and stays
+   where it is while the pages move, and its 64px icon stands across the
+   header's bottom line, moving with the page it belongs to. */
+.page { position: absolute; inset: 0; display: flex; flex-direction: column; padding-top: var(--sky);
+  pointer-events: none; }
+.page[hidden] { display: none; }
+/* the header's bottom line is the sheet's top border: one seam, one line,
+   then the white highlight, then the face */
+.sheet { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--g200);
+  border-top: 1px solid var(--black); box-shadow: inset 0 1px 0 #fff; pointer-events: auto; }
+/* the icon is 32-grid art at twice its size, a whole number of device
+   pixels a pixel at 100, 150 and 200 percent */
+.badge { position: absolute; left: 20px; top: calc(var(--sky) - 38px); width: 64px; height: 64px; }
+.badge svg, .badge img { display: block; width: 64px; height: 64px; image-rendering: pixelated; }
+
+/* the title beside the icon: the one line of display type in the app */
+.head { flex: none; padding: 9px 20px 0 98px; min-height: 54px; }
+.head h1 { margin: 0; font-size: 18px; line-height: 22px; font-weight: bold; }
+.head p { margin: 1px 0 0; color: #555; line-height: 16px; }
+
+/* the six features, two to a row: its icon, its name, what it is. A
+   feature is pressed like a desktop icon is picked: the highlight colour,
+   white words, the art darkened. A phone has them in one column. */
+#feats { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr;
+  align-content: start; gap: 2px 12px; padding: 8px 14px; }
+.feat { display: grid; grid-template-columns: 32px 1fr; column-gap: 10px; align-items: start;
+  padding: 6px; margin: 0; text-align: left; background: none; border: 0; border-radius: 0;
+  color: inherit; font: inherit; min-width: 0; }
+.feat .ico { display: block; width: 32px; height: 32px; }
+.feat .ico svg, .feat .ico img { display: block; width: 32px; height: 32px; }
+.feat .name { display: flex; align-items: center; gap: 6px; font-weight: bold; line-height: 16px; }
+.feat .blurb { display: block; margin-top: 1px; font-size: 11px; line-height: 15px; color: #444; }
+.feat:active { background: var(--hl); color: #fff; }
+.feat:active .blurb { color: #fff; }
+.feat:active .ico { filter: brightness(.55) saturate(1.3); }
+.feat:active .tick path { fill: #fff; }
+.feat:focus { outline: none; }
+.feat:focus-visible { outline: 2px solid #9999fe; outline-offset: -2px; }
+/* the green check beside a feature that is ready on this machine: the
+   Platinum check box's mark in Blue Pencil's green. Its room is kept from
+   the first paint, so a name never moves when the answer arrives. */
+.tick { flex: none; display: block; width: 10px; height: 10px; visibility: hidden; }
+.tick path { fill: var(--green); }
+.tick.on { visibility: visible; }
+
+/* a card: the feature in a few lines, how it stands on this machine, and
+   the button that goes there. The words can be selected: some are
+   commands. */
+#c-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 20px 0; line-height: 16px; }
+#c-body p { margin: 0 0 8px; user-select: text; -webkit-user-select: text; cursor: text; }
+#c-body code { font-family: var(--mono); font-size: 11px; }
+/* separators are a 1px #999 line over a 1px white one */
+#here { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--g600); box-shadow: inset 0 1px 0 #fff; }
+#here h2 { margin: 0 0 2px; font-size: 12px; line-height: 16px; font-weight: bold; }
+/* two lines are kept for the answer, so the card is the same height
+   before it comes and after */
+#c-state { min-height: 32px; color: #555; user-select: text; -webkit-user-select: text; }
+#c-state.ok { color: #0f6b20; }
+#c-state.warn { color: var(--red); }
+#c-state .tick { display: inline-block; vertical-align: -1px; margin-right: 4px; visibility: visible; }
+
+/* buttons get a row of their own under a separator: 20px high, 12px apart
+   and from the edges */
+.foot { flex: none; display: flex; align-items: center; gap: 12px; padding: 12px;
+  border-top: 1px solid var(--g600); box-shadow: inset 0 1px 0 #fff; }
+.foot .gap { flex: 1; min-width: 0; }
+#c-acts { display: flex; gap: 12px; }
+
+/* a phone: one column, the check box on a line of its own above the
+   buttons, and no words cut where they would not fit */
+@media (max-width: 479px) {
+  #feats { grid-template-columns: 1fr; padding: 6px 8px; }
+  .head { padding-right: 12px; }
+  #c-body { padding: 10px 12px 0; }
+  .foot { flex-wrap: wrap; row-gap: 10px; }
+  #home .foot label.check { order: -1; flex-basis: 100%; }
+  #c-acts { flex-wrap: wrap; justify-content: flex-end; row-gap: 10px; margin-left: auto; }
+}
+
+/* Mac OS 9 scrollbars: the desktop's pixel-sampled block, as Tides has it.
+   The window's frame draws the outer black line, so a bar is 15px (1px
+   leading separator + the sampled 14px face) with no trailing border. A
+   window at its own size never shows one; a short window, or a phone held
+   sideways, does. */
+::-webkit-scrollbar { width: 15px; height: 15px; }
+::-webkit-scrollbar-track:vertical { border-left: 1px solid var(--black);
+  background: linear-gradient(to right, #777 0, #777 1px, #888 1px, #888 2px, #aaa 2px, #aaa 12px, #bbb 12px, #bbb 13px, #ccc 13px, #ccc 14px); }
+::-webkit-scrollbar-thumb:vertical { border: 1px solid var(--black); border-right: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="0" width="6" height="1" fill="%23ccccff"/><rect x="4" y="1" width="7" height="1" fill="%23333399"/><rect x="3" y="2" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="2" width="6" height="1" fill="%23ccccff"/><rect x="4" y="3" width="7" height="1" fill="%23333399"/><rect x="3" y="4" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="4" width="6" height="1" fill="%23ccccff"/><rect x="4" y="5" width="7" height="1" fill="%23333399"/><rect x="3" y="6" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="6" width="6" height="1" fill="%23ccccff"/><rect x="4" y="7" width="7" height="1" fill="%23333399"/></svg>') center no-repeat,
+    linear-gradient(to right, #ccccff 0 1px, #9999ff 1px 13px, #6666cc 13px 14px);
+  box-shadow: inset 0 1px 0 #ccccff, inset 0 -1px 0 #6666cc; }
+::-webkit-scrollbar-thumb:vertical:active {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23ccccff"/><rect x="4" y="0" width="6" height="1" fill="%239999ff"/><rect x="4" y="1" width="7" height="1" fill="%23000066"/><rect x="3" y="2" width="1" height="1" fill="%23ccccff"/><rect x="4" y="2" width="6" height="1" fill="%239999ff"/><rect x="4" y="3" width="7" height="1" fill="%23000066"/><rect x="3" y="4" width="1" height="1" fill="%23ccccff"/><rect x="4" y="4" width="6" height="1" fill="%239999ff"/><rect x="4" y="5" width="7" height="1" fill="%23000066"/><rect x="3" y="6" width="1" height="1" fill="%23ccccff"/><rect x="4" y="6" width="6" height="1" fill="%239999ff"/><rect x="4" y="7" width="7" height="1" fill="%23000066"/></svg>') center no-repeat,
+    linear-gradient(to right, #9999ff 0 1px, #6666cc 1px 13px, #333399 13px 14px);
+  box-shadow: inset 0 1px 0 #9999ff, inset 0 -1px 0 #333399; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical {
+  border-top-color: #ccccff; box-shadow: inset 0 -1px 0 #6666cc; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical:active {
+  border-top-color: #9999ff; box-shadow: inset 0 -1px 0 #333399; }
+.at-y-end::-webkit-scrollbar-thumb:vertical {
+  border-bottom-color: #6666cc; box-shadow: inset 0 1px 0 #ccccff; }
+.at-y-end::-webkit-scrollbar-thumb:vertical:active {
+  border-bottom-color: #333399; box-shadow: inset 0 1px 0 #9999ff; }
+/* Safari redraws a custom scroll bar only when its element's own style
+   changes, and the classes above change nothing of the element's own: the
+   thumb's end merges stayed stale there and doubled the line against the
+   arrows. Each class sets a property of its own, so WebKit sees a change. */
+.scrolled-y { --sb-scrolled-y: 1; } .at-y-end { --sb-at-y-end: 1; }
+::-webkit-scrollbar-button { display: block; width: 16px; height: 16px;
+  background: #ddd; border: 1px solid var(--black);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #bbb;
+  background-position: center; background-repeat: no-repeat; }
+::-webkit-scrollbar-button:vertical { border-right: 0; }
+::-webkit-scrollbar-button:vertical:end:increment:enabled { height: 14px; border-top: 0; border-bottom: 0; }
+::-webkit-scrollbar-button:vertical:decrement {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M0 3h8v1h-8z"/></svg>'); }
+::-webkit-scrollbar-button:vertical:increment {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M0 0h8v1h-8z M1 1h6v1h-6z M2 2h4v1h-4z M3 3h2v1h-2z"/></svg>'); }
+::-webkit-scrollbar-button:active { background-color: #777;
+  box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 #999; }
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:start:increment { display: none; }
+::-webkit-scrollbar-corner { background: var(--g300); }
+</style>
+</head>
+<body>
+
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<div class="page" id="home">
+  <div class="badge" id="h-badge"></div>
+  <div class="sheet">
+    <div class="head">
+      <h1>Welcome to exe</h1>
+      <p>A personal VM cloud on this machine. Click any of the six for a closer look.</p>
+    </div>
+    <div id="feats"></div>
+    <div class="foot">
+      <button class="ghost" id="h-docs">exe Documentation…</button>
+      <span class="gap"></span>
+      <label class="check"><input type="checkbox" id="h-show"> Show this window when the desktop opens</label>
+      <span class="gap"></span>
+      <button class="ghost ok default" id="h-ok">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="card" hidden>
+  <div class="badge" id="c-badge"></div>
+  <div class="sheet">
+    <div class="head">
+      <h1 id="c-title"></h1>
+      <p id="c-lead"></p>
+    </div>
+    <div id="c-body">
+      <div id="c-text"></div>
+      <div id="here">
+        <h2>On this machine</h2>
+        <div id="c-state"></div>
+      </div>
+    </div>
+    <div class="foot">
+      <button class="ghost" id="c-back">Back</button>
+      <span class="gap"></span>
+      <div id="c-acts"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  e.append(...kids);
+  return e;
+}
+
+// the desktop hands its window the API token, and ?mobile=1 on a phone
+const QUERY = new URLSearchParams(location.search);
+const TOKEN = QUERY.get("token") ||
+  (() => { try { return localStorage.getItem("exe_token") || ""; } catch (e) { return ""; } })();
+const IN_DESK = window.parent !== window;
+if (QUERY.get("mobile") === "1") document.body.classList.add("mobile");
+async function api(path, opts = {}) {
+  opts.headers = { ...(opts.headers || {}) };
+  if (TOKEN) opts.headers["Authorization"] = "Bearer " + TOKEN;
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+// The desktop bridge. {exe:"desk", act, args} asks the desktop for one of
+// its own menu actions (newvm, cfwizard, app hub…): the names and their
+// greyed-out rules are the desktop menu's.
+const post = msg => { if (IN_DESK) parent.postMessage(msg, location.origin); };
+const desk = (act, ...args) => post({ exe: "desk", act, args });
+
+// ---- the art: 32-grid icons in the desktop's palette. These are the
+// desktop's own drawings (index.html: macIcon, #chat-icon, CLAUDE_ICON,
+// CODEX_ICON, APP_FALLBACK_ICON; the Hub's icon.svg), as they leave the
+// factory; the cloud is the Control Strip's Cloudflare module drawn at 32.
+const SVG = body => `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">${body}</svg>`;
+const MAC = screen => `<rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
+  <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>${screen}
+  <rect x="12" y="18" width="8" height="2" fill="#55524B"/>
+  <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
+  <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>`;
+const ICON = {
+  // the Mac that smiles when it starts: this app's own icon (icon.svg)
+  welcome: SVG(MAC(`<rect x="10.5" y="5.5" width="11" height="8" fill="#fff" stroke="#000"/>
+  <path fill="#000" d="M13 7h1v2h-1zM18 7h1v2h-1zM16 7h1v3h-1zM15 9h1v1h-1zM13 10h1v1h-1zM18 10h1v1h-1zM14 11h4v1h-4z"/>`)),
+  vm: SVG(MAC(`<rect x="10.5" y="5.5" width="11" height="8" fill="#7FD67F" stroke="#000"/>`)),
+  chat: SVG(`<rect x="3.5" y="5.5" width="25" height="15" fill="#DAD5CA" stroke="#000"/>
+  <rect x="4.5" y="6.5" width="23" height="2" fill="#EDEAE2"/>
+  <path d="M9.5 20.5 v6 l6 -6 z" fill="#DAD5CA" stroke="#000"/>
+  <rect x="8" y="10" width="17" height="2" fill="#55524B"/>
+  <rect x="8" y="14" width="11" height="2" fill="#55524B"/>`),
+  claude: SVG(MAC(`<rect x="10.5" y="5.5" width="11" height="8" fill="#000" stroke="#000"/>
+  <path fill="#D97757" d="M13 6h1v1h-1zM16 6h1v1h-1zM19 6h1v1h-1zM14 7h1v1h-1zM16 7h1v1h-1zM18 7h1v1h-1zM15 8h3v1h-3zM13 9h7v1h-7zM15 10h3v1h-3zM14 11h1v1h-1zM16 11h1v1h-1zM18 11h1v1h-1zM13 12h1v1h-1zM16 12h1v1h-1zM19 12h1v1h-1z"/>`)),
+  hub: SVG(`<path fill="#99ccff" d="M5 5h22v22H5z"/>
+  <path fill="#000000" d="M4 4h24v1H4z M4 4h1v24H4z M4 27h24v1H4z M27 4h1v24h-1z"/>
+  <path fill="#333399" d="M14 14h4v4h-4z"/>
+  <path fill="#6666cc" d="M8 7h3v3H8z M21 7h3v3h-3z M8 22h3v3H8z M21 22h3v3h-3z"/>
+  <path fill="#000000" d="M9 8h1v1H9z M22 8h1v1h-1z M9 23h1v1H9z M22 23h1v1h-1z"/>
+  <path fill="#333399" d="M11 10h1v1h-1z M12 11h1v1h-1z M13 12h1v1h-1z M20 10h1v1h-1z M19 11h1v1h-1z M18 12h1v1h-1z M11 21h1v1h-1z M12 20h1v1h-1z M13 19h1v1h-1z M20 21h1v1h-1z M19 20h1v1h-1z M18 19h1v1h-1z"/>
+  <path fill="#ffffff" d="M14 14h1v1h-1z M8 7h1v1H8z M21 7h1v1h-1z M8 22h1v1H8z M21 22h1v1h-1z"/>`),
+  cloud: SVG(`<path fill="#f38020" d="M14 10h4v1H14zM12 11h8v1H12zM11 12h10v1H11zM11 13h11v1H11zM10 14h16v1H10zM10 15h18v1H10zM9 16h20v1H9zM5 17h25v1H5zM4 18h26v1H4zM3 19h26v1H3zM3 20h26v1H3zM4 21h24v1H4z"/>
+  <path fill="#ffb060" d="M14 9h4v1H14zM12 10h2v1H12zM18 10h2v1H18zM11 11h1v1H11zM20 11h1v1H20zM10 12h1v1H10zM10 13h1v1H10zM23 13h3v1H23zM9 14h1v1H9zM26 14h2v1H26zM9 15h1v1H9zM28 15h1v1H28zM5 16h4v1H5zM29 16h1v1H29zM4 17h1v1H4zM3 18h1v1H3z"/>
+  <path fill="#c8600a" d="M29 21h1v1H29zM3 21h1v1H3zM4 22h25v1H4z"/>
+  <path fill="#000" d="M13 8h6v1H13zM11 9h3v1H11zM18 9h3v1H18zM10 10h2v1H10zM20 10h2v1H20zM9 11h2v1H9zM21 11h2v1H21zM9 12h1v1H9zM22 12h5v1H22zM8 13h2v1H8zM22 13h1v1H22zM26 13h3v1H26zM8 14h1v1H8zM28 14h2v1H28zM4 15h5v1H4zM29 15h2v1H29zM3 16h2v1H3zM30 16h1v1H30zM2 17h2v1H2zM30 17h1v1H30zM1 18h2v1H1zM30 18h1v1H30zM1 19h2v1H1zM29 19h2v1H29zM1 20h2v1H1zM29 20h2v1H29zM1 21h2v1H1zM30 21h1v1H30zM2 22h2v1H2zM29 22h2v1H29zM3 23h27v1H3z"/>`),
+  app: SVG(`<path d="M16 2.5 L29.5 16 L16 29.5 L2.5 16 Z" fill="#DAD5CA" stroke="#000"/>
+  <path d="M16 8.5 L23.5 16 L16 23.5 L8.5 16 Z" fill="#9C9AF2" stroke="#000"/>`),
+};
+const TICK = `<svg class="tick" viewBox="0 0 10 10" shape-rendering="crispEdges"><path d="M1 4h1v1H1zM2 5h1v1H2zM3 6h1v1H3zM4 7h1v1H4zM5 6h1v1H5zM6 5h1v1H6zM7 4h1v1H7zM8 3h1v1H8zM8 2h1v1H8zM2 4h1v1H2zM3 5h1v1H3zM4 6h1v1H4zM5 5h1v1H5zM6 4h1v1H6zM7 3h1v1H7z"/></svg>`;
+
+// ---- what this machine has. Each answer is asked once the window opens
+// and again whenever it is shown or a card is opened; a feature reads what
+// has arrived (undefined: not yet; null: the daemon would not say).
+const S = { host: undefined, vms: undefined, chat: undefined, cf: undefined, apps: undefined, hub: undefined };
+const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
+const WAIT = { kind: "wait", text: "Checking…" };
+const UNKNOWN = { kind: "todo", text: "exe did not say." };
+
+const FEATS = [
+  { key: "vms", icon: ICON.vm, name: "Virtual Machines",
+    blurb: "Whole Linux machines, Debian or Alpine, that boot in seconds and keep their disks until you delete them.",
+    lead: "Whole Linux machines that boot in seconds.",
+    text: ["A VM is a real Debian 13 or Alpine machine with its own disk, CPUs and memory. The first one downloads its system once; after that a new VM is a copy of it, up in seconds. Stop one and its disk is kept. Delete it and the disk goes too.",
+      "Each VM has an icon on the desktop. Open it for a terminal, the services it runs, an agent to work inside it and a pad for notes. From a terminal of your own, <code>exe ssh</code> and its name logs in."],
+    more: "Virtual machines",
+    state() {
+      if (S.host === undefined || S.vms === undefined) return WAIT;
+      if (!S.host) return UNKNOWN;
+      if (S.host.vms_error) {
+        // the daemon's own reason, as About This Computer shows it; the
+        // installer's VM step is the cure on the two systems that have one
+        const cure = /^(Linux|Windows)/.test(S.host.os || "") ? " In a terminal, exe setup vms sets a machine up for them, or says why it cannot." : "";
+        return { kind: "todo", text: "Not set up to run VMs: " + S.host.vms_error.replace(/\.$/, "") + "." + cure };
+      }
+      const vms = S.vms || [], up = vms.filter(v => v.state === "running").length;
+      return { kind: "ok", text: vms.length ? "Ready: " + plural(vms.length, "VM") + ", " + up + " running."
+        : "Ready. There are no VMs yet: New VM… makes the first." };
+    },
+    acts: () => [{ label: "New VM…", act: "newvm", off: !S.host || !!S.host.vms_error }] },
+  { key: "chat", icon: ICON.chat, name: "Chat",
+    blurb: "Tell your machines what to do in plain words, on a model from Ollama or on your ChatGPT subscription.",
+    lead: "Tell your machines what to do, in plain words.",
+    text: ["Chat is a conversation that can see and drive every VM you have: make one, install what it needs, write the code, start the service. A VM’s Agent tab starts the same thing pinned to that VM, which is its sandbox.",
+      "Replies run in exe, not in the browser, so closing the tab never stops a long task. Chat uses a model from Ollama, on this machine or in its cloud, or your ChatGPT subscription: sign in under Configuration → OpenAI, with no API key."],
+    more: "The coding agent",
+    state() {
+      if (S.chat === undefined) return WAIT;
+      if (!S.chat) return UNKNOWN;
+      const c = S.chat, model = c.model ? " (" + c.model + ")" : "";
+      if (c.detected) return { kind: "ok", text: "Ready, on " + (c.provider === "openai" ? "your ChatGPT subscription" : "Ollama") + model + "." };
+      if (c.provider === "openai") return { kind: "todo", text: "Not set up yet: nobody is signed in to ChatGPT." };
+      // the daemon's reason is a Go error; these are its three cases
+      const why = !c.base_url ? "no Ollama address is set."
+        : /api_key/.test(c.reason || "") ? "Ollama’s cloud wants an API key."
+        : "no Ollama answers at " + c.base_url.replace(/^https?:\/\//, "") + ".";
+      return { kind: "todo", text: "Not set up yet: " + why + " A ChatGPT sign-in works as well." };
+    },
+    acts: () => S.chat && S.chat.detected ? [{ label: "Open Chat", act: "winchat" }]
+      : [{ label: "Configuration…", act: "winconfig", args: [S.chat && S.chat.provider === "openai" ? "OpenAI" : "Ollama"], off: S.chat === undefined }] },
+  { key: "agents", icon: ICON.claude, name: "Claude Code and Codex",
+    blurb: "Agent sessions in windows of their own, still at work after the tab, or the laptop, is closed.",
+    lead: "Agent sessions that keep working when you leave.",
+    text: ["With the Claude Code or the Codex CLI installed on this machine, each gets an icon on the desktop and a window of its own. The session runs on the machine, not in the browser: close the window, the tab or the laptop and it works on. Open it again, from any device, and you are back in the same conversation.",
+      "The window lists its sessions down the left, the Control Strip counts what they use, and a phone that keeps the desktop on its Home Screen hears when a turn ends."],
+    more: "On a host with tmux, a Claude Code or Codex window",
+    state() {
+      if (S.host === undefined) return WAIT;
+      if (!S.host) return UNKNOWN;
+      const a = S.host.agents || {};
+      if (a.claude && a.codex) return { kind: "ok", text: "Claude Code and Codex are both installed." };
+      if (a.claude) return { kind: "ok", text: "Claude Code is installed. Codex is not." };
+      if (a.codex) return { kind: "ok", text: "Codex is installed. Claude Code is not." };
+      return { kind: "todo", text: "Neither CLI is installed on this machine. Install one and its icon appears on the desktop." };
+    },
+    acts() {
+      const a = (S.host && S.host.agents) || {}, out = [];
+      if (a.codex) out.push({ label: "Open Codex", act: "codex" });
+      if (a.claude) out.push({ label: "Open Claude Code", act: "claude" });
+      return out;
+    } },
+  { key: "hub", icon: ICON.hub, name: "The Hub",
+    blurb: "A small public feed shared between exe nodes. Join someone’s hub, or run one of your own.",
+    lead: "A small public feed shared between exe nodes.",
+    text: ["An exe-hub is one program anyone can run, and a key is an account there: what you post from this desktop is signed by this machine’s key, and everything you read is public. Posts carry pictures, movies, drawings and Markdown, and a thread fills in as its replies arrive.",
+      "The Hub app asks which hub to join the first time it opens. A hub may be open to every key, or take only the ones its admins invite or that hold its token."],
+    more: "The Hub",
+    state() {
+      if (S.hub === undefined) return WAIT;
+      const at = S.hub && typeof S.hub.hub === "string" ? S.hub.hub.replace(/^https?:\/\//, "").replace(/\/+$/, "") : "";
+      return at ? { kind: "ok", text: "Joined: " + at + "." }
+        : { kind: "todo", text: "No hub is joined yet. The Hub app asks for one’s address when it opens." };
+    },
+    acts: () => [{ label: "Open Hub", act: "app", args: ["hub"] }] },
+  { key: "cf", icon: ICON.cloud, name: "Cloudflare",
+    blurb: "A public HTTPS address for anything a VM serves, through a Cloudflare tunnel and a domain of yours.",
+    lead: "A public HTTPS address for anything a VM serves.",
+    text: ["Give exe a Cloudflare tunnel and a domain once, in a wizard. After that any port in a VM gets a public name of its own, with HTTPS, from the Expose tab of the VM’s window or with <code>exe expose</code> in a terminal. Nothing is opened on your router.",
+      "The lamp in the Control Strip, at the bottom left, shows the tunnel’s health, and the Analytics app shows the traffic Cloudflare counted."],
+    more: "Publishing to the web",
+    state() {
+      if (S.cf === undefined) return WAIT;
+      if (!S.cf) return UNKNOWN;
+      if (S.cf.status === "ok") return { kind: "ok", text: "Working" + (S.cf.tunnel_name ? ", through the tunnel “" + S.cf.tunnel_name + "”." : ".") };
+      if (S.cf.status === "unconfigured") return { kind: "todo", text: "Not set up yet. The wizard asks for a Cloudflare API token and a tunnel." };
+      return { kind: "warn", text: String(S.cf.message || "Cloudflare needs attention.").replace(/\s*—\s*click to run the setup wizard\.?$/, ".") };
+    },
+    acts: () => S.cf && S.cf.status === "ok" ? [{ label: "Cloudflare Status…", act: "cfstatus" }]
+      : [{ label: "Setup Wizard…", act: "cfwizard" }] },
+  { key: "apps", icon: ICON.app, name: "Apps",
+    blurb: "Notes, Paint, Tides and more on the desktop. Easel has Claude paint in oils. An agent can build yours.",
+    lead: "Small apps on the desktop, and room for your own.",
+    text: ["An app is a folder holding an <code>app.json</code> and an <code>index.html</code>, in <code>~/.exe/apps</code>. It opens in a window of its own and keeps its data on this machine, shared with the machines you join to it. The installer offers six: Notes, Paint, Tides, Todo, Weather and World Clock.",
+      "An app is one page of HTML, so a coding agent can build you one in a sitting. Easel, installed separately, is a bigger one: it sets Claude to work at an oil paint simulator, and you watch the picture being painted."],
+    more: "Apps",
+    state() {
+      if (S.apps === undefined) return WAIT;
+      if (!S.apps) return UNKNOWN;
+      const shown = S.apps.filter(a => !a.hidden), easel = appNamed("easel");
+      return { kind: "ok", text: plural(shown.length, "app") + (shown.length === 1 ? " is" : " are") + " on this desktop" +
+        (easel ? ", Easel among them." : ". Easel is not one of them yet.") };
+    },
+    acts() {
+      const a = appNamed("easel") || appNamed("notes") || appNamed("paint");
+      return a ? [{ label: "Open " + (a.title || a.name), act: "app", args: [a.name] }] : [];
+    } },
+];
+const appNamed = id => (S.apps || []).find(a => a.name.toLowerCase() === id);
+
+let asking = false;
+function ask() {
+  if (asking) return;
+  asking = true;
+  const get = (key, path, pick = v => v) => api(path).then(pick, () => null).then(v => { S[key] = v; paint(); });
+  Promise.all([
+    get("host", "/v1/hostinfo"),
+    get("vms", "/v1/vms", v => Array.isArray(v) ? v : (v && v.vms) || []),
+    get("chat", "/v1/chat/status"),
+    get("cf", "/v1/cloudflare/health"),
+    get("apps", "/v1/apps"),
+    // no file yet is an answer too: the Hub app has never been set up
+    api("/v1/apps/hub/data/config.json").then(v => v, () => ({})).then(v => { S.hub = v; paint(); }),
+  ]).finally(() => { asking = false; });
+}
+
+// ---- the first page ----
+$("#h-badge").innerHTML = ICON.welcome;
+const featBtns = {};
+for (const f of FEATS) {
+  const b = el("button", { class: "feat", type: "button", onclick: () => openCard(f.key) });
+  b.innerHTML = `<span class="ico">${f.icon}</span><span><span class="name"><span></span>${TICK}</span><span class="blurb"></span></span>`;
+  b.querySelector(".name span").textContent = f.name;
+  b.querySelector(".blurb").textContent = f.blurb;
+  featBtns[f.key] = b;
+  $("#feats").append(b);
+}
+function paint() {
+  for (const f of FEATS) {
+    const st = f.state();
+    featBtns[f.key].querySelector(".tick").classList.toggle("on", st.kind === "ok");
+    featBtns[f.key].title = st.kind === "wait" ? "" : st.text;
+  }
+  if (shown) paintCard();
+}
+
+// The check box is the daemon's mark (GET and PUT /v1/welcome): while it
+// is set, the desktop opens this window each time it loads.
+const showBox = $("#h-show");
+api("/v1/welcome").then(r => { showBox.checked = !!r.show; }).catch(() => {});
+showBox.addEventListener("change", () => {
+  const want = showBox.checked;
+  api("/v1/welcome", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ show: want }) })
+    .catch(() => { showBox.checked = !want; });
+});
+$("#h-ok").onclick = () => post({ exe: "close" });
+$("#h-docs").onclick = () => desk("docs");
+
+// ---- a card ----
+let shown = null; // the feature whose card is up
+function paintCard() {
+  const f = shown, st = f.state();
+  const box = $("#c-state");
+  box.className = st.kind === "ok" ? "ok" : st.kind === "warn" ? "warn" : "";
+  box.innerHTML = st.kind === "ok" ? TICK : "";
+  box.append(st.text);
+  // the buttons: what the manual says, then what goes there, the last of
+  // them the one Return presses
+  const acts = f.acts(), row = $("#c-acts");
+  const want = JSON.stringify(acts);
+  if (row.dataset.acts === want) return; // the same buttons: leave them (and the focus) be
+  row.dataset.acts = want;
+  row.replaceChildren(el("button", { class: "ghost", type: "button", onclick: () => desk("docs", f.more) }, "Read More…"));
+  acts.forEach((a, i) => {
+    // a button that cannot be pressed is not the one Return presses
+    const b = el("button", { class: "ghost" + (i === acts.length - 1 && !a.off ? " default" : ""), type: "button",
+      onclick: () => desk(a.act, ...(a.args || [])) }, a.label);
+    b.disabled = !!a.off;
+    row.append(b);
+  });
+}
+function fillCard(f) {
+  shown = f;
+  $("#c-badge").innerHTML = f.icon;
+  $("#c-title").textContent = f.name;
+  $("#c-lead").textContent = f.lead;
+  $("#c-text").innerHTML = f.text.map(t => "<p>" + t + "</p>").join(""); // our own words, above
+  $("#c-acts").dataset.acts = "";
+  $("#c-body").scrollTop = 0;
+  paintCard();
+}
+
+// ---- the slide: the page on screen leaves by one side as the other comes
+// in from the opposite one, 220ms. The header does not move. Each is an
+// animation that ends and leaves no transform behind, and a reader who
+// asked for less motion gets the other page at once.
+const LESS = matchMedia("(prefers-reduced-motion: reduce)");
+let sliding = false;
+function slide(from, to, dir) {
+  to.hidden = false;
+  if (LESS.matches || !from.animate) { from.hidden = true; return Promise.resolve(); }
+  sliding = true;
+  const opts = { duration: 220, easing: "cubic-bezier(.3, .7, .2, 1)" };
+  from.animate([{ transform: "translateX(0)" }, { transform: "translateX(" + (-dir * 100) + "%)" }], opts);
+  const done = to.animate([{ transform: "translateX(" + (dir * 100) + "%)" }, { transform: "translateX(0)" }], opts).finished;
+  const end = () => { from.hidden = true; sliding = false; };
+  return done.then(end, end);
+}
+function openCard(key) {
+  if (sliding || shown) return;
+  fillCard(FEATS.find(f => f.key === key));
+  ask();
+  slide($("#home"), $("#card"), 1).then(() => {
+    const b = $("#c-acts .default:not(:disabled)") || $("#c-back");
+    b.focus({ preventScroll: true });
+  });
+}
+function back() {
+  if (sliding || !shown) return;
+  const key = shown.key;
+  slide($("#card"), $("#home"), -1).then(() => { featBtns[key].focus({ preventScroll: true }); });
+  shown = null;
+}
+$("#c-back").onclick = back;
+// Return presses the ringed button of the page on screen; Escape goes back
+// from a card, as the Back button does.
+document.addEventListener("keydown", e => {
+  if (sliding) return;
+  if (e.key === "Escape" && shown) { e.preventDefault(); back(); return; }
+  if (e.key !== "Enter" || e.target.closest("button, input")) return;
+  const b = shown ? $("#c-acts .default:not(:disabled)") : $("#h-ok");
+  if (b) { e.preventDefault(); b.click(); }
+});
+
+// clicks inside the frame never reach the window's own mousedown handler
+document.addEventListener("pointerdown", () => post({ exe: "focus" }), true);
+// OS 9 scrollbar end-merges need the same scrolled/at-end flags as the desktop
+document.addEventListener("scroll", e => {
+  const t = e.target;
+  if (!(t instanceof Element)) return;
+  t.classList.toggle("scrolled-y", t.scrollTop >= 1);
+  t.classList.toggle("at-y-end", t.scrollTop >= 1 && t.scrollTop >= t.scrollHeight - t.clientHeight - 1);
+}, { capture: true, passive: true });
+
+// ---- the header: a night sky over a row of Macs ----
+// Pixel art, drawn small and shown at a whole number of device pixels a
+// pixel: an art pixel is 2 CSS pixels, so 2, 3 or 4 device pixels at 100,
+// 150 and 200 percent, and the nearest whole number at any other scale.
+// The canvas holds one device pixel a cell, so nothing is resampled. The
+// scene is laid out for whatever width it gets: the Macs stand at the
+// right, as many as fit clear of the page's icon at the left, under a
+// cloud as wide as their row; the ground is the band's last rows, so a row
+// cut by an odd height is the sky's first and never the ground.
+//
+// What moves: the stars twinkle, a shooting star crosses now and then, the
+// Macs start one after another (dark screen, the smiling Mac, then a
+// running VM's green with lines scrolling up it), and packets climb from
+// each Mac to the cloud and come back, the cloud's foot lighting where one
+// lands. Ten frames a second on a fixed clock, stopped while the window is
+// closed or the tab is hidden; with less motion asked for it is one still
+// frame, every Mac running.
+const sky = $("#sky"), sctx = sky.getContext("2d");
+const art = document.createElement("canvas"), actx = art.getContext("2d");
+const back0 = document.createElement("canvas"), bctx = back0.getContext("2d"); // sky, moon and ground: drawn once a layout
+const STEP = 0.1, PITCH = 34, MAC_W = 20, MAC_H = 28;
+let BLOCK = 2, AW = 0, AH = 0, OY = 0, GROUND = 0;
+let stars = [], macs = [], cloud = null, packets = [], flashes = [], shoot = null;
+let clock = 0, nextShoot = 5, nextNap = 14, rnd = mulberry(7);
+
+// the same sky at every load
+function mulberry(a) {
+  return () => {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+const NIGHT = ["#06061a", "#0a0a28", "#0f0f3a", "#17174f"]; // top to horizon, dithered into one another
+
+function skyLay() {
+  const r = mulberry(11);
+  GROUND = AH - 3;
+  back0.width = AW; back0.height = AH;
+  // the night, darkest at the top, each tone ordered-dithered into the next
+  for (let y = 0; y < GROUND; y++) {
+    const lev = Math.pow(y / Math.max(1, GROUND - 1), 1.6) * (NIGHT.length - 1);
+    const base = Math.min(NIGHT.length - 2, Math.floor(lev)), frac = lev - base;
+    for (let x = 0; x < AW; x++) {
+      bctx.fillStyle = NIGHT[frac * 16 > BAYER[y & 3][x & 3] ? base + 1 : base];
+      bctx.fillRect(x, y, 1, 1);
+    }
+  }
+  // the ground: a lit edge, then the dark
+  bctx.fillStyle = "#333399"; bctx.fillRect(0, GROUND, AW, 1);
+  bctx.fillStyle = "#12123c"; bctx.fillRect(0, GROUND + 1, AW, 1);
+  bctx.fillStyle = "#08081f"; bctx.fillRect(0, GROUND + 2, AW, AH - GROUND - 2);
+
+  // the Macs, from the right, clear of the icon at the left
+  const n = Math.max(1, Math.min(5, Math.floor((AW - 66) / PITCH)));
+  const first = AW - 14 - MAC_W - (n - 1) * PITCH;
+  const m0 = mulberry(3);
+  macs = [];
+  for (let i = 0; i < n; i++) {
+    macs.push({ x: first + i * PITCH, y: GROUND - MAC_H, boot: 0.8 + i * 0.7, lit: 0,
+      lines: [2 + Math.floor(m0() * 6), 2 + Math.floor(m0() * 6), 2 + Math.floor(m0() * 6)],
+      scroll: 0.3 + m0() * 0.6, send: 0, rnd: mulberry(20 + i) });
+  }
+  // the cloud over them: a long cumulus, tallest in the middle, its top a
+  // run of round lobes on a flat foot; white where the light catches the
+  // top, darker along the foot
+  const cw = Math.max(34, (n - 1) * PITCH + MAC_W + 10), ch = 15;
+  const cx = Math.min(AW - cw - 3, Math.max(2, first + ((n - 1) * PITCH + MAC_W - cw) / 2 | 0)), cy = 3;
+  const c0 = mulberry(5), tall = [];
+  for (let at = 0; at < cw;) {
+    let w = 9 + Math.floor(c0() * 7);
+    if (cw - at - w < 7) w = cw - at; // the last lobe takes what is left
+    const lift = Math.floor(c0() * 2);
+    for (let i = 0; i < w; i++) {
+      const u = (i + 0.5) / w * 2 - 1, x = at + i;
+      const dome = 3 + 6 * Math.pow(Math.sin(Math.PI * (x + 0.5) / cw), 0.7);
+      tall[x] = Math.max(2, Math.min(ch, Math.round(dome + (Math.min(w, 13) / 2.6) * Math.sqrt(1 - u * u) + lift - 1)));
+    }
+    at += w;
+  }
+  for (const x of [0, cw - 1]) tall[x] = Math.min(tall[x], 3);
+  const on = (x, y) => x >= 0 && x < cw && y < ch && y >= ch - tall[x] && !(y === ch - 1 && (x < 2 || x >= cw - 2));
+  const px = [];
+  for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+    if (!on(x, y)) continue;
+    px.push({ x, y, c: !on(x, y - 1) || (!on(x - 1, y) && y < ch - 3) ? "#ffffff"
+      : !on(x, y + 1) ? "#6666cc" : !on(x, y + 2) || !on(x + 1, y) ? "#9999ff" : "#ccccff" });
+  }
+  cloud = { x: cx, y: cy, w: cw, h: ch, px };
+  // the moon, where there is room for one left of the cloud
+  if (cx > 46) {
+    const mx = Math.min(30, cx - 18), my = 12;
+    for (let y = -6; y <= 6; y++) for (let x = -6; x <= 6; x++) {
+      const inMoon = x * x + y * y <= 36.5, cut = (x - 3) * (x - 3) + (y + 2) * (y + 2) <= 30;
+      if (inMoon && !cut) { bctx.fillStyle = x * x + y * y > 26 && x < 0 ? "#edeae2" : "#dad5ca"; bctx.fillRect(mx + x, my + y, 1, 1); }
+    }
+  }
+  // the stars: most of them faint, a few bright enough to flare
+  stars = [];
+  const count = Math.round(AW * GROUND / 85);
+  for (let i = 0; i < count; i++) {
+    const tier = r() < 0.6 ? 0 : r() < 0.7 ? 1 : 2;
+    stars.push({ x: Math.floor(r() * AW), y: Math.floor(r() * (GROUND - 3)), tier, period: 2.5 + r() * 5, phase: r() * 6.283 });
+  }
+  packets = []; flashes = []; shoot = null;
+}
+
+const dot = (x, y, c) => { actx.fillStyle = c; actx.fillRect(x, y, 1, 1); };
+const box = (x, y, w, h, c) => { actx.fillStyle = c; actx.fillRect(x, y, w, h); };
+// the smiling Mac, on the screen's 10 by 7
+const FACE = [[2, 1], [2, 2], [7, 1], [7, 2], [5, 1], [5, 2], [5, 3], [4, 3], [2, 4], [7, 4], [3, 5], [4, 5], [5, 5], [6, 5]];
+function drawMac(m, t) {
+  const x = m.x, y = m.y;
+  box(x, y, 20, 25, "#000"); box(x + 1, y + 1, 18, 23, "#DAD5CA");
+  box(x + 1, y + 1, 18, 1, "#EDEAE2");                        // the top catches the moon
+  box(x + 3, y + 3, 14, 11, "#000");
+  box(x + 6, y + 17, 8, 2, "#55524B");
+  box(x + 14, y + 20, 3, 2, t < m.lit ? "#7FD67F" : "#B7B2A7"); // the lamp, lit as a packet lands
+  box(x + 3, y + 24, 14, 4, "#000"); box(x + 4, y + 25, 12, 2, "#C8C3B8");
+  const sx = x + 5, sy = y + 5, age = t - m.boot;
+  if (age < 0) { box(sx, sy, 10, 7, "#3A3F46"); return; }                 // off: a stopped VM's screen
+  if (age < 0.9) {                                                       // starting: the smiling Mac
+    box(sx, sy, 10, 7, "#cccccc");
+    for (const [fx, fy] of FACE) dot(sx + fx, sy + fy, "#000");
+    return;
+  }
+  box(sx, sy, 10, 7, "#7FD67F");                                         // running
+  for (let i = 0; i < 3; i++) box(sx + 1, sy + 1 + i * 2, m.lines[i], 1, "#2f8a3e");
+  if (Math.floor(t * 2) % 2 === 0) dot(sx + 1 + m.lines[2] + 1, sy + 5, "#14531f");
+}
+const beamX = m => m.x + 10;
+const beamTop = () => cloud.y + cloud.h;
+function skyDraw() {
+  if (!AW) return;
+  const t = clock;
+  actx.drawImage(back0, 0, 0);
+  for (const s of stars) {
+    const v = Math.sin(t * 6.283 / s.period + s.phase);
+    if (s.tier === 0) dot(s.x, s.y, v > 0.2 ? "#3c3c7c" : "#26265a");
+    else if (s.tier === 1) dot(s.x, s.y, v > 0.5 ? "#ccccff" : v > -0.4 ? "#8080c0" : "#4c4c96");
+    else {
+      dot(s.x, s.y, v > -0.3 ? "#ffffff" : "#ccccff");
+      if (v > 0.75) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) dot(s.x + dx, s.y + dy, "#8080c0");
+    }
+  }
+  if (shoot) {
+    const TAIL = ["#ffffff", "#ccccff", "#9999ff", "#6666cc", "#333399", "#1c1c5a"];
+    for (let i = TAIL.length - 1; i >= 0; i--) {
+      const x = Math.round(shoot.x + i * 2), y = Math.round(shoot.y - i * 0.8);
+      if (y >= 0 && y < GROUND && shoot.age - i * 0.03 > 0) dot(x, y, TAIL[i]);
+    }
+  }
+  // the beams: a dotted line from each running Mac up to the cloud
+  for (const m of macs) {
+    if (t - m.boot < 0.9) continue;
+    for (let y = beamTop() + 1; y < m.y - 1; y += 2) dot(beamX(m), y, "#3d3d8f");
+  }
+  for (const p of cloud.px) dot(cloud.x + p.x, cloud.y + p.y, p.c);
+  for (const f of flashes) box(f.x - 1, beamTop() - 2, 3, 2, "#ffffff");
+  for (const p of packets) {
+    if (p.pos < 0) continue; // an answer still inside the cloud
+    const m = macs[p.mac], top = beamTop(), bottom = m.y - 2;
+    const y = Math.round(p.up ? bottom - p.pos * (bottom - top) : top + p.pos * (bottom - top));
+    dot(beamX(m), y, p.up ? "#ffffff" : "#7FD67F");
+    dot(beamX(m), y + (p.up ? 1 : -1), p.up ? "#9999ff" : "#2f8a3e");
+  }
+  for (const m of macs) drawMac(m, t);
+  sctx.imageSmoothingEnabled = false;
+  sctx.clearRect(0, 0, sky.width, sky.height);
+  sctx.drawImage(art, 0, 0, AW, AH, 0, OY, AW * BLOCK, AH * BLOCK);
+}
+function skyStep() {
+  clock += STEP;
+  const t = clock;
+  for (const m of macs) {
+    if (t - m.boot < 0.9) continue;
+    if (t >= m.scroll) {                       // a line scrolls up the screen
+      m.lines = [m.lines[1], m.lines[2], 2 + Math.floor(m.rnd() * 6)];
+      m.scroll = t + 0.5 + m.rnd() * 0.9;
+    }
+    if (!m.send) m.send = t + 0.4 + m.rnd() * 1.5;
+    if (t >= m.send) {                         // a packet leaves for the cloud
+      packets.push({ mac: macs.indexOf(m), up: true, pos: 0 });
+      m.send = t + 1.6 + m.rnd() * 2.6;
+    }
+  }
+  for (const p of packets) p.pos += STEP * 1.5;
+  for (const p of packets.filter(p => p.pos >= 1)) {
+    const m = macs[p.mac];
+    if (p.up) { flashes.push({ x: beamX(m), until: t + 0.3 }); packets.push({ mac: p.mac, up: false, pos: -0.35 }); }
+    else m.lit = t + 0.3;
+  }
+  packets = packets.filter(p => p.pos < 1);
+  flashes = flashes.filter(f => f.until > t);
+  if (shoot) {
+    shoot.age += STEP; shoot.x -= 5; shoot.y += 2;
+    if (shoot.age > 0.9 || shoot.x < -12 || shoot.y >= GROUND) shoot = null;
+  } else if (t >= nextShoot) {
+    // over the open sky, left of the cloud where there is one
+    const span = Math.max(30, cloud.x - 10);
+    shoot = { x: 16 + rnd() * span, y: 2 + rnd() * 10, age: 0 };
+    nextShoot = t + 6 + rnd() * 8;
+  }
+  if (t >= nextNap && macs.length) {           // now and then one of them restarts
+    const m = macs[Math.floor(rnd() * macs.length)];
+    m.boot = t + 0.7; m.send = 0;
+    packets = packets.filter(p => macs[p.mac] !== m);
+    nextNap = t + 12 + rnd() * 10;
+  }
+}
+function skyFit() {
+  const dpr = window.devicePixelRatio || 1;
+  const dw = Math.max(1, Math.round(sky.clientWidth * dpr)), dh = Math.max(1, Math.round(sky.clientHeight * dpr));
+  BLOCK = Math.max(1, Math.round(2 * dpr));
+  if (sky.width !== dw || sky.height !== dh) { sky.width = dw; sky.height = dh; }
+  const aw = Math.ceil(dw / BLOCK), ah = Math.ceil(dh / BLOCK);
+  OY = dh - ah * BLOCK;
+  if (aw !== AW || ah !== AH) {
+    AW = art.width = aw; AH = art.height = ah;
+    skyLay();
+    if (LESS.matches) skyStill();
+  }
+  skyDraw();
+}
+// the still frame: every Mac running, nothing in flight
+function skyStill() {
+  clock = 60;
+  for (const m of macs) { m.boot = 0; m.lit = 0; }
+  packets = []; flashes = []; shoot = null;
+}
+let skyTimer = 0, closed = false;
+function skyRun() {
+  const go = !closed && !document.hidden && !LESS.matches;
+  if (go && !skyTimer) skyTimer = setInterval(() => { skyStep(); skyDraw(); }, STEP * 1000);
+  if (!go && skyTimer) { clearInterval(skyTimer); skyTimer = 0; }
+}
+new ResizeObserver(skyFit).observe(sky);
+// a window dragged to a screen of another density is laid out again
+(function watchDensity() {
+  matchMedia("(resolution: " + (window.devicePixelRatio || 1) + "dppx)")
+    .addEventListener("change", () => { skyFit(); watchDensity(); }, { once: true });
+})();
+LESS.addEventListener("change", () => { if (LESS.matches) skyStill(); skyDraw(); skyRun(); });
+document.addEventListener("visibilitychange", () => { skyRun(); if (!document.hidden) ask(); });
+// the desktop says when the window is closed (it is hidden, not destroyed)
+// and when it is opened again: the header rests, and comes back to the
+// first page with fresh answers
+window.addEventListener("message", e => {
+  if (e.origin !== location.origin || !e.data || typeof e.data.exe !== "string") return;
+  if (e.data.exe === "hide") {
+    closed = true;
+    if (shown) { $("#card").hidden = true; $("#home").hidden = false; shown = null; }
+  } else if (e.data.exe === "show") {
+    closed = false;
+    ask();
+    api("/v1/welcome").then(r => { showBox.checked = !!r.show; }).catch(() => {});
+  }
+  skyRun();
+});
+
+skyFit();
+skyRun();
+paint();
+ask();
+</script>
+</body>
+</html>

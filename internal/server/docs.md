@@ -21,8 +21,8 @@ The menu bar works like the classic Mac it resembles:
   Icon Editor, Configuration, Log Viewer.
 - **Special** — Mac OS 9, Join… (pair another exe machine), Cloudflare Status and
   Setup Wizard, Set API Token….
-- **Help** — this page, and the Agent Skill Guide for handing exe to a
-  coding agent.
+- **Help** — Welcome (below), this page, and the Agent Skill Guide for
+  handing exe to a coding agent.
 - **Show All Windows** — the button at the right, left of the magnifier:
   every open window shrinks into a grid. The one under the pointer turns
   blue and shows its name; click it to bring it forward, or click the desk,
@@ -30,6 +30,20 @@ The menu bar works like the classic Mac it resembles:
   reaches it as `showall`.
 - **Search** — the magnifier: one box finds VMs, chat sessions, notes and
   todos.
+
+**Welcome**, under Help, is exe in six cards: virtual machines, Chat, the
+Claude Code and Codex windows, the Hub, Cloudflare and apps. Click one for
+a short account of it. Each card says how that feature stands on this
+machine — ready, with a green check beside its name on the first page, or
+what it still needs — and its button goes there: New VM…, the pane of
+Configuration that sets Chat up, the Cloudflare Setup Wizard, the Hub.
+**Read More…** opens this manual at the chapter. On a new install the
+window opens with the desktop each time, until you clear **Show this
+window when the desktop opens**; that box belongs to this machine, not to
+the browser. An exe that was installed before the window existed opens it
+from the menu only.
+
+<img src="https://hub.v2core.com/v1/embed/bafkreifwrbkkq74w5knqzrsbhxcbri7ehkq2n6patknhucbb2tck5tvzmu" alt="The Welcome window: a night sky over a row of Macs, and under it the six features, two to a row" width="600" height="497">
 
 **About This Computer**, under the Apple menu, is the OS 9 box: the build,
 the machine, its addresses (click one to copy), Built-in Memory, how much of
@@ -472,6 +486,7 @@ needs a label before it, as in `My terminal<TAB>terminal`.
 | `url <address>` | Open an `http://` or `https://` address in a new browser tab. |
 | `docs` | Open the Using exe manual in the desktop. |
 | `skillguide` | Open the Agent Skill Guide. |
+| `welcome` | Open the Welcome window. |
 | `customize` | Open this menu's editor. |
 
 For `workspace` and `edit`, use relative paths such as `Projects/demo` or

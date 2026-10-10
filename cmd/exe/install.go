@@ -1705,6 +1705,9 @@ func runSetup(l layout, h *host, from string) error {
 		}
 		listen = cfg.Listen
 		notes = append(notes, moved...)
+		// a new install greets its owner: the desktop opens its Welcome
+		// window until its check box says otherwise
+		config.SetWelcome(l.State, true)
 	}
 	spoke := false // something was said since the questions
 	if appsDir != "" && (a.Apps || tracked) {

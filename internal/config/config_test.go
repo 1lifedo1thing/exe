@@ -66,3 +66,30 @@ func TestVMRoot(t *testing.T) {
 		t.Errorf("VMRoot = %q", c.VMRoot())
 	}
 }
+
+// `exe init` makes a new home, and a new home greets its owner: the mark
+// that opens the desktop's Welcome window is left beside the configuration.
+// It is this machine's alone to turn off and on.
+func TestWriteTemplateLeavesTheWelcomeMark(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "home")
+	t.Setenv("EXE_HOME", dir)
+	if Welcome(dir) {
+		t.Fatal("a home that does not exist yet is marked")
+	}
+	if _, err := WriteTemplate(); err != nil {
+		t.Fatal(err)
+	}
+	if !Welcome(dir) {
+		t.Fatal("init left no welcome mark")
+	}
+	if err := SetWelcome(dir, false); err != nil || Welcome(dir) {
+		t.Fatalf("turning it off: %v, still marked %v", err, Welcome(dir))
+	}
+	if err := SetWelcome(dir, false); err != nil {
+		t.Fatalf("off twice: %v", err)
+	}
+	// init refuses a home that has a configuration, and does not mark it again
+	if _, err := WriteTemplate(); err == nil || Welcome(dir) {
+		t.Fatalf("a second init: err %v, marked %v", err, Welcome(dir))
+	}
+}

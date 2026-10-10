@@ -421,5 +421,37 @@ func WriteTemplate() (string, error) {
 		return p, err
 	}
 	b, _ := json.MarshalIndent(Default(), "", "  ")
-	return p, os.WriteFile(p, append(b, '\n'), 0o600)
+	if err := os.WriteFile(p, append(b, '\n'), 0o600); err != nil {
+		return p, err
+	}
+	// a new home greets its owner; a failure here is no reason to fail init
+	SetWelcome(Dir(), true)
+	return p, nil
+}
+
+// A new install greets its owner: `exe setup` and `exe init` leave an empty
+// file beside the configuration they write, and while it is there the
+// desktop opens its Welcome window each time it loads. The window's check
+// box takes the file away and puts it back. It is a file of its own rather
+// than a setting, so that it belongs to this machine alone: nothing that
+// is synced between joined nodes carries it.
+const welcomeFile = "welcome"
+
+// Welcome reports whether the desktop kept in dir opens its Welcome window
+// by itself.
+func Welcome(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, welcomeFile))
+	return err == nil
+}
+
+// SetWelcome turns that on or off.
+func SetWelcome(dir string, on bool) error {
+	p := filepath.Join(dir, welcomeFile)
+	if on {
+		return os.WriteFile(p, nil, 0o644)
+	}
+	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }

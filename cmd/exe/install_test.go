@@ -19,6 +19,7 @@ import (
 	"strings"
 	"testing"
 
+	"exe/internal/config"
 	"exe/internal/release"
 )
 
@@ -251,6 +252,10 @@ func TestSetupReturnOnEverything(t *testing.T) {
 	if strings.Contains(out, "Token ") {
 		t.Errorf("a token was shown though none was set:\n%s", out)
 	}
+	// a new install greets its owner: the desktop opens its Welcome window
+	if !config.Welcome(l.State) {
+		t.Error("a new install left no welcome mark")
+	}
 }
 
 // Beyond this machine there is no asking: a token is made and shown.
@@ -382,6 +387,10 @@ func TestSetupKeepsAConfiguration(t *testing.T) {
 	}
 	if strings.Contains(out, "mine") {
 		t.Error("a token the installer did not make was printed")
+	}
+	// an install that was here already is not greeted again
+	if config.Welcome(l.State) {
+		t.Error("a kept configuration was given a welcome mark")
 	}
 }
 

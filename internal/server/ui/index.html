@@ -1420,6 +1420,7 @@ body.mobile th.sorted {
   <div class="dd-item" data-act="token">Set API Token…</div>
 </div>
 <div class="dropdown" id="dd-help" hidden>
+  <div class="dd-item" data-act="welcome">Welcome…</div>
   <div class="dd-item" data-act="docs">exe Documentation…</div>
   <div class="dd-item" data-act="skillguide">Agent Skill Guide…</div>
 </div>
@@ -3152,9 +3153,13 @@ function winSubscribe() {
   };
 }
 document.addEventListener("exe-token", () => { if (winES) winSubscribe(); });
+// settled once the saved layout has been put back (or could not be): what
+// opens a window by itself at load waits for it (Welcome)
+let winRestoredDone;
+const winRestored = new Promise(done => { winRestoredDone = done; });
 function winRestore() {
   // mobile restores its own phone-local state, never the desktop snapshot
-  if (IS_MOBILE) { mobRestore(); return; }
+  if (IS_MOBILE) { mobRestore(); winRestoredDone(); return; }
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem("exe_winstate") || "null"); } catch (e) {}
   if (cached) applyWinState(cached); else openWin("#win-vms");
@@ -3168,7 +3173,7 @@ function winRestore() {
       localStorage.setItem("exe_winstate", JSON.stringify(r.state));
       applyWinState(r.state);
     }
-  }).catch(() => {}).finally(() => { winSubscribe(); restoreTerms(); });
+  }).catch(() => {}).finally(() => { winSubscribe(); restoreTerms(); winRestoredDone(); });
 }
 // the Terminal sessions this browser shows, as "number:started" — the
 // start tells a session from a later one under the same number — kept in
@@ -3271,7 +3276,8 @@ const ACTIONS = {
   cfwizard: () => wizOpen(false),
   join: () => joinOpen(),
   token: () => tokOpen(),
-  docs: () => openDocsWin(),
+  welcome: () => openWelcomeWin(),
+  docs: find => openDocsWin(find),
   skillguide: () => openSkillWin(),
 };
 document.querySelectorAll(".dd-item").forEach(it => {
@@ -3404,10 +3410,11 @@ const copyIP = ip => copyText(ip, "IP " + ip);
 // served at /docs.md the way the skill file is) and is fetched once per
 // page load, rendered with the chat's markdown pipeline ----
 let docsLoaded = false;
-async function openDocsWin() {
+// find: a chapter's heading ("The Hub"), to open the manual there
+async function openDocsWin(find) {
   $("#docs-url").textContent = location.origin + "/docs.md";
   openWin("#win-docs");
-  if (docsLoaded) return;
+  if (docsLoaded) { docsFind(find); return; }
   try {
     const r = await fetch("/docs.md");
     if (!r.ok) throw new Error("HTTP " + r.status);
@@ -3415,9 +3422,35 @@ async function openDocsWin() {
     // fold those newlines back into flowing paragraphs
     $("#docs-md").innerHTML = DOMPurify.sanitize(marked.parse(await r.text(), { breaks: false }));
     docsLoaded = true;
+    docsFind(find);
   } catch (e) {
     $("#docs-md").replaceChildren(el("span", { class: "muted" }, "Could not load the documentation — " + e.message));
   }
+}
+
+// The pictures keep their rooms from their width and height, so a heading
+// stays where it was found while they arrive.
+function docsFind(find) {
+  if (typeof find !== "string" || !find) return;
+  const h = [...document.querySelectorAll("#docs-md h1, #docs-md h2, #docs-md h3")].find(h => h.textContent.trim() === find);
+  const box = $("#docs-body");
+  if (h) box.scrollTop += h.getBoundingClientRect().top - box.getBoundingClientRect().top - 8;
+}
+
+// ---- Help → Welcome: the system app that introduces exe (sysapps/welcome).
+// It is off the desktop's icons (app.json "hidden") and opens from here —
+// and by itself with the desktop for as long as the daemon says so
+// (hostinfo's welcome: a new install, until the window's own check box is
+// cleared). A first open is centred, a third of the spare room above it,
+// as OS 9 places a window that arrives unasked. ----
+function openWelcomeWin() {
+  const fresh = !document.getElementById("win-app-welcome");
+  openAppWin("welcome");
+  const w = document.getElementById("win-app-welcome"), d = $("#desktop");
+  if (!fresh || !w || IS_MOBILE) return;
+  w.style.left = Math.max(8, Math.round((d.clientWidth - w.offsetWidth) / 2)) + "px";
+  w.style.top = Math.max(8, Math.round((d.clientHeight - w.offsetHeight) / 3)) + "px";
+  winSave();
 }
 
 // ---- Help → Agent Skill Guide ----
@@ -3949,6 +3982,7 @@ function renderIcons(vms) {
     box.append(ic);
   }
   for (const app of appsList) {
+    if (app.hidden) continue; // opened from a menu (Welcome, under Help)
     const key = "app:" + app.name;
     const ic = el("div", { class: "dicon" + (selectedIcon === key ? " sel" : ""), title: app.title || app.name });
     ic.innerHTML = appIcon(app);
@@ -4246,6 +4280,19 @@ window.addEventListener("message", e => {
     const path = typeof e.data.path === "string" ? e.data.path : "";
     if (path && !workspaceRelPath(path)) return;
     openAppWin(name, path ? { path } : undefined);
+  } else if (e.data.exe === "close") {
+    // an app's own button puts its window away (Welcome's OK)
+    closeWin(w);
+  } else if (e.data.exe === "desk" && typeof e.data.act === "string") {
+    // a system app asks for something the desktop does, by the desktop
+    // menu's own action names (Welcome's buttons: newvm, cfwizard, app
+    // hub…) and under the menu's own rules, so an action the menu would
+    // show greyed does nothing here either. Embedded bundles only, and
+    // only the actions that open something of the desktop's.
+    const app = appsList.find(a => "win-app-" + a.name === w.id);
+    const act = app && app.system_icon && BRIDGE_ACTS.has(e.data.act) && DESK_ACTS[e.data.act];
+    const args = Array.isArray(e.data.args) ? e.data.args.filter(a => typeof a === "string").slice(0, 2) : [];
+    if (act && !(act.dis && act.dis(...args))) act.run(...args);
   } else if (e.data.exe === "view-page" && isWebURL(e.data.url || "")) {
     // a page (an admin's HTML embed on the hub) opens the same way, in a
     // desktop page window, sandboxed like a Workspace page
@@ -5453,10 +5500,13 @@ const DESK_ACTS = {
 };
 for (const k of Object.keys(ACTIONS)) if (!DESK_ACTS[k]) DESK_ACTS[k] = { run: ACTIONS[k] };
 DESK_ACTS.url = { run: href => window.open(href, "_blank", "noopener") };
+// what a system app may ask for over the bridge ({exe:"desk", act, args})
+const BRIDGE_ACTS = new Set(["newvm", "winvms", "winmyapps", "winchat", "winconfig", "claude", "codex",
+  "cfstatus", "cfwizard", "join", "docs", "skillguide", "app"]);
 const DESK_EMPTY = { vms: "No VMs", apps: "No Apps", windows: "No Windows" };
 function deskGen(kind) {
   if (kind === "vms") return sortedVMs(lastVMs).map(vm => ({ label: vm.name, items: vmCtxItems(vm) }));
-  if (kind === "apps") return appsList.map(a => ({ label: a.title || a.name, act: () => openAppWin(a.name) }));
+  if (kind === "apps") return appsList.filter(a => !a.hidden).map(a => ({ label: a.title || a.name, act: () => openAppWin(a.name) }));
   return openWindows()
     .map(w => ({ label: winLabel(w), icon: winIcon(w), act: () => openWin(w) }))
     .sort((a, b) => a.label.localeCompare(b.label));
@@ -8782,7 +8832,10 @@ const getPath = (o, p) => p.split(".").reduce((a, k) => (a == null ? a : a[k]), 
 const setPath = (o, p, v) => { const ks = p.split("."); const last = ks.pop(); let t = o; for (const k of ks) { t[k] = t[k] || {}; t = t[k]; } t[last] = v; };
 let loadedConfig = null;
 let cfgActiveTab = 0;
-function openConfigWin() {
+// tab: a pane's name ("OpenAI"), for a caller that sends someone to it
+function openConfigWin(tab) {
+  const i = typeof tab === "string" ? CONFIG_FIELDS.findIndex(g => g.group === tab) : -1;
+  if (i >= 0) cfgActiveTab = i;
   openWin("#win-config");
   loadConfig().catch(e => toast(e.message));
 }
@@ -10620,7 +10673,7 @@ winRestore();
 appDataSubscribe();
 renderVMHead();
 loadVMs().catch(e => toast(e.message));
-loadApps().catch(() => {});
+const appsReady = loadApps().catch(() => {});
 loadIcons().catch(() => {});
 loadDeskMenu().catch(() => {});
 // hosts with an agent CLI (Claude Code, Codex) get its desktop icon
@@ -10633,6 +10686,11 @@ j("/v1/hostinfo").then(h => {
   if (any) renderIcons(lastVMs);
   vmsError = h.vms_error || "";
   applyVMsError();
+  // a new install's Welcome, once the saved layout has had its say: a
+  // snapshot that arrived later would close it again
+  if (h.welcome) Promise.all([appsReady, winRestored]).then(() => {
+    if (appsList.some(a => a.name === "welcome")) openWelcomeWin();
+  });
 }).catch(() => { vmsError = ""; applyVMsError(); })
   .then(showFromHash); // a notification's tap loaded this desk: an agent window needs hostAgents to know its shape
 loadConfig().catch(() => {});
