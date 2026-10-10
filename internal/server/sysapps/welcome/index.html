@@ -121,6 +121,18 @@ input[type=checkbox]:focus-visible { outline: 2px solid #9999fe; }
 .foot { flex: none; display: flex; align-items: center; gap: 12px; padding: 12px;
   border-top: 1px solid var(--g600); box-shadow: inset 0 1px 0 #fff; }
 .foot .gap { flex: 1; min-width: 0; }
+/* Back wears a chevron pointing where it goes: the glyph 9px in, 5px to
+   the word, the word's 13px to its right (the Hub's glyph-and-word
+   buttons). Its strokes are 2px, the weight of the bold word beside it.
+   Stepped pixels at 100 and 200 percent; between them, where a stepped
+   diagonal comes out uneven, a smooth copy of the same shape. It takes
+   the word's colour, so it turns white with it while pressed. */
+#c-back { display: inline-flex; align-items: center; gap: 5px; padding: 2px 13px 2px 9px; }
+#c-back svg { display: block; flex: none; fill: currentColor; }
+#c-back .fine { display: none; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  #c-back .crisp { display: none; } #c-back .fine { display: block; }
+}
 #c-acts { display: flex; gap: 12px; }
 
 /* a phone: one column, the check box on a line of its own above the
@@ -217,7 +229,7 @@ input[type=checkbox]:focus-visible { outline: 2px solid #9999fe; }
       </div>
     </div>
     <div class="foot">
-      <button class="ghost" id="c-back">Back</button>
+      <button class="ghost" id="c-back"><svg class="crisp" width="5" height="8" viewBox="0 0 5 8" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 0h2v1H3zM2 1h2v1H2zM1 2h2v1H1zM0 3h2v1H0zM1 4h2v1H1zM2 5h2v1H2zM3 6h2v1H3z"/></svg><svg class="fine" width="5" height="8" viewBox="0 0 5 8" shape-rendering="geometricPrecision" aria-hidden="true"><path d="M3 0h2L2 3.5 5 7H3L0 3.5z"/></svg>Back</button>
       <span class="gap"></span>
       <div id="c-acts"></div>
     </div>

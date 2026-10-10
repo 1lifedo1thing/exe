@@ -423,7 +423,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   to a row — a 32px icon, a bold name, a blurb in 11px `#444` — and a
   button row under a separator: a button at the left, a check box in the
   middle (Show this window when the desktop opens), OK at the right,
-  wearing the ring. A feature is pressed the way a desktop icon is picked
+  wearing the ring. A card's Back wears a chevron, the Hub's
+  glyph-and-word layout (the glyph 9px in, 5px to the word): 5 by 7 with
+  2px strokes, the weight of the bold word, on the caps' middle, in
+  `currentColor`, stepped at whole scales with a smooth copy between 1x
+  and 2x. A feature is pressed the way a desktop icon is picked
   (`--hl`, white words, the art darkened) and has no other state. What a
   card says of this machine keeps two lines from the first paint; the
   green check beside a ready feature's name keeps its 10px.
