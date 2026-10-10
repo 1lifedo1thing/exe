@@ -137,6 +137,12 @@ Afterwards: rebuild and restart the daemon on spark (it serves
 `/install.sh` and the homepage), run the real one-liner once on `lab`, and
 post the release on the hub.
 
+The first release, 2026.10.10, went out this way: built from a commit,
+installed from the mirror on `lab` and by `exe update` on `precision`, its
+Mac binaries checked with `spctl` ("Notarized Developer ID"), then
+published — GitHub marked it immutable — and installed through the real
+one-liner on `lab` and on a Mac.
+
 Rolling back is moving GitHub's "latest" mark to the release before
 (`gh release edit <older> --latest`); whether that is allowed with
 immutable releases on has not been tried — publishing the next version is

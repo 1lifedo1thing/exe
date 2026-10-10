@@ -275,7 +275,7 @@ publish() {
 		notes=$(mktemp)
 		prev=$(git -C "$root" describe --tags --abbrev=0 "$commit" 2>/dev/null || true)
 		{
-			echo "Install or update on Linux (x86-64, ARM64):"
+			echo "Install or update, on Linux and macOS (x86-64 and ARM64):"
 			echo
 			echo '```sh'
 			echo "curl -fsSL https://exe.v2core.com/install.sh | sh    # new machine"
