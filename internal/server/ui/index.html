@@ -928,10 +928,89 @@ pre.out { background: #10120f; color: #cfe3cf; border: 1px solid var(--black); p
    between items — the statusbar draws the bottom frame line); the small
    gray last line is the byline: which node posted it, and when */
 #news-list { height: 380px; overflow-y: scroll; overflow-x: hidden; }
+/* Software Update (Apple menu), after Mac OS 9's control panel of that
+   name, sampled from the QEMU guest on 2026-10-10: bold words on what it
+   does; one large square button, 52 by 50, with its name under it; a line
+   on the last look; then an etched group. The button is OS 9's large bevel
+   button: a black outline with square corners, inside it one row of #ddd
+   then two of white at the top and left, one of #777 then two of #aaa at
+   the bottom and right, and a 32px icon on the #ddd face.
+   Nothing here arrives late and moves what is there: the status keeps two
+   lines, the bar its 12px, the notes their box, whatever they hold. */
+#su-body { padding: 12px 16px; }
+#su-about { font-weight: bold; line-height: 16px; }
+#su-act { display: flex; flex-direction: column; align-items: center; margin-top: 14px; }
+#su-go { width: 52px; height: 50px; padding: 0; display: grid; place-items: center;
+  background: var(--g300); border: 1px solid var(--black); border-radius: 0;
+  box-shadow: inset 1px 1px 0 #ddd, inset -1px -1px 0 #777, inset 3px 3px 0 #fff, inset -3px -3px 0 #aaa; }
+#su-go svg { display: block; width: 32px; height: 32px; }
+#su-go:active:not(:disabled) { background: #666;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888, inset 3px 3px 0 #555, inset -3px -3px 0 #777; }
+#su-go:disabled { border-color: #888; box-shadow: none; }
+#su-go:disabled svg { opacity: .4; }
+#su-go:focus { outline: none; }
+#su-go:focus-visible { outline: 2px solid #9999fe; }
+#su-go-label { margin-top: 7px; font-weight: bold; line-height: 16px; }
+#su-go:disabled + #su-go-label { color: #777; }
+/* the status is a short line, two at most (a phone's width, a source
+   build); anything longer — why an update stopped, why the releases could
+   not be asked — is said in the box below, which scrolls */
+#su-status { margin-top: 8px; min-height: 32px; line-height: 16px; text-align: center; user-select: text; }
+#su-status.bad { color: #7a1010; }
+/* The bar that says exe is at work. How far along is not known — the
+   installer is a command that says "Downloading" and then "Installed" —
+   so it is OS 9's barber pole: slanted bands of the scroll thumb's blues
+   in a sunken well, stepping along eight times a second. With less motion
+   asked for the bands stand still. */
+#su-bar { height: 12px; margin: 10px 40px 0; border: 1px solid var(--black); background: var(--g400);
+  box-shadow: inset 1px 1px 0 var(--g600); visibility: hidden; }
+#su-bar.on { visibility: visible;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="10" shape-rendering="crispEdges"><rect width="16" height="10" fill="%23ccccff"/><path fill="%236666cc" d="M0 0h8v1H0zM1 1h8v1H1zM2 2h8v1H2zM3 3h8v1H3zM4 4h8v1H4zM5 5h8v1H5zM6 6h8v1H6zM7 7h8v1H7zM8 8h8v1H8zM9 9h7v1H9zM0 9h1v1H0z"/></svg>') 0 0 repeat-x;
+  animation: su-pole 1s steps(8) infinite; }
+@keyframes su-pole { to { background-position: 16px 0; } }
+@media (prefers-reduced-motion: reduce) { #su-bar.on { animation: none; } }
+#su-rows { display: grid; grid-template-columns: max-content 1fr; gap: 2px 8px; margin: 6px 0 0 6px; line-height: 16px; }
+#su-rows b { text-align: right; }
+#su-rows span { user-select: text; }
+#su-group { margin-top: 16px; padding: 12px 10px 10px; }
+/* what changed, or how the update went: a sunken white box that scrolls,
+   framed as the Log Viewer's printouts are (always a bar, the frame's
+   right border dropped: the bar's black edge is that line) */
+#su-notes { height: 112px; max-height: none; overflow-y: scroll; overflow-x: hidden; border-right: 0;
+  padding: 6px 8px; line-height: 16px; user-select: text; }
+#su-notes > :first-child { margin-top: 0; } #su-notes > :last-child { margin-bottom: 0; }
+#su-notes p, #su-notes ul, #su-notes ol, #su-notes pre { margin: 0 0 6px; }
+#su-notes ul, #su-notes ol { padding-left: 18px; }
+#su-notes h1, #su-notes h2, #su-notes h3 { font-size: 12px; margin: 8px 0 4px; }
+#su-notes pre, #su-notes code { font-family: var(--mono); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+#su-notes .su-vm { display: flex; gap: 8px; }
+#su-notes .su-vm b { flex: none; }
+#su-notes .muted { color: #777; }
+#su-foot { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+#su-last { flex: 1; min-width: 0; font-size: 11px; color: #333; }
+/* a diamond in a menu's left gutter, where the dot of a current choice
+   goes: OS's mark for something that wants attention (Software Update…
+   with a newer release waiting). The same mark stands right of the Apple
+   in the menu bar, inside the title's own padding, so the bar does not
+   shift when it comes. Pixels at whole scales, geometry between them. */
+.dd-mark.dia { left: 5px; top: 8px; width: 7px; height: 7px; }
+#apple-dia { position: absolute; right: 2px; top: 7px; width: 7px; height: 7px; display: block; fill: #000; }
+.menu.appl { position: relative; }
+.menu.appl.open #apple-dia { fill: #fff; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  #apple-dia { shape-rendering: geometricPrecision; }
+}
+
 /* Documentation (Help menu): the manual on paper, a page at a time — its
    contents, then a chapter each — rendered markdown with the chat's
-   typography (the inner div carries .msg.asst) */
-#docs-body { height: 420px; overflow-y: scroll; overflow-x: hidden; user-select: text; }
+   typography (the inner div carries .msg.asst). The paper is as tall as
+   the contents page, so every chapter's name shows without a scroll:
+   --docs-h is that page measured (docsFit), 420px until it has come, and
+   a height the window was dragged to (inline) is over both. The first
+   time, the window is not drawn until its page is on it (.unread), so it
+   never changes height in view. */
+#docs-body { height: var(--docs-h, 420px); overflow-y: scroll; overflow-x: hidden; user-select: text; }
+#win-docs.unread { visibility: hidden; }
 /* the contents page's list of chapters: numbered, in two columns where the
    window has the room for them and one where it has not (a phone) */
 #docs-md ol.docs-toc { margin: 6px 0 4px; padding: 0 0 0 26px; columns: 2 200px; column-gap: 32px; }
@@ -1385,7 +1464,7 @@ body.mobile th.sorted {
 <body>
 
 <div id="menubar">
-  <div class="menu appl" data-m="apple" title="About This Computer, and the open windows"><svg width="15" height="15" viewBox="0 0 32 32" shape-rendering="crispEdges"><rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/><rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/><rect x="10.5" y="5.5" width="11" height="8" fill="#7FD67F" stroke="#000"/><rect x="12" y="18" width="8" height="2" fill="#55524B"/><rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/></svg></div>
+  <div class="menu appl" data-m="apple" title="About This Computer, Software Update, and the open windows"><svg width="15" height="15" viewBox="0 0 32 32" shape-rendering="crispEdges"><rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/><rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/><rect x="10.5" y="5.5" width="11" height="8" fill="#7FD67F" stroke="#000"/><rect x="12" y="18" width="8" height="2" fill="#55524B"/><rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/></svg></div>
   <div class="menu" data-m="file">File</div>
   <div class="menu" data-m="windows">Windows</div>
   <div class="menu" data-m="special">Special</div>
@@ -1407,6 +1486,7 @@ body.mobile th.sorted {
 <!-- the open windows follow About under a rule (appleMenuFill) -->
 <div class="dropdown" id="dd-apple" hidden>
   <div class="dd-item" data-act="about">About This Computer</div>
+  <div class="dd-item" data-act="update" id="dd-update">Software Update…</div>
 </div>
 <div class="dropdown" id="dd-file" hidden>
   <div class="dd-item" data-act="newvm">New VM…</div>
@@ -1871,6 +1951,34 @@ body.mobile th.sorted {
   <!-- exe Documentation (Help menu): the manual, embedded in the binary as
        docs.md, served at /docs.md, rendered with the chat's markdown
        pipeline. No desktop icon — the Help menu is its only entry. -->
+  <!-- Software Update (Apple menu): Mac OS 9's control panel of that name,
+       for exe's own releases (see the #su- CSS and openUpdateWin) -->
+  <div class="window" id="win-update" style="left:330px; top:76px; width:400px;" hidden>
+    <div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
+      <div class="title">Software Update</div>
+      <div class="stripe"></div><button class="tbox shade"></button></div>
+    <div class="win-frame">
+      <div class="win-body" id="su-body">
+        <div id="su-about">Software Update looks for a newer release of exe and moves this machine to it. exe restarts to finish, which stops the running VMs and starts them again.</div>
+        <div id="su-act">
+          <button id="su-go" disabled aria-labelledby="su-go-label"></button>
+          <div id="su-go-label">Update Now</div>
+        </div>
+        <div id="su-bar"></div>
+        <div id="su-status" aria-live="polite">Looking for a newer release…</div>
+        <div id="su-rows"><b>Installed:</b><span id="su-have">…</span><b>Newest:</b><span id="su-new">…</span></div>
+        <div class="join-group" id="su-group">
+          <div class="join-legend" id="su-legend">What changed</div>
+          <div class="listbox" id="su-notes"></div>
+        </div>
+        <div id="su-foot">
+          <span id="su-last"></span>
+          <button class="ghost" id="su-check">Check Now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="window grow" id="win-docs" style="left:200px; top:56px; width:560px;" hidden>
     <div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
       <div class="title">exe Documentation</div>
@@ -2912,7 +3020,7 @@ const WIN_CLIENT = Math.random().toString(36).slice(2) + Date.now().toString(36)
 // windows whose open/closed state is restored and synced; win-detail needs a
 // current VM and the dialogs are transient, so those only keep geometry
 const WIN_SYNC_OPEN = new Set(["win-vms", "win-config", "win-log", "win-chat", "win-news", "win-trash", "win-docs", "win-myapps", "win-icons", "win-menu"]);
-const WIN_OPENERS = { "win-log": () => openLogWin(), "win-chat": () => openChatWin(), "win-news": () => openNewsWin(), "win-config": () => openConfigWin(), "win-docs": () => openDocsWin(), "win-myapps": () => openMyAppsWin(), "win-icons": () => openIconsWin(), "win-menu": () => openMenuEditor() };
+const WIN_OPENERS = { "win-update": () => openUpdateWin(), "win-log": () => openLogWin(), "win-chat": () => openChatWin(), "win-news": () => openNewsWin(), "win-config": () => openConfigWin(), "win-docs": () => openDocsWin(), "win-myapps": () => openMyAppsWin(), "win-icons": () => openIconsWin(), "win-menu": () => openMenuEditor() };
 let winApplying = false; // applying a stored/remote snapshot — don't echo it back
 let winDragging = null;  // window under the local pointer — remote moves lose
 let winRev = 0;
@@ -3001,7 +3109,10 @@ function winSnapshot() {
   for (const [id, g] of Object.entries(termGeom)) if (!st[id] && !document.getElementById(id)) st[id] = { ...g };
   st["win-log"].h = parseInt($("#log-box").style.height) || $("#log-box").offsetHeight || 380;
   st["win-news"].h = parseInt($("#news-list").style.height) || $("#news-list").offsetHeight || 380;
-  st["win-docs"].h = parseInt($("#docs-body").style.height) || $("#docs-body").offsetHeight || 420;
+  // the manual's height only once dragged — otherwise it is its contents
+  // page's (docsFit). It goes by "dh": the "h" of builds before this one
+  // was saved whether dragged or not, and is not read
+  if ($("#docs-body").style.height) st["win-docs"].dh = parseInt($("#docs-body").style.height);
   // VM list height only once edge-resized — otherwise it sizes to its rows
   const vb = $("#win-vms .win-body");
   if (vb.style.height) st["win-vms"].h = parseInt(vb.style.height);
@@ -3086,7 +3197,7 @@ function applyWinState(st) {
       w.classList.toggle("shaded", !!v.shaded);
       if (id === "win-log" && v.h) $("#log-box").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-news" && v.h) $("#news-list").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
-      if (id === "win-docs" && v.h) $("#docs-body").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
+      if (id === "win-docs") $("#docs-body").style.height = v.dh ? Math.max(96, Math.min(window.innerHeight - 170, v.dh)) + "px" : "";
       if (id === "win-myapps" && v.h) $("#ma-icons").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-icons" && v.h) $("#ic-gallery").style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       if (id === "win-menu" && v.h) $("#menu-text").style.height = Math.max(160, Math.min(window.innerHeight - 170, v.h)) + "px";
@@ -3276,6 +3387,7 @@ document.addEventListener("mousedown", e => {
 });
 const ACTIONS = {
   about: () => openAboutWin(),
+  update: () => openUpdateWin(),
   newvm: () => { openWin("#win-newvm"); $("#c-name").focus(); },
   upload: () => openWin("#win-upload"),
   closewin: closeFrontWindow,
@@ -3318,6 +3430,11 @@ function appleMenuFill() {
   // a new build held back by unsaved work: the user can take it now
   if (buildNew) dd.querySelector('[data-act="about"]').after(
     el("div", { class: "dd-item dd-build", onclick: () => { menuClose(); buildReload(); } }, "Reload for Update"));
+  // a newer release waiting: Software Update… wears the diamond
+  const upd = $("#dd-update");
+  upd.querySelectorAll(".dd-mark").forEach(n => n.remove());
+  upd.classList.toggle("mark", suWaiting());
+  if (suWaiting()) { const m = el("span", { class: "dd-mark dia" }); m.innerHTML = DIAMOND_MARK; upd.append(m); }
   const wins = openWindows().filter(w => w.id !== "win-about")
     .sort((a, b) => winLabel(a).localeCompare(winLabel(b)));
   dd.classList.toggle("icons", wins.length > 0);
@@ -3427,6 +3544,182 @@ async function copyText(text, label) {
 }
 const copyIP = ip => copyText(ip, "IP " + ip);
 
+// ---- Apple → Software Update…: the desktop's `exe update`. The daemon
+// does the work and remembers it (update.go: GET and POST /v1/update); this
+// window only asks and draws, so it can be closed, opened on another
+// device, or come back after the desktop has reloaded, and show the same
+// thing: looking, a newer release with what changed in it, an update at
+// work, a release installed and waiting for a restart, and after one what
+// runs now and how each VM that was running came back.
+// The daemon is asked when the window opens, on Check Now, every second
+// and a half while something is under way (an update, a restart the
+// daemon has not come back from, VMs still starting), and — window or no
+// window — at load and every six hours, which is what puts the diamond by
+// the Apple and by the menu's line when a release is waiting. ----
+// Software Update: the same compact Mac, its screen showing an arrow down
+// into a tray
+let UPDATE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
+  <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>
+  <rect x="10.5" y="5.5" width="11" height="8" fill="#fff" stroke="#000"/>
+  <path fill="#333399" d="M15 6h2v3h-2zM13 9h6v1h-6zM14 10h4v1h-4zM15 11h2v1h-2zM12 12h8v1h-8z"/>
+  <rect x="12" y="18" width="8" height="2" fill="#55524B"/>
+  <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
+  <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
+</svg>`;
+const DIAMOND_MARK = `<svg width="7" height="7" viewBox="0 0 7 7" shape-rendering="crispEdges"><path d="M3 0h1v1H3zM2 1h3v1H2zM1 2h5v1H1zM0 3h7v1H0zM1 4h5v1H1zM2 5h3v1H2zM3 6h1v1H3z"/></svg>`;
+let suData = null;   // the daemon's last answer
+let suDown = false;  // it did not answer the last time it was asked
+let suAsked = "";    // the release this desktop asked to be restarted into
+let suTimer = 0, suBusy = false;
+let suNext;          // a look asked for while one was out: made when that one is back
+// a release this machine could move to: newer than what runs, or already
+// installed and waiting for the restart
+const suWaiting = () => !!suData && !suData.source && (!!suData.available || !!suData.installed);
+const suWhen = iso => { const d = new Date(iso); return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + " on " + d.toLocaleDateString(); };
+const suJobOn = () => !!suData && !!suData.job && suData.job.state !== "failed";
+function suMark() {
+  const menu = document.querySelector(".menu.appl");
+  let d = $("#apple-dia");
+  if (suWaiting() && !d) { menu.insertAdjacentHTML("beforeend", DIAMOND_MARK); menu.lastElementChild.id = "apple-dia"; }
+  if (!suWaiting() && d) d.remove();
+}
+async function suLoad(check) {
+  // one request at a time; a look asked for meanwhile is not dropped (a
+  // Check Now pressed during a routine one), it follows
+  if (suBusy) { suNext = suNext || check; return; }
+  suBusy = true;
+  try {
+    suData = await j("/v1/update" + (check ? "?check=1" : ""));
+    suDown = false;
+    // the restart this desktop asked for is over once the daemon that
+    // answers has no update in hand
+    if (suAsked && !suJobOn()) suAsked = "";
+  } catch (e) { suDown = true; }
+  suBusy = false;
+  suMark();
+  suRender();
+  if (suNext !== undefined) { const again = suNext; suNext = undefined; suLoad(again); return; }
+  suSchedule();
+}
+// something is under way that the next answer may change
+function suMoving() {
+  if (suAsked || suJobOn()) return true;
+  const last = suData && suData.last;
+  return !!(last && last.recent && (last.vms || []).some(v => v.state !== "running"));
+}
+function suSchedule() {
+  clearTimeout(suTimer);
+  if (!$("#win-update").hidden && suMoving()) suTimer = setTimeout(() => suLoad(false), 1500);
+}
+function suRender() {
+  $("#su-go").innerHTML = UPDATE_ICON;
+  const d = suData, st = $("#su-status"), go = $("#su-go");
+  let status = "Looking for a newer release…", bad = false, act = "", bar = false;
+  if (d) {
+    const job = d.job, last = d.last;
+    $("#su-have").textContent = d.source ? "built from source" : d.version;
+    $("#su-new").textContent = d.latest || "—";
+    if (suAsked && (suDown || (job && job.state === "restarting"))) {
+      status = "exe is restarting into " + suAsked + "…"; bar = true;
+    } else if (job && job.state === "restarting") {
+      status = "exe is restarting into " + job.target + "…"; bar = true;
+    } else if (job && job.state === "installing") {
+      status = job.message || "Downloading exe " + job.target + "…"; bar = true;
+    } else if (job && job.state === "failed") {
+      status = d.installed ? "exe " + d.installed + " is installed, but exe did not restart." : "The update did not finish."; bad = true;
+      act = d.installed ? "restart" : d.available ? "update" : "";
+    } else if (d.installed) {
+      status = "exe " + d.installed + " is installed. Restart exe to use it."; act = "restart";
+    } else if (last && last.recent && !last.ok) {
+      status = "The restart did not bring up exe " + last.to + ": this is still " + (d.version || "the old one") + "."; bad = true;
+      act = d.available ? "update" : "";
+    } else if (d.source) {
+      status = "This exe was built from source, so it is updated there: git pull, then make build.";
+    } else if (d.available) {
+      status = "exe " + d.latest + " is available. This machine runs " + d.version + "."; act = "update";
+    } else if (last && last.recent) {
+      status = "exe was updated from " + last.from + " to " + last.to + ".";
+    } else if (d.error) {
+      status = "Could not look for a newer release."; bad = true;
+    } else if (d.latest) {
+      status = "exe " + d.version + " is the newest release.";
+    }
+    $("#su-last").textContent = d.checked ? "Last checked at " + suWhen(d.checked) + "." : "";
+    suNotes(d);
+  }
+  st.textContent = status;
+  st.classList.toggle("bad", bad);
+  $("#su-bar").classList.toggle("on", bar);
+  go.disabled = !act;
+  go.dataset.act = act;
+  $("#su-go-label").textContent = act === "restart" ? "Restart Now" : "Update Now";
+  $("#su-check").disabled = bar || !d;
+}
+// the box under the status: how the last update went while that is news,
+// then what changed in the newest release
+function suNotes(d) {
+  const box = $("#su-notes"), last = d.last, kids = [];
+  if (last && last.recent) {
+    kids.push(el("p", {}, el("b", {}, "Updated at " + suWhen(last.at) + ": " + last.from + " to " + last.to + ".")));
+    const vms = last.vms || [];
+    if (vms.length) {
+      kids.push(el("p", {}, "Running before the restart:"));
+      for (const v of vms) kids.push(el("div", { class: "su-vm" }, el("b", {}, v.name),
+        v.state === "running" ? "running again" : v.state === "starting" ? "starting…" : v.state === "gone" ? "no longer there" : v.state));
+    } else kids.push(el("p", { class: "muted" }, "No VM was running."));
+    if (last.notes) kids.push(el("pre", {}, last.notes));
+  } else if (d.job && d.job.state === "failed") {
+    kids.push(el("p", {}, el("b", {}, "Why it stopped:")), el("pre", {}, d.job.error));
+  } else if (d.installed && d.installed_notes) {
+    kids.push(el("pre", {}, d.installed_notes));
+  } else if (d.error && !d.available) {
+    kids.push(el("p", {}, el("b", {}, "What the release address answered:")), el("pre", {}, d.error));
+  }
+  $("#su-legend").textContent = d.latest ? "What changed in " + d.latest : "What changed";
+  const notes = el("div", {});
+  if (d.notes) notes.innerHTML = DOMPurify.sanitize(marked.parse(d.notes, { breaks: false }));
+  else if (d.latest) {
+    notes.append(el("p", { class: "muted" }, "This release came without notes. ",
+      el("a", { href: d.page, target: "_blank", rel: "noopener" }, "Its page on GitHub"), " says what is in it."));
+  } else if (!kids.length) notes.append(el("p", { class: "muted" }, "Nothing to show yet."));
+  if (kids.length && (d.notes || d.latest)) kids.push(el("hr", { style: "border:0; border-top:1px solid #ccc; margin:8px 0" }));
+  // the same words again leave the box, and where it is scrolled to, alone
+  const want = JSON.stringify([last && last.recent ? last : null, d.job && d.job.state === "failed" ? d.job.error : "",
+    d.installed_notes, d.error, d.notes, d.latest, d.page]);
+  if (box.dataset.shown === want) return;
+  box.dataset.shown = want;
+  box.replaceChildren(...kids, ...notes.childNodes);
+}
+async function suAct() {
+  const d = suData, act = $("#su-go").dataset.act;
+  if (!d || !act) return;
+  const target = act === "restart" && d.installed ? d.installed : d.latest;
+  const run = d.running || [];
+  const ok = await confirmDialog({
+    message: act === "restart" ? "Restart exe into " + target + "?" : "Update exe to " + target + "?",
+    detail: (act === "restart" ? "" : "exe restarts when the release is installed. ") +
+      (run.length ? (run.length === 1 ? "The running VM stops and starts again: " : "The " + run.length + " running VMs stop and start again: ") + run.join(", ") + "."
+        : "No VM is running.") + " You can close this window: the update goes on without it.",
+    action: act === "restart" ? "Restart" : "Update" });
+  if (!ok) return;
+  try {
+    suData = await j("/v1/update", { method: "POST", json: { restart: true } });
+    suAsked = target;
+  } catch (e) { toast(e.message); }
+  suRender();
+  suSchedule();
+}
+$("#su-go").onclick = suAct;
+$("#su-check").onclick = () => { $("#su-status").textContent = "Looking for a newer release…"; $("#su-status").classList.remove("bad"); suLoad(true); };
+function openUpdateWin() {
+  suRender();
+  openWin("#win-update");
+  // a look made less than ten minutes ago is the answer; otherwise ask afresh
+  const young = suData && suData.checked && Date.now() - new Date(suData.checked) < 10 * 60 * 1000;
+  suLoad(!young && !suMoving());
+}
+
 // ---- Help → exe Documentation: the manual ships in the binary (docs.md,
 // served at /docs.md the way the skill file is), is fetched once per page
 // load and read a page at a time. A chapter is one of the file's own "## "
@@ -3455,10 +3748,19 @@ function docsSplit(md) {
 // where: a chapter by its name or its address's last word ("The Hub",
 // "the-hub"), for a caller that sends someone to it (Welcome's Read More…).
 // Without one the window comes back as it was left, on the contents the
-// first time.
+// first time. That first time the window is open at once — its place in
+// the stack and in the snapshot are any window's — and drawn when the
+// manual is on it, at the height docsFit gives it; a manual a second in
+// coming shows the window waiting for it.
 async function openDocsWin(where) {
+  const w = $("#win-docs");
   $("#docs-url").textContent = location.origin + "/docs.md";
-  openWin("#win-docs");
+  let slow = 0;
+  if (!docsLoaded && !IS_MOBILE) {
+    w.classList.add("unread");
+    slow = setTimeout(() => w.classList.remove("unread"), 1000);
+  }
+  openWin(w);
   if (!docsLoaded) {
     try {
       const r = await fetch("/docs.md");
@@ -3468,12 +3770,32 @@ async function openDocsWin(where) {
       docsShow(-1);
     } catch (e) {
       $("#docs-md").replaceChildren(el("span", { class: "muted" }, "Could not load the documentation — " + e.message));
-      return;
     }
   }
-  if (typeof where !== "string" || !where) return;
+  docsFit();
+  clearTimeout(slow);
+  w.classList.remove("unread");
+  if (!docsLoaded || typeof where !== "string" || !where) return;
   const i = docsChapters.findIndex(c => c.slug === docSlug(where));
   if (i >= 0) docsShow(i);
+}
+// docsFit gives the paper its default height: the contents page's, so the
+// whole list of chapters shows and nothing is left to scroll. It is
+// measured once, with that page on the paper, and not a figure in the CSS:
+// the page is as long as its words run in the reader's own font at the
+// window's own width. A height the window was dragged to stays over it
+// (#docs-body's CSS), and the limits are the drags' own. A phone's window
+// is the screen.
+let docsFitted = false;
+function docsFit() {
+  if (docsFitted || IS_MOBILE || docsAt !== -1 || !docsLoaded) return;
+  const w = $("#win-docs"), shaded = w.classList.contains("shaded");
+  w.classList.remove("shaded"); // a rolled-up window has no paper to measure
+  const h = $("#docs-md").offsetHeight;
+  w.classList.toggle("shaded", shaded);
+  if (!h) return; // closed: the next open measures it
+  $("#docs-body").style.setProperty("--docs-h", Math.max(160, Math.min(window.innerHeight - 170, h)) + "px");
+  docsFitted = true;
 }
 // docsShow puts one page on the paper: the contents (-1) or a chapter, from
 // its top or at a heading inside it (section, as an address names it).
@@ -4681,6 +5003,7 @@ const ICON_DEFS = [
   { key: "vm", label: "VM", size: 32, get: () => macIcon("running", 32),
     note: "the green screen follows each VM's state" },
   { key: "terminal", label: "Terminal", size: 32, get: () => TERMINAL_ICON, set: s => TERMINAL_ICON = s },
+  { key: "update", label: "Software Update", size: 32, get: () => UPDATE_ICON, set: s => { UPDATE_ICON = s; suRender(); } },
   { key: "claude", label: "Claude Code", size: 32, get: () => CLAUDE_ICON, set: s => CLAUDE_ICON = s },
   { key: "codex", label: "Codex", size: 32, get: () => CODEX_ICON, set: s => CODEX_ICON = s },
   { key: "folder", label: "Folder", size: 32, get: () => FOLDER_ICON, set: s => FOLDER_ICON = s },
@@ -5619,6 +5942,7 @@ function winIcon(w) {
   if (id.startsWith("win-term-") || id.startsWith("win-tool-")) return at16(TERMINAL_ICON);
   if (agentOfWin(id)) return at16(AGENT_APPS[agentOfWin(id)].icon());
   if (id === "win-chat") return at16($("#chat-icon svg").outerHTML);
+  if (id === "win-update") return at16(UPDATE_ICON);
   if (id === "win-news") return at16($("#news-icon svg").outerHTML);
   if (id === "win-trash") return at16($("#trash-icon svg").outerHTML);
   if (id === "win-log") return at16(LOG_ICON);
@@ -10777,6 +11101,8 @@ j("/v1/hostinfo").then(h => {
 }).catch(() => { vmsError = ""; applyVMsError(); })
   .then(showFromHash); // a notification's tap loaded this desk: an agent window needs hostAgents to know its shape
 loadConfig().catch(() => {});
+suLoad(false);
+setInterval(() => { if (!suMoving()) suLoad(false); }, 6 * 60 * 60 * 1000);
 cfHeartbeat(false);
 chatDetect(false);
 setInterval(() => { if (!document.hidden) { loadVMs().catch(() => {}); aboutTick(); } }, 5000);

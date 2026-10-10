@@ -284,9 +284,27 @@ publish() {
 		die "$version is already a tag: a release is never replaced, make the next one"
 	fi
 
-	if [ -z "$notes" ]; then
+	# What changed is one of the release's files as well as its text on
+	# GitHub: the desktop's Software Update reads NOTES.md the way exe reads
+	# every other file of a release, and a mirror serves it too. Notes
+	# somebody wrote are both; without them GitHub's text opens with the
+	# install lines, which a desktop that is already installed has no use
+	# for, and NOTES.md is the list of changes alone.
+	if [ -n "$notes" ]; then
+		cp "$notes" "$out/NOTES.md"
+		notes=$out/NOTES.md # gh is run from $out: a path that still holds there
+	else
 		notes=$(mktemp)
 		prev=$(git -C "$root" describe --tags --abbrev=0 "$commit" 2>/dev/null || true)
+		if [ -n "$prev" ]; then
+			{
+				echo "Since $prev:"
+				echo
+				git -C "$root" log --no-merges --format='- %s' "$prev..$commit"
+			} >"$out/NOTES.md"
+		else
+			echo "The first release." >"$out/NOTES.md"
+		fi
 		{
 			echo "Install or update, on Linux and macOS (x86-64 and ARM64):"
 			echo
@@ -294,12 +312,8 @@ publish() {
 			echo "curl -fsSL https://exe.v2core.com/install.sh | sh    # new machine"
 			echo "exe update                                            # an installed exe"
 			echo '```'
-			if [ -n "$prev" ]; then
-				echo
-				echo "Since $prev:"
-				echo
-				git -C "$root" log --no-merges --format='- %s' "$prev..$commit"
-			fi
+			echo
+			cat "$out/NOTES.md"
 		} >"$notes"
 	fi
 
@@ -308,7 +322,7 @@ publish() {
 	# the files go up on a draft; publishing it is what makes the release,
 	# and from then on it cannot be changed
 	(cd "$out" && gh release create "$version" --repo "$repo" --draft --verify-tag \
-		--title "exe $version" --notes-file "$notes" "${assets[@]}")
+		--title "exe $version" --notes-file "$notes" "${assets[@]}" NOTES.md)
 	gh release edit "$version" --repo "$repo" --draft=false --latest
 
 	# what the world gets now has to be what was built

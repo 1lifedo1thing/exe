@@ -156,6 +156,44 @@ func (c *Client) Latest(ctx context.Context) (string, error) {
 	return tag, nil
 }
 
+// NotesAsset is what changed in a release, as its author wrote it: the
+// text of the GitHub release, published a second time as one of its files
+// so that it is read the way everything else here is, from
+// /releases/download/<tag>/, and a mirror serves it too.
+const NotesAsset = "NOTES.md"
+
+// Notes is the text of release tag's NotesAsset, or "" for a release
+// published without one (the first two were).
+func (c *Client) Notes(ctx context.Context, tag string) (string, error) {
+	if !Valid(tag) {
+		return "", fmt.Errorf("%q is not a release version", tag)
+	}
+	from := c.Base + "/download/" + tag + "/" + NotesAsset
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, from, nil)
+	if err != nil {
+		return "", err
+	}
+	hc := *c.HTTP
+	hc.Timeout = 30 * time.Second
+	resp, err := hc.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("download %s: %w", from, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return "", nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("download %s: %s", from, resp.Status)
+	}
+	// notes are a page of text; more than this is not notes
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return "", fmt.Errorf("download %s: %w", from, err)
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
 // Fetch downloads the named files of release tag into dir, with the
 // release's SHA256SUMS, and checks each against it. A file that does not
 // match is removed.

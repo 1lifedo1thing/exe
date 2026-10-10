@@ -134,7 +134,10 @@ curl -fsSL https://exe.v2core.com/install.sh |
 | `EXE_INSTALL_VM_DRIVE` | a drive letter (Windows): the drive that holds the VMs |
 | `EXE_API_TOKEN` | the token to use, instead of a generated one |
 
-**Updating.** `exe update` moves an installed exe to the latest release:
+**Updating.** In the desktop, **Apple menu → Software Update…** shows the
+newest release and what changed in it, and moves this machine to it; a
+diamond by the Apple says when one is waiting. From a shell,
+`exe update` moves an installed exe to the latest release:
 it downloads it, checks it, and replaces the binary. The running daemon
 goes on as it was until it restarts, and a restart stops and starts every
 VM, so `exe update` asks first (`-y` does not ask; `-check` only says

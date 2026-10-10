@@ -123,6 +123,33 @@ latest release" on. `deploy/release.sh build --worktree <version>` builds
 the files on disk rather than a commit, for testing something not yet
 committed; `publish` refuses such a build.
 
+**Software Update** (the desktop's Apple menu) is `exe update` run by the
+daemon, so it reads the release address from the daemon's environment, not
+from a shell's. To try it against the mirror, give the service the
+variable and restart it — on Linux a drop-in:
+
+```sh
+mkdir -p ~/.config/systemd/user/exe.service.d
+printf '[Service]\nEnvironment=EXE_RELEASE_URL=http://<this machine>:7796/releases\n' \
+    > ~/.config/systemd/user/exe.service.d/mirror.conf
+systemctl --user daemon-reload && systemctl --user restart exe
+```
+
+Then move `dist/release/LATEST` on and open the machine's desktop (through
+`ssh -L` when it listens on itself only): the Apple wears a diamond, the
+window names the new release with what its `NOTES.md` says, and Update Now
+installs and restarts. The case to run: press Update, close the tab during
+the download, open the desktop again while exe restarts, and find one
+`update: exe <version> is installed` line in `~/.exe/daemon.log`, the new
+`exe version`, and each VM that was running back. Then the other way in: a
+shell's `exe update` without `-y` and without a terminal installs and
+leaves the daemon alone, and the window offers Restart Now. Remove the
+drop-in afterwards, and `~/.exe/update.json`.
+
+`NOTES.md` is not built: `publish` writes it (below). For a test, put one
+in the version's folder by hand; without it the window links the release's
+page instead.
+
 The machines: `lab` (an exe VM: Debian 13, ARM64, no `/dev/kvm`) for the
 installer, the service, `exe update` and `exe uninstall`; `precision`
 (Ubuntu 24.04, x86-64, KVM, Tailscale) for the x86-64 build and the VM
@@ -147,6 +174,14 @@ not Developer ID signed and notarized. It tags the commit, pushes
 as the latest release, and checks that GitHub's `latest` now serves the
 checksums that were built. Without a notes file the notes are the install
 lines and the commit subjects since the last release.
+
+The notes go up twice: as the release's text on GitHub, and as a tenth
+file, `NOTES.md`, which the desktop's Software Update reads the way every
+other file of a release is read (no GitHub API, and a mirror serves it).
+Notes somebody wrote are both; generated ones leave the install lines out
+of `NOTES.md`, since whoever reads it there has exe installed. It is not
+in `SHA256SUMS`: it is words to show, and they are shown as text. The two
+releases before it, 2026.10.10 and 2026.10.10.2, have none.
 
 Afterwards: rebuild and restart the daemon on spark (it serves
 `/install.sh`, `/install.ps1` and the homepage), run the real one-liners

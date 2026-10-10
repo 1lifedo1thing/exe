@@ -15,7 +15,10 @@ shows the current choice, which this browser remembers between visits.
 
 The menu bar works like the classic Mac it resembles:
 
-- **Apple menu** — About This Computer (see below).
+- **Apple menu** — About This Computer (see below), and Software Update…,
+  which moves an installed exe to the newest release
+  ([Updating](https://exe.v2core.com/docs/using/updating)). A diamond
+  beside the Apple, and beside that line, says a release is waiting.
 - **File** — New VM…, Upload to Workspace…, Close Window, Refresh.
 - **Windows** — reopen the core windows: Virtual Machines, Chat, Newsfeed,
   Icon Editor, Configuration, Log Viewer.
@@ -499,6 +502,7 @@ needs a label before it, as in `My terminal<TAB>terminal`.
 | `url <address>` | Open an `http://` or `https://` address in a new browser tab. |
 | `docs` | Open the Using exe manual in the desktop. |
 | `skillguide` | Open the Agent Skill Guide. |
+| `update` | Open Software Update. |
 | `welcome` | Open the Welcome window. |
 | `customize` | Open this menu's editor. |
 
@@ -1515,6 +1519,31 @@ An exe installed with the one-line installer (Linux, macOS and Windows; see
 for its date: `exe version` says which, and so does the
 daemon log when it starts.
 
+**Apple menu → Software Update…** does it from the desktop, on a phone as
+well as at a desk. The window says which release is installed and which is
+the newest, and shows what changed in it. **Update Now** asks first, since
+exe restarts to finish and a restart stops the running VMs and starts them
+again; the alert names them. Then it downloads the release, checks it,
+replaces the binary and restarts — in the daemon, so you can close the
+window, or the browser: the update goes on, a second Update Now from
+another device joins the same one, and the window says where it stands
+whenever it is opened again. When exe is back the window names the version
+that runs now and, for a quarter of an hour, each VM that was running
+before and how it is doing. On Linux, when the release changes the
+root-owned network helper, the two `sudo` lines that install the new one
+are shown there too.
+
+The desktop looks for a newer release when it loads, at most twice a day,
+by asking where the newest one is: nothing about this machine is sent. A
+daemon no desktop is open on asks nothing. **Check Now** asks at once.
+
+A release that is installed but not yet running — a restart you put off in
+a shell, say — shows as such, and the button is **Restart Now**.
+
+<img src="https://hub.v2core.com/v1/embed/bafkreiae6itihmsgm3w6cixhpvu5j77jicn4ijrybtf33mihqchupc575a" alt="The Software Update window: the installed release, a newer one, what changed in it, and the Update Now button" width="400" height="470">
+
+The same from a shell:
+
 ```sh
 exe update          # move to the latest release
 exe update -check   # only say whether there is a newer one
@@ -1535,7 +1564,8 @@ up yet, `exe setup vms` is only its VM step, and `exe uninstall` removes
 exe and leaves your data in `~/.exe`.
 
 An exe built from a checkout has no version and is updated there:
-`git pull && make build`.
+`git pull && make build`. Software Update says so, and still names the
+newest release.
 
 ## Configuration
 

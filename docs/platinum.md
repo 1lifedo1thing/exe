@@ -236,6 +236,33 @@ restyling: `internal/server/ui/index.html` (the desktop),
   topmost line in view (with the two after it, as a log repeats itself)
   and how far down it sat, and finds it again as the backlog streams in.
   Only a wholesale change of content — a new filter — goes to the tail.
+- A control panel with one thing to do (Apple → Software Update…,
+  `#win-update`, after Mac OS 9's panel of that name, sampled from the
+  QEMU guest on 2026-10-10): bold words on what it does at the top; one
+  large bevel button centred under them, 52 by 50 — a black outline with
+  square corners, inside it one row of `#ddd` then two of white at the top
+  and left, one of `#777` then two of `#aaa` at the bottom and right, a
+  32px icon on the `#ddd` face — with its name in bold 7px under it; a
+  status of one or two 16px lines, centred; then an etched group
+  (`.join-group`) around a sunken box, and a foot row with the "last
+  checked" line at the left and a push button at the right. The large
+  button is the panel's one action and its name says which (Update Now,
+  Restart Now); pressed it takes the push button's dark face, and dead it
+  loses its bevel and fades its icon. Every state draws in the same 400 by
+  470: the status keeps its two lines and says only short things, and
+  whatever is long — why an update stopped, what the installer said — goes
+  in the box, which scrolls. Between the button's name and the status a
+  12px slot holds OS 9's barber pole while exe is at work and how far
+  along it is cannot be known: slanted bands of the scroll thumb's blues
+  (`#ccccff`, `#6666cc`) in a sunken well, a 16px tile stepping its own
+  width in eight steps a second, standing still under
+  `prefers-reduced-motion`. It is the third motion on the desktop.
+- A diamond says something wants attention, as it did in the Application
+  menu: 7px, in a menu item's left gutter where the dot of a current
+  choice goes (`.dd-mark.dia`), and right of the Apple in the menu bar,
+  inside the title's own padding so the bar does not shift when it comes
+  (`#apple-dia`). Stepped pixels at whole scales, geometry between them.
+  Software Update wears both while a newer release is waiting.
 - A manual of pages (Help → exe Documentation…, `#win-docs`): the paper
   shows one page at a time, the contents first — the manual's opening
   words, then its chapters as a numbered list of links, two columns where
@@ -404,7 +431,8 @@ restyling: `internal/server/ui/index.html` (the desktop),
   desktop icon launches its window the way a home screen does: the tile
   scales to 1.35 and fades to nothing over 120ms ease-in, then the window
   covers it and the tile resets unseen (`launchIcon`). That, and the 200ms
-  flight of Show All Windows, is all the motion on the desktop; both honour
+  flight of Show All Windows, is all the motion on the desktop but for
+  Software Update's barber pole (above, Controls); all three honour
   `prefers-reduced-motion`. In an app the one motion so far is Notes'
   zoom between its corkboard and a note (240ms ease-in-out: the sheet grows
   from its card's rectangle and fades in, and shrinks back into it), which

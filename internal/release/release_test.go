@@ -94,6 +94,25 @@ func TestLatest(t *testing.T) {
 	}
 }
 
+// What changed in a release is one of its files; a release published
+// without it has none to tell, which is no error.
+func TestNotes(t *testing.T) {
+	srv := mirror(t, "2026.10.11", map[string][]byte{
+		"2026.10.11/NOTES.md": []byte("\nSince 2026.10.10:\n\n- Software Update\n"),
+	})
+	c := &Client{Base: srv.URL + "/releases", HTTP: srv.Client()}
+	got, err := c.Notes(context.Background(), "2026.10.11")
+	if err != nil || got != "Since 2026.10.10:\n\n- Software Update" {
+		t.Fatalf("Notes = %q, %v", got, err)
+	}
+	if got, err := c.Notes(context.Background(), "2026.10.10"); err != nil || got != "" {
+		t.Fatalf("a release without notes: %q, %v", got, err)
+	}
+	if _, err := c.Notes(context.Background(), "../etc"); err == nil {
+		t.Fatal("a tag that is no version was asked for")
+	}
+}
+
 func TestLatestWithNoRelease(t *testing.T) {
 	srv := mirror(t, "", nil)
 	c := &Client{Base: srv.URL + "/releases", HTTP: srv.Client()}

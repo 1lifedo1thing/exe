@@ -168,6 +168,9 @@ type Server struct {
 	// Shared web UI window layout (see uistate.go).
 	ui uiState
 
+	// Software Update: the check, the one job, what is on disk (update.go).
+	upd updateState
+
 	// App-data change fanout to open desktops (see appevents.go).
 	appEv appEvents
 
@@ -356,6 +359,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/tailscale/set", s.handleTailscaleSet)
 	mux.HandleFunc("GET /v1/hostinfo", s.handleHostInfo)
 	mux.HandleFunc("GET /v1/host/monitor", s.handleHostMonitor)
+	mux.HandleFunc("GET /v1/update", s.handleUpdateGet)
+	mux.HandleFunc("POST /v1/update", s.handleUpdatePost)
 	mux.HandleFunc("GET /v1/welcome", s.handleWelcomeGet)
 	mux.HandleFunc("PUT /v1/welcome", s.handleWelcomePut)
 	mux.HandleFunc("GET /v1/routes", s.handleRoutes)
