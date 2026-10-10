@@ -30,7 +30,7 @@ import (
 // The page's icons are the desktop's own (uiFS), served here so the site
 // host is self-contained and the repository keeps one copy of each.
 
-//go:embed site/index.html site/site.css site/screenshot.png site/badge.gif site/badge.html
+//go:embed site/index.html site/site.css site/screenshot.png site/badge.gif site/badge.html site/install.sh
 var siteFS embed.FS
 
 // SiteBackend is the proxy backend that names this handler. `exe site`
@@ -105,6 +105,11 @@ var siteFiles = map[string]siteFile{
 	// given, so it is kept no longer than the screenshot and a new
 	// drawing reaches them within hours
 	"/badge.gif": {fs: siteFS, name: "site/badge.gif", kind: "image/gif", maxAge: "max-age=14400"},
+	// the installer: `curl -fsSL https://<site>/install.sh | sh`. It is
+	// plain text, so a browser shows what it would run; it names no
+	// version (it asks GitHub for the latest release when it runs), so
+	// the copy in this binary serves every release.
+	"/install.sh": {fs: siteFS, name: "site/install.sh", kind: "text/plain; charset=utf-8", maxAge: "no-cache"},
 }
 
 // SiteStats opens the homepage's own analytics — github.com/livid/exe-stats,

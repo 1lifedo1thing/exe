@@ -53,6 +53,12 @@ Usage:
   exe site [-sub name]                     publish this daemon's homepage (default exe.<domain>)
   exe unexpose <host>                      remove a proxy route
   exe routes                               show proxy routes
+  exe version                              say which release this is
+
+An exe installed from https://exe.v2core.com/install.sh (Linux) also has:
+  exe update [-check] [-y]                 move to the latest release; -y restarts the daemon unasked
+  exe setup [vms]                          the installer's questions again, or only its VM step
+  exe uninstall [-y]                       remove exe; the data in ~/.exe stays
 
 The daemon also speaks SSH on :2222 (config ssh_listen):
   ssh -p 2222 exe@<mac>     lobby: ls / new / rm / code / expose ... (--json for scripts)
@@ -96,6 +102,14 @@ func main() {
 		err = cmdUnexpose(args)
 	case "routes":
 		err = cmdRoutes()
+	case "version", "-v", "--version":
+		err = cmdVersion()
+	case "update":
+		err = cmdUpdate(args)
+	case "setup":
+		err = cmdSetup(args)
+	case "uninstall":
+		err = cmdUninstall(args)
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -378,6 +392,7 @@ func cmdServe() error {
 		}()
 	}
 	log.Printf("exe daemon: API http://%s, proxy %s, state %s", displayAddr(cfg.Listen), cfg.ProxyListen, stateDir)
+	log.Print(versionLine())
 	if len(apiLns) > 1 {
 		log.Printf("api: also on http://%s", apiLns[1].Addr())
 	}

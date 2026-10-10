@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,7 @@ func TestSiteHandler(t *testing.T) {
 		{"/icon.svg", "image/svg+xml", "max-age=14400", "<svg"},
 		{"/icon-192.png", "image/png", "max-age=14400", "PNG"},
 		{"/robots.txt", "text/plain; charset=utf-8", "max-age=14400", "Disallow: /stats\nDisallow: /v1/stats\n"},
+		{"/install.sh", "text/plain; charset=utf-8", "no-cache", "#!/bin/sh\n# exe installer for Linux"},
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", "http://exe.example.com"+tc.path, nil))
@@ -189,4 +191,40 @@ func count(t *testing.T, an *stats.Stats) int {
 		t.Fatal(err)
 	}
 	return sum.Pageviews
+}
+
+// The installer is piped straight into a shell, so the copy the site
+// serves has to parse, and has to do nothing until its last line: a
+// download that was cut short must not run half an install.
+func TestSiteInstallScript(t *testing.T) {
+	rec := httptest.NewRecorder()
+	SiteHandler(nil).ServeHTTP(rec, httptest.NewRequest("GET", "http://exe.example.com/install.sh", nil))
+	script := rec.Body.String()
+	if !strings.HasSuffix(script, "\nmain \"$@\"\n") {
+		t.Fatalf("the script does not end by calling main; its last lines:\n%s", script[max(0, len(script)-200):])
+	}
+	// outside main and fail there is only `set -eu` and that last call
+	depth0 := 0
+	for _, line := range strings.Split(script, "\n") {
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "\t") || line == "}" ||
+			line == "main() {" || line == "fail() {" {
+			continue
+		}
+		depth0++
+		if line != "set -eu" && line != `main "$@"` {
+			t.Errorf("a command outside main: %q", line)
+		}
+	}
+	if depth0 != 2 {
+		t.Errorf("%d top-level commands, want `set -eu` and the call to main", depth0)
+	}
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh to parse the script with")
+	}
+	cmd := exec.Command(sh, "-n")
+	cmd.Stdin = strings.NewReader(script)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("sh -n: %v\n%s", err, out)
+	}
 }

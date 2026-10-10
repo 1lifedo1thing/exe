@@ -25,6 +25,14 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
 - For publicly shareable build artifacts under 20 MB, pin them in Kubo and
   record the CID, a working download URL and SHA-256 in the relevant doc.
   Verify the pin and a fresh download; keep the binaries out of Git.
+  Releases are the exception: they live on GitHub only.
+- Releases (Linux x86-64 and ARM64; `docs/release.md`): build with
+  `deploy/release.sh build`, test on `lab` and `precision` through
+  `deploy/release-mirror.py`, and publish with `deploy/release.sh publish`
+  only when Livid says "release a new version" — it pushes `main` and a
+  tag, and a published release cannot be changed. The version is the UTC
+  date. The hub carries the announcement, not the files. Never run a
+  released build's `exe setup` on spark.
 - Build: `export PATH=$PATH:/usr/local/go/bin && make build` (Go is not on
   the tool shell's PATH). Restart: `XDG_RUNTIME_DIR=/run/user/1000
   systemctl --user restart exe` — no sudo; VMs return through
