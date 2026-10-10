@@ -29,7 +29,8 @@ The menu bar works like the classic Mac it resembles:
   shows a chapter at a time: click a chapter's name, or turn the pages
   with **Contents**, **Previous** and **Next**. A reference from one
   chapter to another turns to it in the same window, and the window
-  comes back where you left it.
+  comes back where you left it. It opens just tall enough to show the
+  whole contents page, and keeps a height you drag it to.
 - **Show All Windows** — the button at the right, left of the magnifier:
   every open window shrinks into a grid. The one under the pointer turns
   blue and shows its name; click it to bring it forward, or click the desk,

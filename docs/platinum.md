@@ -278,7 +278,16 @@ restyling: `internal/server/ui/index.html` (the desktop),
   named in an address as the website names it (`docSlug` is `mdSlug`, a
   Go test holds every heading to that), so one chapter refers to another
   by the website's address and the link turns the page in the window.
-  `openDocsWin(name)` opens a chapter by its heading.
+  `openDocsWin(name)` opens a chapter by its heading. The paper's default
+  height is the contents page's own, so every chapter's name shows and the
+  scroll bar has nothing to do. It is measured (`docsFit`, into
+  `--docs-h`), not a figure in the CSS: no font ships with the desk, so
+  the page is as long as its words run in the reader's own face at the
+  window's own width. The window is open at once and drawn when that page
+  is on it (`.unread`, a second at most), so it never changes height in
+  view. A height it was dragged to is the reader's and is over the
+  measured one; the snapshot keeps it as `dh`, and only then — a window
+  whose height is its content's saves none, as Virtual Machines does.
 - A pad of pages (Notes, `/www/exe-apps/Notes`): Mac OS's Note Pad,
   sampled from the guest's Apple Extras. A white sheet flush with the
   frame, its bar running down to the grow box; under the sheet's bottom
