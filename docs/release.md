@@ -149,14 +149,23 @@ checksums that were built. Without a notes file the notes are the install
 lines and the commit subjects since the last release.
 
 Afterwards: rebuild and restart the daemon on spark (it serves
-`/install.sh` and the homepage), run the real one-liner once on `lab`, and
-post the release on the hub.
+`/install.sh`, `/install.ps1` and the homepage), run the real one-liners
+once on `lab` and on `world`, move the machines that run a release to it
+with `exe update`, and post the release on the hub.
 
 The first release, 2026.10.10, went out this way: built from a commit,
 installed from the mirror on `lab` and by `exe update` on `precision`, its
 Mac binaries checked with `spctl` ("Notarized Developer ID"), then
 published — GitHub marked it immutable — and installed through the real
 one-liner on `lab` and on a Mac.
+
+The second, 2026.10.10.2, was the first with a Windows build and the first
+that anything was updated to: `exe update` took `lab` and `precision` from
+2026.10.10 to it through the mirror, a VM was made on `precision`, the Mac
+binaries passed `spctl`, `birdie` installed it and was left clean, and
+`world` installed it with the VM step and ran a VM. Once it was published,
+the real lines ran on `lab` and on `world`, and `exe update` moved the Mac
+node from GitHub.
 
 Rolling back is moving GitHub's "latest" mark to the release before
 (`gh release edit <older> --latest`); whether that is allowed with
