@@ -22,7 +22,16 @@ phone/laptop ──► exe API (bind to Tailscale IP)
 
 ## Quick start
 
-**1. Open the desktop.** Needs Go 1.25 or newer.
+**1. Open the desktop.** On Linux and macOS, x86-64 or ARM64, one line
+installs the latest release and starts it; it asks where exe should listen
+first ([what it asks and does](https://exe.v2core.com/docs/getting-started#installing)):
+
+```sh
+curl -fsSL https://exe.v2core.com/install.sh | sh
+```
+
+`exe update` moves it to the next release. On Windows, or to work on exe
+itself, build it instead. That needs Go 1.25 or newer:
 
 ```sh
 git clone https://github.com/livid/exe.git
@@ -38,7 +47,8 @@ needs nothing else. A Linux machine without KVM or Firecracker still gets
 it, with the apps, the Terminal and the Hub, and an empty VM list; see
 [Running without VMs](https://exe.v2core.com/docs/getting-started#running-without-vms-a-nas-a-container).
 
-**2. A VM, from a second terminal** (`serve` has the first). Linux and Windows
+**2. A VM, from a second terminal** (`serve` has the first; an installed exe
+is `exe`, not `./exe`). Linux and Windows
 have [requirements](https://exe.v2core.com/docs/getting-started#linux-requirements) of [their own](https://exe.v2core.com/docs/getting-started#windows-requirements);
 `exe code` talks to the Ollama named in the [configuration](https://exe.v2core.com/docs/config).
 

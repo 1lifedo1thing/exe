@@ -62,7 +62,10 @@
 <div class="window">
   <div class="titlebar"><div class="stripe"></div><div class="title">Quick Start</div><div class="stripe"></div></div>
   <div class="frame">
-<pre class="term"><span class="c"># Open the desktop</span>
+<pre class="term"><span class="c"># Linux and macOS: install the latest release</span>
+<span class="p">$</span> curl -fsSL https://exe.v2core.com/install.sh | sh   <span class="c t"># asks where to listen, then starts the desktop</span>
+
+<span class="c"># Windows, or from a checkout (where exe is ./exe)</span>
 <span class="p">$</span> git clone https://github.com/livid/exe.git
 <span class="p">$</span> cd exe
 <span class="p">$</span> make build        <span class="c t"># Windows: go build -o exe.exe ./cmd/exe</span>
@@ -70,13 +73,13 @@
 <span class="p">$</span> ./exe serve       <span class="c t"># stays running; the desktop is at http://127.0.0.1:7777</span>
 
 <span class="c"># A VM, from a second terminal</span>
-<span class="p">$</span> ./exe create demo   <span class="c t"># Debian 13; the first one downloads a 3 GB image</span>
-<span class="p">$</span> ./exe ssh demo
-<span class="p">$</span> ./exe code demo "build me a guestbook app on port 8000"
+<span class="p">$</span> exe create demo   <span class="c t"># Debian 13; the first one downloads a 3 GB image</span>
+<span class="p">$</span> exe ssh demo
+<span class="p">$</span> exe code demo "build me a guestbook app on port 8000"
 
 <span class="c"># A public URL</span>
-<span class="p">$</span> ./exe expose demo -port 8000 -sub guestbook   <span class="c t"># https://guestbook.your.domain</span></pre>
-    <div class="statusbar"><span>The rest is in the <a href="/docs/">documentation</a></span></div>
+<span class="p">$</span> exe expose demo -port 8000 -sub guestbook   <span class="c t"># https://guestbook.your.domain</span></pre>
+    <div class="statusbar"><span>The rest is in the <a href="/docs/">documentation</a></span><span><a href="/docs/getting-started#installing">What the installer asks</a></span></div>
   </div>
 </div>
 

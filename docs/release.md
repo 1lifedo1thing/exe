@@ -16,15 +16,6 @@ and `exe update` fetch. Windows is built from a checkout.
   has no version, and `exe update`, `exe setup` and `exe uninstall` refuse
   to act on it.
 
-## Before the first release
-
-The homepage, the README, Getting Started and the manual do not mention
-the installer yet: a page that showed the one-liner before a release
-existed would show a command that fails. Those edits are written and
-checked, and wait on spark in `output/release/first-release-docs.patch`.
-Apply and commit them, then build the first release from that commit —
-and delete this section.
-
 ## What a release is
 
 Seven files, with the same names in every release, so

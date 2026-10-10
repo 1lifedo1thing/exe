@@ -1477,6 +1477,33 @@ running, and those finished in the last two minutes: each announced as
 added, then its last line; `{"ready": true}` ends the first round and
 `{"ping": …}` keeps a quiet stream open.
 
+## Updating
+
+An exe installed with the one-line installer (Linux and macOS; see
+[Getting Started](/docs/getting-started#installing)) is a release, named
+for its date: `exe version` says which, and so does the
+daemon log when it starts.
+
+```sh
+exe update          # move to the latest release
+exe update -check   # only say whether there is a newer one
+```
+
+`exe update` downloads the release, checks it against the release's
+checksums and replaces the binary. The daemon goes on running the old one
+until it restarts, and a restart stops and starts every VM — so it asks
+first, and `-y` answers yes ahead of time. The extra apps the installer
+brought follow the release, except one you edited or removed. On Linux,
+when a release changes the root-owned network helper, the update prints
+the two `sudo` lines that install the new one.
+
+`exe setup` asks the installer's questions again for whatever is not set
+up yet, `exe setup vms` is only its VM step, and `exe uninstall` removes
+exe and leaves your data in `~/.exe`.
+
+An exe built from a checkout has no version and is updated there:
+`git pull && make build`.
+
 ## Configuration
 
 **Windows → Configuration** edits `~/.exe/config.json` in place; most fields

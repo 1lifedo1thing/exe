@@ -1,9 +1,19 @@
 # Getting Started
 
-exe is one Go binary. Build it, open the desktop, and everything else —
+exe is one Go binary. Install it, open the desktop, and everything else —
 a VM, an agent inside it, a public HTTPS address — follows from there.
 
-**1. Open the desktop.** Needs Go 1.25 or newer.
+**1. Open the desktop.** On Linux and on a Mac — x86-64 or ARM64, Intel or
+Apple silicon — one line installs the latest release and starts it:
+
+```sh
+curl -fsSL https://exe.v2core.com/install.sh | sh
+```
+
+It asks where exe should listen and a few things more, then prints the
+desktop's address; [Installing](#installing) says what it asks and where
+it puts things. On Windows, or to work on exe itself, build it instead.
+That needs Go 1.25 or newer:
 
 ```sh
 git clone https://github.com/livid/exe.git
@@ -18,6 +28,9 @@ Open http://127.0.0.1:7777: the desktop is the first thing that works, and it
 needs nothing else. A Linux machine without KVM or Firecracker still gets
 it, with the apps, the Terminal and the Hub, and an empty VM list; see
 [Running without VMs](#running-without-vms-a-nas-a-container).
+
+The examples below say `./exe`, as in a checkout. An installed exe is
+`~/.local/bin/exe`: write `exe`.
 
 **2. A VM, from a second terminal** (`serve` has the first). Linux and Windows
 have [requirements](#linux-requirements) of [their own](#windows-requirements);
@@ -39,7 +52,122 @@ into `~/.exe/images/`. Linux also downloads the configured direct-boot kernel.
 ./exe expose demo -port 8000 -sub guestbook   # -> https://guestbook.<domain>
 ```
 
+# Installing
+
+```sh
+curl -fsSL https://exe.v2core.com/install.sh | sh
+```
+
+For Linux, and for macOS 13 or later. The script downloads the latest
+release from [GitHub](https://github.com/livid/exe/releases) for this
+machine's system and processor, checks it against the release's
+`SHA256SUMS`, and hands over to `exe setup`. That asks up to four
+questions — three on a Mac — and writes nothing until the last one is
+answered. Return on each of them is the careful install: this machine
+only, and no sudo.
+
+1. **Where should exe listen?** This machine only (`127.0.0.1`), all
+   interfaces, or the machine's Tailscale address when it has one. The
+   answer goes for all three listeners: the desktop and API (7777), the
+   reverse proxy (8090) and the SSH gate (2222). A port something else
+   holds is passed over for the next free one, and the installer says so.
+2. **Require an API token?** Asked for this machine only (default no) and
+   for Tailscale (default yes). On all interfaces there is no question: a
+   token is generated and shown, because whoever reaches the API has this
+   machine's Terminal. exe speaks plain HTTP, so all interfaces is for a
+   network you trust.
+3. **Install the extra desktop apps?** Notes, Paint, Tides, Todo, Weather
+   and World Clock, from [exe-apps](https://github.com/livid/exe-apps),
+   into `~/.exe/apps`.
+4. **Set this machine up to run VMs?** Linux only, asked where `/dev/kvm`
+   exists, and the one step that uses sudo. It lists the commands it would
+   run before you answer: adding you to the `kvm` group, installing
+   Firecracker (a pinned version, checked against its checksum) and the
+   root-owned network helper with `CAP_NET_ADMIN`, and with `apt` any of
+   `iproute2`, `iptables`, `e2fsprogs` and `libcap2-bin` that are missing.
+   Say no and exe runs the desktop without VMs; `exe setup vms` does this
+   step later. A Mac is not asked: its VMs need nothing set up.
+
+Then it starts exe as a service of your own user and prints the desktop's
+address — and the token, if there is one. On Linux that is a systemd user
+unit (`systemctl --user status exe`, `journalctl --user -u exe`), with
+lingering turned on so it runs with nobody logged in and starts at boot.
+On a Mac it is a launchd agent; see [On a Mac](#on-a-mac).
+
+| What | Where |
+|---|---|
+| The binary | `~/.local/bin/exe` |
+| Configuration, VMs, Workspace, app data | `~/.exe` |
+| The service, Linux | `~/.config/systemd/user/exe.service` |
+| The service, macOS | `~/Library/LaunchAgents/com.v2core.exe.plist` |
+| The network helper (Linux VM step) | `/usr/local/libexec/exe-net-helper` |
+| Firecracker (Linux VM step) | `/usr/local/bin/firecracker` |
+
+Run again over an install, the installer keeps `~/.exe/config.json` as it
+is and asks only about what is not there yet.
+
+**With nobody at a keyboard** (a provisioning script, `ssh host 'curl … | sh'`)
+it asks nothing and installs for this machine only, with the apps and
+without the VM step. Each answer can be given ahead of time:
+
+```sh
+curl -fsSL https://exe.v2core.com/install.sh |
+  EXE_INSTALL_LISTEN=tailscale EXE_INSTALL_TOKEN=yes EXE_INSTALL_VMS=yes sh
+```
+
+| Variable | Values |
+|---|---|
+| `EXE_INSTALL_LISTEN` | `local`, `all`, `tailscale` |
+| `EXE_INSTALL_TOKEN` | `yes`, `no` (`all` always has one) |
+| `EXE_INSTALL_APPS` | `yes`, `no` |
+| `EXE_INSTALL_VMS` | `yes`, `no` (Linux) — without a keyboard this needs sudo to work without a password |
+| `EXE_API_TOKEN` | the token to use, instead of a generated one |
+
+**Updating.** `exe update` moves an installed exe to the latest release:
+it downloads it, checks it, and replaces the binary. The running daemon
+goes on as it was until it restarts, and a restart stops and starts every
+VM, so `exe update` asks first (`-y` does not ask; `-check` only says
+whether a newer release exists). The extra apps follow the release, except
+one you edited or removed. The network helper belongs to root, so when a
+release changes it, `exe update` prints the two `sudo` lines that install
+the new one. `exe version` says which release this is. A release is named
+for its date: `2026.10.09`.
+
+**Removing.** `exe uninstall` stops the service and removes the binary,
+the service and the apps it installed. Everything in `~/.exe` that is
+yours — the configuration, VMs, Workspace, app data — stays; delete the
+folder to remove that too. On Linux it prints the `sudo rm` for the
+network helper.
+
+## On a Mac
+
+The release is one binary for each processor, signed with a Developer ID
+and notarized by Apple, so macOS runs it whether it came through the
+one-liner or was downloaded by hand. Nothing in the install uses sudo.
+
+- **It starts when you log in**, not at boot: the agent runs in your login
+  session, which is where its menu-bar item is. Installed over SSH with
+  nobody logged in at the screen, it starts at the next login.
+- **The menu-bar item** opens the desktop, restarts the daemon and quits
+  it. Quit stays quit until the next login, or
+  `launchctl kickstart gui/$(id -u)/com.v2core.exe`.
+- **The first VM brings an alert.** Since macOS 15 a program has to be
+  allowed to reach the local network, and that is where exe's VMs are.
+  The first time one starts, macOS asks to let exe find devices on your
+  local network: choose Allow. Until then the VM runs but exe cannot
+  reach it, and `exe create` says so. The switch is in System Settings →
+  Privacy & Security → Local Network.
+- **Its logs** are `~/.exe/daemon.log`, as everywhere, and
+  `~/.exe/launchd.log` for anything it printed before it could log.
+- **On an Intel Mac** the installer and the desktop are the same. Its VMs
+  have not been tried yet: the Intel build was only run on Apple silicon,
+  under Rosetta, where macOS offers no virtualization.
+
 # Linux requirements
+
+The installer's VM step does what this section describes; the rest of it
+is for a checkout.
+
 
 - An amd64 or arm64 host with hardware virtualization and `/dev/kvm`.
 - Firecracker on `PATH`, plus `ip`, `iptables`, `debugfs`, and `resize2fs`.
