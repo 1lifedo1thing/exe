@@ -123,7 +123,19 @@ is tested in Go and can be run again as `exe setup`.
   in `~/.exe/release/`, the apps in `~/.exe/apps`, and a user unit in
   `~/.config/systemd/user/exe.service`.
 
-`exe update` replaces the binary in one rename after checking the download
-and running its `version`, refreshes the apps it installed (not one that
-was edited or removed), says so when the root-owned network helper has
-changed, and restarts the daemon only on a yes or `-y`.
+`exe update` checks the download and runs its `version`, copies the new
+binary beside the old one, stages the helper, refreshes the apps it
+installed (not one that was edited or removed), and only then renames the
+binary into place. That rename is the commit: the old binary does the
+whole update, so an update that fails before it is simply run again. Were
+the binary replaced first, the retry would be the new binary, which finds
+itself up to date and repairs nothing. The installer keeps the same order.
+`exe update` says so when the root-owned network helper has changed, and
+restarts the daemon only on a yes or `-y`.
+
+The apps' record is `~/.exe/release/apps.json`, saved at the end of a run.
+What a run is about to place is written first, to `apps.json.pending`, and
+removed once the record is saved, so a run that stops halfway — an error,
+or a killed process — is recognised by the next one: a bundle that stands
+there with exactly the contents the plan named is the installer's, and
+anything else without a record is its owner's (`internal/release/apps.go`).

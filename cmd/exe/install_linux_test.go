@@ -841,3 +841,204 @@ func TestUpdateRefusesWhatWasNotReleased(t *testing.T) {
 		t.Fatalf("a binary that does not run here: %v, binary %q", err, r.binary())
 	}
 }
+
+// ---- an install or an update that stops partway is run again ----
+
+func readApp(l layout, app string) string {
+	b, _ := os.ReadFile(filepath.Join(l.Apps(), app, "index.html"))
+	return string(b)
+}
+
+// The review's case (hub thread 34b0c377): a step after the binary fails.
+// The binary must not be in place yet — or the retry is the new binary,
+// which finds itself up to date and repairs nothing — and running the
+// update again must finish it.
+func TestUpdateIsRunAgainAfterAFailure(t *testing.T) {
+	r := rig(t, "2026.10.10", false)
+	// the helper cannot be staged: a folder stands where its file goes
+	os.Remove(r.l.Helper())
+	os.MkdirAll(filepath.Join(r.l.Helper(), "in the way"), 0o755)
+
+	err := r.u.run(context.Background(), false, true)
+	if err == nil || !strings.Contains(err.Error(), "exe is still 2026.10.09; run `exe update` again") {
+		t.Fatalf("a helper that cannot be staged: %v", err)
+	}
+	if r.binary() != "the released exe" {
+		t.Fatal("the binary was replaced before the update was done: a retry would find nothing to do")
+	}
+	if _, err := os.Stat(r.l.Bin + ".new"); err == nil {
+		t.Error("the copy of the new binary was left beside the old one")
+	}
+	if r.restarts != 0 {
+		t.Error("a failed update restarted the daemon")
+	}
+
+	// the cause is removed, and the same update is run again
+	os.RemoveAll(r.l.Helper())
+	r.out.Reset()
+	if err := r.u.run(context.Background(), false, true); err != nil {
+		t.Fatalf("the update run again: %v\n%s", err, r.out.String())
+	}
+	if b, _ := os.ReadFile(r.l.Helper()); string(b) != "helper 2026.10.10" {
+		t.Errorf("staged helper = %q", b)
+	}
+	if readApp(r.l, "Todo") != "two" || readApp(r.l, "Weather") != "two" {
+		t.Errorf("apps: Todo %q, Weather %q", readApp(r.l, "Todo"), readApp(r.l, "Weather"))
+	}
+	if r.binary() != "exe 2026.10.10" || r.restarts != 1 {
+		t.Errorf("binary %q, restarts %d", r.binary(), r.restarts)
+	}
+}
+
+// The same when it is the apps that fail, after one of them was placed.
+func TestUpdateIsRunAgainAfterAnAppFails(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root moves a folder it may not write to")
+	}
+	r := rig(t, "2026.10.10", false)
+	// Todo cannot be moved out of the way (moving a folder to another
+	// parent needs write permission on it); Notes, before it, can
+	todo := filepath.Join(r.l.Apps(), "Todo")
+	os.Chmod(todo, 0o555)
+	t.Cleanup(func() { os.Chmod(todo, 0o755) })
+
+	err := r.u.run(context.Background(), false, true)
+	if err == nil || !strings.Contains(err.Error(), "Todo") || !strings.Contains(err.Error(), "run `exe update` again") {
+		t.Fatalf("an app that cannot be replaced: %v", err)
+	}
+	if readApp(r.l, "Notes") != "two" || readApp(r.l, "Todo") != "one" {
+		t.Fatalf("at the failure: Notes %q, Todo %q", readApp(r.l, "Notes"), readApp(r.l, "Todo"))
+	}
+	if r.binary() != "the released exe" || r.restarts != 0 {
+		t.Fatal("the binary was replaced, or the daemon restarted, by an update that failed")
+	}
+
+	os.Chmod(todo, 0o755)
+	r.out.Reset()
+	if err := r.u.run(context.Background(), false, true); err != nil {
+		t.Fatal(err)
+	}
+	// Notes was placed by the run that failed; it is not "edited"
+	if out := r.out.String(); strings.Contains(out, "is left as it is") {
+		t.Errorf("the retry took its own work for the owner's:\n%s", out)
+	}
+	for _, app := range []string{"Notes", "Todo", "Weather", "World Clock"} {
+		if readApp(r.l, app) != "two" {
+			t.Errorf("%s = %q after the retry", app, readApp(r.l, app))
+		}
+	}
+	m, _ := release.ReadAppsManifest(r.l.AppsManifest())
+	if len(m) != 4 {
+		t.Errorf("on record: %v", m)
+	}
+	if _, err := os.Stat(r.l.AppsManifest() + ".pending"); err == nil {
+		t.Error("the plan of the failed run was left")
+	}
+	if r.binary() != "exe 2026.10.10" {
+		t.Errorf("binary %q", r.binary())
+	}
+}
+
+// The new binary is copied before anything else is touched, so an update
+// that cannot write it changes nothing.
+func TestUpdateThatCannotWriteTheBinaryChangesNothing(t *testing.T) {
+	r := rig(t, "2026.10.10", false)
+	os.MkdirAll(filepath.Join(r.l.Bin+".new", "in the way"), 0o755)
+	if err := r.u.run(context.Background(), false, true); err == nil {
+		t.Fatal("the update went through without a binary")
+	}
+	if b, _ := os.ReadFile(r.l.Helper()); string(b) != "the helper" {
+		t.Errorf("the helper was staged by an update that could not write the binary: %q", b)
+	}
+	if readApp(r.l, "Todo") != "one" || r.binary() != "the released exe" || r.restarts != 0 {
+		t.Errorf("Todo %q, binary %q, restarts %d", readApp(r.l, "Todo"), r.binary(), r.restarts)
+	}
+}
+
+// An install is the same: nothing is written if the binary cannot be, and
+// the binary is in place only once the rest is.
+func TestSetupThatCannotWriteTheBinaryChangesNothing(t *testing.T) {
+	setVersion(t, "2026.10.09")
+	f, l := newFake(t, "\n\n\n")
+	os.MkdirAll(filepath.Join(l.Bin+".new", "in the way"), 0o755)
+	if err := runSetup(l, f.host, unpacked(t)); err == nil {
+		t.Fatal("the install went through without a binary")
+	}
+	for _, p := range []string{l.Config(), l.Apps(), l.Release(), l.Unit, l.Bin} {
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("%s was written by an install that could not write the binary", p)
+		}
+	}
+	if len(f.quiet) != 0 {
+		t.Errorf("ran %v", f.quiet)
+	}
+}
+
+// A first install that stopped while placing the apps has no manifest,
+// only its plan. Running the installer again finishes it without asking
+// about the apps a second time; an uninstall instead takes away what it
+// had placed.
+func TestSetupIsRunAgainAfterAFailure(t *testing.T) {
+	setVersion(t, "2026.10.09")
+	from := unpacked(t)
+	stopped := func(t *testing.T) (*fakeHost, layout) {
+		f, l := newFake(t, "") // the rerun must ask nothing
+		// what the first run left: its configuration, the staged helper,
+		// Notes in place, the plan for all three bundles — and no binary
+		os.MkdirAll(l.State, 0o755)
+		os.WriteFile(l.Config(), []byte(`{"listen":"127.0.0.1:7777"}`), 0o600)
+		src := t.TempDir()
+		if err := release.Extract(filepath.Join(from, release.AppsAsset), src); err != nil {
+			t.Fatal(err)
+		}
+		plan := release.AppsManifest{}
+		for _, app := range []string{"Notes", "Todo", "World Clock"} {
+			plan[app], _ = release.TreeSum(filepath.Join(src, app))
+		}
+		if err := plan.Write(l.AppsManifest() + ".pending"); err != nil {
+			t.Fatal(err)
+		}
+		os.MkdirAll(filepath.Join(l.Apps(), "Notes"), 0o755)
+		for _, name := range []string{"app.json", "index.html"} {
+			b, _ := os.ReadFile(filepath.Join(src, "Notes", name))
+			os.WriteFile(filepath.Join(l.Apps(), "Notes", name), b, 0o644)
+		}
+		return f, l
+	}
+
+	f, l := stopped(t)
+	if err := runSetup(l, f.host, from); err != nil {
+		t.Fatalf("%v\n%s", err, f.out.String())
+	}
+	out := f.out.String()
+	if strings.Contains(out, "?") {
+		t.Errorf("the rerun asked again:\n%s", out)
+	}
+	if strings.Contains(out, "is left as it is") {
+		t.Errorf("the rerun took the first run's Notes for the owner's:\n%s", out)
+	}
+	m, _ := release.ReadAppsManifest(l.AppsManifest())
+	if len(m) != 3 || readApp(l, "Todo") != "one" || readApp(l, "World Clock") != "one" {
+		t.Errorf("on record %v; Todo %q, World Clock %q", m, readApp(l, "Todo"), readApp(l, "World Clock"))
+	}
+	if b, _ := os.ReadFile(l.Bin); string(b) != "the released exe" {
+		t.Errorf("binary = %q", b)
+	}
+	if !has(f.quiet, "systemctl --user restart exe") || !strings.Contains(out, "is running.") {
+		t.Errorf("the service was not started:\n%s", out)
+	}
+
+	// or, instead of the rerun, an uninstall
+	f, l = stopped(t)
+	os.MkdirAll(filepath.Dir(l.Bin), 0o755)
+	os.WriteFile(l.Bin, []byte("the released exe"), 0o755)
+	if err := runUninstall(l, f.host, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(l.Apps(), "Notes")); err == nil {
+		t.Error("the app an unfinished install had placed was left behind")
+	}
+	if !strings.Contains(f.out.String(), "Removed the apps it installed: Notes\n") {
+		t.Errorf("said:\n%s", f.out.String())
+	}
+}

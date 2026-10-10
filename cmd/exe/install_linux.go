@@ -882,31 +882,60 @@ func (h *host) startService(l layout) (started bool, notes []string) {
 
 // ---- putting files in place --------------------------------------------------
 
-// installBinary puts a copy of src at dst, replacing what is there in one
-// rename — a running exe keeps the file it started from.
-func installBinary(src, dst string) error {
+// prepareBinary copies src beside dst, ready to take its place. It is the
+// one large write of an install, so it comes first: a full disk, or a
+// folder that cannot be written, stops things before anything has changed.
+//
+// commit is the rename that puts the copy in place, and it comes last —
+// it is what makes an install or an update done. Until then the old
+// binary is the one that runs, so running it again does every step again;
+// were the new binary in place with a later step unfinished, the next
+// `exe update` would be the new binary finding itself up to date. A
+// running exe keeps the file it started from. discard removes the copy
+// when commit was never reached.
+func prepareBinary(src, dst string) (commit func() error, discard func(), err error) {
 	if a, err := os.Stat(src); err == nil {
 		if b, err := os.Stat(dst); err == nil && os.SameFile(a, b) {
-			return nil
+			return func() error { return nil }, func() {}, nil
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
+		return nil, nil, err
 	}
 	tmp := dst + ".new"
 	if err := release.CopyFile(src, tmp, 0o755); err != nil {
 		os.Remove(tmp)
-		return err
+		return nil, nil, err
 	}
 	if err := os.Chmod(tmp, 0o755); err != nil {
 		os.Remove(tmp)
+		return nil, nil, err
+	}
+	done := false
+	commit = func() error {
+		if err := os.Rename(tmp, dst); err != nil {
+			return err
+		}
+		done = true
+		return nil
+	}
+	discard = func() {
+		if !done {
+			os.Remove(tmp)
+		}
+	}
+	return commit, discard, nil
+}
+
+// installBinary puts a copy of src at dst, replacing what is there in one
+// rename.
+func installBinary(src, dst string) error {
+	commit, discard, err := prepareBinary(src, dst)
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, dst); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return nil
+	defer discard()
+	return commit()
 }
 
 // stageRelease keeps what a release brought beside the binary: the network
@@ -949,23 +978,17 @@ func unpackApps(from, scratch string) (dir string, names []string, size int64, e
 }
 
 // placeApps brings the unpacked bundles into the apps folder and says
-// which it left alone; kept is how many.
+// which it left alone; kept is how many. It may be run again after a
+// failure (release.InstallApps).
 func (h *host) placeApps(l layout, dir string) (kept int, err error) {
-	prev, err := release.ReadAppsManifest(l.AppsManifest())
-	if err != nil {
-		return 0, err
-	}
-	next, changes, err := release.InstallApps(dir, l.Apps(), filepath.Join(l.Release(), "staging"), prev)
-	if err != nil {
-		return 0, err
-	}
+	changes, err := release.InstallApps(dir, l.Apps(), filepath.Join(l.Release(), "staging"), l.AppsManifest())
 	for _, c := range changes {
 		if c.Action == "kept" {
 			kept++
 			h.say("  %s is left as it is: %s.\n", c.Name, c.Why)
 		}
 	}
-	return kept, next.Write(l.AppsManifest())
+	return kept, err
 }
 
 // ---- exe setup ---------------------------------------------------------------
@@ -1019,14 +1042,16 @@ func runSetup(l layout, h *host, from string) error {
 	}
 
 	var appsDir string
-	_, hadApps := os.Stat(l.AppsManifest())
+	// apps that came with an install — or with one that did not finish —
+	// follow it without being asked about again
+	tracked := release.AppsTracked(l.AppsManifest())
 	if from != "" {
 		var names []string
 		var size int64
 		if appsDir, names, size, err = unpackApps(from, scratch); err != nil {
 			return err
 		}
-		if hadApps != nil { // never installed here: a question
+		if !tracked { // never installed here: a question
 			o.Apps, o.AppsSize = names, size
 		}
 	}
@@ -1050,10 +1075,15 @@ func runSetup(l layout, h *host, from string) error {
 	h.say("\n")
 
 	// ---- from here on, things are written ----
+	// The binary goes in place last (prepareBinary): an install that
+	// stops before that is finished by running the installer again.
+	commit := func() error { return nil }
 	if from != "" {
-		if err := installBinary(filepath.Join(from, "exe"), l.Bin); err != nil {
+		var discard func()
+		if commit, discard, err = prepareBinary(filepath.Join(from, "exe"), l.Bin); err != nil {
 			return err
 		}
+		defer discard()
 		if err := stageRelease(l, from); err != nil {
 			return err
 		}
@@ -1069,7 +1099,7 @@ func runSetup(l layout, h *host, from string) error {
 		notes = append(notes, moved...)
 	}
 	spoke := false // something was said since the questions
-	if appsDir != "" && (a.Apps || hadApps == nil) {
+	if appsDir != "" && (a.Apps || tracked) {
 		kept, err := h.placeApps(l, appsDir)
 		if err != nil {
 			return err
@@ -1086,6 +1116,9 @@ func runSetup(l layout, h *host, from string) error {
 		}
 	}
 
+	if err := commit(); err != nil {
+		return err
+	}
 	started, svcNotes := h.startService(l)
 	notes = append(notes, svcNotes...)
 	url := h.deskURL(listen)
@@ -1228,8 +1261,8 @@ func runUninstall(l layout, h *host, yes bool) error {
 	h.say("Removed %s\n", h.tilde(l.Bin))
 	// the apps the installer brought go with it; one that was edited since
 	// is its owner's
-	if m, err := release.ReadAppsManifest(l.AppsManifest()); err == nil && len(m) > 0 {
-		removed, kept, err := release.RemoveApps(l.Apps(), m)
+	if release.AppsTracked(l.AppsManifest()) {
+		removed, kept, err := release.RemoveApps(l.Apps(), l.AppsManifest())
 		if err != nil {
 			return err
 		}

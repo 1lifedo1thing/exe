@@ -22,6 +22,12 @@ import (
 // replaced in one rename, so the running daemon goes on with the file it
 // started from until it restarts — and restarting stops and starts every
 // VM, which is why that part is asked.
+//
+// That rename is the last thing an update does. The old binary does the
+// whole update, so as long as it is the one in place, an update that
+// failed is simply run again; with the new binary in place first, the
+// retry would be the new binary, which finds itself up to date and
+// repairs nothing.
 
 func cmdUpdate(args []string) error {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
@@ -108,8 +114,8 @@ func (u *updater) run(ctx context.Context, check, yes bool) error {
 	defer os.RemoveAll(scratch)
 	binary := release.BinaryAsset(runtime.GOARCH)
 	names := []string{binary}
-	_, appsErr := os.Stat(l.AppsManifest())
-	if appsErr == nil { // the apps came with the install, so they follow it
+	apps := release.AppsTracked(l.AppsManifest())
+	if apps { // the apps came with the install, so they follow it
 		names = append(names, release.AppsAsset)
 	}
 	h.say("Downloading exe %s…\n", latest)
@@ -130,20 +136,30 @@ func (u *updater) run(ctx context.Context, check, yes bool) error {
 		return fmt.Errorf("the download is not exe %s: it calls itself %q", latest, said)
 	}
 
-	if err := installBinary(fresh, l.Bin); err != nil {
+	// the copy first, the rename last (prepareBinary), and between them
+	// the steps that can be done twice: the helper and the apps
+	commit, discard, err := prepareBinary(fresh, l.Bin)
+	if err != nil {
 		return fmt.Errorf("replace %s: %w", l.Bin, err)
 	}
-	if err := stageRelease(l, scratch); err != nil {
-		return err
+	defer discard()
+	unfinished := func(err error) error {
+		return fmt.Errorf("%w — exe is still %s; run `exe update` again to finish", err, release.Version)
 	}
-	if appsErr == nil {
+	if err := stageRelease(l, scratch); err != nil {
+		return unfinished(err)
+	}
+	if apps {
 		dir, _, _, err := unpackApps(scratch, scratch)
 		if err != nil {
-			return err
+			return unfinished(err)
 		}
 		if _, err := h.placeApps(l, dir); err != nil {
-			return err
+			return unfinished(err)
 		}
+	}
+	if err := commit(); err != nil {
+		return unfinished(fmt.Errorf("replace %s: %w", l.Bin, err))
 	}
 	h.say("Installed exe %s at %s\n", latest, h.tilde(l.Bin))
 
