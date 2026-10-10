@@ -22,11 +22,30 @@ import (
 // Restart Daemon / Quit; the signal-and-error wait moves to a goroutine
 // that exits the process, because the AppKit loop never returns.
 func serveWait(srv *server.Server, wait func() error, shutdown func()) error {
+	// The VMs live inside this process, so a daemon that just exits cuts
+	// their power. Told to stop — a signal: launchd's restart (an update,
+	// `exe daemon restart`, the menu's Restart), a logout — it shuts the
+	// guests down first, as the other systems do (serve_other.go) and as
+	// Quit below does. Until 2026-10-10 only Quit did: every restart under
+	// launchd took the VMs down mid-write, and a guest eight seconds old
+	// came back without its sshd. launchd waits 75 seconds for this
+	// (ExitTimeOut in the agent).
+	stopped := func() error {
+		err := wait()
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if running := srv.RunningVMNames(ctx); len(running) > 0 {
+			log.Printf("daemon shutdown: stopping %s", strings.Join(running, ", "))
+			srv.StopVMs(ctx, running)
+		}
+		shutdown()
+		return err
+	}
 	if !menubar.Supported() {
-		return wait() // headless (ssh) session: no window server, no icon
+		return stopped() // headless (ssh) session: no window server, no icon
 	}
 	go func() {
-		if err := wait(); err != nil {
+		if err := stopped(); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
