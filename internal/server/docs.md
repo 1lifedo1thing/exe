@@ -1479,7 +1479,7 @@ added, then its last line; `{"ready": true}` ends the first round and
 
 ## Updating
 
-An exe installed with the one-line installer (Linux and macOS; see
+An exe installed with the one-line installer (Linux, macOS and Windows; see
 [Getting Started](/docs/getting-started#installing)) is a release, named
 for its date: `exe version` says which, and so does the
 daemon log when it starts.
@@ -1495,7 +1495,9 @@ until it restarts, and a restart stops and starts every VM — so it asks
 first, and `-y` answers yes ahead of time. The extra apps the installer
 brought follow the release, except one you edited or removed. On Linux,
 when a release changes the root-owned network helper, the update prints
-the two `sudo` lines that install the new one.
+the two `sudo` lines that install the new one. On Windows the binary that
+was running is moved aside as `exe.exe.old`, since Windows does not let a
+running program be replaced, and removed by the next update.
 
 `exe setup` asks the installer's questions again for whatever is not set
 up yet, `exe setup vms` is only its VM step, and `exe uninstall` removes

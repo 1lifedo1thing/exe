@@ -30,8 +30,14 @@ first ([what it asks and does](https://exe.v2core.com/docs/getting-started#insta
 curl -fsSL https://exe.v2core.com/install.sh | sh
 ```
 
-`exe update` moves it to the next release. On Windows, or to work on exe
-itself, build it instead. That needs Go 1.25 or newer:
+On Windows (x86-64), the same from PowerShell:
+
+```powershell
+irm https://exe.v2core.com/install.ps1 | iex
+```
+
+`exe update` moves it to the next release. To work on exe itself, build it
+instead. That needs Go 1.25 or newer:
 
 ```sh
 git clone https://github.com/livid/exe.git

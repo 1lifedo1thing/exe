@@ -9,8 +9,8 @@ curl -fsSL https://exe.v2core.com/install.sh | sh    # Linux, macOS
 irm https://exe.v2core.com/install.ps1 | iex         # Windows, in PowerShell
 ```
 
-The first release, 2026.10.10, has no Windows build: the homepage, the
-README and the manual name the Windows line once a release holds one.
+Windows is in every release since 2026.10.10.2; the first, 2026.10.10, has
+no Windows build.
 
 - **Where.** GitHub Releases of `livid/exe` holds the files and says which
   release is the latest. Nothing is pinned in Kubo; the hub only carries

@@ -10,10 +10,16 @@ Apple silicon — one line installs the latest release and starts it:
 curl -fsSL https://exe.v2core.com/install.sh | sh
 ```
 
+On Windows (x86-64), the same from PowerShell:
+
+```powershell
+irm https://exe.v2core.com/install.ps1 | iex
+```
+
 It asks where exe should listen and a few things more, then prints the
 desktop's address; [Installing](#installing) says what it asks and where
-it puts things. On Windows, or to work on exe itself, build it instead.
-That needs Go 1.25 or newer:
+it puts things. To work on exe itself, build it instead. That needs Go
+1.25 or newer:
 
 ```sh
 git clone https://github.com/livid/exe.git
@@ -29,8 +35,8 @@ needs nothing else. A Linux machine without KVM or Firecracker still gets
 it, with the apps, the Terminal and the Hub, and an empty VM list; see
 [Running without VMs](#running-without-vms-a-nas-a-container).
 
-The examples below say `./exe`, as in a checkout. An installed exe is
-`~/.local/bin/exe`: write `exe`.
+The examples below say `./exe`, as in a checkout. An installed exe is on
+your `PATH`: write `exe`.
 
 **2. A VM, from a second terminal** (`serve` has the first). Linux and Windows
 have [requirements](#linux-requirements) of [their own](#windows-requirements);
@@ -58,7 +64,8 @@ into `~/.exe/images/`. Linux also downloads the configured direct-boot kernel.
 curl -fsSL https://exe.v2core.com/install.sh | sh
 ```
 
-For Linux, and for macOS 13 or later. The script downloads the latest
+For Linux, and for macOS 13 or later; Windows has a line and a section of
+its own, [On Windows](#on-windows). The script downloads the latest
 release from [GitHub](https://github.com/livid/exe/releases) for this
 machine's system and processor, checks it against the release's
 `SHA256SUMS`, and hands over to `exe setup`. That asks up to four
@@ -120,7 +127,8 @@ curl -fsSL https://exe.v2core.com/install.sh |
 | `EXE_INSTALL_LISTEN` | `local`, `all`, `tailscale` |
 | `EXE_INSTALL_TOKEN` | `yes`, `no` (`all` always has one) |
 | `EXE_INSTALL_APPS` | `yes`, `no` |
-| `EXE_INSTALL_VMS` | `yes`, `no` (Linux) — without a keyboard this needs sudo to work without a password |
+| `EXE_INSTALL_VMS` | `yes`, `no` (Linux, Windows) — without a keyboard, Linux needs sudo to work without a password |
+| `EXE_INSTALL_VM_DRIVE` | a drive letter (Windows): the drive that holds the VMs |
 | `EXE_API_TOKEN` | the token to use, instead of a generated one |
 
 **Updating.** `exe update` moves an installed exe to the latest release:
@@ -162,6 +170,59 @@ one-liner or was downloaded by hand. Nothing in the install uses sudo.
 - **On an Intel Mac** the installer and the desktop are the same. Its VMs
   have not been tried yet: the Intel build was only run on Apple silicon,
   under Rosetta, where macOS offers no virtualization.
+
+## On Windows
+
+```powershell
+irm https://exe.v2core.com/install.ps1 | iex
+```
+
+For Windows 11 on x86-64, typed into PowerShell; Windows 10 from version
+1809 has what it uses, and has not been tried. It installs for you alone
+and needs no administrator, except for the VM step. The first three
+questions are the ones above. Two more follow:
+
+- **Set this PC up to run VMs?** Asked when something is missing, and it
+  lists what it would run: turning on the **Windows Hypervisor Platform**
+  and the **Virtual Machine Platform**, and installing QEMU with `winget`.
+  This is the one step that needs an administrator: from a terminal that
+  is not one, Windows asks you to allow it. Windows may want a restart
+  before the features work, and the installer says so. Say no and exe
+  runs the desktop without VMs; `exe setup vms` does this step later.
+- **Which drive should hold the VMs?** Asked on a PC that will run them
+  and has more than one drive. It lists your fixed drives with their free
+  space and what they are — an SSD, a hard disk, a disk that is somewhere
+  else on the network — and suggests your home folder's drive when it has
+  40 GB free, otherwise the drive in this PC with the most room. A base
+  image is 3 GB and a VM takes up to its disk size, so a nearly full `C:`
+  is a poor home for them. Any drive but your home folder's is written to
+  the [configuration](/docs/config) as `vm_dir`: the VMs go to `X:\exe`
+  and everything else stays in your home folder.
+
+| What | Where |
+|---|---|
+| The binary | `%LOCALAPPDATA%\Programs\exe\exe.exe`, on your `PATH` in every terminal opened afterwards |
+| Configuration, Workspace, app data | `%USERPROFILE%\.exe` |
+| VMs and base images | `%USERPROFILE%\.exe`, or `X:\exe` on the drive you chose |
+| What starts it | the value `exe` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
+
+- **It starts when you sign in**, with no window: Windows has no service
+  of a user's own, so exe is a program of your session. Installed over
+  SSH with nobody signed in at the PC, it starts at the next sign-in.
+  `exe daemon start` starts it by hand, `exe daemon restart` restarts it.
+- **Signing out stops it, and its VMs.** exe writes down which VMs were
+  running, and they start again when you sign in.
+- **The release is not signed.** Fetched by PowerShell, Windows runs it
+  without a question, and Microsoft Defender found nothing in it.
+- **Updating** is `exe update`, as everywhere. Windows does not let a
+  running program be replaced, so the old binary is moved aside as
+  `exe.exe.old` and removed by the next update.
+- **Removing** is `exe uninstall`. The VMs stay where they are, and it
+  says where.
+- **With nobody at a keyboard** it asks nothing, as above;
+  `EXE_INSTALL_VM_DRIVE` names the drive.
+- **Its log** is `%USERPROFILE%\.exe\daemon.log`.
+- Windows on ARM has no release: exe's VMs there are x86-64 only.
 
 # Linux requirements
 
@@ -210,6 +271,10 @@ to become bindable, and exits non-zero after that so systemd starts it
 again.
 
 # Windows requirements
+
+The installer's VM step does the first two of these for you
+([On Windows](#on-windows)); a build from a checkout needs them done by
+hand.
 
 - An x86-64 host. Enable **Windows Hypervisor Platform** and **Virtual
   Machine Platform** under *Windows features* (available on Windows Home
