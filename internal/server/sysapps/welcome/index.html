@@ -246,7 +246,8 @@ async function api(path, opts = {}) {
   opts.headers = { ...(opts.headers || {}) };
   if (TOKEN) opts.headers["Authorization"] = "Bearer " + TOKEN;
   const r = await fetch(path, opts);
-  if (!r.ok) throw new Error("HTTP " + r.status);
+  // an answer left unread keeps its request open: take a refusal's words too
+  if (!r.ok) { await r.text().catch(() => {}); throw new Error("HTTP " + r.status); }
   return r.json();
 }
 // The desktop bridge. {exe:"desk", act, args} asks the desktop for one of
@@ -347,7 +348,7 @@ const FEATS = [
     lead: "Agent sessions that keep working when you leave.",
     text: ["With the Claude Code or the Codex CLI installed on this machine, each gets an icon on the desktop and a window of its own. The session runs on the machine, not in the browser: close the window, the tab or the laptop and it works on. Open it again, from any device, and you are back in the same conversation.",
       "The window lists its sessions down the left, the Control Strip counts what they use, and a phone that keeps the desktop on its Home Screen hears when a turn ends."],
-    more: "On a host with tmux, a Claude Code or Codex window",
+    more: "Claude Code, Codex and Terminal",
     state() {
       if (S.host === undefined) return WAIT;
       if (!S.host) return UNKNOWN;
@@ -467,8 +468,8 @@ function paintCard() {
   box.className = st.kind === "ok" ? "ok" : st.kind === "warn" ? "warn" : "";
   box.innerHTML = st.kind === "ok" ? TICK : "";
   box.append(st.text);
-  // the buttons: what the manual says, then what goes there, the last of
-  // them the one Return presses
+  // the buttons: the manual's chapter (more is its heading), then what
+  // goes there, the last of them the one Return presses
   const acts = f.acts(), row = $("#c-acts");
   const want = JSON.stringify(acts);
   if (row.dataset.acts === want) return; // the same buttons: leave them (and the focus) be

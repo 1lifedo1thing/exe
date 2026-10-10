@@ -21,8 +21,12 @@ The menu bar works like the classic Mac it resembles:
   Icon Editor, Configuration, Log Viewer.
 - **Special** — Mac OS 9, Join… (pair another exe machine), Cloudflare Status and
   Setup Wizard, Set API Token….
-- **Help** — Welcome (below), this page, and the Agent Skill Guide for
-  handing exe to a coding agent.
+- **Help** — Welcome (below), this manual, and the Agent Skill Guide for
+  handing exe to a coding agent. The manual opens on its contents and
+  shows a chapter at a time: click a chapter's name, or turn the pages
+  with **Contents**, **Previous** and **Next**. A reference from one
+  chapter to another turns to it in the same window, and the window
+  comes back where you left it.
 - **Show All Windows** — the button at the right, left of the magnifier:
   every open window shrinks into a grid. The one under the pointer turns
   blue and shows its name; click it to bring it forward, or click the desk,
@@ -37,7 +41,7 @@ a short account of it. Each card says how that feature stands on this
 machine — ready, with a green check beside its name on the first page, or
 what it still needs — and its button goes there: New VM…, the pane of
 Configuration that sets Chat up, the Cloudflare Setup Wizard, the Hub.
-**Read More…** opens this manual at the chapter. On a new install the
+**Read More…** opens this manual on that feature's chapter. On a new install the
 window opens with the desktop each time, until you clear **Show this
 window when the desktop opens**; that box belongs to this machine, not to
 the browser. An exe that was installed before the window existed opens it
@@ -73,10 +77,10 @@ tools. Choose **Customize…** to edit it. The
 chapter covers the format, every supported action and examples.
 
 Desktop icons: **Workspace** (shared files), **Terminal** (a shell on this
-host machine, which on a host with tmux outlives a reload or a closed
-browser — below), **Claude Code** and **Codex** (each appears when its CLI is
-installed on this host; one persistent session per agent, so closing the
-window and reopening it returns to the same conversation), one icon per VM,
+host machine), **Claude Code** and **Codex** (each appears when its CLI is
+installed on this host; the three have a chapter of their own,
+[Claude Code, Codex and Terminal](https://exe.v2core.com/docs/using/claude-code-codex-and-terminal)),
+one icon per VM,
 one per installed app, plus **Newsfeed**, **Chat** (appears when Ollama is
 reachable) and the **Trash**. Double-click opens things.
 
@@ -91,8 +95,8 @@ download; a phone's tile is the lamp alone. Its menu
 shows the tunnel's replicas and edge connections, plus this node's request
 rate, bytes a second sent and received, active requests, totals and origin
 errors. Open **Cloudflare Status…** for the same live counters and connector
-uptime, or **Analytics…** for the traffic Cloudflare counted (below,
-Analytics). Local traffic refreshes every five seconds while the strip is
+uptime, or **Analytics…** for the traffic Cloudflare counted (the
+[Analytics](https://exe.v2core.com/docs/using/analytics) chapter). Local traffic refreshes every five seconds while the strip is
 open on a desktop, and while the menu or the window is open on a phone; tunnel-wide connection counts refresh every 30 seconds. Bytes come
 from cloudflared's QUIC connections to Cloudflare, so a connector on HTTP/2
 shows a dash, and files Cloudflare answers from its cache never reach the
@@ -205,6 +209,55 @@ reaches every browser that turned notifications on. A `tag` makes a later
 push replace the earlier one, and a `url` (a path, such as `/`) is what a
 tap opens. Only callers on the machine itself are taken; the same request
 over Tailscale is refused.
+
+Windows behave like OS 9 windows: drag the title bar to move, drag the
+left/right/bottom edges or the grow corner to resize, click the shade box to
+collapse a window to its title bar, the zoom box to toggle its size. The
+whole layout — positions, stacking, which windows are open — is saved on the
+daemon and mirrored live to every browser looking at this desk, so dragging
+a window here moves it on your other screens too.
+
+On a phone the desktop becomes a home screen of icons and windows go
+fullscreen, one at a time; a tapped icon swells and fades as its window
+comes up, and closing a window walks back through the stack like a
+phone's back button. In a Claude Code or Codex window a finger drag
+scrolls back through the session's history, and a flick keeps it going.
+In Todo and Weather a finger scrolls the list; to move a row, press and
+hold it for half a second until it tints, then drag it to its new place.
+A picture window swipes down to close, the window under it showing
+through the gap as it goes.
+
+Over HTTPS — a Tailscale Serve address, say — the desktop installs as an
+app: **Add to Home Screen** on an iPhone or iPad, the install button in
+Chrome's or Edge's address bar. It then opens in a window of its own with
+the menu bar right under the status bar. When the daemon is not answering —
+restarting, or the device offline — the desktop shows an alert in place of
+the browser's error page and comes back by itself once the daemon does.
+
+Every system icon is hand-plotted pixel art, and **Windows → Icon Editor**
+lets you repaint it: the gallery lists each one (the VM Mac, folders,
+documents, the Trash, built-in apps such as Mac OS 9, the minis in search
+results, even the Apple menu),
+and double-clicking opens a fat-bits editor — pencil, eraser, eyedropper,
+fill, undo, the Platinum palette plus a custom color well. Save applies the
+art everywhere at once, follows the desk into every browser and joined
+node, and survives restarts; Revert brings the factory icon back. On a VM
+icon, pixels painted the factory screen-green keep changing color with the
+VM's state. **New Icon…** adds icons of your own on a 32×32 or 16×16 grid —
+draw them, copy their SVG for use anywhere, delete them when done. System
+icons can only be repainted, never deleted. Restored editors keep their position,
+stacking and shaded state even when their icon loads after the desktop layout.
+
+<img src="https://hub.v2core.com/v1/embed/bafkreifywpjwrpr7wss5xiw5aukrugxpvupownkyis6pjq5vlzvdwidhby" alt="The Icon Editor's gallery of system icons, with New Icon at its top" width="562" height="383">
+
+## Claude Code, Codex and Terminal
+
+**Terminal** is a shell on the machine exe runs on. **Claude Code** and
+**Codex** are windows of the same kind with that agent's CLI in them: each
+has its icon on the desktop when its CLI is installed on this machine. On
+a host with tmux a session outlives its window: close the window, the tab
+or the laptop and it works on, and opening the window again, from any
+device, returns to the same conversation.
 
 A Claude Code window's status line shows the session's figures at its
 right — the model, context in use, tokens, cost and the plan's 5-hour and
@@ -343,46 +396,6 @@ tells the session what to do with it. The hub watcher builds this way: an instru
 you post in one of Claude's hub threads opens as a session in the Claude
 Code window's column, works there in view, reports in the thread when it
 is done and stays open in the window to be continued.
-
-Windows behave like OS 9 windows: drag the title bar to move, drag the
-left/right/bottom edges or the grow corner to resize, click the shade box to
-collapse a window to its title bar, the zoom box to toggle its size. The
-whole layout — positions, stacking, which windows are open — is saved on the
-daemon and mirrored live to every browser looking at this desk, so dragging
-a window here moves it on your other screens too.
-
-On a phone the desktop becomes a home screen of icons and windows go
-fullscreen, one at a time; a tapped icon swells and fades as its window
-comes up, and closing a window walks back through the stack like a
-phone's back button. In a Claude Code or Codex window a finger drag
-scrolls back through the session's history, and a flick keeps it going.
-In Todo and Weather a finger scrolls the list; to move a row, press and
-hold it for half a second until it tints, then drag it to its new place.
-A picture window swipes down to close, the window under it showing
-through the gap as it goes.
-
-Over HTTPS — a Tailscale Serve address, say — the desktop installs as an
-app: **Add to Home Screen** on an iPhone or iPad, the install button in
-Chrome's or Edge's address bar. It then opens in a window of its own with
-the menu bar right under the status bar. When the daemon is not answering —
-restarting, or the device offline — the desktop shows an alert in place of
-the browser's error page and comes back by itself once the daemon does.
-
-Every system icon is hand-plotted pixel art, and **Windows → Icon Editor**
-lets you repaint it: the gallery lists each one (the VM Mac, folders,
-documents, the Trash, built-in apps such as Mac OS 9, the minis in search
-results, even the Apple menu),
-and double-clicking opens a fat-bits editor — pencil, eraser, eyedropper,
-fill, undo, the Platinum palette plus a custom color well. Save applies the
-art everywhere at once, follows the desk into every browser and joined
-node, and survives restarts; Revert brings the factory icon back. On a VM
-icon, pixels painted the factory screen-green keep changing color with the
-VM's state. **New Icon…** adds icons of your own on a 32×32 or 16×16 grid —
-draw them, copy their SVG for use anywhere, delete them when done. System
-icons can only be repainted, never deleted. Restored editors keep their position,
-stacking and shaded state even when their icon loads after the desktop layout.
-
-<img src="https://hub.v2core.com/v1/embed/bafkreifywpjwrpr7wss5xiw5aukrugxpvupownkyis6pjq5vlzvdwidhby" alt="The Icon Editor's gallery of system icons, with New Icon at its top" width="562" height="383">
 
 ## Desktop context menu
 
@@ -727,7 +740,8 @@ every five seconds while the window is open. The tabs:
 - **Terminal** — a full SSH terminal in the browser.
 - **Agent** — tell the built-in coding agent what to build; it gets a shell
   in this VM and streams its work live.
-- **Expose** — publish a VM port to an HTTPS subdomain (see below).
+- **Expose** — publish a VM port to an HTTPS subdomain (see
+  [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web)).
 - **Sessions** — every chat pinned to this VM, agent runs included, each
   with a model-written one-line summary of what it accomplished; click one
   to reopen it in the Chat window.
@@ -1535,8 +1549,9 @@ restart. Highlights:
   `exe token`, run on the machine that runs exe, shows it again, and
   **Special → Set API Token…** brings the dialog back.
 - `ssh_user` — the user created in every VM (default `dev`).
-- `ollama.*`, `chat_provider`, `openai.model`, `cloudflare.*` — the agent
-  and publishing sections above.
+- `ollama.*`, `chat_provider`, `openai.model`, `cloudflare.*` — see
+  [The coding agent](https://exe.v2core.com/docs/using/the-coding-agent) and
+  [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web).
 
 <img src="https://hub.v2core.com/v1/embed/bafkreib5o3chahprhedmnmlt5ewo25povt6sfx5rfqqiawty3pwxv3b77i" alt="The Configuration window on its Daemon tab: listen, proxy_listen, ssh_listen, advertise_host, api_token and more" width="662" height="476">
 

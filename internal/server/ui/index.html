@@ -928,9 +928,24 @@ pre.out { background: #10120f; color: #cfe3cf; border: 1px solid var(--black); p
    between items — the statusbar draws the bottom frame line); the small
    gray last line is the byline: which node posted it, and when */
 #news-list { height: 380px; overflow-y: scroll; overflow-x: hidden; }
-/* Documentation (Help menu): the manual on paper, rendered markdown with
-   the chat's typography (the inner div carries .msg.asst) */
+/* Documentation (Help menu): the manual on paper, a page at a time — its
+   contents, then a chapter each — rendered markdown with the chat's
+   typography (the inner div carries .msg.asst) */
 #docs-body { height: 420px; overflow-y: scroll; overflow-x: hidden; user-select: text; }
+/* the contents page's list of chapters: numbered, in two columns where the
+   window has the room for them and one where it has not (a phone) */
+#docs-md ol.docs-toc { margin: 6px 0 4px; padding: 0 0 0 26px; columns: 2 200px; column-gap: 32px; }
+#docs-md ol.docs-toc li { margin: 0; padding: 2px 0; break-inside: avoid; }
+/* The manual's foot: where a page leads. Buttons get a row of their own,
+   20px high, 12px apart and from the edges: Contents at the left, Previous
+   and Next at the right, one width for the pair. Its top line is its one
+   seam with the paper; the status bar under it keeps its own. All three
+   are there from the first paint and go grey where they lead nowhere, so
+   nothing moves from page to page. */
+#docs-nav { flex: none; display: flex; align-items: center; gap: 12px; padding: 12px;
+  border-top: 1px solid var(--black); background: var(--g300); user-select: none; }
+#docs-nav .fill { flex: 1; }
+#docs-prev, #docs-next { width: 72px; padding-left: 0; padding-right: 0; }
 /* the manual's pictures: each a window, at its own size or the column's;
    its width and height keep its place while it loads */
 #docs-md img { display: block; max-width: 100%; height: auto; margin: 8px 0 12px; }
@@ -1865,6 +1880,12 @@ body.mobile th.sorted {
         <div id="docs-body" class="vflush">
           <div id="docs-md" class="msg asst" style="margin:0; padding:12px 16px"><span class="muted">Loading…</span></div>
         </div>
+      </div>
+      <div id="docs-nav">
+        <button class="ghost" id="docs-toc" disabled>Contents</button>
+        <span class="fill"></span>
+        <button class="ghost" id="docs-prev" disabled>Previous</button>
+        <button class="ghost" id="docs-next" disabled>Next</button>
       </div>
       <div class="statusbar"><span class="mono muted" id="docs-url"></span></div>
       <svg id="docs-grow" class="grow-box" width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges">
@@ -3277,7 +3298,7 @@ const ACTIONS = {
   join: () => joinOpen(),
   token: () => tokOpen(),
   welcome: () => openWelcomeWin(),
-  docs: find => openDocsWin(find),
+  docs: where => openDocsWin(where),
   skillguide: () => openSkillWin(),
 };
 document.querySelectorAll(".dd-item").forEach(it => {
@@ -3407,35 +3428,97 @@ async function copyText(text, label) {
 const copyIP = ip => copyText(ip, "IP " + ip);
 
 // ---- Help → exe Documentation: the manual ships in the binary (docs.md,
-// served at /docs.md the way the skill file is) and is fetched once per
-// page load, rendered with the chat's markdown pipeline ----
-let docsLoaded = false;
-// find: a chapter's heading ("The Hub"), to open the manual there
-async function openDocsWin(find) {
+// served at /docs.md the way the skill file is), is fetched once per page
+// load and read a page at a time. A chapter is one of the file's own "## "
+// headings with what follows it — the division the website makes
+// (sitedocs.go), so /docs/using/<slug> there and a chapter here are the
+// same text under the same name — and the words before the first of them
+// open the contents page, which lists the chapters. Each page is rendered
+// with the chat's markdown pipeline. ----
+let docsLoaded = false, docsIntro = "", docsChapters = [];
+let docsAt = -1; // the chapter on the page; -1 is the contents
+// a heading's name in an address, as the website writes it (mdSlug)
+const docSlug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+const DOCS_SITE = "https://exe.v2core.com";
+function docsSplit(md) {
+  const intro = [], chapters = [];
+  let cur = null;
+  for (const l of md.split("\n")) {
+    if (l.startsWith("## ")) {
+      const title = l.slice(3).trim();
+      chapters.push(cur = { title, slug: docSlug(title), body: [] });
+    } else (cur ? cur.body : intro).push(l);
+  }
+  docsIntro = intro.join("\n");
+  docsChapters = chapters.map(c => ({ title: c.title, slug: c.slug, body: c.body.join("\n") }));
+}
+// where: a chapter by its name or its address's last word ("The Hub",
+// "the-hub"), for a caller that sends someone to it (Welcome's Read More…).
+// Without one the window comes back as it was left, on the contents the
+// first time.
+async function openDocsWin(where) {
   $("#docs-url").textContent = location.origin + "/docs.md";
   openWin("#win-docs");
-  if (docsLoaded) { docsFind(find); return; }
-  try {
-    const r = await fetch("/docs.md");
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    // docs.md is hard-wrapped in the source; unlike chat (breaks:true),
-    // fold those newlines back into flowing paragraphs
-    $("#docs-md").innerHTML = DOMPurify.sanitize(marked.parse(await r.text(), { breaks: false }));
-    docsLoaded = true;
-    docsFind(find);
-  } catch (e) {
-    $("#docs-md").replaceChildren(el("span", { class: "muted" }, "Could not load the documentation — " + e.message));
+  if (!docsLoaded) {
+    try {
+      const r = await fetch("/docs.md");
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      docsSplit(await r.text());
+      docsLoaded = true;
+      docsShow(-1);
+    } catch (e) {
+      $("#docs-md").replaceChildren(el("span", { class: "muted" }, "Could not load the documentation — " + e.message));
+      return;
+    }
   }
+  if (typeof where !== "string" || !where) return;
+  const i = docsChapters.findIndex(c => c.slug === docSlug(where));
+  if (i >= 0) docsShow(i);
 }
-
-// The pictures keep their rooms from their width and height, so a heading
-// stays where it was found while they arrive.
-function docsFind(find) {
-  if (typeof find !== "string" || !find) return;
-  const h = [...document.querySelectorAll("#docs-md h1, #docs-md h2, #docs-md h3")].find(h => h.textContent.trim() === find);
-  const box = $("#docs-body");
-  if (h) box.scrollTop += h.getBoundingClientRect().top - box.getBoundingClientRect().top - 8;
+// docsShow puts one page on the paper: the contents (-1) or a chapter, from
+// its top or at a heading inside it (section, as an address names it).
+function docsShow(i, section) {
+  const n = docsChapters.length;
+  docsAt = i = Math.max(-1, Math.min(n - 1, i));
+  const box = $("#docs-md"), c = docsChapters[i];
+  // docs.md is hard-wrapped in the source; unlike chat (breaks:true), fold
+  // those newlines back into flowing paragraphs
+  box.innerHTML = DOMPurify.sanitize(marked.parse(c ? "# " + c.title + "\n" + c.body : docsIntro, { breaks: false }));
+  if (!c) {
+    const list = el("ol", { class: "docs-toc" });
+    for (const ch of docsChapters) list.append(el("li", {}, el("a", { href: DOCS_SITE + "/docs/using/" + ch.slug }, ch.title)));
+    box.append(el("h2", {}, "Chapters"), list);
+  }
+  // an address the website would answer and this desktop would not
+  box.querySelectorAll('a[href^="/docs/"]').forEach(a => a.setAttribute("href", DOCS_SITE + a.getAttribute("href")));
+  const prev = i >= 0 ? (docsChapters[i - 1] || { title: "Contents" }) : null, next = docsChapters[i + 1];
+  $("#docs-toc").disabled = i < 0;
+  $("#docs-prev").disabled = !prev;
+  $("#docs-next").disabled = !next;
+  $("#docs-prev").title = prev ? "Previous: " + prev.title : "";
+  $("#docs-next").title = next ? "Next: " + next.title : "";
+  const scroller = $("#docs-body");
+  const h = section && [...box.querySelectorAll("h2, h3, h4")].find(h => docSlug(h.textContent) === section);
+  scroller.scrollTop = 0;
+  // the pictures keep their rooms from their width and height, so a
+  // heading stays where it was found while they arrive
+  if (h) scroller.scrollTop = h.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 8;
 }
+$("#docs-toc").onclick = () => docsShow(-1);
+$("#docs-prev").onclick = () => docsShow(docsAt - 1);
+$("#docs-next").onclick = () => docsShow(docsAt + 1);
+// A link to another page of the manual turns to it here: the contents'
+// own lines, and the chapters' references to each other, which are written
+// as the website's addresses. Any other link opens in a tab of its own.
+$("#docs-md").addEventListener("click", e => {
+  const a = e.target.closest("a[href]");
+  const m = a && /^https:\/\/exe\.v2core\.com\/docs\/using(?:\/([a-z0-9-]+))?\/?(?:#([a-z0-9-]+))?$/.exec(a.getAttribute("href"));
+  if (!m || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  const i = m[1] ? docsChapters.findIndex(c => c.slug === m[1]) : -1;
+  if (m[1] && i < 0) return; // a chapter this build does not have: the website's
+  e.preventDefault();
+  docsShow(i, m[2]);
+});
 
 // ---- Help → Welcome: the system app that introduces exe (sysapps/welcome).
 // It is off the desktop's icons (app.json "hidden") and opens from here —

@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -330,5 +331,53 @@ func TestDocsContents(t *testing.T) {
 	foot := body[strings.Index(body, `<div class="strip foot">`):]
 	if i, j := strings.Index(foot, `class="btn dir"`), strings.Index(foot, `>Next<`); i < 0 || j < 0 || i > j {
 		t.Error("the contents button does not come before the way on")
+	}
+}
+
+// The desktop's Help window splits the manual where the site does and
+// names a chapter by the same rule, written a second time in script
+// (docSlug in ui/index.html: lower case, every run of anything else a
+// hyphen). The two agree for as long as a heading is plain words, so every
+// heading the manual has is held to that. And what points at a chapter —
+// one chapter's reference to another, a Welcome card's Read More… — names
+// one that exists.
+func TestManualChaptersHavePlainNames(t *testing.T) {
+	other := regexp.MustCompile(`[^a-z0-9]+`)
+	plain := func(s string) string { return strings.Trim(other.ReplaceAllString(strings.ToLower(s), "-"), "-") }
+	bySlug, byTitle := map[string]bool{}, map[string]bool{}
+	for _, c := range manualChapters {
+		if c.Slug == "" || plain(c.Title) != c.Slug {
+			t.Errorf("chapter %q: the site names it %q, the desktop %q", c.Title, c.Slug, plain(c.Title))
+		}
+		if bySlug[c.Slug] {
+			t.Errorf("two chapters are named %q", c.Slug)
+		}
+		bySlug[c.Slug], byTitle[c.Title] = true, true
+	}
+	if len(manualChapters) < 10 {
+		t.Fatalf("the manual has %d chapters", len(manualChapters))
+	}
+	for _, l := range strings.Split(string(docsMD), "\n") {
+		if h, ok := strings.CutPrefix(l, "### "); ok && plain(strings.TrimSpace(h)) != mdSlug(strings.TrimSpace(h)) {
+			t.Errorf("heading %q: the site names it %q, the desktop %q", h, mdSlug(h), plain(h))
+		}
+	}
+	for _, m := range regexp.MustCompile(`exe\.v2core\.com/docs/using/([a-z0-9-]+)`).FindAllStringSubmatch(string(docsMD), -1) {
+		if !bySlug[m[1]] {
+			t.Errorf("the manual refers to a chapter %q it does not have", m[1])
+		}
+	}
+	welcome, err := sysAppsFS.ReadFile("sysapps/welcome/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	more := regexp.MustCompile(`\bmore: "([^"]+)"`).FindAllStringSubmatch(string(welcome), -1)
+	if len(more) != 6 {
+		t.Fatalf("Welcome has %d cards with a chapter to read, want 6", len(more))
+	}
+	for _, m := range more {
+		if !byTitle[m[1]] {
+			t.Errorf("a Welcome card's Read More… names %q, which is no chapter", m[1])
+		}
 	}
 }

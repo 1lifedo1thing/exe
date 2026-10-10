@@ -236,6 +236,22 @@ restyling: `internal/server/ui/index.html` (the desktop),
   topmost line in view (with the two after it, as a log repeats itself)
   and how far down it sat, and finds it again as the backlog streams in.
   Only a wholesale change of content — a new filter — goes to the tail.
+- A manual of pages (Help → exe Documentation…, `#win-docs`): the paper
+  shows one page at a time, the contents first — the manual's opening
+  words, then its chapters as a numbered list of links, two columns where
+  the window has the room (`columns: 2 200px`) and one on a phone — and
+  after it a chapter each, under its name as the page's one `h1`. Under
+  the paper a button row of its own (`#docs-nav`, the held row's
+  construction: a 1px black top line as its seam with the paper, 12px all
+  round, the status bar under it keeping its own line): Contents at the
+  left, Previous and Next at the right, 72px each. All three are there
+  from the first paint and go grey where they lead nowhere, and say where
+  they lead in their tooltips, so nothing moves from page to page. Every
+  page starts at its top. A chapter is a `## ` heading of `docs.md` and is
+  named in an address as the website names it (`docSlug` is `mdSlug`, a
+  Go test holds every heading to that), so one chapter refers to another
+  by the website's address and the link turns the page in the window.
+  `openDocsWin(name)` opens a chapter by its heading.
 - A pad of pages (Notes, `/www/exe-apps/Notes`): Mac OS's Note Pad,
   sampled from the guest's Apple Extras. A white sheet flush with the
   frame, its bar running down to the grow box; under the sheet's bottom
@@ -529,7 +545,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   of the desktop menu's action names that open a window (`newvm`,
   `winconfig`, `cfwizard`, `docs`, `app`…, the `BRIDGE_ACTS` set), `args`
   its strings, and an action the menu would show greyed does nothing.
-  `winconfig` takes a pane's name and `docs` a chapter's heading there.
+  `winconfig` takes a pane's name and `docs` a chapter's heading there
+  (Welcome's Read More…; the same Go test holds each card to a chapter
+  that exists).
 - An app that is opened from a menu and not from the desktop says
   `"hidden": true` in app.json (Welcome, under Help): it is listed, so its
   window, its icon in the window lists and the Icon Editor all work, but

@@ -52,11 +52,14 @@ var siteDocs = []siteDoc{
 	manualDoc,
 }
 
-// The manual (internal/server/docs.md) is one file — the desktop's Help
-// window opens the whole of it — and too long for one page on the site,
-// so the site reads it as chapters: its own "## " headings, each a page
-// of its own under /docs/using/. Nothing is edited on the way; the split
-// is where the manual already divides itself.
+// The manual (internal/server/docs.md) is one file, too long for one
+// page, so it is read as chapters: its own "## " headings, each a page of
+// its own under /docs/using/. Nothing is edited on the way; the split is
+// where the manual already divides itself. The desktop's Help window
+// makes the same split of the same file (docsSplit in ui/index.html), and
+// names a chapter the way its address here does, so a reference from one
+// chapter to another is written once, as this site's address, and turns
+// the page in both.
 
 type manualChapter struct {
 	Slug, Title string
