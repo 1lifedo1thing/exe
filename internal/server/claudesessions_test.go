@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -80,6 +81,11 @@ func TestClaudeSessions(t *testing.T) {
 	if l := list[1]; l.ID != old || l.Title != "City tornado disaster" || l.Cwd != "/www/exe-city" || l.Working {
 		t.Fatalf("older session: %+v", l)
 	}
+	// the first prompt rides under a title that is not it, for Search; a
+	// session titled by its prompt says it once
+	if list[0].Prompt != "" || list[1].Prompt != "add a tornado to the city" {
+		t.Fatalf("prompts: %q, %q", list[0].Prompt, list[1].Prompt)
+	}
 	// a session of the column's carries mine: left out, and its file is never read
 	claudeMetaCache.Delete(minePath)
 	if list = claudeSessions(home, map[string]bool{mine: true}, nil, now, claudeSessionsShown); len(list) != 1 || list[0].ID != old {
@@ -119,6 +125,28 @@ func TestClaudeSessions(t *testing.T) {
 	}
 	if list = claudeSessions(t.TempDir(), nil, nil, now, 5); len(list) != 0 {
 		t.Fatalf("empty home: %+v", list)
+	}
+}
+
+// The column shows the latest ten conversations started elsewhere; its
+// Search asks for every one, an archived session's among them.
+func TestAgentThreadListAll(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", home)
+	now := time.Now()
+	const n = claudeSessionsShown + 2
+	for i := 0; i < n; i++ {
+		id := fmt.Sprintf("81afe071-7e89-4ee7-9522-%012d", i)
+		writeClaudeTranscript(t, home, "-www-exe", id, "cli", "/www/exe", fmt.Sprintf("conversation %d", i), now.Add(-time.Duration(i+1)*time.Hour))
+	}
+	s := &Server{}
+	c := hostAgent{app: "fc", title: "Fake Claude", session: "exe-test-fc"}
+	if th := s.agentThreads(c, nil); len(th) != claudeSessionsShown || th[0].Title != "conversation 0" {
+		t.Fatalf("the column's list: %d rows, first %+v", len(th), th[0])
+	}
+	th := s.agentThreadList(c, nil, true)
+	if len(th) != n || th[n-1].Title != fmt.Sprintf("conversation %d", n-1) {
+		t.Fatalf("every conversation: %d rows", len(th))
 	}
 }
 

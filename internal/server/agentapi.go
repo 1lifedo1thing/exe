@@ -23,7 +23,8 @@ import (
 // the conversation stays open there to be taken over or continued.
 //
 //	GET    /v1/agents/{app}/sessions                 the rows of the column, with their states, and "threads", the
-//	                                                 conversations started elsewhere (codexthreads.go, claudesessions.go)
+//	                                                 conversations started elsewhere (codexthreads.go, claudesessions.go):
+//	                                                 the latest ten, or with ?threads=all every one (the column's Search)
 //	POST   /v1/agents/{app}/sessions                 {prompt, resume, fork, session_id, permission_mode, model, name} → {name, number}
 //	                                                 (Codex: prompt and resume, a thread id, alone)
 //	POST   /v1/agents/{app}/sessions/{name}/prompt   {prompt, say}: one message, "say" typed and the prompt pasted after it
@@ -47,7 +48,7 @@ func (s *Server) handleAgentSessionsList(w http.ResponseWriter, r *http.Request)
 	list := s.agentSessions(a)
 	s.markAgentStates(a, list)
 	out := map[string]any{"sessions": list}
-	if threads := s.agentThreads(a, list); threads != nil {
+	if threads := s.agentThreadList(a, list, r.URL.Query().Get("threads") == "all"); threads != nil {
 		out["threads"] = threads // conversations started elsewhere (codexthreads.go, claudesessions.go)
 	}
 	writeJSON(w, http.StatusOK, out)

@@ -641,7 +641,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   sunken white list of 18px rows, the selected row `--hl` with white
   text, its one seam with the terminal the 1px line on its right — a 6px
   grip astride it drags the list's width, saved in the layout — and its
-  button in a row of its own under the list. The column keeps the
+  buttons in a row of their own under the list: New, and in the Claude
+  Code window Search beside it, 58px each and 12px apart, centred. A
+  column under 153px cannot hold both words, so Search is the Hub's 13px
+  magnifier alone in 31px (`.sess-col.tight`), and under 122px New gives
+  up width too; a phone's strip always wears the glyph. The column keeps the
   terminal's height (`contain: size`) and the list scrolls inside it; a
   long list never grows the window. When the current session changes the
   list scrolls its row into view, the least distance that does it, and
@@ -651,6 +655,27 @@ restyling: `internal/server/ui/index.html` (the desktop),
   title: the 7px black dot when the session wants someone (a hook's word,
   or the bell), or the Chat list's 6px pulsing green dot while it works
   unwatched — green means "live" everywhere.
+
+- A modal dialog of a window's own (the Claude Code window's Search,
+  `.sess-veil`): a veil of the overlay's 15% black over the window's
+  frame, so its title bar stays free, the desk's other windows go on
+  working and the dialog travels with its window. On the veil, centred,
+  the modal dialog's box: a title, no close box, 440px wide and never
+  nearer than 16px to a phone's edges. Inside, the Search window's query
+  bar with the 20px field; a white list of the column's 18px rows,
+  fourteen of them from the first paint so the box keeps its height
+  whatever is found, a short window taking rows off and never the
+  buttons; and a button row with a count in 11px at its left and Cancel
+  and Open at its right, 58px each, Open in the ring. The list is
+  `.vflush`: the frame's border is its bar's trailing line and the button
+  row's top line is its last arrow's. A row is the column's: the mark in
+  a 7px slot, the title, and at the right in 10px `#777` the folder and
+  the day; a rule parts the sessions here from the conversations that
+  are not. A press outside the field takes no focus, so typing always
+  narrows the list; a click selects, a double click or Return opens,
+  Escape is Cancel, and Tab goes round the dialog only. The box is not a
+  `.window`, so the window lists, Show All Windows and the saved layout
+  never see it. `~/tools/playwright/exe-claude-search-test.js` walks it.
 
 ## Icons
 

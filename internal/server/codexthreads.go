@@ -31,11 +31,12 @@ import (
 type agentThread struct {
 	ID       string `json:"thread"`
 	Title    string `json:"title"`
-	Origin   string `json:"origin"` // where it was started, in words
+	Prompt   string `json:"prompt,omitempty"` // Claude Code: the first prompt, under a title that is not it — Search reads both
+	Origin   string `json:"origin"`           // where it was started, in words
 	Cwd      string `json:"cwd"`
 	Created  int64  `json:"created"`
-	Activity int64  `json:"activity"` // the transcript's last write
-	Working  bool   `json:"working"`  // written to in the last few seconds: a turn runs there
+	Activity int64  `json:"activity"`       // the transcript's last write
+	Working  bool   `json:"working"`        // written to in the last few seconds: a turn runs there
 	Open     bool   `json:"open,omitempty"` // Claude Code: a CLI process still holds the session
 }
 
@@ -190,7 +191,7 @@ func readCodexIndex(home string) map[string]string {
 }
 
 // codexAppThreads lists the threads started elsewhere, latest activity
-// first, at most limit of them; live are thread ids the column's
+// first, at most limit of them (0: all); live are thread ids the column's
 // sessions already carry, left out.
 func codexAppThreads(home string, live map[string]bool, now time.Time, limit int) []agentThread {
 	out := []agentThread{}
@@ -273,17 +274,29 @@ func (s *Server) noteCodexThread(a hostAgent, session, id string) {
 
 // agentThreads is the column's list of conversations started elsewhere
 // — Codex's threads, Claude Code's sessions (claudesessions.go) — with
-// the ones its sessions carry left out.
+// the ones its sessions carry left out: the latest few, as the column
+// shows them.
 func (s *Server) agentThreads(a hostAgent, list []agentSession) []agentThread {
+	return s.agentThreadList(a, list, false)
+}
+
+// agentThreadList is that list, or with all every such conversation on
+// this machine — what the column's Search goes through, an archived
+// session among them: its transcript stays, and no session carries it.
+func (s *Server) agentThreadList(a hostAgent, list []agentSession, all bool) []agentThread {
 	live := map[string]bool{}
 	for _, l := range list {
 		if id := readAgentThreadID(s.agentStatusFile(a, l.Name)); id != "" {
 			live[id] = true
 		}
 	}
+	codexLimit, claudeLimit := codexThreadsShown, claudeSessionsShown
+	if all {
+		codexLimit, claudeLimit = 0, 0
+	}
 	if a.notify {
-		return codexAppThreads(codexHome(), live, time.Now(), codexThreadsShown)
+		return codexAppThreads(codexHome(), live, time.Now(), codexLimit)
 	}
 	home := claudeHome()
-	return claudeSessions(home, live, claudeOpenSessions(home), time.Now(), claudeSessionsShown)
+	return claudeSessions(home, live, claudeOpenSessions(home), time.Now(), claudeLimit)
 }

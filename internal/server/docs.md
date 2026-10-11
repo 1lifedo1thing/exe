@@ -787,8 +787,12 @@ Right-click a row for its menu:
 | **Copy Title** | Copies the row's title. |
 | **Archive…** | Ends the session and its process, after a dialog. |
 
-An archived conversation stays on this machine, where `/resume` inside
-Claude Code or Codex brings it back. The desktop keeps no list of its own.
+An archived conversation stays on this machine. In the Claude Code window,
+**Search** finds it again (below), and `/resume` inside Claude Code or Codex
+brings it back too. The desktop keeps no list of its own: it reads the
+conversations the CLI keeps. Claude Code deletes a conversation 30 days
+after its last write unless `cleanupPeriodDays` in `~/.claude/settings.json`
+says otherwise.
 
 - **Archive…** shows only once the conversation exists.
 - A turn still in flight when you archive is lost.
@@ -833,6 +837,39 @@ continues as `claude --resume` would.
 Not listed: headless runs (`claude -p`, the turns of a tool that watches a
 hub), `codex` started in a terminal of your own, and the conversations the
 column's own sessions hold.
+
+### Search for a conversation
+
+**Search**, beside **New** in the Claude Code window, opens a dialog over
+the window that lists every conversation on this machine:
+
+- the window's sessions, as the column has them;
+- under a rule, the conversations no session holds: the ones started
+  elsewhere and the ones you archived, all of them and not only the latest
+  ten the column shows.
+
+Type words to narrow the list. A conversation stays when every word is found
+in its title, its first prompt or its folder, in any case and inside longer
+words. A row says the conversation's folder and the day it started; hover it
+for the rest.
+
+| To | Do this |
+| --- | --- |
+| Open the selected row | Press Return, press **Open**, or double-click the row. |
+| Move the selection | Use the arrow keys, Page Up and Page Down, or click a row. |
+| Put the dialog away | Press Escape or **Cancel**. |
+
+Opening a session moves the window to it. Opening any other conversation
+continues it in a session of its own, as a click on its row in the column
+does.
+
+- The dialog belongs to the window: the rest of the desktop keeps working
+  while it is up.
+- The list is as it stood when the dialog opened. Open **Search** again for
+  a fresh one.
+- In a column too narrow for both words, and on a phone, **Search** shows as
+  a magnifier.
+- The Codex window has no **Search** yet.
 
 ### Closing and reconnecting
 
@@ -952,7 +989,7 @@ is set.
 
 | Request | What it does |
 | --- | --- |
-| `GET /v1/agents/claude/sessions` | Lists the rows with their states and, as `threads`, the conversations started elsewhere. |
+| `GET /v1/agents/claude/sessions` | Lists the rows with their states and, as `threads`, the conversations started elsewhere: the latest ten, or every one with `?threads=all`. |
 | `POST /v1/agents/claude/sessions` | Opens a numbered session and answers with its `name` and `number`. |
 | `POST /v1/agents/claude/sessions/<name>/prompt` | Types a message into a session. |
 | `DELETE /v1/agents/claude/sessions/<name>` | Ends the session, as **Archive…** does. |

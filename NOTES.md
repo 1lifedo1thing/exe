@@ -9,6 +9,6 @@ docs/release.md, "The notes", says how it is written.
 - **Join a Hub…** in the Hub app: four steps, from a hub's address to your profile.
 - **Node Sync…** in the Special menu is the old **Join…**: it pairs this exe with another.
 - **Mac OS X** in the Special menu: a Power Mac G4 running Mac OS X 10.4 Tiger, beside Mac OS 9.
-- **Blue Pencil**'s options take a **Custom prompt**, such as "I prefer writing in lowercase".
+- **Search**, beside **New** in the Claude Code window, finds any conversation, archived ones too.
 - On a Mac, restarting exe shuts the VMs down first. It used to cut their power.
 - Right-click a window's title bar for **Save a Screenshot**: a PNG of it lands in Workspace/Screenshots.

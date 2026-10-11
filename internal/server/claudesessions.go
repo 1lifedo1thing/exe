@@ -257,11 +257,11 @@ func claudeSessions(home string, live, open map[string]bool, now time.Time, limi
 		if t == nil || claudeHeadless(t.entrypoint) || t.prompt == "" {
 			continue
 		}
-		title := t.title
+		title, prompt := t.title, t.prompt
 		if title == "" {
-			title = t.prompt
+			title, prompt = t.prompt, ""
 		}
-		out = append(out, agentThread{ID: t.id, Title: title, Origin: claudeOrigin(t.entrypoint), Cwd: t.cwd,
+		out = append(out, agentThread{ID: t.id, Title: title, Prompt: prompt, Origin: claudeOrigin(t.entrypoint), Cwd: t.cwd,
 			Created: t.created, Activity: f.mtime.Unix(), Working: now.Sub(f.mtime) <= agentWorkingSeconds*time.Second,
 			Open: open[t.id]})
 		if len(out) == limit {
