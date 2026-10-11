@@ -695,6 +695,12 @@ restyling: `internal/server/ui/index.html` (the desktop),
   name, drawn the way OS 9 drew its own (a machine, a document, a tool);
   a logo is not an icon, and a 16px glyph scaled to 2x2 blocks is the
   wrong grid.
+- A file kind's icon is the document's page (`DOC_ICON`: the outline and
+  the folded corner) with one thing drawn on it, in columns 9 to 22 under
+  the fold: a landscape, a film strip, lines of text, a disc, a number
+  sign. Two change the page itself: the zip's zipper runs its whole
+  height, and the classic Mac archive's vise pinches its waist. `fileIcon`
+  picks by extension, and each kind registers in `ICON_DEFS`.
 - The Icon Editor (Windows → Icon Editor) is a hand-maintained registry,
   `ICON_DEFS` in index.html, not discovery. An entry has `key`, `label`,
   `size` and either `dom` (a selector, when the art lives in one place in

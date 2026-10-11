@@ -5364,11 +5364,63 @@ let ARCHIVE_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-render
   <path fill="#888" d="M12 5h2v1h-2zM14 7h2v1h-2zM12 9h2v1h-2zM14 11h2v1h-2zM14 15h2v1h-2zM12 17h2v1h-2zM14 19h2v1h-2zM12 21h2v1h-2zM14 23h2v1h-2zM12 25h2v1h-2zM14 27h2v1h-2z"/>
   <path fill="#444" d="M12 13h4v2h-4zM13 15h2v1h-2z"/>
 </svg>`;
+// plain text (txt): the page with its lines, three ragged paragraphs
+let TEXT_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
+  <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
+  <path fill="#444" d="M10 6h6v1h-6zM10 8h7v1h-7zM10 10h4v1h-4zM10 13h12v1h-12zM10 15h11v1h-11zM10 17h12v1h-12zM10 19h8v1h-8zM10 22h12v1h-12zM10 24h10v1h-10z"/>
+</svg>`;
+// CD image (toast/iso): the page with a disc on it — silver, lit from the
+// upper left, its two rainbow wedges in the pink, sun, green and sky accents
+let DISC_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
+  <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
+  <path fill="#000" d="M14 12h4v1h-4zM12 13h2v1h-2zM18 13h2v1h-2zM11 14h1v1h-1zM20 14h1v1h-1zM10 15h1v2h-1zM21 15h1v2h-1zM9 17h1v4h-1zM22 17h1v4h-1zM10 21h1v2h-1zM21 21h1v2h-1zM11 23h1v1h-1zM20 23h1v1h-1zM12 24h2v1h-2zM18 24h2v1h-2zM14 25h4v1h-4z"/>
+  <path fill="#eee" d="M14 13h2v1h-2zM12 14h4v1h-4zM11 15h1v1h-1zM13 15h4v1h-4zM12 16h4v1h-4zM10 17h5v1h-5zM10 18h4v1h-4z"/>
+  <path fill="#ccc" d="M16 13h1v2h-1zM16 16h1v1h-1zM21 17h1v1h-1zM19 18h3v1h-3zM10 19h3v1h-3zM10 20h1v1h-1zM15 21h1v1h-1zM15 23h1v2h-1z"/>
+  <path fill="#aaa" d="M18 19h4v1h-4zM17 20h5v1h-5zM16 21h5v1h-5zM15 22h6v1h-6zM16 23h4v1h-4zM16 24h2v1h-2z"/>
+  <path fill="#ff8888" d="M17 13h1v4h-1zM14 21h1v4h-1z"/>
+  <path fill="#ffff33" d="M18 14h2v1h-2zM18 15h1v2h-1zM17 17h1v1h-1zM14 20h1v1h-1zM13 21h1v2h-1zM12 23h2v1h-2z"/>
+  <path fill="#77bb77" d="M19 15h2v1h-2zM19 16h1v1h-1zM18 17h1v1h-1zM13 20h1v1h-1zM12 21h1v1h-1zM11 22h2v1h-2z"/>
+  <path fill="#99ccff" d="M20 16h1v1h-1zM19 17h2v1h-2zM18 18h1v1h-1zM13 19h1v1h-1zM11 20h2v1h-2zM11 21h1v1h-1z"/>
+  <path fill="#777" d="M15 17h2v1h-2zM14 18h1v2h-1zM17 18h1v2h-1zM15 20h2v1h-2z"/>
+  <path fill="#fff" d="M12 15h1v1h-1zM11 16h1v1h-1zM15 18h2v2h-2z"/>
+</svg>`;
+// classic Mac archive (sit and its kin): the page pinched at the waist in
+// a vise — steel jaws, the screw and its handle on the right, the paper
+// creasing between them
+let SIT_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v2l-3 3v3l3 3v8h-17v-8l3-3v-3l-3-3z"/>
+  <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
+  <path fill="#000" d="M28 12h2v3h-2zM6 13h5v1h-5zM21 13h5v1h-5zM6 14h1v4h-1zM10 14h1v4h-1zM21 14h1v4h-1zM25 14h1v1h-1zM25 15h5v2h-5zM25 17h1v1h-1zM28 17h2v3h-2zM6 18h5v1h-5zM21 18h5v1h-5z"/>
+  <path fill="#eee" d="M7 14h3v1h-3zM22 14h3v1h-3z"/>
+  <path fill="#aaa" d="M12 14h1v1h-1zM19 14h1v1h-1zM7 15h3v2h-3zM13 15h2v2h-2zM17 15h2v2h-2zM22 15h3v2h-3zM12 17h1v1h-1zM19 17h1v1h-1z"/>
+  <path fill="#888" d="M7 17h3v1h-3zM22 17h3v1h-3z"/>
+</svg>`;
+// SHA-256 checksum (sha256): the page with a number sign over a row of
+// the digest's bytes
+let HASH_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <path fill="#fff" stroke="#000" d="M7.5 3.5h11l6 6v19h-17z"/>
+  <path fill="#ccc" stroke="#000" d="M18.5 3.5v6h6z"/>
+  <path fill="#000" d="M14 11h2v3h-2zM19 11h2v3h-2zM11 14h11v2h-11zM13 16h2v2h-2zM18 16h2v2h-2zM10 18h11v2h-11zM12 20h2v3h-2zM17 20h2v3h-2z"/>
+  <path fill="#888" d="M10 25h2v1h-2zM13 25h2v1h-2zM16 25h2v1h-2zM19 25h2v1h-2z"/>
+</svg>`;
+// kinds told by their extension alone: nothing here opens them, but each
+// wears its own page. A CD image is what Toast writes, or an ISO; a classic
+// Mac archive is StuffIt's, Compact Pro's, or either in BinHex
+const DISC_EXT = new Set("toast iso".split(" "));
+const SIT_EXT = new Set("sit sitx sea cpt hqx".split(" "));
+const extIn = (name, set) => { const dot = name.lastIndexOf("."); return dot > 0 && set.has(name.slice(dot + 1).toLowerCase()); };
+const isPlainTextFile = name => name.toLowerCase().endsWith(".txt");
 const fileIcon = en => en.dir ? FOLDER_ICON
   : isImageFile(en.name) ? IMAGE_ICON
   : isPageFile(en.name) ? PAGE_ICON
   : isMovieFile(en.name) || isSoundFile(en.name) ? MOVIE_ICON
-  : isArchiveFile(en.name) ? ARCHIVE_ICON : DOC_ICON;
+  : isArchiveFile(en.name) ? ARCHIVE_ICON
+  : extIn(en.name, DISC_EXT) ? DISC_ICON
+  : extIn(en.name, SIT_EXT) ? SIT_ICON
+  : en.name.toLowerCase().endsWith(".sha256") ? HASH_ICON
+  : isPlainTextFile(en.name) ? TEXT_ICON : DOC_ICON;
 // host Terminal: the compact Mac with a dark screen showing a green prompt
 let TERMINAL_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
@@ -5980,6 +6032,10 @@ const ICON_DEFS = [
   { key: "page", label: "Web Page", size: 32, get: () => PAGE_ICON, set: s => PAGE_ICON = s },
   { key: "movie", label: "Movie File", size: 32, get: () => MOVIE_ICON, set: s => MOVIE_ICON = s },
   { key: "archive", label: "Archive", size: 32, get: () => ARCHIVE_ICON, set: s => ARCHIVE_ICON = s },
+  { key: "text", label: "Text File", size: 32, get: () => TEXT_ICON, set: s => TEXT_ICON = s },
+  { key: "disc", label: "CD Image", size: 32, get: () => DISC_ICON, set: s => DISC_ICON = s },
+  { key: "sit", label: "OS 9 Archive", size: 32, get: () => SIT_ICON, set: s => SIT_ICON = s },
+  { key: "hash", label: "SHA256 Hash", size: 32, get: () => HASH_ICON, set: s => HASH_ICON = s },
   { key: "log", label: "Log Viewer", size: 32, get: () => LOG_ICON, set: s => LOG_ICON = s },
   { key: "app", label: "App", size: 32, get: () => APP_FALLBACK_ICON, set: s => APP_FALLBACK_ICON = s },
   { key: "news", label: "Newsfeed", size: 32, dom: "#news-icon svg" },
@@ -6914,7 +6970,7 @@ function winIcon(w) {
     return appIcon(app, 16);
   }
   if (id.startsWith("win-ws-")) return at16(FOLDER_ICON);
-  if (id.startsWith("win-ed-")) return at16(DOC_ICON);
+  if (id.startsWith("win-ed-")) return at16(isPlainTextFile(decodeURIComponent(id.slice(7))) ? TEXT_ICON : DOC_ICON);
   if (id.startsWith("win-iv-")) return at16(IMAGE_ICON);
   if (id.startsWith("win-pv-")) return at16(PAGE_ICON);
   if (id.startsWith("win-mv-")) return at16(MOVIE_ICON);

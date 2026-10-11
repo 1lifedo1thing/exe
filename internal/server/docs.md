@@ -2651,6 +2651,9 @@ Double-click the **Workspace** icon on the desktop; on a phone, tap it.
 The window shows the folder's contents as icons. The line under the title
 bar says how many items there are and how much disk space is free.
 
+A file's icon tells its kind: a picture, a movie, a web page, plain text,
+an archive, a CD image, a checksum. Any other file is a blank page.
+
 <img src="https://hub.v2core.com/v1/embed/bafkreigcssoqlxnaybr7d7yjusstyejrfd4utagcwqzonbjzhadtwcbs4m" alt="The Workspace window with folders, a picture, a movie, a sound and text files" width="522" height="266">
 
 Each folder opens in a window of its own, as in the classic Finder. Names
