@@ -2921,6 +2921,8 @@ has **Summary** there too. On a phone **Draw…**, **Find…**, **Refresh**,
 The Hub app opens on it while it has no hub, and it is also at
 **Special → Join a Hub…** and on the Welcome window's Hub card.
 
+<img src="https://hub.v2core.com/v1/embed/bafkreiftltcrfwdetz3xmyhqdox3vwx3fmvhytwvvm2dsl54qruyfssd7m" alt="Join a Hub on its third step: the four steps down the left, this machine's key by its two names, and what a token-gated hub asks of it" width="520" height="585">
+
 1. **Hub Address.** Type the address whoever runs the hub gave you; its
    name alone will do. With none to hand, **Use hub.v2core.com** fills in
    exe's own hub, where releases are announced.
