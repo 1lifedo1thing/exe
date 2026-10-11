@@ -817,6 +817,10 @@ column's own sessions hold.
 
 - **Close the window** and its sessions run on. Open the agent's icon again
   to come back to them.
+- **The window belongs to the browser.** Open in one tab, it is open in
+  every tab of that browser, and it comes back after a reload or when the
+  browser is opened again. Its close box closes it in all of them. Another
+  browser or device opens its own from the icon, at the same place and size.
 - **A window whose link drops** reconnects on its own, in the background, to
   the session it showed: a tab left behind while the laptop slept, a network
   that came and went, the daemon restarted. A window whose tmux client was
