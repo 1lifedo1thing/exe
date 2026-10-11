@@ -381,3 +381,28 @@ func TestManualChaptersHavePlainNames(t *testing.T) {
 		}
 	}
 }
+
+// In the desktop's Help window a chapter's page wears the icon of what it
+// is about (DOCS_ICONS in ui/index.html, by the chapter's name in an
+// address). A chapter without one would wear the plain document, and an
+// entry for a chapter that is gone would be art nobody sees: the list and
+// the manual's chapters are held to each other.
+func TestManualChaptersHaveIcons(t *testing.T) {
+	block := regexp.MustCompile(`(?s)const DOCS_ICONS = \{(.*?)\n\};`).FindStringSubmatch(string(uiHTML))
+	if block == nil {
+		t.Fatal("the desktop has no DOCS_ICONS")
+	}
+	has := map[string]bool{}
+	for _, m := range regexp.MustCompile(`(?m)^\s*"([a-z0-9-]+)":`).FindAllStringSubmatch(block[1], -1) {
+		has[m[1]] = true
+	}
+	for _, c := range manualChapters {
+		if !has[c.Slug] {
+			t.Errorf("the chapter %q has no icon in DOCS_ICONS", c.Slug)
+		}
+		delete(has, c.Slug)
+	}
+	for slug := range has {
+		t.Errorf("DOCS_ICONS names %q, which is no chapter", slug)
+	}
+}

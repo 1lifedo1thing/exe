@@ -196,6 +196,8 @@ It opens on its contents and shows a chapter at a time.
 
 - Click a chapter's name to read it, or turn the pages with **Contents**,
   **Previous** and **Next**.
+- A chapter's page shows the icon of what it is about beside its name: the
+  VM's Mac, the Workspace's folder, an app's own icon.
 - A reference from one chapter to another turns to it in the same window.
 - Close the window and open it again, and it comes back where you left it.
 - It opens just tall enough to show the whole contents page, and keeps a

@@ -320,6 +320,26 @@ restyling: `internal/server/ui/index.html` (the desktop),
   one-pixel diagonal smears. The window never changes height for any of
   it, and the default height's limit gives up the bar's own, so a short
   screen's window ends where it did.
+  A chapter's page wears, left of its name, the icon of what it is about
+  (`docsIcon`, `DOCS_ICONS` by the chapter's name in an address): the
+  desktop's own art at 16px as the Windows lists show it (`sizeSvg`, the
+  `.dd-ico` rule's declarations) — the VM's Mac for Virtual machines, the
+  folder for the Workspace, a system app's own icon for its chapter. It
+  stands in the name's left margin, 22px that are there before the art
+  is, 2px down so that it sits in the middle of the name's first line; a
+  name that wraps runs on beside it. The art is read when it is drawn, so
+  a repaint in the Icon Editor shows on the open page, and a page drawn
+  before the app list came gets its app's art when it does. Five chapters
+  had nothing on the desktop to wear and got icons of their own, drawn on
+  the 32 grid and registered like any other: a pop-up menu with a line
+  chosen (`deskmenu`), a brass key (`sshkey`, the palette's key-brass),
+  Software Update's Mac with its arrow turned upward (`publish`), two
+  Macs on one cable (`join`) and a control panel with two sliders
+  (`config`). A chapter the list does not name wears the document, and
+  `TestManualChaptersHaveIcons` holds the list and the manual's chapters
+  to each other. The contents and the found chapters wear none. A manual's
+  heading still reads as the chapter's name alone: the art is hidden from
+  assistive readers and carries no text.
 - A pad of pages (Notes, `/www/exe-apps/Notes`): Mac OS's Note Pad,
   sampled from the guest's Apple Extras. A white sheet flush with the
   frame, its bar running down to the grow box; under the sheet's bottom

@@ -1062,6 +1062,14 @@ pre.out { background: #10120f; color: #cfe3cf; border: 1px solid var(--black); p
   border-top: 1px solid var(--black); background: var(--g300); user-select: none; }
 #docs-nav .fill { flex: 1; }
 #docs-prev, #docs-next { width: 72px; padding-left: 0; padding-right: 0; }
+/* A chapter's page wears the icon of what it is about, left of its name:
+   the desktop's own art at 16px (docsIcon). It stands in the name's left
+   margin, 22px that are there before the art is, 2px down so that it sits
+   in the middle of the name's first line; a name that wraps runs on beside
+   it, not under it. The contents and the found chapters wear none. */
+#docs-md h1.docs-h { position: relative; padding-left: 22px; }
+#docs-md .docs-ic { position: absolute; left: 0; top: 2px; width: 16px; height: 16px; user-select: none; }
+#docs-md .docs-ic svg, #docs-md .docs-ic img { display: block; width: 16px; height: 16px; image-rendering: pixelated; } /* .dd-ico's own */
 /* a table wider than the paper (a phone's, with a long name in a cell)
    scrolls in a box of its own, as the website's does (.tablebox), so the
    page never loses its right edge */
@@ -3892,6 +3900,7 @@ function docsShow(i, section, place) {
     box.querySelectorAll('a[href^="/docs/"]').forEach(a => a.setAttribute("href", DOCS_SITE + a.getAttribute("href")));
     // a table gets the box it scrolls in when it is wider than the paper
     box.querySelectorAll("table").forEach(t => { const w = el("div", { class: "docs-tablebox" }); t.replaceWith(w); w.append(t); });
+    if (c) { box.querySelector("h1").classList.add("docs-h"); docsIcon(); }
     at = section && [...box.querySelectorAll("h2, h3, h4")].find(h => docSlug(h.textContent) === section);
     if (docsQ) docsBlocks(box).forEach((b, k) => {
       const first = docsMark(b.nodes, docsQ.res);
@@ -3913,6 +3922,46 @@ function docsShow(i, section, place) {
   // under some of what leads to it
   const lead = at.closest("h1, h2, h3, h4, h5, h6") ? 8 : Math.round(scroller.clientHeight / 4);
   scroller.scrollTop = at.getBoundingClientRect().top - scroller.getBoundingClientRect().top - lead;
+}
+
+// A chapter's page wears, left of its name, the icon of what it is about:
+// the desktop's own art for it, at 16px as the Windows lists show art
+// (sizeSvg) — the VM's Mac, the Hub's icon, the folder. Each is read when
+// it is drawn, so a repaint in the Icon Editor shows on the page too:
+// applyIconOverrides and the apps' arrival (a system app's art comes with
+// the app list) draw it again. A chapter not named here wears the document.
+const DOCS_APP = name => () => appIcon(appsList.find(a => a.name === name), 16);
+const DOCS_ICONS = {
+  "the-desktop": () => WINDOW_ICON,
+  "claude-code-codex-and-terminal": () => TERMINAL_ICON,
+  "desktop-context-menu": () => MENU_ICON,
+  "mac-os-9": DOCS_APP("macos9"),
+  "virtual-machines": () => macIcon("running", 16),
+  "ssh-from-your-own-terminal": () => KEY_ICON,
+  "the-coding-agent": () => $("#chat-icon svg").outerHTML,
+  "publishing-to-the-web": () => CF_ICON,
+  "publishing-to-github": () => PUBLISH_ICON,
+  "analytics": DOCS_APP("analytics"),
+  "workspace-and-files": () => FOLDER_ICON,
+  "apps": () => APP_FALLBACK_ICON,
+  "joining-desks-together": () => JOIN_ICON,
+  "the-hub": DOCS_APP("hub"),
+  "blue-pencil": DOCS_APP("bluepencil"),
+  "dict": DOCS_APP("dict"),
+  "updating": () => UPDATE_ICON,
+  "configuration": () => CONFIG_ICON,
+};
+function docsIcon() {
+  const h = $("#docs-md h1.docs-h"), c = docsChapters[docsAt];
+  if (!h || !c) return; // the contents, the found chapters, or no page yet
+  let ic = h.querySelector(".docs-ic");
+  if (!ic) h.prepend(ic = el("span", { class: "docs-ic", "aria-hidden": "true" }));
+  ic.innerHTML = sizeSvg((DOCS_ICONS[c.slug] || (() => DOC_ICON))(), 16);
+  // the art's own line ends are no part of the name: the heading's text
+  // stays the chapter's name, for whoever reads it (the search does)
+  const tw = document.createTreeWalker(ic, NodeFilter.SHOW_TEXT), ends = [];
+  while (tw.nextNode()) ends.push(tw.currentNode);
+  ends.forEach(n => n.remove());
 }
 
 // ---- the manual's search bar. What the field holds is cut at its spaces
@@ -4218,7 +4267,8 @@ const sizeSvg = (svg, size) => svg.replace(/width="\d+" height="\d+"/, `width="$
 //             yellow #f5bd00 and violet #6e45ff on its face), seeker-teal
 //             #14b8a6 / #8ee8dc / #0b7a6e (the price module's coins),
 //             tailscale-lit #c8dcf8 / #f0f6ff (reserved — the Control
-//             Strip repaints exactly these per tailnet state)
+//             Strip repaints exactly these per tailnet state), key-brass
+//             #e8b830 / #fff0a0 / #a87a10 (the SSH key)
 // Shadows are never gray pixels: paint #000 with fill-opacity 0.2–0.5 so
 // they darken whatever sits beneath. Write chromatic colors as 6-digit hex
 // (pure grays may shorthand). ICX_PALETTE in the Icon Editor carries the
@@ -4756,6 +4806,56 @@ let CODEX_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-renderin
   <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
   <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
 </svg>`;
+// Five things the manual has a chapter on and the desktop had no art for
+// (docsIcon, the chapter pages' icons). The desktop menu: a pop-up menu, one
+// of its lines chosen.
+let MENU_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <rect x="5.5" y="2.5" width="20" height="27" fill="#eee" stroke="#000"/>
+  <path fill="#fff" d="M6 3h19v1H6zM6 4h1v24H6z"/>
+  <path fill="#aaa" d="M7 28h18v1H7zM24 4h1v24h-1zM7 21h17v1H7z"/>
+  <path fill="#444" d="M8 5h11v2H8zM8 17h13v2H8zM8 24h9v2H8z"/>
+  <rect x="6" y="9" width="19" height="6" fill="#333399"/>
+  <path fill="#fff" d="M8 11h14v2H8z"/>
+</svg>`;
+// SSH: a brass key, lying along the icon with its bow at the left
+let KEY_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <path fill="#000" d="M6 9h6v1h-6zM5 10h1v1h-1zM12 10h1v1h-1zM4 11h1v1h-1zM13 11h1v1h-1zM3 12h1v1h-1zM7 12h4v1h-4zM14 12h1v1h-1zM2 13h1v1h-1zM6 13h1v1h-1zM11 13h1v1h-1zM15 13h1v1h-1zM2 14h1v1h-1zM5 14h1v1h-1zM12 14h1v1h-1zM16 14h14v1h-14zM2 15h1v1h-1zM5 15h1v1h-1zM12 15h1v1h-1zM29 15h1v1h-1zM2 16h1v1h-1zM5 16h1v1h-1zM12 16h1v1h-1zM29 16h1v1h-1zM2 17h1v1h-1zM5 17h1v1h-1zM12 17h1v1h-1zM16 17h5v1h-5zM24 17h2v1h-2zM29 17h1v1h-1zM2 18h1v1h-1zM6 18h1v1h-1zM11 18h1v1h-1zM15 18h1v1h-1zM21 18h1v1h-1zM23 18h1v1h-1zM26 18h1v1h-1zM28 18h1v1h-1zM3 19h1v1h-1zM7 19h4v1h-4zM14 19h1v1h-1zM21 19h1v1h-1zM23 19h1v1h-1zM26 19h1v1h-1zM28 19h1v1h-1zM4 20h1v1h-1zM13 20h1v1h-1zM21 20h1v1h-1zM23 20h1v1h-1zM26 20h3v1h-3zM5 21h1v1h-1zM12 21h1v1h-1zM21 21h3v1h-3zM6 22h6v1h-6z"/>
+  <path fill="#fff0a0" d="M6 10h6v1h-6zM5 11h1v1h-1zM12 11h1v1h-1zM4 12h1v1h-1zM11 12h1v1h-1zM3 13h1v1h-1zM3 14h1v1h-1zM3 15h1v1h-1zM16 15h13v1h-13zM3 16h1v1h-1zM3 17h1v1h-1zM3 18h1v1h-1zM5 18h1v1h-1zM4 19h1v1h-1z"/>
+  <path fill="#e8b830" d="M6 11h6v1h-6zM5 12h2v1h-2zM12 12h2v1h-2zM4 13h2v1h-2zM12 13h2v1h-2zM4 14h1v1h-1zM13 14h2v1h-2zM4 15h1v1h-1zM13 15h3v1h-3zM4 16h1v1h-1zM13 16h16v1h-16zM4 17h1v1h-1zM13 17h2v1h-2zM21 17h3v1h-3zM26 17h3v1h-3zM4 18h1v1h-1zM12 18h2v1h-2zM5 19h2v1h-2zM11 19h2v1h-2zM5 20h7v1h-7z"/>
+  <path fill="#a87a10" d="M14 13h1v1h-1zM15 14h1v1h-1zM15 17h1v1h-1zM14 18h1v1h-1zM22 18h1v1h-1zM27 18h1v1h-1zM13 19h1v1h-1zM22 19h1v1h-1zM27 19h1v1h-1zM12 20h1v1h-1zM22 20h1v1h-1zM6 21h6v1h-6z"/>
+</svg>`;
+// publishing to GitHub: Software Update's Mac with its arrow turned round —
+// what was made here goes up and out
+let PUBLISH_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
+  <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>
+  <rect x="10.5" y="5.5" width="11" height="8" fill="#fff" stroke="#000"/>
+  <path fill="#333399" d="M15 6h2v1h-2zM14 7h4v1h-4zM13 8h6v1h-6zM15 9h2v3h-2zM12 12h8v1h-8z"/>
+  <rect x="12" y="18" width="8" height="2" fill="#55524B"/>
+  <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
+  <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
+</svg>`;
+// joined desks: two Macs and the cable between them
+let JOIN_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <path fill="#000" d="M7 22h2v6H7zM7 26h18v2H7zM23 22h2v6h-2z"/>
+  <rect x="1.5" y="4.5" width="12" height="15" fill="#DAD5CA" stroke="#000"/>
+  <rect x="3.5" y="6.5" width="8" height="6" fill="#fff" stroke="#000"/>
+  <rect x="5" y="15" width="5" height="1" fill="#55524B"/>
+  <rect x="3.5" y="19.5" width="8" height="2" fill="#C8C3B8" stroke="#000"/>
+  <rect x="17.5" y="4.5" width="12" height="15" fill="#DAD5CA" stroke="#000"/>
+  <rect x="19.5" y="6.5" width="8" height="6" fill="#fff" stroke="#000"/>
+  <rect x="21" y="15" width="5" height="1" fill="#55524B"/>
+  <rect x="19.5" y="19.5" width="8" height="2" fill="#C8C3B8" stroke="#000"/>
+</svg>`;
+// Configuration: a control panel, its two sliders set
+let CONFIG_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <rect x="3.5" y="4.5" width="25" height="23" fill="#DAD5CA" stroke="#000"/>
+  <path fill="#fff" d="M4 5h24v1H4zM4 6h1v21H4z"/>
+  <path fill="#8B867B" d="M5 26h23v1H5zM27 6h1v20h-1z"/>
+  <path fill="#55524B" d="M7 11h18v2H7zM7 20h18v2H7z"/>
+  <rect x="10.5" y="8.5" width="4" height="7" fill="#fff" stroke="#000"/>
+  <rect x="18.5" y="17.5" width="4" height="7" fill="#fff" stroke="#000"/>
+</svg>`;
 // Only the server's embedded bundles supply trusted inline SVG. Disk apps
 // stay image resources, including when they override a built-in app's name.
 const systemAppIcons = new Map();
@@ -4792,6 +4892,7 @@ function registerSystemAppIcons(apps) {
   }
   if (!$("#win-icons").hidden) renderIconGallery();
   openPendingIconEditors();
+  docsIcon(); // a chapter's page drawn before the apps came wears its app's art now
 }
 async function loadApps() {
   appsList = await j("/v1/apps");
@@ -5260,6 +5361,16 @@ const ICON_DEFS = [
   { key: "trash", label: "Trash", size: 32, dom: "#trash-icon svg" },
   { key: "window", label: "Window", size: 32, get: () => WINDOW_ICON, set: s => WINDOW_ICON = s,
     note: "the Windows lists' icon for windows with no art of their own" },
+  { key: "deskmenu", label: "Desktop Menu", size: 32, get: () => MENU_ICON, set: s => MENU_ICON = s,
+    note: "its chapter of the manual wears it" },
+  { key: "sshkey", label: "SSH Key", size: 32, get: () => KEY_ICON, set: s => KEY_ICON = s,
+    note: "its chapter of the manual wears it" },
+  { key: "publish", label: "Publish to GitHub", size: 32, get: () => PUBLISH_ICON, set: s => PUBLISH_ICON = s,
+    note: "its chapter of the manual wears it" },
+  { key: "join", label: "Joined Desks", size: 32, get: () => JOIN_ICON, set: s => JOIN_ICON = s,
+    note: "its chapter of the manual wears it" },
+  { key: "config", label: "Configuration", size: 32, get: () => CONFIG_ICON, set: s => CONFIG_ICON = s,
+    note: "its chapter of the manual wears it" },
   { key: "vm-mini", label: "VM (mini)", size: 16, get: () => miniMacIcon("running"),
     note: "the green screen follows each VM's state" },
   { key: "chat-mini", label: "Chat (mini)", size: 16, get: () => MINI_CHAT_ICON, set: s => MINI_CHAT_ICON = s },
@@ -5331,6 +5442,7 @@ function applyIconOverrides(ovs, custom) {
   pxStripPaint();
   auStripPaint();
   monStripPaint();
+  docsIcon();
   tickClock();
   $("#about-icon").innerHTML = macIcon("running", 48);
   document.querySelectorAll(".finder-window").forEach(w => { if (!w.hidden) loadFinder(w); });
