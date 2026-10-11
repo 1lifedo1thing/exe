@@ -97,12 +97,17 @@ type hostAgent struct {
 	app, bin, title, session        string
 	homeDirs                        []string
 	statusLine, openaiUsage, notify bool
+	// wheel is how many lines the CLI's own transcript moves for one
+	// mouse wheel report, for a CLI that keeps its history in its own
+	// alternate screen without asking for the mouse (unixShell.Scroll);
+	// 0 for one that does not
+	wheel int
 }
 
 var hostAgents = map[string]hostAgent{
 	"claude": {app: "claude", bin: "claude", title: "Claude Code", session: "exe-claude",
 		homeDirs: []string{filepath.Join(".claude", "local")}, statusLine: true},
-	"codex": {app: "codex", bin: "codex", title: "Codex", session: "exe-codex", openaiUsage: true, notify: true},
+	"codex": {app: "codex", bin: "codex", title: "Codex", session: "exe-codex", openaiUsage: true, notify: true, wheel: 3},
 }
 
 // agentPath finds an agent's CLI on this host, "" when it is not installed.

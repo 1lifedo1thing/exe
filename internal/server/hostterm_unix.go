@@ -18,10 +18,12 @@ import (
 )
 
 type unixShell struct {
-	f   *os.File
-	cmd *exec.Cmd
-	mu  sync.Mutex
-	tty string // the pty's tmux client tty once known (clientTTY)
+	f     *os.File
+	cmd   *exec.Cmd
+	mu    sync.Mutex
+	tty   string // the pty's tmux client tty once known (clientTTY)
+	wheel int    // the agent's lines per wheel report (hostAgent.wheel)
+	owed  int    // wheel lines not yet a whole report (Scroll)
 }
 
 func (s *unixShell) Read(p []byte) (int, error)  { return s.f.Read(p) }
@@ -115,7 +117,7 @@ func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, string, er
 	if err != nil {
 		return nil, "", err
 	}
-	return &unixShell{f: f, cmd: cmd}, session, nil
+	return &unixShell{f: f, cmd: cmd, wheel: a.wheel}, session, nil
 }
 
 // agentCommand is the CLI's launch inside a tmux session: the arguments
@@ -229,22 +231,31 @@ func (s *unixShell) clientTTY() string {
 // mode, which the browser sends ahead of any key typed while scrolled
 // back, so the key reaches the CLI as it would in any terminal. A pane
 // in its own alternate screen (vim, less) has no history: the wheel
-// becomes arrow keys there, as xterm.js does on its own. Every command
-// names the client's tty as its target: an if-shell's inner commands
-// without one land on tmux's idea of the current session — someone
-// else's window.
+// becomes arrow keys there, as xterm.js does on its own. Codex draws
+// there too since 0.160, with a transcript of its own, and asks the
+// terminal for just those arrow keys (?1007h) — which its composer
+// takes as a walk through past prompts. What scrolls its transcript is
+// a mouse wheel report, three lines each, though it never asks for the
+// mouse: so an agent with a wheel of its own (hostAgent.wheel) gets
+// reports, aimed a third of the way down the pane — Codex heeds them
+// over the transcript only, not over the prompt pinned to the top line
+// or the composer — and lines short of a whole report are owed to the
+// next. Scrolled back there, a typed key leaves the view where it is:
+// that is Codex's to decide. Every command names the client's tty as
+// its target: an if-shell's inner commands without one land on tmux's
+// idea of the current session — someone else's window.
 func (s *unixShell) Scroll(lines int) error {
 	tty := s.clientTTY()
 	if tty == "" {
 		return nil // no tmux client: the browser terminal scrolls itself
 	}
-	out, err := tmuxCmd("display-message", "-p", "-t", tty, "#{alternate_on} #{pane_in_mode}").Output()
+	out, err := tmuxCmd("display-message", "-p", "-t", tty, "#{alternate_on} #{pane_in_mode} #{pane_width} #{pane_height}").Output()
 	if err != nil {
 		return fmt.Errorf("tmux display-message: %w", err)
 	}
 	f := strings.Fields(string(out))
-	alt := len(f) == 2 && f[0] == "1"
-	mode := len(f) == 2 && f[1] == "1"
+	alt := len(f) == 4 && f[0] == "1"
+	mode := len(f) == 4 && f[1] == "1"
 	n := lines
 	if n < 0 {
 		n = -n
@@ -253,10 +264,30 @@ func (s *unixShell) Scroll(lines int) error {
 	var cmd *exec.Cmd
 	switch {
 	case lines == 0:
+		s.mu.Lock()
+		s.owed = 0
+		s.mu.Unlock()
 		if !mode {
 			return nil
 		}
 		cmd = tmuxCmd("send-keys", "-t", tty, "-X", "cancel")
+	case alt && !mode && s.wheel > 0:
+		s.mu.Lock()
+		s.owed += lines
+		reports := s.owed / s.wheel
+		s.owed -= reports * s.wheel
+		s.mu.Unlock()
+		if reports == 0 {
+			return nil
+		}
+		button := 64 // wheel up, in SGR: back through the transcript
+		if reports < 0 {
+			button, reports = 65, -reports
+		}
+		cols, _ := strconv.Atoi(f[2])
+		rows, _ := strconv.Atoi(f[3])
+		report := fmt.Sprintf("\x1b[<%d;%d;%dM", button, max(cols/2, 1), max(rows/3, 2))
+		cmd = tmuxCmd("send-keys", "-t", tty, "-l", "-N", strconv.Itoa(reports), report)
 	case alt && !mode:
 		key := "Up"
 		if lines < 0 {

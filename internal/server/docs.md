@@ -836,11 +836,16 @@ column's own sessions hold.
 The mouse wheel scrolls back through the conversation in either window.
 
 - **Claude Code** takes the wheel itself and scrolls its own transcript.
-- **Codex** leaves its transcript to the terminal, and on a machine with
-  tmux that is the tmux session's history. The wheel scrolls it there, in
-  tmux's copy mode, with its `[123/980]` position at the top right. Typing
-  returns to the live screen first, so the keys reach Codex as in any
-  terminal.
+- **Codex** keeps a transcript of its own as well, since version 0.160, and
+  the wheel scrolls that, three lines at a time. While you are scrolled
+  back Codex shows "Back to bottom" above its composer, and what you type
+  goes into the composer without moving the view. Esc returns to the
+  latest line.
+- **An older Codex**, or one started with `--no-alt-screen`, leaves its
+  transcript to the terminal, and on a machine with tmux that is the tmux
+  session's history. The wheel scrolls it there, in tmux's copy mode, with
+  its `[123/980]` position at the top right. Typing returns to the live
+  screen first, so the keys reach Codex as in any terminal.
 
 On a phone, drag a finger instead of turning a wheel.
 
@@ -913,8 +918,9 @@ one up over SSH.
 - **tmux stays out of the way.** These sessions have no tmux status line and
   no prefix key, so Ctrl+B reaches the shell, and `tmux` run inside works as
   it would anywhere.
-- **The wheel scrolls back** through the session's history, as in a Codex
-  window.
+- **The wheel scrolls back** through the session's history, in tmux's copy
+  mode, with its `[123/980]` position at the top right. Typing returns to
+  the live screen.
 
 ### Start and drive sessions over the API
 

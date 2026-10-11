@@ -426,6 +426,90 @@ func TestAgentSessionsLive(t *testing.T) {
 	}
 }
 
+// The wheel over a pane in its own alternate screen. An agent with a
+// wheel of its own (Codex since 0.160: a transcript it scrolls for wheel
+// reports, a composer that takes arrow keys for past prompts) gets
+// reports — whole ones, the lines short of one owed to the next, and
+// forgotten at 0; any other gets the arrow keys a terminal would send.
+// cat stands in for the CLI, and the tty's echo shows what reached it.
+func TestScrollAlternateScreenLive(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux on this host")
+	}
+	tmuxSocket = fmt.Sprintf("exe-test-wheel-%d", os.Getpid())
+	defer func() {
+		if c := tmuxCmd("kill-server"); c != nil {
+			c.Run()
+		}
+		tmuxSocket = ""
+	}()
+	s := &Server{StateDir: t.TempDir()}
+	for _, c := range []struct {
+		a     hostAgent
+		lines []int
+		want  func(cols, rows int) string
+	}{
+		{hostAgent{app: "sh", bin: "sh", title: "Shell", session: "exe-test-wheel", wheel: 3},
+			[]int{7, 1, 1, -4, 0, -2, -2, 2, 2}, func(cols, rows int) string {
+				up := fmt.Sprintf("^[[<64;%d;%dM", cols/2, rows/3)
+				down := fmt.Sprintf("^[[<65;%d;%dM", cols/2, rows/3)
+				return up + up + up + down + down + up // 7: two and 1 owed; 1, 1: one; -4: one and -1 owed; 0; -2, -2: one and -1; 2, 2: one
+			}},
+		{hostAgent{app: "sh", bin: "sh", title: "Shell", session: "exe-test-arrows"},
+			[]int{2, -1, 0, 1}, func(int, int) string { return "^[[A^[[A^[[B^[[A" }},
+	} {
+		sh, _, err := s.startAgent(c.a, 80, 24)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer sh.Close()
+		go func() { // drain the pty so the client never blocks on output
+			buf := make([]byte, 4096)
+			for {
+				if _, err := sh.Read(buf); err != nil {
+					return
+				}
+			}
+		}()
+		pane := func(format string) string {
+			out, _ := tmuxCmd("display-message", "-p", "-t", c.a.session, format).Output()
+			return strings.TrimSpace(string(out))
+		}
+		waitFor := func(what string, ok func() bool) {
+			t.Helper()
+			for i := 0; i < 100; i++ {
+				if ok() {
+					return
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			t.Fatalf("%s: timed out waiting for %s", c.a.session, what)
+		}
+		waitFor("the client to attach", func() bool { return sh.Current() == c.a.session })
+		sh.Write([]byte("printf '\\033[?1049h'; cat\n"))
+		waitFor("the alternate screen", func() bool { return pane("#{alternate_on}") == "1" })
+		for _, n := range c.lines {
+			if err := sh.Scroll(n); err != nil {
+				t.Fatalf("%s: Scroll(%d): %v", c.a.session, n, err)
+			}
+		}
+		var cols, rows int
+		fmt.Sscan(pane("#{pane_width} #{pane_height}"), &cols, &rows)
+		want, got := c.want(cols, rows), ""
+		for i := 0; i < 100 && got != want; i++ {
+			time.Sleep(50 * time.Millisecond)
+			out, _ := tmuxCmd("capture-pane", "-p", "-J", "-t", c.a.session).Output()
+			got = strings.Join(strings.Fields(string(out)), "")
+		}
+		if got != want {
+			t.Errorf("%s (%dx%d): cat was sent %q, want %q", c.a.session, cols, rows, got, want)
+		}
+		if mode := pane("#{pane_in_mode}"); mode != "0" {
+			t.Errorf("%s: pane_in_mode = %s: the wheel should not open tmux's copy mode over a CLI's own screen", c.a.session, mode)
+		}
+	}
+}
+
 // The prompt endpoint types into a live session: pasted and sent with
 // Return. Its tmux target is a pane, and "=name" alone is not one
 // ("can't find pane"), which sent every hub reply meant for an open

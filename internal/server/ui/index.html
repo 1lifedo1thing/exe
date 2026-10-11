@@ -8129,15 +8129,18 @@ function openHostTermWin(app, cmd, vm, termSess) {
   // into arrow keys, which reach the CLI as typed (Codex's composer
   // walked its prompt history on every notch). The history is the
   // pane's, in tmux, so the wheel goes to the daemon as lines to scroll
-  // ({"scroll":n}, back for n > 0) and tmux's copy mode shows it; a key
-  // typed while scrolled back sends 0 first — back to the live screen —
-  // so it reaches the CLI as it would in any terminal. A CLI that tracks
-  // the mouse (Claude Code) takes the wheel itself, through xterm's own
-  // reports, so the handler steps aside for it. A notch goes out at
-  // once; what follows within 40 ms pools into one more frame, as a
-  // trackpad sends dozens of small deltas a second, each a tmux command
-  // otherwise. The window opens as if scrolled: the pane may have been
-  // left in copy mode by a window that never got to leave it
+  // ({"scroll":n}, back for n > 0) and tmux's copy mode shows it — or,
+  // where the CLI keeps a transcript of its own in its alternate screen
+  // (Codex since 0.160), the daemon hands it the lines as wheel reports
+  // (unixShell.Scroll); a key typed while scrolled back sends 0 first —
+  // back to the live screen — so it reaches the CLI as it would in any
+  // terminal. A CLI that tracks the mouse (Claude Code) takes the wheel
+  // itself, through xterm's own reports, so the handler steps aside for
+  // it. A notch goes out at once; what follows within 40 ms pools into
+  // one more frame, as a trackpad sends dozens of small deltas a second,
+  // each a tmux command otherwise. The window opens as if scrolled: the
+  // pane may have been left in copy mode by a window that never got to
+  // leave it
   let scrolled = true, pend = 0, pendTimer = 0, lastScroll = 0;
   const sendScroll = n => {
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ scroll: n }));
