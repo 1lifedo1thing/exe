@@ -10,5 +10,5 @@ docs/release.md, "The notes", says how it is written.
 - **Node Sync…** in the Special menu is the old **Join…**: it pairs this exe with another.
 - **Mac OS X** in the Special menu: a Power Mac G4 running Mac OS X 10.4 Tiger, beside Mac OS 9.
 - **Search**, beside **New** in the Claude Code window, finds any conversation, archived ones too.
-- On a Mac, restarting exe shuts the VMs down first. It used to cut their power.
+- Right-click the empty part of a Workspace window for **View**: **as Icons** or **as List**, kept per folder.
 - Right-click a window's title bar for **Save a Screenshot**: a PNG of it lands in Workspace/Screenshots.

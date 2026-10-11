@@ -677,6 +677,49 @@ restyling: `internal/server/ui/index.html` (the desktop),
   `.window`, so the window lists, Show All Windows and the saved layout
   never see it. `~/tools/playwright/exe-claude-search-test.js` walks it.
 
+## The Workspace as a list
+
+- A Workspace window is icons or a list (`renderFinder`): **View** in the
+  white-area menu, the check mark on the view in force, as the Finder's
+  own contextual menu has it. The list was sampled from the Finder of the
+  QEMU Mac OS 9 and agrees with the HIG's fig. 2-43.
+- The header is a row of cells 19px high, between the status line's rule
+  and a rule of its own. A cell is outlined left and right, so there are
+  two black pixels between two cells and beside the frame. This is the
+  one exception to "one seam, one line", and it is the Finder's. A cell's
+  face is `#ddd` under a white top and left and an `#aaa` right and
+  bottom. The column the list is sorted by wears `#666` under `#555` and
+  `#777`, its label still black, and is `#ddd` down the list where the
+  others are `#eee`. The header ends in a blank cell over the scroll bar,
+  one black line between them.
+- A row is 18px and a white line. Its icon is the 32px art at 16, 22px
+  into the Name column (the Finder keeps the 15px before it for a
+  folder's triangle, which is not built); its name starts a pixel past
+  the icon; a column's text is 6px in and its header's 8px. Size is set
+  right. Dates read "Today, 3:03 AM", "Yesterday, 11:40 PM", "Sun, Jun 1,
+  2003, 12:02 PM"; a folder's size is a dash and an empty file's "zero K".
+- An item is its icon and its name. The rest of its row is the window's
+  ground: a click there lets the selection go and a right-click gives the
+  window's menu, so a full list can still be asked for its view.
+- Name takes the room the other columns leave, down to 180px (the
+  Finder's is a fixed 214px, and a column cannot be dragged wider here).
+  The other three are as wide as the widest thing each can say in the
+  desk's type, measured once (`flCols`), so no column moves with what a
+  folder holds. A window too narrow scrolls sideways, header and all.
+- The box that holds the icons keeps its size as a list: the header sits
+  in it and the scrolling moves to `.fl-body`, so switching views never
+  resizes the window, and the saved layout's height means the same thing
+  in both.
+- A click on a header sorts by it, in the Finder's first order: newest
+  first, largest first with folders last, kinds from A. There is no
+  sort-order button and no pressed state.
+- A folder's view and sort are its own, kept by path in the System app
+  data's `views.json` and applied before the folder's first drawing
+  (`viewsReady`), so a list never opens as icons and turns over. Only
+  what differs from icons, by name, is written.
+  `~/tools/playwright/exe-finder-views-test.js` holds all of this, on a
+  scratch daemon.
+
 ## Icons
 
 - The palette standard is in index.html above `MINI_CHAT_ICON`: grays `#000

@@ -2663,6 +2663,24 @@ A line of your desktop menu can open the Workspace or one of its folders;
 see
 [Desktop context menu](https://exe.v2core.com/docs/using/desktop-context-menu).
 
+### See a folder as icons or as a list
+
+A folder of many files reads better as a list: an item to a line, with
+the date it was modified, its size and its kind. Right-click a window's
+empty space and choose **View → as List**. **View → as Icons** goes back,
+and the check mark is on the view you are in.
+
+<img src="https://hub.v2core.com/v1/embed/bafkreihgugqlaxg2yrjbi6p5wmb2frl7qh4hiv57qf5au7wic42hlm4ziy" alt="A Workspace window as a list: nine items with their dates, sizes and kinds, sorted by name" width="562" height="266">
+
+- Click **Date Modified**, **Size** or **Kind** at the top of the list to
+  sort by it: newest first, largest first, kinds from A. **Name** sorts by
+  name again.
+- In a list an item is its icon and its name: click, double-click and
+  right-click those. The rest of its line is the window's, so a
+  right-click there gives the window's menu.
+- Each folder remembers its own view and sort, on every desktop of this
+  exe and on every node it is synced with.
+
 ### What a double-click opens
 
 | The item | What opens |
@@ -2693,7 +2711,8 @@ jumps to the first name starting with "a", and letters typed quickly
 spell more of it (`ar` reaches a folder named Artifacts).
 
 The arrow keys move the selection an icon left or right, or a row up or
-down. The same keys work in My Apps and the Icon Editor gallery.
+down; in a list, a line up or down. The same keys work in My Apps and the
+Icon Editor gallery.
 
 ### Right-click a file or a folder
 
@@ -2713,8 +2732,8 @@ desktop's **Trash** window does not list it. To restore it, move it out
 of that folder.
 
 Right-click a window's empty space for **New Folder…**,
-**New Text File…** and **Upload…**. A new name cannot begin with a dot or
-hold a slash.
+**New Text File…**, **Upload…** and **View**. A new name cannot begin with
+a dot or hold a slash.
 
 ### Bring files in, take files out
 

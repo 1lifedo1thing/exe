@@ -505,6 +505,53 @@ body.mobile #cstrip { z-index: 5; }
    icons fill; a whisper of rounding, the way home screens treat them */
 .fitem img.ma-icon { width: 32px; height: 32px; border-radius: 6px; }
 .fitem.sel .lbl, .fitem.drop .lbl { background: var(--hl); color: #fff; }
+/* The same window as a list (View → as List), sampled from the Finder of
+   a real Mac OS 9 (the QEMU guest) and the HIG's fig. 2-43. The header is
+   a row of cells 19px high between the status line's rule and a rule of
+   its own. A cell is outlined left and right, so two black pixels stand
+   between two cells, and the first cell's stands beside the frame's: the
+   one place two lines meet on purpose. Its face is #ddd under a white top
+   and left and an #aaa right and bottom; the column the list is sorted by
+   wears #666 under #555 and #777, and is #ddd down the list where the
+   others are #eee. A row is 18px and a white line, its 16px icon 22px in
+   (the Finder keeps the 15px before it for a folder's triangle) and its
+   text 6px into a column. The header stays put while the list scrolls
+   under it, runs sideways with it (flFrame), and ends in a blank cell over
+   the scroll bar. The box keeps its size and the window's: the scrolling
+   moves to .fl-body inside it. Name takes the room the other three leave
+   (the Finder's is a fixed 214px, and a column cannot be dragged wider
+   here); theirs are set once from the widest thing each can say (flCols). */
+.finder-icons.as-list { display: flex; flex-direction: column; flex-wrap: nowrap; padding: 0;
+  overflow: hidden; background: #eee; }
+.fl-head { flex: none; display: flex; height: 20px; border-bottom: 1px solid var(--black); }
+.fl-hscroll { flex: 1; min-width: 0; overflow: hidden; }
+.fl-hrow, .fl-rows, .fl-bands { min-width: calc(180px + var(--fl-date) + var(--fl-size) + var(--fl-kind)); }
+.fl-hrow, .fl-bands, .fitem.frow { display: flex; }
+.fl-name { flex: 1 0 180px; min-width: 0; }
+.fl-date { flex: none; width: var(--fl-date); }
+.fl-size { flex: none; width: var(--fl-size); text-align: right; }
+.fl-kind { flex: none; width: var(--fl-kind); }
+.fl-h { display: flex; border-left: 1px solid var(--black); border-right: 1px solid var(--black); }
+.fl-h:last-child { border-right: 0; }
+.fl-hb { flex: 1; min-width: 0; padding: 0 4px 0 6px; line-height: 17px;
+  white-space: nowrap; overflow: hidden; background: #ddd;
+  border: 1px solid; border-color: #fff #aaa #aaa #fff; }
+.fl-h.fl-name .fl-hb { padding-left: 42px; }
+.fl-h.sorted .fl-hb { background: #666; border-color: #555 #777 #777 #555; }
+.fl-corner { flex: none; display: flex; border-left: 1px solid var(--black); }
+.fl-corner .fl-hb { padding: 0; }
+.fl-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.fl-rows { position: relative; flex: 1 0 auto; }
+.fl-bands { position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; }
+.fl-bands .sorted { background: #ddd; }
+.fitem.frow { position: relative; width: auto; height: 19px;
+  flex-direction: row; align-items: stretch; gap: 0; border-bottom: 1px solid #fff; }
+.fc { padding: 0 5px 0 6px; line-height: 18px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc.fl-name { display: flex; padding-left: 22px; }
+.fl-it { display: flex; align-items: center; min-width: 0; }
+.fl-it svg { flex: none; display: block; }
+.frow .lbl { max-width: none; min-width: 0; margin-left: 1px; line-height: 14px; }
 /* drag-and-drop upload targets */
 .finder-window.drop .finder-icons { box-shadow: inset 0 0 0 2px var(--hl); }
 #desktop.drop { box-shadow: inset 0 0 0 3px var(--hl); }
@@ -5412,15 +5459,25 @@ const DISC_EXT = new Set("toast iso".split(" "));
 const SIT_EXT = new Set("sit sitx sea cpt hqx".split(" "));
 const extIn = (name, set) => { const dot = name.lastIndexOf("."); return dot > 0 && set.has(name.slice(dot + 1).toLowerCase()); };
 const isPlainTextFile = name => name.toLowerCase().endsWith(".txt");
-const fileIcon = en => en.dir ? FOLDER_ICON
-  : isImageFile(en.name) ? IMAGE_ICON
-  : isPageFile(en.name) ? PAGE_ICON
-  : isMovieFile(en.name) || isSoundFile(en.name) ? MOVIE_ICON
-  : isArchiveFile(en.name) ? ARCHIVE_ICON
-  : extIn(en.name, DISC_EXT) ? DISC_ICON
-  : extIn(en.name, SIT_EXT) ? SIT_ICON
-  : en.name.toLowerCase().endsWith(".sha256") ? HASH_ICON
-  : isPlainTextFile(en.name) ? TEXT_ICON : DOC_ICON;
+const fileType = en => en.dir ? "folder"
+  : isImageFile(en.name) ? "image"
+  : isPageFile(en.name) ? "page"
+  : isMovieFile(en.name) ? "movie"
+  : isSoundFile(en.name) ? "sound"
+  : isArchiveFile(en.name) ? "archive"
+  : extIn(en.name, DISC_EXT) ? "disc"
+  : extIn(en.name, SIT_EXT) ? "sit"
+  : en.name.toLowerCase().endsWith(".sha256") ? "hash"
+  : isPlainTextFile(en.name) ? "text" : "doc";
+// read at every draw, never kept: the Icon Editor repaints these variables
+const fileIcon = en => ({ folder: FOLDER_ICON, image: IMAGE_ICON, page: PAGE_ICON, movie: MOVIE_ICON,
+  sound: MOVIE_ICON, archive: ARCHIVE_ICON, disc: DISC_ICON, sit: SIT_ICON, hash: HASH_ICON,
+  text: TEXT_ICON, doc: DOC_ICON })[fileType(en)];
+// what Get Info and a list's Kind column call each, in the Finder's lower case
+const FILE_KINDS = { folder: "folder", image: "picture", page: "web page", movie: "movie", sound: "sound",
+  archive: "archive", disc: "CD image", sit: "OS 9 archive", hash: "SHA256 hash", text: "text document",
+  doc: "document" };
+const fileKind = en => FILE_KINDS[fileType(en)];
 // host Terminal: the compact Mac with a dark screen showing a green prompt
 let TERMINAL_ICON = `<svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
   <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
@@ -5789,18 +5846,27 @@ function openFinderWin(path, fromWin) {
     w.querySelector(".title").textContent = path ? path.split("/").pop() : "Workspace";
     w.dataset.path = path;
     const box = w.querySelector(".finder-icons");
+    // an item stops its own click, so one that reaches the box was on
+    // bare ground and lets the selection go; the list's header is not ground
     box.addEventListener("click", e => {
-      if (e.target === box) box.querySelectorAll(".fitem").forEach(d => d.classList.remove("sel"));
+      if (!e.target.closest(".fl-head")) box.querySelectorAll(".fitem").forEach(d => d.classList.remove("sel"));
     });
     // white-area menu: icons run their own contextmenu handler and stop
-    // propagation, so anything that reaches the box is empty space
+    // propagation, so anything that reaches the box is empty space. View
+    // is the Finder's own submenu, the check on the view in force
     box.addEventListener("contextmenu", e => {
       e.preventDefault();
+      const list = finderView(w.dataset.path).view === "list";
       showCtxMenu(e.clientX, e.clientY, [
         { label: "New Folder…", act: () => nfOpen(w, true) },
         { label: "New Text File…", act: () => nfOpen(w, false) },
         "-",
         { label: "Upload…", act: () => nfPickUpload(w.dataset.path) },
+        "-",
+        { label: "View", items: [
+          { label: "as Icons", chk: !list, act: () => setFinderView(w, { view: "icons" }) },
+          { label: "as List", chk: list, act: () => setFinderView(w, { view: "list" }) },
+        ] },
       ]);
     });
     wireGrow(w.querySelector(".grow-box"), w, box, 320);
@@ -5814,25 +5880,53 @@ function openFinderWin(path, fromWin) {
 async function loadFinder(w) {
   const path = w.dataset.path, items = w.querySelector(".ws-items");
   let data;
-  try { data = await j("/v1/workspace?dir=" + encodeURIComponent(path)); }
+  // the folder's view is in hand before its first drawing, so a list never
+  // opens as icons and turns over
+  try { [data] = await Promise.all([j("/v1/workspace?dir=" + encodeURIComponent(path)), viewsReady]); }
   catch (e) { items.textContent = e.message; return; }
   const n = data.entries.length;
   items.textContent = `${n} item${n === 1 ? "" : "s"}, ${fmtBytes(data.free)} available`;
   w._entries = data.entries; // Duplicate consults this for copy-name collisions
-  const box = w.querySelector(".finder-icons");
+  renderFinder(w);
+}
+// draws what loadFinder fetched, as icons or as a list: the same items with
+// the same clicks and menus either way, and whichever was selected still is.
+// In a list an item is its icon and its name, as in the Finder: the rest of
+// its row is the window's, so a full list still has ground to click on and
+// to ask the window's menu from
+function renderFinder(w) {
+  if (!w._entries) return; // not fetched yet; loadFinder draws when it has
+  const path = w.dataset.path, box = w.querySelector(".finder-icons");
+  const v = finderView(path), list = v.view === "list";
+  const was = box.querySelector(".fitem.sel .lbl")?.textContent;
+  box.classList.toggle("as-list", list);
   box.replaceChildren();
-  for (const en of data.entries) {
-    const it = el("div", { class: "fitem", title: en.name });
-    it.innerHTML = fileIcon(en);
-    it.append(el("span", { class: "lbl" }, en.name));
+  const entries = list ? [...w._entries].sort(FL_SORT[v.sort]) : w._entries;
+  const into = list ? flFrame(w, box, v.sort) : box;
+  for (const en of entries) {
+    const it = el("div", { class: list ? "fitem frow" : "fitem", title: en.name });
+    let hit = it;
+    if (list) {
+      hit = el("div", { class: "fl-it" });
+      hit.innerHTML = sizeSvg(fileIcon(en), 16);
+      hit.append(el("span", { class: "lbl" }, en.name));
+      it.append(el("div", { class: "fc fl-name" }, hit),
+        el("div", { class: "fc fl-date" }, flDate(en.modified)),
+        el("div", { class: "fc fl-size" }, flSize(en)),
+        el("div", { class: "fc fl-kind" }, fileKind(en)));
+    } else {
+      it.innerHTML = fileIcon(en);
+      it.append(el("span", { class: "lbl" }, en.name));
+    }
+    if (en.name === was) it.classList.add("sel");
     if (en.dir) it.dataset.dropDir = path ? path + "/" + en.name : en.name;
     const select = () => {
       box.querySelectorAll(".fitem").forEach(d => d.classList.remove("sel"));
       it.classList.add("sel");
     };
-    it.addEventListener("click", e => { e.stopPropagation(); select(); });
-    tapOpen(it, () => openEntry(en, path ? path + "/" + en.name : en.name, w));
-    it.addEventListener("contextmenu", e => {
+    hit.addEventListener("click", e => { e.stopPropagation(); select(); });
+    tapOpen(hit, () => openEntry(en, path ? path + "/" + en.name : en.name, w));
+    hit.addEventListener("contextmenu", e => {
       e.preventDefault(); e.stopPropagation();
       select();
       const rel = path ? path + "/" + en.name : en.name;
@@ -5847,8 +5941,121 @@ async function loadFinder(w) {
         { label: "Download", act: () => wsDownload(en, rel), dis: !!en.dir },
       ]);
     });
-    box.append(it);
+    into.append(it);
   }
+}
+
+// ---- Workspace views: as Icons, as List ----
+// A folder remembers how it was last looked at, as in the OS 9 Finder: as
+// icons or as a list, and the column its list is sorted by. The record is
+// the System app data's views.json ({views: {path: {view, sort}}}), so the
+// folder opens the same way on every desk of this node and on every joined
+// one, whose Workspace is the same tree. Only what differs from icons, by
+// name, is written; a folder back at both leaves the file.
+const FL_COLS = [["name", "Name"], ["date", "Date Modified"], ["size", "Size"], ["kind", "Kind"]];
+// by name is the daemon's own order; the others as the Finder first sorts
+// them: newest first, largest first (a folder, which has no size, last),
+// kinds from A, and the names in order within a tie
+const FL_SORT = {
+  name: () => 0,
+  date: (a, b) => new Date(b.modified) - new Date(a.modified),
+  size: (a, b) => (!!a.dir - !!b.dir) || ((b.size || 0) - (a.size || 0)), // the listing leaves out a false and a zero
+  kind: (a, b) => fileKind(a).localeCompare(fileKind(b)),
+};
+let finderViews = {}, viewsLoaded = false, viewsSeq = 0, viewsReady = null;
+function finderView(path) {
+  const v = finderViews[path] || {};
+  return { view: v.view === "list" ? "list" : "icons", sort: FL_SORT[v.sort] ? v.sort : "name" };
+}
+async function loadViews() {
+  let d = null;
+  // no file yet is an empty record; any other failure leaves the record
+  // unread, and setFinderView then keeps its choices to this window rather
+  // than write a file that would drop every other folder's
+  try { d = await j("/v1/apps/System/data/views.json"); }
+  catch (e) { if (e.message !== "not found") throw e; }
+  finderViews = (d && d.views) || {};
+  viewsLoaded = true;
+}
+function setFinderView(w, change) {
+  const path = w.dataset.path, v = { ...finderView(path), ...change };
+  const keep = {};
+  if (v.view === "list") keep.view = "list";
+  if (v.sort !== "name") keep.sort = v.sort;
+  if (Object.keys(keep).length) finderViews[path] = keep; else delete finderViews[path];
+  renderFinder(w);
+  if (!viewsLoaded) return;
+  j("/v1/apps/System/data/views.json", {
+    method: "PUT", json: { views: finderViews },
+    headers: { "X-Exe-Seq": String(viewsSeq = Math.max(Date.now(), viewsSeq + 1)) },
+  }).catch(e => toast(e.message));
+}
+// another desk or a joined node changed a folder's view: the open windows
+// whose folder it was follow
+async function viewsChanged(client) {
+  if (client && client === WIN_CLIENT) return;
+  const before = finderViews;
+  try { await loadViews(); } catch (e) { return; }
+  document.querySelectorAll(".finder-window[data-path]").forEach(w => {
+    const p = w.dataset.path;
+    if (JSON.stringify(before[p] || {}) !== JSON.stringify(finderViews[p] || {})) renderFinder(w);
+  });
+}
+// "Today, 3:03 AM", "Yesterday, 11:40 PM", "Sun, Jun 1, 2003, 12:02 PM"
+function flDate(t) {
+  const d = new Date(t), now = new Date();
+  const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const ago = Math.round((day(now) - day(d)) / 864e5);
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return (ago === 0 ? "Today" : ago === 1 ? "Yesterday"
+    : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })) + ", " + time;
+}
+const flSize = en => en.dir ? "—" : en.size ? fmtBytes(en.size) : "zero K";
+// the three columns beside Name are as wide as the widest thing each can
+// say in the desk's type, which differs by machine (Charcoal on a Mac,
+// Verdana on Windows), and no narrower than the Finder's Size: measured
+// once, so a column never moves with what a folder happens to hold
+let flColW = null;
+function flCols() {
+  if (flColW) return flColW;
+  const cs = getComputedStyle(document.body), ctx = document.createElement("canvas").getContext("2d");
+  ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const wide = (...texts) => Math.ceil(Math.max(...texts.map(t => ctx.measureText(t).width))) + 12;
+  // and the scroll bar's own width, read off a box that is not in a window:
+  // a closed or shaded one measures nothing. None where bars overlay the
+  // page (a phone)
+  const probe = el("div", { class: "doc-scroll", style: "position:absolute;visibility:hidden;width:60px;height:60px" });
+  document.body.append(probe);
+  const bar = probe.offsetWidth - probe.clientWidth;
+  probe.remove();
+  return flColW = {
+    date: wide("Date Modified", "Wed, Sep 30, 2000, 10:00 PM"),
+    size: Math.max(66, wide("Size", "1000.0 MB")),
+    kind: wide("Kind", ...Object.values(FILE_KINDS)),
+    bar,
+  };
+}
+// the list's frame inside the box: the header, then the body that scrolls,
+// its column shading under the rows; returns where the rows go
+function flFrame(w, box, sort) {
+  const cols = flCols();
+  for (const k of ["date", "size", "kind"]) box.style.setProperty("--fl-" + k, cols[k] + "px");
+  const hrow = el("div", { class: "fl-hrow" }), bands = el("div", { class: "fl-bands" });
+  for (const [key, label] of FL_COLS) {
+    const h = el("div", { class: "fl-h fl-" + key + (key === sort ? " sorted" : "") }, el("div", { class: "fl-hb" }, label));
+    h.addEventListener("click", () => { if (key !== finderView(w.dataset.path).sort) setFinderView(w, { sort: key }); });
+    hrow.append(h);
+    bands.append(el("div", { class: "fl-" + key + (key === sort ? " sorted" : "") }));
+  }
+  const hscroll = el("div", { class: "fl-hscroll" }, hrow);
+  const corner = el("div", { class: "fl-corner" }, el("div", { class: "fl-hb" }));
+  const rows = el("div", { class: "fl-rows" }, bands), body = el("div", { class: "fl-body doc-scroll" }, rows);
+  box.append(el("div", { class: "fl-head" }, hscroll, corner), body);
+  // the blank cell is as wide as the scroll bar under it
+  corner.style.width = cols.bar + "px";
+  corner.hidden = !cols.bar;
+  body.addEventListener("scroll", () => { hscroll.scrollLeft = body.scrollLeft; });
+  return rows;
 }
 function openEntry(en, rel, w) {
   if (en.dir) openFinderWin(rel, w);
@@ -5878,9 +6085,11 @@ function fiPick(box, hit) {
   box.querySelectorAll(".fitem").forEach(it => it.classList.toggle("sel", it === hit));
   // scroll the box alone: scrollIntoView would also shift the desktop under
   // a window hanging off its edge
-  const top = hit.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientTop;
-  if (top < 0) box.scrollTop += top - 10;
-  else if (top + hit.offsetHeight > box.clientHeight) box.scrollTop += top + hit.offsetHeight - box.clientHeight;
+  // as a list the items scroll in a box of their own, under the header
+  const sc = hit.closest(".doc-scroll") || box;
+  const top = hit.getBoundingClientRect().top - sc.getBoundingClientRect().top - sc.clientTop;
+  if (top < 0) sc.scrollTop += top - 10;
+  else if (top + hit.offsetHeight > sc.clientHeight) sc.scrollTop += top + hit.offsetHeight - sc.clientHeight;
 }
 // the icons wrap in rows of equal width, so a row is `cols` items long;
 // down from beyond the short last row lands on its last icon
@@ -6656,11 +6865,13 @@ document.addEventListener("mousemove", e => {
 });
 // Items: { label, act, dis } is a command, { label, items } a submenu, "-"
 // (or { sep: true }) a separator; `info` with `dis` is a line to read, inert
-// but in the normal text colour; an item's `icon` (16px SVG or <img>
-// markup) draws at its left, and a panel with any icon lays every row out
-// with the icon column. Submenus open on hover (a click opens them too,
-// for touch) to the right of the parent, overlapping it by 3px with the
-// first item level with the parent item, or to the left when there's no room.
+// but in the normal text colour; `chk` sets the check mark before the one
+// of several that is in force (the Finder's View menu); an item's `icon`
+// (16px SVG or <img> markup) draws at its left, and a panel with any icon
+// lays every row out with the icon column. Submenus open on hover (a click
+// opens them too, for touch) to the right of the parent, overlapping it by
+// 3px with the first item level with the parent item, or to the left when
+// there's no room.
 // the dot a module menu puts before its current choice (OS 9's, 5px)
 const DD_MARK = `<svg width="6" height="6" viewBox="0 0 6 6" shape-rendering="crispEdges"><path d="M1 0h4v1H1zM0 1h6v4H0zM1 5h4v1H1z"/></svg>`;
 function ctxFill(panel, items, depth) {
@@ -6669,8 +6880,9 @@ function ctxFill(panel, items, depth) {
   for (const it of items) {
     if (it === "-" || it.sep) { panel.append(el("div", { class: "dd-sep" })); continue; }
     const sub = !it.dis && Array.isArray(it.items);
-    const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") + (it.info ? " info" : "") + (Array.isArray(it.items) ? " sub" : "") + (it.mark ? " mark" : "") });
+    const d = el("div", { class: "dd-item" + (it.dis ? " dis" : "") + (it.info ? " info" : "") + (Array.isArray(it.items) ? " sub" : "") + (it.mark ? " mark" : "") + (it.chk ? " chk" : "") });
     if (it.mark) { const m = el("span", { class: "dd-mark" }); m.innerHTML = DD_MARK; d.append(m); }
+    if (it.chk) { const c = el("span", { class: "dd-chk" }); c.innerHTML = CHECK_MARK; d.append(c); }
     if (it.title) d.title = it.title; // a plain-words tooltip for a setting whose name alone does not say what it does
     if (it.icon) { const i = el("span", { class: "dd-ico" }); i.innerHTML = it.icon; d.append(i); }
     d.append(it.label);
@@ -6817,7 +7029,7 @@ function showGetInfo(en, rel) {
   $("#win-getinfo .title").textContent = en.name + " Info";
   $("#gi-icon").innerHTML = fileIcon(en);
   $("#gi-name").textContent = en.name;
-  $("#gi-kind").textContent = en.dir ? "folder" : "document";
+  $("#gi-kind").textContent = fileKind(en);
   $("#gi-size").textContent = en.dir ? "—" : `${fmtBytes(en.size || 0)} (${(en.size || 0).toLocaleString()} bytes)`;
   const dir = rel.split("/").slice(0, -1).join("/");
   $("#gi-where").textContent = "Workspace" + (dir ? " :" + dir.split("/").join(" :") : "");
@@ -12227,6 +12439,7 @@ function appDataSubscribe() {
     if (ev.app === "System") {
       if (ev.path === "icons.json") iconsChanged(ev.client || "");
       else if (ev.path === "menu.txt") menuChanged(ev.client || "");
+      else if (ev.path === "views.json") viewsChanged(ev.client || "");
       return;
     }
     // Forward even to a closed window: closeWin only hides the iframe, which
@@ -12303,6 +12516,7 @@ function workspaceChanged(path, deleted, client) {
 
 // ---- boot ----
 if (IS_MOBILE) $("#vm-hint").textContent = "tap a VM to open it";
+viewsReady = loadViews().catch(() => {}); // before the restore: a Workspace window it opens waits for this
 winRestore();
 appDataSubscribe();
 renderVMHead();
