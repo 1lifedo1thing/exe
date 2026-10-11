@@ -2915,6 +2915,10 @@ function initWindow(w) {
   if (zb) zb.addEventListener("click", e => {
     e.stopPropagation();
     if (w._macDisplay) { fitMacOS9Window(w); focusWin(w); return; }
+    // a window of one size (Welcome, Extras) has no second size to switch
+    // to: its zoom box puts it back at the size it opens at. Stretched the
+    // way the windows below are, it had no grow box to be dragged back by
+    if (w._std) { w._std(); winClampPos(w); focusWin(w); return; }
     if (w._zoom) {
       Object.assign(w.style, w._zoom);
       w._zoom = null;
@@ -3156,7 +3160,7 @@ const termGeom = {}; // "win-term-N" → { l, t, w, h, … }
 const isTermSessWin = id => /^win-term-\d+$/.test(id);
 
 // a window the user can resize: a grow corner, edge grips, or both
-const winResizable = w => w.classList.contains("grow") || w.classList.contains("edge-grow") || !!w._edge;
+const winResizable = w => !w._std && (w.classList.contains("grow") || w.classList.contains("edge-grow") || !!w._edge);
 // winClampPos keeps a window's title bar reachable at the width it has
 // now — at least 60px of it inside the viewport on either side, its top
 // on screen — the bounds a title-bar drag keeps. It goes after any width
@@ -3284,7 +3288,9 @@ function applyWinState(st) {
       // pin a resizable window below the width its own drags enforce. A
       // fixed-size window (About, Get Info, the dialogs) always takes the
       // width its markup declares: a saved width would pin it to whatever
-      // an older build's markup said, and nothing could ever resize it back
+      // an older build's markup said, and nothing could ever resize it back.
+      // An app's window of one size (w._std) likewise keeps the size its
+      // app.json names, width and height
       if (v.w && winResizable(w)) w.style.width = Math.max(w._edge ? w._edge.minW : 0, Math.min(window.innerWidth - 24, v.w)) + "px";
       // the position is clamped against the width as applied above, not
       // the saved one (winClampPos): a wide desk's window narrowed to this
@@ -3311,7 +3317,7 @@ function applyWinState(st) {
         const g = w.querySelector(".finder-icons, .ed-text, .iv-box, .mv-box");
         if (g) g.style.height = Math.max(96, Math.min(window.innerHeight - 170, v.h)) + "px";
       }
-      if (id.startsWith("win-app-") && v.h) {
+      if (id.startsWith("win-app-") && v.h && !w._std) {
         const fr = w.querySelector(".app-frame");
         if (fr) fr.style.height = Math.max(120, Math.min(window.innerHeight - 120, v.h)) + "px";
       }
@@ -4952,6 +4958,10 @@ async function loadApps() {
     // resized (restored from the layout snapshot as an inline style)
     const fr = w.querySelector(".app-frame");
     if (a.window && a.window.height && !fr.style.height) fr.style.height = a.window.height + "px";
+    // a window of one size was given the layout's width and height while
+    // nothing said it had one: it takes its own now
+    w._std = appOneSize(a) ? () => appWinSize(w, a) : null;
+    if (w._std) w._std();
     // a window restored before the list came loaded the code it names
     if (fr._ver === undefined && a.version) fr._ver = a.version;
   }
@@ -4967,6 +4977,20 @@ function appFrameSrc(name, args) {
   for (const [k, v] of Object.entries(args || {})) if (typeof v === "string") q.set(k, v);
   const qs = q.toString(); // not .size: iOS 16 Safari lacks it
   return "/apps/" + encodeURIComponent(name) + "/" + (qs ? "?" + qs : "");
+}
+// An app whose window has one size: no "grow" in its app.json, so it
+// draws no grow box (Welcome, Extras). Such a window is always the size
+// its app.json names — a size in the saved layout is not applied to it
+// (winResizable), and its zoom box puts it back (w._std, the window's
+// standard state). An app not listed yet (a window the layout opened
+// before the list came) is not known to be one, and the emulated Mac is
+// not: its window is fitted to the guest's display (fitMacOS9Window).
+const appOneSize = a => !!a.name && a.name !== "macos9" && !(a.window && a.window.grow);
+// the size an app's window opens at: its app.json's, inside this viewport
+function appWinSize(w, app) {
+  w.style.width = Math.min((app.window && app.window.width) || 420, Math.max(240, window.innerWidth - 160)) + "px";
+  const fr = w.querySelector(".app-frame");
+  if (app.window && app.window.height) fr.style.height = Math.min(app.window.height, Math.max(120, window.innerHeight - 150)) + "px";
 }
 // openAppWin opens or raises an app's window. args (the Writer's path)
 // ride the frame's query when the window is made and reach an open
@@ -4986,7 +5010,6 @@ function openAppWin(name, args) {
     const n = document.querySelectorAll("#desktop .app-window").length;
     w.style.left = (120 + n * 24) + "px";
     w.style.top = (70 + n * 20) + "px";
-    w.style.width = Math.min((app.window && app.window.width) || 420, Math.max(240, window.innerWidth - 160)) + "px";
     w.innerHTML = `<div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
       <div class="title"></div>
       <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
@@ -4994,7 +5017,8 @@ function openAppWin(name, args) {
     w.querySelector(".title").textContent = app.title || name;
     if (app.window && app.window.grow) w.classList.add("grow");
     const fr = w.querySelector(".app-frame");
-    if (app.window && app.window.height) fr.style.height = Math.min(app.window.height, Math.max(120, window.innerHeight - 150)) + "px";
+    appWinSize(w, app);
+    if (appOneSize(app)) w._std = () => appWinSize(w, app);
     fr._args = args;
     fr._ver = appVer(name); // the code this window runs (appStaleCheck)
     fr.src = appFrameSrc(name, args);
@@ -6855,6 +6879,7 @@ function openMovieWin(path, fromWin, name) {
       w.style.top = (100 + n * 22) + "px";
     }
     w.style.width = sound ? "300px" : "480px";
+    if (sound) w._std = () => { w.style.width = "300px"; }; // one size: the zoom box keeps it
     w.innerHTML = `<div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
       <div class="title"></div>
       <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>

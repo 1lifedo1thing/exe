@@ -129,7 +129,7 @@ the right end.
 | Move a window | Drag its title bar. |
 | Resize it | Drag its left, right or bottom edge, or the grow box in its bottom-right corner. Not every window can be resized. |
 | Collapse it to its title bar | Click the shade box, or double-click the title bar. The same again brings it back. |
-| Switch between two sizes | Click the zoom box. |
+| Switch between two sizes | Click the zoom box. A window of one size, such as Welcome, goes back to that size. |
 | Close it | Click the close box. **File → Close Window** closes the window in front. |
 | Bring it to the front | Click it, or choose its name in the Apple menu. |
 

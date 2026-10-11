@@ -218,7 +218,12 @@ restyling: `internal/server/ui/index.html` (the desktop),
   until 2026-09-26, `exe-app-grow-source-test.js`). A fixed-size window needs no grow box: if the window cannot be resized
   (a dialog, an About box, a guest display shown at whole-number scales
   like the Mac OS 9 app) it has no tile, and an app says `"grow": false`
-  in app.json so the desktop adds no edge grips either. On a phone every
+  in app.json so the desktop adds no edge grips either. Such a window has
+  one size, the one its app.json names: the desktop applies no size the
+  saved layout holds for it, and its zoom box, which switches a resizable
+  window between two sizes, puts it back at that one (Welcome was once
+  stretched to 1100px by its zoom box, saved so, and had no grow box to be
+  dragged back by; `exe-zoom-onesize-test.js`). On a phone every
   app hides its grow box; the window fills the screen there.
 - Tab control (`.tabbar` of `.tab`s over a `.tabpanel`, as Configuration,
   the VM window and the Log Viewer draw it): the active tab runs 3px down
