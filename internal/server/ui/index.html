@@ -206,10 +206,11 @@ body.mobile #clock { padding: 0 10px; }
 /* platinum query bar over a fixed-height white result list — fixed so the
    window doesn't change height on every keystroke as matches come and go */
 #win-search .win-body { padding: 0; }
-#search-bar { padding: 8px; background: var(--g300);
+/* the manual wears the same bar over its paper (#docs-find) */
+#search-bar, #docs-find { padding: 8px; background: var(--g300);
   border-bottom: 1px solid var(--black); /* single seam over the list — rows draw no top line */
   box-shadow: inset 0 1px 0 rgba(255,255,255,.6); }
-#search-bar input { width: 100%; }
+#search-bar input, #docs-find input { width: 100%; }
 #search-results { height: 320px; overflow-y: auto; background: #fff; }
 .sr-item { display: flex; align-items: center; gap: 7px; padding: 4px 8px;
   border-bottom: 1px solid #efefef; cursor: pointer; }
@@ -1015,6 +1016,22 @@ pre.out { background: #10120f; color: #cfe3cf; border: 1px solid var(--black); p
    window has the room for them and one where it has not (a phone) */
 #docs-md ol.docs-toc { margin: 6px 0 4px; padding: 0 0 0 26px; columns: 2 200px; column-gap: 32px; }
 #docs-md ol.docs-toc li { margin: 0; padding: 2px 0; break-inside: avoid; }
+/* The manual's search bar, over the paper: the Search window's query bar
+   (#search-bar, whose rule this shares), there from the first paint. Words
+   in its field narrow the contents page to the chapters that hold them
+   all: the same numbered list in one column, each chapter under its own
+   number, with the count of its found words in small grey beside its name
+   and up to three paragraphs that hold them as a line each — a heading's
+   in bold — and every found word on yellow, as the Hub marks what Find
+   found. A line is a link in the text's own colour: the chapter's name is
+   the one blue line of its entry. */
+#docs-find { flex: none; }
+#docs-md mark { background: #ffff66; color: inherit; }
+#docs-md ol.docs-found { margin: 6px 0 4px; padding: 0 0 0 26px; }
+#docs-md ol.docs-found li { margin: 0; padding: 2px 0 6px; }
+#docs-md .docs-n { margin-left: 8px; font-size: 11px; color: #777; }
+#docs-md a.docs-place { display: block; margin: 3px 0 0; color: inherit; text-decoration: none; }
+#docs-md a.docs-place.head { font-weight: bold; }
 /* The manual's foot: where a page leads. Buttons get a row of their own,
    20px high, 12px apart and from the edges: Contents at the left, Previous
    and Next at the right, one width for the pair. Its top line is its one
@@ -1984,6 +2001,9 @@ body.mobile th.sorted {
       <div class="title">exe Documentation</div>
       <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
     <div class="win-frame paper">
+      <div id="docs-find">
+        <input type="text" id="docs-q" placeholder="Search the manual" autocomplete="off" spellcheck="false" disabled>
+      </div>
       <div class="win-body" style="padding:0">
         <div id="docs-body" class="vflush">
           <div id="docs-md" class="msg asst" style="margin:0; padding:12px 16px"><span class="muted">Loading…</span></div>
@@ -3730,6 +3750,10 @@ function openUpdateWin() {
 // with the chat's markdown pipeline. ----
 let docsLoaded = false, docsIntro = "", docsChapters = [];
 let docsAt = -1; // the chapter on the page; -1 is the contents
+// the words in the search bar's field ({ text, res: a pattern a word }),
+// null while it is empty; and the chapter a search was begun from with how
+// far down it was read, which an emptied field puts back
+let docsQ = null, docsBack = null;
 // a heading's name in an address, as the website writes it (mdSlug)
 const docSlug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 const DOCS_SITE = "https://exe.v2core.com";
@@ -3767,6 +3791,7 @@ async function openDocsWin(where) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       docsSplit(await r.text());
       docsLoaded = true;
+      $("#docs-q").disabled = false; // there is a manual to search
       docsShow(-1);
     } catch (e) {
       $("#docs-md").replaceChildren(el("span", { class: "muted" }, "Could not load the documentation — " + e.message));
@@ -3784,35 +3809,54 @@ async function openDocsWin(where) {
 // measured once, with that page on the paper, and not a figure in the CSS:
 // the page is as long as its words run in the reader's own font at the
 // window's own width. A height the window was dragged to stays over it
-// (#docs-body's CSS), and the limits are the drags' own. A phone's window
-// is the screen.
+// (#docs-body's CSS), and the limits are the drags' own, less the search
+// bar over the paper, so a short screen's window ends where it did before
+// it had one. A phone's window is the screen.
 let docsFitted = false;
 function docsFit() {
-  if (docsFitted || IS_MOBILE || docsAt !== -1 || !docsLoaded) return;
+  if (docsFitted || IS_MOBILE || docsAt !== -1 || docsQ || !docsLoaded) return;
   const w = $("#win-docs"), shaded = w.classList.contains("shaded");
   w.classList.remove("shaded"); // a rolled-up window has no paper to measure
-  const h = $("#docs-md").offsetHeight;
+  const h = $("#docs-md").offsetHeight, bar = $("#docs-find").offsetHeight;
   w.classList.toggle("shaded", shaded);
   if (!h) return; // closed: the next open measures it
-  $("#docs-body").style.setProperty("--docs-h", Math.max(160, Math.min(window.innerHeight - 170, h)) + "px");
+  $("#docs-body").style.setProperty("--docs-h", Math.max(160, Math.min(window.innerHeight - 170 - bar, h)) + "px");
   docsFitted = true;
 }
+// a page's HTML: the contents' opening words (-1) or a chapter under its
+// name. docs.md is hard-wrapped in the source; unlike chat (breaks:true),
+// fold those newlines back into flowing paragraphs
+function docsHTML(i) {
+  const c = docsChapters[i];
+  return DOMPurify.sanitize(marked.parse(c ? "# " + c.title + "\n" + c.body : docsIntro, { breaks: false }));
+}
 // docsShow puts one page on the paper: the contents (-1) or a chapter, from
-// its top or at a heading inside it (section, as an address names it).
-function docsShow(i, section) {
+// its top, at a heading inside it (section, as an address names it) or at
+// the first found word of one of its blocks (place, the block's number as
+// docsBlocks counts). While the search bar holds words the contents are the
+// chapters that hold them (docsFound), and a chapter shows them on yellow.
+function docsShow(i, section, place) {
   const n = docsChapters.length;
   docsAt = i = Math.max(-1, Math.min(n - 1, i));
+  docsBack = null; // a page turned by hand is the page being read
   const box = $("#docs-md"), c = docsChapters[i];
-  // docs.md is hard-wrapped in the source; unlike chat (breaks:true), fold
-  // those newlines back into flowing paragraphs
-  box.innerHTML = DOMPurify.sanitize(marked.parse(c ? "# " + c.title + "\n" + c.body : docsIntro, { breaks: false }));
-  if (!c) {
-    const list = el("ol", { class: "docs-toc" });
-    for (const ch of docsChapters) list.append(el("li", {}, el("a", { href: DOCS_SITE + "/docs/using/" + ch.slug }, ch.title)));
-    box.append(el("h2", {}, "Chapters"), list);
+  let at = null; // where the page opens, when not at its top
+  if (!c && docsQ) docsFound(box);
+  else {
+    box.innerHTML = docsHTML(i);
+    if (!c) {
+      const list = el("ol", { class: "docs-toc" });
+      for (const ch of docsChapters) list.append(el("li", {}, el("a", { href: DOCS_SITE + "/docs/using/" + ch.slug }, ch.title)));
+      box.append(el("h2", {}, "Chapters"), list);
+    }
+    // an address the website would answer and this desktop would not
+    box.querySelectorAll('a[href^="/docs/"]').forEach(a => a.setAttribute("href", DOCS_SITE + a.getAttribute("href")));
+    at = section && [...box.querySelectorAll("h2, h3, h4")].find(h => docSlug(h.textContent) === section);
+    if (docsQ) docsBlocks(box).forEach((b, k) => {
+      const first = docsMark(b.nodes, docsQ.res);
+      if (k === place) at = first || b.el;
+    });
   }
-  // an address the website would answer and this desktop would not
-  box.querySelectorAll('a[href^="/docs/"]').forEach(a => a.setAttribute("href", DOCS_SITE + a.getAttribute("href")));
   const prev = i >= 0 ? (docsChapters[i - 1] || { title: "Contents" }) : null, next = docsChapters[i + 1];
   $("#docs-toc").disabled = i < 0;
   $("#docs-prev").disabled = !prev;
@@ -3820,18 +3864,169 @@ function docsShow(i, section) {
   $("#docs-prev").title = prev ? "Previous: " + prev.title : "";
   $("#docs-next").title = next ? "Next: " + next.title : "";
   const scroller = $("#docs-body");
-  const h = section && [...box.querySelectorAll("h2, h3, h4")].find(h => docSlug(h.textContent) === section);
   scroller.scrollTop = 0;
+  if (!at) return;
   // the pictures keep their rooms from their width and height, so a
-  // heading stays where it was found while they arrive
-  if (h) scroller.scrollTop = h.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 8;
+  // heading stays where it was found while they arrive. A heading opens at
+  // the paper's top; a word found in the text a quarter of the way down,
+  // under some of what leads to it
+  const lead = at.closest("h1, h2, h3, h4, h5, h6") ? 8 : Math.round(scroller.clientHeight / 4);
+  scroller.scrollTop = at.getBoundingClientRect().top - scroller.getBoundingClientRect().top - lead;
 }
+
+// ---- the manual's search bar. What the field holds is cut at its spaces
+// into words; a chapter is found when it holds every one of them, in any
+// case and inside longer words (as the Search window and the Hub's Find
+// match), anywhere in its name or its text. ----
+function docsWords(s) {
+  const words = [...new Set(s.trim().split(/\s+/).filter(Boolean))];
+  if (!words.length) return null;
+  return { text: words.join(" "), res: words.map(w => new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi")) };
+}
+// A page as the search reads it: its blocks — a paragraph, a list item, a
+// heading, a table cell, a listing — each with its text nodes in order and
+// their text run together, so a word is found across whatever bold or link
+// it stands in. A block's place in the list is its number: the same for a
+// chapter read off the paper (docsIndex) and the same chapter on it, which
+// is how a found line is found again.
+const DOCS_BLOCK = "p, li, h1, h2, h3, h4, h5, h6, pre, td, th, blockquote, dt, dd";
+function docsBlocks(root) {
+  const blocks = [], by = new Map();
+  const tw = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n; (n = tw.nextNode());) {
+    const b = n.parentElement.closest(DOCS_BLOCK);
+    if (!b || b === root || !root.contains(b)) continue; // the line ends between two blocks
+    let e = by.get(b);
+    if (!e) { by.set(b, e = { el: b, nodes: [], text: "" }); blocks.push(e); }
+    e.nodes.push(n);
+    e.text += n.nodeValue;
+  }
+  return blocks;
+}
+// docsIndex reads every chapter once, the first time something is looked
+// for, in a document of its own (which fetches no pictures): each block's
+// text and whether it is a heading, and the chapter's text whole.
+function docsIndex() {
+  if (!docsChapters.length || docsChapters[0].blocks) return;
+  const parser = new DOMParser();
+  docsChapters.forEach((c, i) => {
+    const page = parser.parseFromString(docsHTML(i), "text/html").body;
+    c.blocks = docsBlocks(page).map(b => ({ text: b.text, head: /^H\d$/.test(b.el.tagName) }));
+    c.text = c.blocks.map(b => b.text).join("\n");
+  });
+}
+// where the words stand in a text: [from, to) stretches in order, with
+// those that overlap or touch joined into one
+function docsHits(text, res) {
+  const all = [];
+  for (const re of res) for (const m of text.matchAll(re)) all.push([m.index, m.index + m[0].length]);
+  all.sort((x, y) => x[0] - y[0]);
+  const hits = [];
+  for (const h of all) {
+    const last = hits[hits.length - 1];
+    if (last && h[0] <= last[1]) last[1] = Math.max(last[1], h[1]);
+    else hits.push(h);
+  }
+  return hits;
+}
+// docsMark puts the found words of one block's text nodes on yellow, and
+// answers with the first of them (nothing, where there is none). A stretch
+// is cut out of each node it runs through, from the node's end back so the
+// ones before keep their places, and wrapped in a <mark>, which changes no
+// measure of the line.
+function docsMark(nodes, res) {
+  const hits = docsHits(nodes.map(n => n.nodeValue).join(""), res);
+  let at = 0, first = null;
+  for (const n of nodes) {
+    const len = n.nodeValue.length;
+    const mine = hits.filter(h => h[0] < at + len && h[1] > at).map(h => [Math.max(h[0], at) - at, Math.min(h[1], at + len) - at]);
+    at += len;
+    let mark = null;
+    for (const [a, b] of mine.reverse()) {
+      const m = a ? n.splitText(a) : n; // no empty node left at either end
+      if (b - a < m.nodeValue.length) m.splitText(b - a);
+      mark = el("mark");
+      m.replaceWith(mark);
+      mark.append(m);
+    }
+    first = first || mark; // made last, it stands first in its node
+  }
+  return first;
+}
+// a found block as one line of the list: all of a short one, and of a long
+// one some 180 letters around its first found word, cut at spaces
+function docsSnip(text, res) {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t.length <= 180) return t;
+  const at = Math.min(...res.map(re => t.search(re)).filter(x => x >= 0));
+  let a = Math.max(0, at - 60);
+  const b0 = Math.min(t.length, a + 180);
+  let b = b0;
+  if (a > 0) { const sp = t.indexOf(" ", a); if (sp >= 0 && sp < at) a = sp + 1; }
+  if (b < t.length) { const sp = t.lastIndexOf(" ", b); if (sp > b0 - 60) b = sp; }
+  return (a > 0 ? "…" : "") + t.slice(a, b) + (b < t.length ? "…" : "");
+}
+// docsFound writes the contents as the words narrow them: the chapters that
+// hold every word, in the manual's order under their own numbers. Each has
+// its name, in how many places its text holds the words (the yellow marks
+// the chapter will show under its name), and three of its blocks as a line
+// each — the ones with the most of the words, a heading before a paragraph,
+// then down the page. A name opens its chapter at the top and a line opens
+// it at that block's first found word (the click on #docs-md, below).
+function docsFound(box) {
+  docsIndex();
+  const q = docsQ, has = (t, re) => t.search(re) >= 0;
+  const lit = a => { docsMark([a.firstChild], q.res); return a; };
+  const list = el("ol", { class: "docs-found" });
+  docsChapters.forEach((c, i) => {
+    if (!q.res.every(re => has(c.text, re))) return;
+    // every block but the first, the chapter's own name, which this entry shows
+    const held = c.blocks.map((b, k) => ({ b, k, n: k ? q.res.filter(re => has(b.text, re)).length : 0 })).filter(p => p.n);
+    const places = held.reduce((sum, p) => sum + docsHits(p.b.text, q.res).length, 0);
+    const href = DOCS_SITE + "/docs/using/" + c.slug;
+    const li = el("li", { value: i + 1 }, lit(el("a", { href }, c.title)));
+    if (places) li.append(el("span", { class: "docs-n" }, places === 1 ? "1 place" : places + " places"));
+    const shown = [...held].sort((x, y) => y.n - x.n || y.b.head - x.b.head || x.k - y.k).slice(0, 3).sort((x, y) => x.k - y.k);
+    for (const p of shown) li.append(lit(el("a", { class: "docs-place" + (p.b.head ? " head" : ""), href, "data-b": p.k }, docsSnip(p.b.text, q.res))));
+    list.append(li);
+  });
+  const n = list.children.length;
+  if (!n) box.replaceChildren(el("p", {}, "Nothing in the manual matches “" + q.text + "”."));
+  else box.replaceChildren(el("h1", {}, "Found in " + (n === 1 ? "1 chapter" : n + " chapters")), list);
+}
+// docsFind follows the field. Words in it turn the paper to the contents
+// they narrow, from whatever page was on it; emptied, it gives that page
+// back where it was being read — or, when a found chapter is on the paper,
+// leaves it there and takes the yellow off.
+function docsFind() {
+  const was = docsQ, scroller = $("#docs-body");
+  docsQ = docsWords($("#docs-q").value);
+  if (!docsLoaded || (!docsQ && !was)) return;
+  const back = docsAt >= 0 ? { at: docsAt, top: scroller.scrollTop } : docsBack;
+  if (docsQ) {
+    docsShow(-1);
+    docsBack = back;
+  } else {
+    docsShow(back ? back.at : -1);
+    if (back) scroller.scrollTop = back.top;
+  }
+}
+$("#docs-q").addEventListener("input", docsFind);
+// Return brings the found chapters back over a chapter opened from them (as
+// the Contents button does while the field holds words); Escape empties
+// the field
+$("#docs-q").addEventListener("keydown", e => {
+  if (e.isComposing) return;
+  if (e.key === "Enter" && docsQ && docsAt >= 0) docsFind();
+  if (e.key === "Escape" && e.target.value) { e.target.value = ""; docsFind(); }
+});
 $("#docs-toc").onclick = () => docsShow(-1);
 $("#docs-prev").onclick = () => docsShow(docsAt - 1);
 $("#docs-next").onclick = () => docsShow(docsAt + 1);
 // A link to another page of the manual turns to it here: the contents'
 // own lines, and the chapters' references to each other, which are written
-// as the website's addresses. Any other link opens in a tab of its own.
+// as the website's addresses; a line the search found carries its place in
+// the chapter beside one (data-b). Any other link opens in a tab of its own.
 $("#docs-md").addEventListener("click", e => {
   const a = e.target.closest("a[href]");
   const m = a && /^https:\/\/exe\.v2core\.com\/docs\/using(?:\/([a-z0-9-]+))?\/?(?:#([a-z0-9-]+))?$/.exec(a.getAttribute("href"));
@@ -3839,7 +4034,7 @@ $("#docs-md").addEventListener("click", e => {
   const i = m[1] ? docsChapters.findIndex(c => c.slug === m[1]) : -1;
   if (m[1] && i < 0) return; // a chapter this build does not have: the website's
   e.preventDefault();
-  docsShow(i, m[2]);
+  docsShow(i, m[2], a.dataset.b ? +a.dataset.b : undefined);
 });
 
 // ---- Help → Welcome: the system app that introduces exe (sysapps/welcome).

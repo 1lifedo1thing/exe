@@ -288,6 +288,28 @@ restyling: `internal/server/ui/index.html` (the desktop),
   view. A height it was dragged to is the reader's and is over the
   measured one; the snapshot keeps it as `dh`, and only then — a window
   whose height is its content's saves none, as Virtual Machines does.
+  Over the paper a search bar (`#docs-find`): the Search window's query
+  bar, one rule for both — 8px round a field as wide as the frame, a 1px
+  black bottom line as its one seam with the paper — there from the first
+  paint, its field dead until the manual has come. Words in the field
+  narrow the contents to the chapters that hold every one of them, in any
+  case and inside longer words: the page's `h1` says in how many, and the
+  chapters keep the contents' own numbers in one column
+  (`ol.docs-found`), each with its name, the count of its found words in
+  11px `#777` beside it, and up to three of its paragraphs as a line each
+  — some 180 letters round the first found word, cut at spaces, a
+  heading's line in bold, a line a link in the text's own colour. Every
+  found word wears the Hub's yellow (`mark`, `#ffff66`, the text's
+  colour), in the list and on any chapter turned to while the field holds
+  words; a mark changes no measure of its line. A name opens its chapter
+  at the top; a line opens it with that word a quarter of the way down the
+  paper, a found heading at the top. While the field holds words, Contents
+  and Return lead back to the found chapters; emptied — Escape does it, as
+  in the Log Viewer's filter — the field gives back the page the search
+  was begun from, where it was being read, or leaves a found chapter on
+  the paper without its marks. The window never changes height for any of
+  it, and the default height's limit gives up the bar's own, so a short
+  screen's window ends where it did.
 - A pad of pages (Notes, `/www/exe-apps/Notes`): Mac OS's Note Pad,
   sampled from the guest's Apple Extras. A white sheet flush with the
   frame, its bar running down to the grow box; under the sheet's bottom
