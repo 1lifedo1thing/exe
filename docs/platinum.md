@@ -693,16 +693,32 @@ restyling: `internal/server/ui/index.html` (the desktop),
   others are `#eee`. The header ends in a blank cell over the scroll bar,
   one black line between them.
 - A row is 18px and a white line. Its icon is the 32px art at 16, 22px
-  into the Name column (the Finder keeps the 15px before it for a
-  folder's triangle, which is not built); its name starts a pixel past
-  the icon; a column's text is 6px in and its header's 8px. Size is set
-  right. Dates read "Today, 3:03 AM", "Yesterday, 11:40 PM", "Sun, Jun 1,
-  2003, 12:02 PM"; a folder's size is a dash and an empty file's "zero K".
+  into the Name column; its name starts a pixel past the icon; a
+  column's text is 6px in and its header's 8px. Size is set right. Dates
+  read "Today, 3:03 AM", "Yesterday, 11:40 PM", "Sun, Jun 1, 2003, 12:02
+  PM"; a folder's size is a dash and an empty file's "zero K".
+- A folder's row has the Finder's disclosure triangle in the 15px before
+  the icon (`FL_SHUT`, `FL_OPEN`: the sampled pixels, 11 tall pointing
+  right, 10 wide pointing down, `#ccccff` `#9999ff` `#6666cc` in a black
+  outline with an `#888` and `#bbb` shadow that is part of the drawing).
+  Pressed, its lavender is `#333366` and its shadow `#444` and `#555`.
+  The flip between the two has no frame in between. The triangle is 7px
+  into the Name column at every depth: an open folder's items are listed
+  under it with icon and name 24px further in a level, and a folder among
+  them keeps its triangle in the same gutter. Each folder's items are
+  sorted among themselves. The status line counts every row shown, as
+  the Finder's does. The gutter's 16px, the row's height, takes the click;
+  it does not select. Right and Left open and shut the selected folder
+  (the Finder's Command-arrows, which a browser keeps for its history).
 - An item is its icon and its name. The rest of its row is the window's
   ground: a click there lets the selection go and a right-click gives the
   window's menu, so a full list can still be asked for its view.
 - Name takes the room the other columns leave, down to 180px (the
   Finder's is a fixed 214px, and a column cannot be dragged wider here).
+  Those 180px leave a name two levels in some 85px; from the third level
+  on the least grows by 24px a level (the Finder widens Name by every
+  level, which here would scroll a window of the first size sideways as
+  soon as one folder opened).
   The other three are as wide as the widest thing each can say in the
   desk's type, measured once (`flCols`), so no column moves with what a
   folder holds. A window too narrow scrolls sideways, header and all.
@@ -713,10 +729,13 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - A click on a header sorts by it, in the Finder's first order: newest
   first, largest first with folders last, kinds from A. There is no
   sort-order button and no pressed state.
-- A folder's view and sort are its own, kept by path in the System app
-  data's `views.json` and applied before the folder's first drawing
-  (`viewsReady`), so a list never opens as icons and turns over. Only
-  what differs from icons, by name, is written.
+- A folder's view, its sort and the folders left open in it are its own,
+  kept by path in the System app data's `views.json` and applied before
+  the folder's first drawing (`viewsReady`), so a list never opens as
+  icons and turns over. Only what differs from icons, by name, all shut,
+  is written. A folder shut keeps the record of the open ones inside it;
+  one that is gone is dropped at the next save. A redrawn list keeps its
+  scroll position.
   `~/tools/playwright/exe-finder-views-test.js` holds all of this, on a
   scratch daemon.
 

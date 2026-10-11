@@ -514,8 +514,8 @@ body.mobile #cstrip { z-index: 5; }
    and left and an #aaa right and bottom; the column the list is sorted by
    wears #666 under #555 and #777, and is #ddd down the list where the
    others are #eee. A row is 18px and a white line, its 16px icon 22px in
-   (the Finder keeps the 15px before it for a folder's triangle) and its
-   text 6px into a column. The header stays put while the list scrolls
+   (the 15px before it are a folder's triangle's) and its text 6px into a
+   column. The header stays put while the list scrolls
    under it, runs sideways with it (flFrame), and ends in a blank cell over
    the scroll bar. The box keeps its size and the window's: the scrolling
    moves to .fl-body inside it. Name takes the room the other three leave
@@ -525,9 +525,9 @@ body.mobile #cstrip { z-index: 5; }
   overflow: hidden; background: #eee; }
 .fl-head { flex: none; display: flex; height: 20px; border-bottom: 1px solid var(--black); }
 .fl-hscroll { flex: 1; min-width: 0; overflow: hidden; }
-.fl-hrow, .fl-rows, .fl-bands { min-width: calc(180px + var(--fl-date) + var(--fl-size) + var(--fl-kind)); }
+.fl-hrow, .fl-rows, .fl-bands { min-width: calc(180px + var(--fl-in, 0px) + var(--fl-date) + var(--fl-size) + var(--fl-kind)); }
 .fl-hrow, .fl-bands, .fitem.frow { display: flex; }
-.fl-name { flex: 1 0 180px; min-width: 0; }
+.fl-name { flex: 1 0 calc(180px + var(--fl-in, 0px)); min-width: 0; }
 .fl-date { flex: none; width: var(--fl-date); }
 .fl-size { flex: none; width: var(--fl-size); text-align: right; }
 .fl-kind { flex: none; width: var(--fl-kind); }
@@ -552,6 +552,21 @@ body.mobile #cstrip { z-index: 5; }
 .fl-it { display: flex; align-items: center; min-width: 0; }
 .fl-it svg { flex: none; display: block; }
 .frow .lbl { max-width: none; min-width: 0; margin-left: 1px; line-height: 14px; }
+/* A folder's row wears the Finder's disclosure triangle, sampled with the
+   list: lavender with a two-pixel shadow, pointing right while the folder
+   is shut and down while what is in it is listed under it, dark for as
+   long as it is pressed. It stands 7px into the Name column at every
+   depth: a folder inside an open one keeps its triangle in that gutter,
+   and only its icon and name move in, 24px a level (from the third level
+   on the Name column's least width grows by as much: --fl-in, flFrame).
+   One 10 by 11 box, 5px in and 3px down, holds either drawing; the
+   gutter's 16px, the row's height, is what a click or a finger has to
+   hit. */
+.fl-tri { position: absolute; left: 2px; top: 0; width: 16px; height: 18px; }
+.fl-tri svg { display: block; position: absolute; left: 3px; top: 3px; }
+.fl-tri:active .tf { fill: #333366; }
+.fl-tri:active .ts { fill: #444; }
+.fl-tri:active .tu { fill: #555; }
 /* drag-and-drop upload targets */
 .finder-window.drop .finder-icons { box-shadow: inset 0 0 0 2px var(--hl); }
 #desktop.drop { box-shadow: inset 0 0 0 3px var(--hl); }
@@ -5877,16 +5892,27 @@ function openFinderWin(path, fromWin) {
   openWin(w);
   loadFinder(w);
 }
+const wsList = dir => j("/v1/workspace?dir=" + encodeURIComponent(dir));
 async function loadFinder(w) {
   const path = w.dataset.path, items = w.querySelector(".ws-items");
+  const turn = w._turn = (w._turn || 0) + 1;
   let data;
   // the folder's view is in hand before its first drawing, so a list never
   // opens as icons and turns over
-  try { [data] = await Promise.all([j("/v1/workspace?dir=" + encodeURIComponent(path)), viewsReady]); }
+  try { [data] = await Promise.all([wsList(path), viewsReady]); }
   catch (e) { items.textContent = e.message; return; }
-  const n = data.entries.length;
-  items.textContent = `${n} item${n === 1 ? "" : "s"}, ${fmtBytes(data.free)} available`;
-  w._entries = data.entries; // Duplicate consults this for copy-name collisions
+  // as a list, every folder left open brings its own listing (by its path
+  // within this one). A folder that is gone, or will not read, is shut:
+  // here and now, and in the record when the folder's view is next saved
+  const kids = {}, v = finderView(path);
+  if (v.view === "list") {
+    await Promise.all(v.open.map(async rel => { try { kids[rel] = (await wsList(path ? path + "/" + rel : rel)).entries; } catch (e) {} }));
+    if (v.open.some(rel => !kids[rel]) && finderViews[path]) finderViews[path].open = v.open.filter(rel => kids[rel]);
+  }
+  if (turn !== w._turn) return; // a later load has the window now
+  w._entries = data.entries;
+  w._kids = kids;
+  w._free = data.free;
   renderFinder(w);
 }
 // draws what loadFinder fetched, as icons or as a list: the same items with
@@ -5897,61 +5923,90 @@ async function loadFinder(w) {
 function renderFinder(w) {
   if (!w._entries) return; // not fetched yet; loadFinder draws when it has
   const path = w.dataset.path, box = w.querySelector(".finder-icons");
-  const v = finderView(path), list = v.view === "list";
-  const was = box.querySelector(".fitem.sel .lbl")?.textContent;
+  const v = finderView(path), list = v.view === "list", open = new Set(v.open);
+  const was = box.querySelector(".fitem.sel")?.dataset.rel;
+  const from = box.querySelector(".fl-body"), at = from && [from.scrollLeft, from.scrollTop];
+  // the items in the order they are drawn. As a list each folder's are
+  // sorted among themselves, and an open folder is followed by its own, a
+  // level in; `among` is an item's own folder's listing, for Duplicate
+  const rows = [];
+  const walk = (entries, dir, depth) => {
+    for (const en of list ? [...entries].sort(FL_SORT[v.sort]) : entries) {
+      const rel = dir ? dir + "/" + en.name : en.name;
+      const kids = list && en.dir && open.has(rel) && w._kids[rel];
+      rows.push({ en, rel, depth, among: entries, kids });
+      if (kids) walk(kids, rel, depth + 1);
+    }
+  };
+  walk(w._entries, "", 0);
+  // the count is of what is shown, an open folder's items among them, as the Finder counts
+  w.querySelector(".ws-items").textContent = `${rows.length} item${rows.length === 1 ? "" : "s"}, ${fmtBytes(w._free)} available`;
   box.classList.toggle("as-list", list);
   box.replaceChildren();
-  const entries = list ? [...w._entries].sort(FL_SORT[v.sort]) : w._entries;
-  const into = list ? flFrame(w, box, v.sort) : box;
-  for (const en of entries) {
+  const into = list ? flFrame(w, box, v.sort, Math.max(0, ...rows.map(r => r.depth))) : box;
+  for (const { en, rel, depth, among, kids } of rows) {
+    const full = path ? path + "/" + rel : rel; // from the Workspace's root
     const it = el("div", { class: list ? "fitem frow" : "fitem", title: en.name });
+    it.dataset.rel = rel;
     let hit = it;
     if (list) {
       hit = el("div", { class: "fl-it" });
       hit.innerHTML = sizeSvg(fileIcon(en), 16);
       hit.append(el("span", { class: "lbl" }, en.name));
-      it.append(el("div", { class: "fc fl-name" }, hit),
+      const name = el("div", { class: "fc fl-name" }, hit);
+      if (depth) name.style.paddingLeft = 22 + 24 * depth + "px";
+      it.append(name,
         el("div", { class: "fc fl-date" }, flDate(en.modified)),
         el("div", { class: "fc fl-size" }, flSize(en)),
         el("div", { class: "fc fl-kind" }, fileKind(en)));
+      if (en.dir) {
+        const tri = el("div", { class: "fl-tri" });
+        tri.innerHTML = kids ? FL_OPEN : FL_SHUT;
+        tri.addEventListener("click", e => { e.stopPropagation(); flFold(w, rel, !kids); });
+        it.append(tri);
+        it._fold = want => { if (want !== !!kids) flFold(w, rel, want); }; // the keyboard's way to the triangle
+      }
     } else {
       it.innerHTML = fileIcon(en);
       it.append(el("span", { class: "lbl" }, en.name));
     }
-    if (en.name === was) it.classList.add("sel");
-    if (en.dir) it.dataset.dropDir = path ? path + "/" + en.name : en.name;
+    if (rel === was) it.classList.add("sel");
+    if (en.dir) it.dataset.dropDir = full;
     const select = () => {
       box.querySelectorAll(".fitem").forEach(d => d.classList.remove("sel"));
       it.classList.add("sel");
     };
     hit.addEventListener("click", e => { e.stopPropagation(); select(); });
-    tapOpen(hit, () => openEntry(en, path ? path + "/" + en.name : en.name, w));
+    tapOpen(hit, () => openEntry(en, full, w));
     hit.addEventListener("contextmenu", e => {
       e.preventDefault(); e.stopPropagation();
       select();
-      const rel = path ? path + "/" + en.name : en.name;
       showCtxMenu(e.clientX, e.clientY, [
-        { label: "Open", act: () => openEntry(en, rel, w) },
-        ...(isPageFile(en.name) ? [{ label: "Open in New Window", act: () => openPageTab(rel) }] : []),
-        ...(isPageFile(en.name) && en.size < 1 << 20 ? [{ label: "Edit Source", act: () => openEditorWin(rel, w) }] : []),
-        { label: "Move To Trash", act: () => wsTrash(rel, w) },
+        { label: "Open", act: () => openEntry(en, full, w) },
+        ...(isPageFile(en.name) ? [{ label: "Open in New Window", act: () => openPageTab(full) }] : []),
+        ...(isPageFile(en.name) && en.size < 1 << 20 ? [{ label: "Edit Source", act: () => openEditorWin(full, w) }] : []),
+        { label: "Move To Trash", act: () => wsTrash(full, w) },
         "-",
-        { label: "Get Info", act: () => showGetInfo(en, rel) },
-        { label: "Duplicate", act: () => wsDuplicate(en, rel, w), dis: !!en.dir },
-        { label: "Download", act: () => wsDownload(en, rel), dis: !!en.dir },
+        { label: "Get Info", act: () => showGetInfo(en, full) },
+        { label: "Duplicate", act: () => wsDuplicate(en, full, w, among), dis: !!en.dir },
+        { label: "Download", act: () => wsDownload(en, full), dis: !!en.dir },
       ]);
     });
     into.append(it);
   }
+  // a list redrawn (a triangle turned, a file arrived) stays where it was scrolled to
+  if (list && at) { const body = box.querySelector(".fl-body"); body.scrollLeft = at[0]; body.scrollTop = at[1]; }
 }
 
 // ---- Workspace views: as Icons, as List ----
 // A folder remembers how it was last looked at, as in the OS 9 Finder: as
-// icons or as a list, and the column its list is sorted by. The record is
-// the System app data's views.json ({views: {path: {view, sort}}}), so the
-// folder opens the same way on every desk of this node and on every joined
-// one, whose Workspace is the same tree. Only what differs from icons, by
-// name, is written; a folder back at both leaves the file.
+// icons or as a list, the column its list is sorted by, and which of the
+// folders in it were left open by their triangles. The record is the System
+// app data's views.json ({views: {path: {view, sort, open}}}, open a list
+// of paths within the folder), so the folder opens the same way on every
+// desk of this node and on every joined one, whose Workspace is the same
+// tree. Only what differs from icons, by name, all shut, is written; a
+// folder back at all three leaves the file.
 const FL_COLS = [["name", "Name"], ["date", "Date Modified"], ["size", "Size"], ["kind", "Kind"]];
 // by name is the daemon's own order; the others as the Finder first sorts
 // them: newest first, largest first (a folder, which has no size, last),
@@ -5965,7 +6020,8 @@ const FL_SORT = {
 let finderViews = {}, viewsLoaded = false, viewsSeq = 0, viewsReady = null;
 function finderView(path) {
   const v = finderViews[path] || {};
-  return { view: v.view === "list" ? "list" : "icons", sort: FL_SORT[v.sort] ? v.sort : "name" };
+  return { view: v.view === "list" ? "list" : "icons", sort: FL_SORT[v.sort] ? v.sort : "name",
+    open: Array.isArray(v.open) ? v.open.filter(p => typeof p === "string") : [] };
 }
 async function loadViews() {
   let d = null;
@@ -5982,25 +6038,44 @@ function setFinderView(w, change) {
   const keep = {};
   if (v.view === "list") keep.view = "list";
   if (v.sort !== "name") keep.sort = v.sort;
+  if (v.open.length) keep.open = [...v.open].sort();
   if (Object.keys(keep).length) finderViews[path] = keep; else delete finderViews[path];
-  renderFinder(w);
+  // a list wants the listing of every folder left open in it: one not in
+  // hand (the folder was icons until now) sends the window to fetch them
+  if (v.view === "list" && v.open.some(rel => !(w._kids || {})[rel])) loadFinder(w); else renderFinder(w);
   if (!viewsLoaded) return;
   j("/v1/apps/System/data/views.json", {
     method: "PUT", json: { views: finderViews },
     headers: { "X-Exe-Seq": String(viewsSeq = Math.max(Date.now(), viewsSeq + 1)) },
   }).catch(e => toast(e.message));
 }
+// a folder's triangle, turned: what is in the folder is listed under it,
+// read afresh each time, or put away. A folder shut keeps the record of
+// the open ones inside it, as the Finder does, and shows them so again
+async function flFold(w, rel, open) {
+  const path = w.dataset.path, set = new Set(finderView(path).open);
+  if (open) {
+    try { (w._kids = w._kids || {})[rel] = (await wsList(path ? path + "/" + rel : rel)).entries; }
+    catch (e) { toast(e.message); return; }
+    set.add(rel);
+  } else set.delete(rel);
+  setFinderView(w, { open: [...set] });
+}
 // another desk or a joined node changed a folder's view: the open windows
-// whose folder it was follow
+// whose folder it was follow (a closed one reads the record when it opens)
 async function viewsChanged(client) {
   if (client && client === WIN_CLIENT) return;
   const before = finderViews;
   try { await loadViews(); } catch (e) { return; }
   document.querySelectorAll(".finder-window[data-path]").forEach(w => {
     const p = w.dataset.path;
-    if (JSON.stringify(before[p] || {}) !== JSON.stringify(finderViews[p] || {})) renderFinder(w);
+    if (!w.hidden && JSON.stringify(before[p] || {}) !== JSON.stringify(finderViews[p] || {})) loadFinder(w);
   });
 }
+// the Finder's disclosure triangle, shut and open, pixel for pixel in one
+// 10 by 11 box; .tf is its lavender and .ts/.tu its shadow, which a press darkens
+const FL_SHUT = `<svg width="10" height="11" viewBox="0 0 10 11" shape-rendering="crispEdges"><path fill="#000" d="M2 0h1v1h-1zM2 1h2v1h-2zM2 2h1v7h-1zM4 2h1v1h-1zM5 3h1v1h-1zM6 4h1v1h-1zM7 5h1v1h-1zM6 6h1v1h-1zM5 7h1v1h-1zM4 8h1v1h-1zM2 9h2v1h-2zM2 10h1v1h-1z"/><path class="tf" fill="#ccccff" d="M3 2h1v6h-1z"/><path class="tf" fill="#9999ff" d="M4 3h1v1h-1zM4 4h2v2h-2zM4 6h1v1h-1zM3 8h1v1h-1z"/><path class="tf" fill="#6666cc" d="M6 5h1v1h-1zM5 6h1v1h-1zM4 7h1v1h-1z"/><path class="ts" fill="#888" d="M7 6h1v1h-1zM6 7h1v1h-1zM5 8h1v1h-1zM4 9h1v1h-1zM3 10h1v1h-1z"/><path class="tu" fill="#bbb" d="M8 6h1v1h-1zM7 7h1v1h-1zM6 8h1v1h-1zM5 9h1v1h-1zM4 10h1v1h-1z"/></svg>`;
+const FL_OPEN = `<svg width="10" height="11" viewBox="0 0 10 11" shape-rendering="crispEdges"><path fill="#000" d="M0 3h10v1h-10zM0 4h1v1h-1zM8 4h1v1h-1zM1 5h1v1h-1zM7 5h1v1h-1zM2 6h1v1h-1zM6 6h1v1h-1zM3 7h1v1h-1zM5 7h1v1h-1zM4 8h1v1h-1z"/><path class="tf" fill="#ccccff" d="M1 4h6v1h-6z"/><path class="tf" fill="#9999ff" d="M7 4h1v1h-1zM2 5h4v1h-4zM3 6h2v1h-2z"/><path class="tf" fill="#6666cc" d="M6 5h1v1h-1zM5 6h1v1h-1zM4 7h1v1h-1z"/><path class="ts" fill="#888" d="M9 4h1v1h-1zM8 5h1v1h-1zM7 6h1v1h-1zM6 7h1v1h-1zM5 8h1v1h-1z"/><path class="tu" fill="#bbb" d="M9 5h1v1h-1zM8 6h1v1h-1zM7 7h1v1h-1zM6 8h1v1h-1zM5 9h1v1h-1z"/></svg>`;
 // "Today, 3:03 AM", "Yesterday, 11:40 PM", "Sun, Jun 1, 2003, 12:02 PM"
 function flDate(t) {
   const d = new Date(t), now = new Date();
@@ -6036,10 +6111,16 @@ function flCols() {
   };
 }
 // the list's frame inside the box: the header, then the body that scrolls,
-// its column shading under the rows; returns where the rows go
-function flFrame(w, box, sort) {
+// its column shading under the rows; returns where the rows go. depth is
+// how many levels in the deepest open folder's items are. Name's least
+// 180px leave a name two levels in some 85px; from the third level on the
+// least grows by the indent, so no name is squeezed out by its own depth
+// (the Finder widens Name by every level; here the first two fit in
+// what a window of the first size already has, with no sideways scroll)
+function flFrame(w, box, sort, depth) {
   const cols = flCols();
   for (const k of ["date", "size", "kind"]) box.style.setProperty("--fl-" + k, cols[k] + "px");
+  box.style.setProperty("--fl-in", 24 * Math.max(0, depth - 2) + "px");
   const hrow = el("div", { class: "fl-hrow" }), bands = el("div", { class: "fl-bands" });
   for (const [key, label] of FL_COLS) {
     const h = el("div", { class: "fl-h fl-" + key + (key === sort ? " sorted" : "") }, el("div", { class: "fl-hb" }, label));
@@ -6116,7 +6197,11 @@ document.addEventListener("keydown", e => {
   if (arrow) {
     e.preventDefault();
     tsAt = 0; // a letter after an arrow starts a new name
-    if (items.length) fiPick(box, fiStep(items, box.querySelector(".fitem.sel"), e.key));
+    // in a list Right opens the selected folder and Left shuts it: the
+    // Finder's Command-arrows, which a browser keeps for its own history
+    const sel = box.querySelector(".fitem.sel");
+    if (sel && sel._fold && (e.key === "ArrowRight" || e.key === "ArrowLeft")) { sel._fold(e.key === "ArrowRight"); return; }
+    if (items.length) fiPick(box, fiStep(items, sel, e.key));
     return;
   }
   const now = Date.now();
@@ -6945,14 +7030,15 @@ async function wsDownload(en, rel) {
     setTimeout(() => URL.revokeObjectURL(u), 60000);
   } catch (e) {}
 }
-async function wsDuplicate(en, rel, w) {
+// among: the listing of the folder the file is in, which in a list may be one opened inside the window's
+async function wsDuplicate(en, rel, w, among = w._entries || []) {
   try {
     const blob = await (await api(wsUrl(rel))).blob();
     const dot = en.name.lastIndexOf(".");
     const base = dot > 0 ? en.name.slice(0, dot) : en.name;
     const ext = dot > 0 ? en.name.slice(dot) : "";
     let cp = base + " copy" + ext, n = 1;
-    while ((w._entries || []).some(x => x.name === cp)) cp = base + " copy " + ++n + ext;
+    while (among.some(x => x.name === cp)) cp = base + " copy " + ++n + ext;
     const dir = rel.split("/").slice(0, -1).join("/");
     await api(wsUrl(dir ? dir + "/" + cp : cp), { method: "PUT", body: blob });
   } catch (e) {}

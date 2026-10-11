@@ -2670,16 +2670,21 @@ the date it was modified, its size and its kind. Right-click a window's
 empty space and choose **View → as List**. **View → as Icons** goes back,
 and the check mark is on the view you are in.
 
-<img src="https://hub.v2core.com/v1/embed/bafkreihgugqlaxg2yrjbi6p5wmb2frl7qh4hiv57qf5au7wic42hlm4ziy" alt="A Workspace window as a list: nine items with their dates, sizes and kinds, sorted by name" width="562" height="266">
+<img src="https://hub.v2core.com/v1/embed/bafkreigbxdhdqmuhokq2j6xvenamykane43rr73uycxyxnheixgry4g4p4" alt="A Workspace window as a list: items with their dates, sizes and kinds, one folder opened by its triangle with its two items listed under it" width="562" height="298">
 
+- Click the triangle before a folder to list what is in it under it,
+  a step in; click it again to put that away. A folder inside can be
+  opened the same way. With a folder selected, the Right and Left arrow
+  keys do the same.
 - Click **Date Modified**, **Size** or **Kind** at the top of the list to
   sort by it: newest first, largest first, kinds from A. **Name** sorts by
   name again.
 - In a list an item is its icon and its name: click, double-click and
   right-click those. The rest of its line is the window's, so a
   right-click there gives the window's menu.
-- Each folder remembers its own view and sort, on every desktop of this
-  exe and on every node it is synced with.
+- Each folder remembers its own view, its sort and which folders were
+  left open, on every desktop of this exe and on every node it is synced
+  with.
 
 ### What a double-click opens
 
@@ -2711,8 +2716,9 @@ jumps to the first name starting with "a", and letters typed quickly
 spell more of it (`ar` reaches a folder named Artifacts).
 
 The arrow keys move the selection an icon left or right, or a row up or
-down; in a list, a line up or down. The same keys work in My Apps and the
-Icon Editor gallery.
+down. In a list they move it a line up or down, and Right and Left open
+and shut a folder. The same keys work in My Apps and the Icon Editor
+gallery.
 
 ### Right-click a file or a folder
 
