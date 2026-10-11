@@ -3247,9 +3247,41 @@ function shotFreeze(ctx, live, copy, jobs) {
   // the viewport's own scroll is shotDraw's to place
   if (live !== doc.scrollingElement) shotScroll(live, copy);
 }
+// an SVG text as a picture the canvas can take
+async function shotImage(svg) {
+  const img = new Image();
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = () => rej(new Error("the browser could not draw the window again"));
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+  if (img.decode) await img.decode().catch(() => {});
+  return img;
+}
+// Safari paints a box-shadow in the wrong place when a picture of markup
+// is drawn straight onto a canvas: the offset comes out unscaled and
+// upside down, and at 2x every bevel line of the chrome is gone. Through
+// an ImageBitmap the same picture is right, and as sharp. Which browser
+// this is is asked once, of a 16px picture holding one shadow.
+let shotBent = null;
+function shotShadowsBent() {
+  return shotBent || (shotBent = (async () => {
+    try {
+      const img = await shotImage(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><foreignObject x="0" y="0" width="100%" height="100%">` +
+        `<div xmlns="http://www.w3.org/1999/xhtml" style="position:absolute;left:4px;top:4px;width:8px;height:8px;background:#fff;box-shadow:inset 2px 2px 0 #000"></div></foreignObject></svg>`);
+      const cv = el("canvas");
+      cv.width = cv.height = 32;
+      const g = cv.getContext("2d");
+      g.drawImage(img, 0, 0, 32, 32);
+      const px = g.getImageData(9, 20, 1, 1).data; // in the shadow's left arm
+      return !(px[3] > 200 && px[0] < 60);
+    } catch (e) { return false; }
+  })());
+}
 // One document drawn on a canvas: all of it at the size of its viewport (a
 // frame), or with `target` only that element and its line of ancestors,
-// cut to `clip` — { x, y, w, h } in CSS px.
+// cut to `clip` — { x, y, w, h } in CSS px, and { dx, dy } to move the
+// element by first (shotWindow).
 async function shotDraw(ctx, doc, target, clip) {
   const win = doc.defaultView, root = doc.documentElement;
   // a WebGL canvas keeps what it drew only until the frame is shown: read
@@ -3267,6 +3299,7 @@ async function shotDraw(ctx, doc, target, clip) {
   if (target) {
     let copy = mute(target.cloneNode(true));
     shotFreeze(ctx, target, copy, jobs);
+    if (clip.dx || clip.dy) copy.style.transform = `translate(${clip.dx}px, ${clip.dy}px)`;
     for (let p = target.parentElement; p; p = p.parentElement) {
       // the ancestors hold the window where it is, and show nothing: no
       // desktop under it, no veil behind a dialog
@@ -3308,28 +3341,30 @@ async function shotDraw(ctx, doc, target, clip) {
   style.textContent = await shotCSS(ctx, doc);
   head.replaceChildren(style);
   // control characters (a terminal's output holds them) are not XML
-  let xml = new XMLSerializer().serializeToString(port).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f￾￿]/g, "");
+  let xml = new XMLSerializer().serializeToString(port).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g, "");
   if (xml.toWellFormed) xml = xml.toWellFormed();
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${vw}" height="${vh}">` +
-    `<foreignObject x="0" y="0" width="100%" height="100%">${xml}</foreignObject></svg>`;
-  const img = new Image();
-  await new Promise((res, rej) => {
-    img.onload = res;
-    img.onerror = () => rej(new Error("the browser could not draw the window again"));
-    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-  });
-  if (img.decode) await img.decode().catch(() => {});
+  const img = await shotImage(`<svg xmlns="http://www.w3.org/2000/svg" width="${vw}" height="${vh}">` +
+    `<foreignObject x="0" y="0" width="100%" height="100%">${xml}</foreignObject></svg>`);
   const k = ctx.scale, c = clip || { x: 0, y: 0, w: vw, h: vh };
   const cv = el("canvas");
   cv.width = Math.max(1, Math.round(c.w * k)); cv.height = Math.max(1, Math.round(c.h * k));
   const g = cv.getContext("2d", { willReadFrequently: true });
+  const bent = window.createImageBitmap && await shotShadowsBent();
+  // the part of the cut that the viewport holds: all an ImageBitmap is asked for
+  const x0 = Math.max(0, c.x), y0 = Math.max(0, c.y), x1 = Math.min(vw, c.x + c.w), y1 = Math.min(vh, c.y + c.h);
   // WebKit hands the picture over before the pictures and fonts inside it
   // are ready: draw until two passes in a row come out the same
   let last = -1;
   for (let i = 0; i < 5; i++) {
+    let bmp = null;
+    if (bent && x1 > x0 && y1 > y0) {
+      bmp = await createImageBitmap(img, x0, y0, x1 - x0, y1 - y0,
+        { resizeWidth: Math.round((x1 - x0) * k), resizeHeight: Math.round((y1 - y0) * k), resizeQuality: "high" }).catch(() => null);
+    }
     g.clearRect(0, 0, cv.width, cv.height);
     if (fill) { g.fillStyle = fill; g.fillRect(0, 0, cv.width, cv.height); }
-    g.drawImage(img, -c.x * k, -c.y * k, vw * k, vh * k);
+    if (bmp) { g.drawImage(bmp, Math.round((x0 - c.x) * k), Math.round((y0 - c.y) * k)); bmp.close(); }
+    else g.drawImage(img, -c.x * k, -c.y * k, vw * k, vh * k);
     const px = new Uint32Array(g.getImageData(0, 0, cv.width, cv.height).data.buffer);
     let sum = 0;
     for (let j = 0; j < px.length; j++) sum = (sum * 31 + px[j]) | 0;
@@ -3350,6 +3385,11 @@ async function shotWindow(w) {
   // and a cut anywhere else would smear every line in it
   const x = Math.round(r.left), y = Math.round(r.top);
   const clip = { x, y, w: Math.round(r.right) - x + (m ? Math.max(0, +m[1]) : 0), h: Math.round(r.bottom) - y + (m ? Math.max(0, +m[2]) : 0) };
+  // a window hanging off the screen is saved whole: the copy is moved to
+  // where all of it shows (one larger than the screen keeps its top left)
+  const into = (at, size, room) => Math.max(0, Math.min(at, room - size)) - at;
+  clip.dx = into(x, clip.w, window.innerWidth); clip.dy = into(y, clip.h, window.innerHeight);
+  clip.x += clip.dx; clip.y += clip.dy;
   const cv = await shotDraw(ctx, document, w, clip);
   return new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error("the picture could not be made")), "image/png"));
 }

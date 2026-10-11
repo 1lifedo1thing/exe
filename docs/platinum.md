@@ -417,8 +417,12 @@ restyling: `internal/server/ui/index.html` (the desktop),
   frame, a same-origin frame. Not carried: `:hover`, a selection, a
   sandboxed frame, a WebGL canvas that does not draw every frame, and a
   control left to the browser's own theme (`appearance: auto`), which a
-  picture draws its own way. A new window kind is checked against the
-  browser's screenshot with `~/tools/playwright/exe-screenshot-compare.js`.
+  picture draws its own way. Safari puts every `box-shadow` in the wrong
+  place when such a picture goes straight onto a canvas (the bevels vanish
+  at 2x), so there it goes through an `ImageBitmap` first
+  (`shotShadowsBent` asks once which browser this is). A new window kind is
+  checked against the browser's screenshot with
+  `~/tools/playwright/exe-screenshot-compare.js`.
 - A modal dialog that asks for something (the desktop's API Token, raised
   by itself when the API answers 401): a title, no close box, 380px at
   most. A bold line says why it is there, the guide follows in 16px
