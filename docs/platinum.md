@@ -90,6 +90,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   secondary meta. Never 13px, never a system font stack. There is one line
   of display type: the Welcome window's heading, 18px bold on a 22px line,
   beside its 64px icon. Nothing else is set larger than 12px.
+- On a Mac that stack lands on Geneva, which has one weight: a browser
+  only thickens it a little, and a bold heading reads as the text under
+  it. The public site (`site/site.css`) and the Platinum site template
+  give Geneva a bold with two `@font-face` rules, `local("Geneva")` for
+  normal and `local("Lucida Grande Bold")` for bold; where neither face
+  is installed they come to nothing. The desktop does not have them yet.
+  Linux and Windows fall through to a face with a bold of its own, so
+  weight is judged on a real Mac, not in headless Chromium.
 - Chrome is `user-select: none; cursor: default`. OS 9 had no pointing
   hand and no hover states: a control changes only while pressed (`:active`),
   menus alone highlight under the pointer (and, asked for by name, the

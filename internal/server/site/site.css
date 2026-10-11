@@ -5,6 +5,16 @@
    documentation and the stats desk wear one chrome and it is written
    once. That file is checked against the desktop, which defines the
    look (internal/server/ui/index.html). */
+
+/* bold type on a Mac: the chrome's stack lands there on Geneva, which
+   has one weight, so a browser thickens it a little and a heading reads
+   as the text under it. Geneva's bold on these pages is Lucida Grande's,
+   a face every Mac carries; where neither face is installed both rules
+   come to nothing and the stack goes on to its next name, as it always
+   did. */
+@font-face { font-family: "Geneva"; font-weight: normal; src: local("Geneva"); }
+@font-face { font-family: "Geneva"; font-weight: bold; src: local("Lucida Grande Bold"), local("LucidaGrande-Bold"); }
+
 .btn { display: inline-block; min-width: 58px; height: 20px; padding: 2px 13px;
   background: #ddd; color: #262626; text-decoration: none; text-align: center; cursor: default;
   font-size: 12px; line-height: 14px; font-weight: bold; white-space: nowrap;
