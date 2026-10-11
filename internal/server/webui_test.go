@@ -1,8 +1,11 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -96,6 +99,43 @@ func TestUIFilesRevalidate(t *testing.T) {
 
 // The Services scan reads ss on Debian and busybox netstat on Alpine,
 // which has no ss; each fixture is its tool's real shape.
+// Configuration keeps a tab for the backend this node runs VMs with and
+// drops the others' (a Mac has no Firecracker to set up), going by
+// hostinfo's vm_backend. A group keyed on a name no platform reports would
+// have its tab nowhere.
+func TestConfigTabsFollowTheVMBackend(t *testing.T) {
+	backends := map[string]string{"linux": "firecracker", "darwin": "virtualization", "windows": "qemu"}
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	rec := httptest.NewRecorder()
+	s.handleHostInfo(rec, httptest.NewRequest("GET", "/v1/hostinfo", nil))
+	var info struct {
+		Backend string `json:"vm_backend"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &info); err != nil {
+		t.Fatal(err)
+	}
+	if info.Backend != backends[runtime.GOOS] {
+		t.Errorf("vm_backend on %s = %q, want %q", runtime.GOOS, info.Backend, backends[runtime.GOOS])
+	}
+
+	keyed := map[string]string{}
+	for _, m := range regexp.MustCompile(`\{ group: "([^"]+)", backend: "([^"]+)"`).FindAllSubmatch(uiHTML, -1) {
+		keyed[string(m[1])] = string(m[2])
+	}
+	if keyed["Firecracker"] != "firecracker" {
+		t.Errorf("the Firecracker tab is keyed on %q, want the Linux backend", keyed["Firecracker"])
+	}
+	for group, backend := range keyed {
+		known := false
+		for _, b := range backends {
+			known = known || b == backend
+		}
+		if !known {
+			t.Errorf("the %s tab is keyed on %q, which no platform reports", group, backend)
+		}
+	}
+}
+
 func TestParsePorts(t *testing.T) {
 	ss := `State  Recv-Q Send-Q Local Address:Port  Peer Address:Port Process
 LISTEN 0      128        127.0.0.1:631        0.0.0.0:*

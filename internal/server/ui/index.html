@@ -9530,7 +9530,7 @@ const CONFIG_FIELDS = [
     { path: "default_memory_mb", num: true },
     { path: "default_disk_gb", num: true },
   ]},
-  { group: "Firecracker", fields: [
+  { group: "Firecracker", backend: "firecracker", fields: [
     { path: "firecracker.binary", restart: true },
     { path: "firecracker.kernel_url", restart: true },
     { path: "firecracker.network_helper", restart: true },
@@ -9591,29 +9591,41 @@ function modelSelect(f, val) {
 const getPath = (o, p) => p.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
 const setPath = (o, p, v) => { const ks = p.split("."); const last = ks.pop(); let t = o; for (const k of ks) { t[k] = t[k] || {}; t = t[k]; } t[last] = v; };
 let loadedConfig = null;
-let cfgActiveTab = 0;
+// /v1/hostinfo, asked once for the boot code and Configuration both; a
+// failed ask is forgotten, so the next caller asks again.
+let hostAsked = null;
+const hostOnce = () => hostAsked || (hostAsked = j("/v1/hostinfo").catch(e => { hostAsked = null; throw e; }));
+// A group that names a backend has its tab only on a node that runs VMs
+// with it (hostinfo's vm_backend): a Mac, on Virtualization.framework, has
+// no Firecracker to set up. loadConfig asks before it draws, so the tabs
+// are right the first time they show, and Save reads back the groups drawn.
+let cfgGroups = [];
+let cfgActiveTab = "Daemon";
 // tab: a pane's name ("OpenAI"), for a caller that sends someone to it
 function openConfigWin(tab) {
-  const i = typeof tab === "string" ? CONFIG_FIELDS.findIndex(g => g.group === tab) : -1;
-  if (i >= 0) cfgActiveTab = i;
+  if (typeof tab === "string") cfgActiveTab = tab;
   openWin("#win-config");
   loadConfig().catch(e => toast(e.message));
 }
-function showCfgPane(i) {
-  cfgActiveTab = i;
-  document.querySelectorAll("#cfg-tabs .tab").forEach((t, idx) => t.classList.toggle("active", idx === i));
-  document.querySelectorAll("#cfg-form .pane").forEach((p, idx) => { p.hidden = idx !== i; });
+function showCfgPane(name) {
+  cfgActiveTab = name;
+  document.querySelectorAll("#cfg-tabs .tab").forEach(t => t.classList.toggle("active", t.textContent === name));
+  document.querySelectorAll("#cfg-form .pane").forEach(p => { p.hidden = p.dataset.group !== name; });
 }
 async function loadConfig() {
-  loadedConfig = await j("/v1/config");
+  const [cfg, backend] = await Promise.all([j("/v1/config"), hostOnce().then(h => h.vm_backend || "", () => "")]);
+  loadedConfig = cfg;
+  cfgGroups = CONFIG_FIELDS.filter(g => !g.backend || g.backend === backend);
+  if (!cfgGroups.some(g => g.group === cfgActiveTab)) cfgActiveTab = cfgGroups[0].group;
   const bar = $("#cfg-tabs");
   const panel = $("#cfg-form");
   bar.replaceChildren();
   panel.replaceChildren();
-  CONFIG_FIELDS.forEach((g, i) => {
-    bar.append(el("div", { class: "tab" + (i === cfgActiveTab ? " active" : ""), onclick: () => showCfgPane(i) }, g.group));
+  cfgGroups.forEach(g => {
+    bar.append(el("div", { class: "tab" + (g.group === cfgActiveTab ? " active" : ""), onclick: () => showCfgPane(g.group) }, g.group));
     const pane = el("div", { class: "pane" });
-    pane.hidden = i !== cfgActiveTab;
+    pane.dataset.group = g.group;
+    pane.hidden = g.group !== cfgActiveTab;
     if (g.group === "Cloudflare") {
       pane.append(el("div", { class: "row", style: "justify-content:flex-end; margin-bottom:8px" },
         el("button", { class: "ghost sm", onclick: () => wizOpen(false) }, "Cloudflare Setup Wizard…")));
@@ -9716,7 +9728,7 @@ async function daemonRestart(btn) {
 $("#cfg-save").onclick = async () => {
   if (!loadedConfig) return;
   const nc = JSON.parse(JSON.stringify(loadedConfig));
-  for (const g of CONFIG_FIELDS) {
+  for (const g of cfgGroups) {
     for (const f of g.fields) {
       // getElementById, not querySelector: ids like cfg-ollama.base_url
       // contain dots that a selector would parse as class names
@@ -11437,7 +11449,7 @@ const appsReady = loadApps().catch(() => {});
 loadIcons().catch(() => {});
 loadDeskMenu().catch(() => {});
 // hosts with an agent CLI (Claude Code, Codex) get its desktop icon
-j("/v1/hostinfo").then(h => {
+hostOnce().then(h => {
   let any = false;
   for (const app of Object.keys(AGENT_APPS)) {
     const a = h.agents && h.agents[app];

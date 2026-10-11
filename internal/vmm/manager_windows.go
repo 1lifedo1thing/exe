@@ -31,6 +31,10 @@ import (
 	"exe/internal/sshexec"
 )
 
+// Backend names what runs this platform's VMs. /v1/hostinfo carries it, so
+// the desktop shows a backend's settings only on a node that uses them.
+const Backend = "qemu"
+
 const (
 	qemuBootTimeout = 3 * time.Minute
 	qemuStopTimeout = 30 * time.Second

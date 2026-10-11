@@ -22,6 +22,10 @@ import (
 	"exe/internal/cloudinit"
 )
 
+// Backend names what runs this platform's VMs. /v1/hostinfo carries it, so
+// the desktop shows a backend's settings only on a node that uses them.
+const Backend = "virtualization"
+
 // vzManager runs VMs with Apple's Virtualization.framework. VMs live inside
 // this process: if the daemon exits, its VMs power off.
 type vzManager struct {

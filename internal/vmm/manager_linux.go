@@ -35,6 +35,10 @@ import (
 	"exe/internal/sshexec"
 )
 
+// Backend names what runs this platform's VMs. /v1/hostinfo carries it, so
+// the desktop shows a backend's settings only on a node that uses them.
+const Backend = "firecracker"
+
 const (
 	firecrackerBootTimeout = 3 * time.Minute
 	firecrackerStopTimeout = 30 * time.Second

@@ -965,9 +965,11 @@ func TailscaleIP() string { return config.TailscaleIP() }
 // the window's Built-in Memory and Largest Unused Block lines and the
 // state-dir disk behind its Disk Space line (bytes; 0 when a platform
 // lookup fails); the daemon's own footprint (exe_memory) for the first
-// row of its memory bars; the build stamp; plus the agent CLIs installed
-// here (agents: {claude: {dir}, codex: {dir}} — the desktop shows an
-// agent's icon only then) and the project dir their sessions open in.
+// row of its memory bars; the build stamp; what runs VMs on this platform
+// (vm_backend: firecracker, virtualization or qemu — Configuration shows a
+// backend's tab only where it is the one in use); plus the agent CLIs
+// installed here (agents: {claude: {dir}, codex: {dir}} — the desktop shows
+// an agent's icon only then) and the project dir their sessions open in.
 // The desktop polls it while the window is open, so nothing here may be
 // slow: the memory and disk reads are a syscall or a /proc read on Linux
 // and Windows and two short commands on macOS.
@@ -988,6 +990,7 @@ func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 	info := map[string]any{
 		"hostname": host, "machine": hostinfo.Model(), "lan_ip": lan, "tailscale_ip": ts,
 		"os": hostinfo.OS(), "arch": runtime.GOARCH, "cpus": runtime.NumCPU(),
+		"vm_backend":   vmm.Backend,
 		"memory_total": mem.Total, "memory_available": mem.Available,
 		"disk_total": disk.Total, "disk_free": disk.Free,
 		"exe_memory": hostinfo.ProcessMemory(),

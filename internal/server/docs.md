@@ -4000,9 +4000,10 @@ leaves it alone unless you ask.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreib5o3chahprhedmnmlt5ewo25povt6sfx5rfqqiawty3pwxv3b77i" alt="The Configuration window on its Daemon tab: listen, proxy_listen, ssh_listen, advertise_host, api_token and more" width="662" height="476">
 
-The fields are grouped on tabs: **Daemon**, **VMs**, **Firecracker**,
-**Ollama**, **OpenAI**, **GitHub**, **Hub** and **Cloudflare**. Change what
-you want and press **Save**.
+The fields are grouped on tabs: **Daemon**, **VMs**, **Ollama**,
+**OpenAI**, **GitHub**, **Hub** and **Cloudflare**, and on a Linux machine
+**Firecracker**, which runs the VMs there. Change what you want and press
+**Save**.
 
 - Most fields hot-reload on Save: they take effect at once.
 - Fields marked `*` take effect after a daemon restart: `ssh_user`,
