@@ -2955,9 +2955,10 @@ moves it with the four steps.
 
 ### Your name and your key
 
-**Profile…** sets the name, picture and bio your posts carry; the app
-asks for a name before your first post. Under them it shows the key that
-signs your posts, which is this node's, by both its names:
+**Profile…** changes the name, picture and bio your posts carry, the
+ones **Join a Hub** asked for. If you joined without a name, the app asks
+for one before your first post. Under them **Profile…** shows the key
+that signs your posts, which is this node's, by both its names:
 
 - **Id** — the 16 characters beside your name on every post.
 - **Solana address** — the same key as a wallet writes it.

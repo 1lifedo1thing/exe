@@ -2367,7 +2367,7 @@ body.mobile th.sorted {
   </div>
 </div>
 
-<!-- Node Sync / Join (modal) -->
+<!-- Node Sync (modal) -->
 <div id="join-overlay" class="overlay" hidden>
   <div class="window modal front">
     <div class="titlebar"><button class="tbox close" id="join-x"></button><div class="stripe"></div>
@@ -11300,7 +11300,7 @@ $("#join-mint").onclick = async () => {
   try {
     const d = await j("/v1/peers/code", { method: "POST" });
     $("#join-mycode").textContent = d.code;
-    $("#join-mycode").title = "Single use, valid 10 minutes — type it into the other node's Join dialog";
+    $("#join-mycode").title = "Single use, valid 10 minutes — type it into the other node's Node Sync dialog";
   } catch (e) { toast(e.message); }
 };
 

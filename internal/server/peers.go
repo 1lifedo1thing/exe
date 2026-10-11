@@ -38,7 +38,7 @@ func (s *Server) handlePeersGet(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := config.TailscaleIP()
 	// Cached statuses only — probing blocks up to 4 s per unreachable peer,
-	// and this is the Join dialog's open path. The UI follows up with
+	// and this is the Node Sync dialog's open path. The UI follows up with
 	// /v1/peers/status?force=1 to fill in fresh latencies.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"self": map[string]any{

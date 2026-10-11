@@ -109,7 +109,7 @@ func (e *Engine) validKey(key string) bool {
 	return true
 }
 
-// Status is one row of the Join dialog's peer table.
+// Status is one row of the Node Sync dialog's peer table.
 type Status struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -977,7 +977,7 @@ func (e *Engine) setStatus(p *Peer, latency time.Duration, err error) {
 	e.statusMu.Unlock()
 	// A peer that just came back (e.g. a laptop woke) shouldn't wait up to a
 	// full reconcile interval — kick an immediate pass. The latency Probe
-	// (every 5s while the Join dialog is open) also drives this transition.
+	// (every 5s while the Node Sync dialog is open) also drives this transition.
 	if !wasOnline {
 		e.ReconcileNow()
 	}
