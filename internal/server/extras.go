@@ -359,6 +359,21 @@ func (s *Server) extraStand(def *extraDef, probe bool) extraInfo {
 	return info
 }
 
+// said is an extra as it is told: a folder under the home folder is
+// written with "~", as the manual and config.json write it (expandHome
+// reads it back).
+func (x extraInfo) said() extraInfo {
+	if home, err := os.UserHomeDir(); err == nil && home != "" && home != string(filepath.Separator) {
+		if rel, err := filepath.Rel(home, x.Dir); err == nil && x.Dir != "" && filepath.IsLocal(rel) {
+			x.Dir = "~"
+			if rel != "." {
+				x.Dir = "~/" + filepath.ToSlash(rel)
+			}
+		}
+	}
+	return x
+}
+
 func (s *Server) handleExtras(w http.ResponseWriter, r *http.Request) {
 	out := make([]extraInfo, len(extraDefs))
 	var wg sync.WaitGroup
@@ -366,7 +381,7 @@ func (s *Server) handleExtras(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() { // each asks its daemon; none waits for another's
 			defer wg.Done()
-			out[i] = s.extraStand(&extraDefs[i], true)
+			out[i] = s.extraStand(&extraDefs[i], true).said()
 		}()
 	}
 	wg.Wait()
@@ -404,8 +419,12 @@ func (s *Server) handleExtraSet(w http.ResponseWriter, r *http.Request) {
 		info := s.extraStand(def, true)
 		if dir != "" && info.State != "on" {
 			info.State, info.From, info.Dir, info.Release = "off", "folder", dir, ""
+			if def.Service != "" { // a copy that is here may well be running
+				up := e.probe(strings.TrimRight(info.Service, "/") + def.Health)
+				info.Running = &up
+			}
 		}
-		writeJSON(w, http.StatusOK, info)
+		writeJSON(w, http.StatusOK, info.said())
 		return
 	}
 
@@ -431,7 +450,7 @@ func (s *Server) handleExtraSet(w http.ResponseWriter, r *http.Request) {
 		// edited since it was placed, or never ours to remove
 		info.Kept = info.Have
 	}
-	writeJSON(w, http.StatusOK, info)
+	writeJSON(w, http.StatusOK, info.said())
 }
 
 var errExtraMissing = errors.New("it is not on this machine")

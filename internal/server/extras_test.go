@@ -136,9 +136,10 @@ func TestExtrasAFolder(t *testing.T) {
 	if code, _, _ := f.post("planet", `{"check":true,"dir":"relative/path"}`); code != http.StatusBadRequest {
 		t.Fatalf("a relative folder: %d", code)
 	}
-	// the checkout's own folder is as good as its apps folder; a check changes nothing
+	// the checkout's own folder is as good as its apps folder; a check
+	// changes nothing, and says whether the copy's daemon runs
 	code, x, _ := f.post("planet", `{"check":true,"dir":"`+root+`"}`)
-	if code != 200 || x.State != "off" || x.From != "folder" || x.Dir != filepath.Join(root, "apps") {
+	if code != 200 || x.State != "off" || x.From != "folder" || x.Dir != filepath.Join(root, "apps") || x.Running == nil || *x.Running {
 		t.Fatalf("check: %d %+v", code, x)
 	}
 	if f.saves != 0 || len(f.s.Config().AppsDirs) != 0 || f.get()["planet"].State != "missing" {
@@ -146,6 +147,9 @@ func TestExtrasAFolder(t *testing.T) {
 	}
 
 	f.running["http://127.0.0.1:7799/v1/status"] = true
+	if _, x, _ = f.post("planet", `{"check":true,"dir":"`+root+`"}`); x.Running == nil || !*x.Running {
+		t.Fatalf("a found copy's daemon runs, and the check did not say so: %+v", x)
+	}
 	code, x, _ = f.post("planet", `{"on":true,"dir":"`+root+`"}`)
 	if code != 200 || x.State != "on" || x.From != "folder" || !reflect.DeepEqual(x.Have, []string{"Planet", "Writer"}) ||
 		x.Running == nil || !*x.Running {
@@ -250,6 +254,35 @@ func TestExtrasLeaveAFolderOfSomeonesOwn(t *testing.T) {
 	}
 	if got := f.s.Config().AppsDirs; !reflect.DeepEqual(got, []string{mine}) {
 		t.Fatalf("off took the folder's name away: %v", got)
+	}
+}
+
+// A folder under the home folder is told with "~", and taken back so.
+func TestExtrasTellHomeAsTilde(t *testing.T) {
+	f := newExtFixture(t, "")
+	home := filepath.Join(f.dir, "home")
+	t.Setenv("HOME", home)
+	bundle(t, filepath.Join(home, "src", "exe-easel", "apps"), "easel")
+	code, x, why := f.post("easel", `{"check":true,"dir":"~/src/exe-easel"}`)
+	if code != 200 || x.Dir != "~/src/exe-easel/apps" {
+		t.Fatalf("check: %d %+v %s", code, x, why)
+	}
+	if code, x, _ = f.post("easel", `{"on":true,"dir":"`+x.Dir+`"}`); code != 200 || x.State != "on" || x.Dir != "~/src/exe-easel/apps" {
+		t.Fatalf("on: %d %+v", code, x)
+	}
+	// the configuration keeps the whole path, which every reader of it takes
+	if got := f.s.Config().AppsDirs; !reflect.DeepEqual(got, []string{filepath.Join(home, "src", "exe-easel", "apps")}) {
+		t.Fatalf("apps_dirs: %v", got)
+	}
+	if x = f.get()["easel"]; x.Dir != "~/src/exe-easel/apps" {
+		t.Fatalf("told: %+v", x)
+	}
+	// off and on again, by the folder it remembers
+	if code, x, _ = f.post("easel", `{"on":false}`); code != 200 || x.State != "off" || x.Dir != "~/src/exe-easel/apps" {
+		t.Fatalf("off: %d %+v", code, x)
+	}
+	if code, x, _ = f.post("easel", `{"on":true}`); code != 200 || x.State != "on" {
+		t.Fatalf("on again: %d %+v", code, x)
 	}
 }
 
