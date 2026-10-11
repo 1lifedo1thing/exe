@@ -71,7 +71,7 @@ var deskMenuActions = map[string]deskMenuAction{
 	// menu bar equivalents
 	"about": {}, "newvm": {}, "upload": {}, "closewin": {}, "showall": {}, "refresh": {},
 	"winvms": {}, "winmyapps": {}, "winchat": {}, "winnews": {}, "winicons": {},
-	"winconfig": {}, "winlog": {}, "join": {}, "cfstatus": {}, "cfwizard": {},
+	"winconfig": {}, "winlog": {}, "join": {}, "hubjoin": {}, "cfstatus": {}, "cfwizard": {},
 	"token": {}, "docs": {}, "skillguide": {}, "welcome": {}, "update": {},
 	// desktop icons and windows
 	"claude": {}, "codex": {}, "search": {}, "trash": {}, "customize": {},
@@ -123,7 +123,7 @@ const deskMenuDefault = `# Desktop menu — right-click the desktop (long-press 
 #   terminal [command]  claude  codex  workspace [folder]  edit <file>
 #   winvms  winmyapps  winchat  winnews  winicons  winconfig  winlog
 #   vm <name> [svc|term|vibe|expose|sess|notes]  app <name>  chat [vm]
-#   join  cfstatus  cfwizard  token  url <https://…>
+#   join  hubjoin  cfstatus  cfwizard  token  url <https://…>
 #   about  update  docs  skillguide  welcome
 # Lists that fill themselves in: @vms  @apps  @windows
 #   alone on a line they expand in place; after a label they fill a submenu.

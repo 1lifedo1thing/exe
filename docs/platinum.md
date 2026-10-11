@@ -520,6 +520,34 @@ restyling: `internal/server/ui/index.html` (the desktop),
   (`--hl`, white words, the art darkened) and has no other state. What a
   card says of this machine keeps two lines from the first paint; the
   green check beside a ready feature's name keeps its 10px.
+- A wizard (the Hub app's Join a Hub, `#join`): a task of several steps
+  that a new user is walked through takes the app's whole face over its
+  status bar, never a panel on the veil. A head: the app's 32px icon, the
+  task's name in bold, one line under it in `#555`. Down the left, 132px
+  behind a separator, the steps by name on 20px rows, read and never
+  pressed: a done one wears the pass mark's green check, the one in hand
+  OS 9's 6px dot and bold type (stepped pixels at whole scales, a circle
+  between 1x and 2x), the ones to come are `#777`. Beside the list the
+  step's page: a bold line that says what the step asks or shows, 16px
+  lines of copy, the app's own rows and fields, 420px wide at most. Under
+  a separator the button row, 12px all round: Cancel at the left, Go Back
+  and Continue at the right, as the Installer had them, Continue wearing
+  the ring and named for what it does on the last step (Join). All three
+  are there from the first paint: Go Back is grey on the first step,
+  both grey while the wizard waits for an answer. Return presses the
+  ringed button, Escape is Cancel. A page asks or shows one thing, and
+  nothing is kept before the last step's button. A line under a page's
+  fields (`.j-note`) keeps two lines and says what the wizard is doing
+  and what came of it, `#7a1010` when that was a refusal; a button of the
+  page's own (Check Again) has a row with what it did in words beside it,
+  two lines kept; a box whose words change when the button is pressed
+  keeps the height it had, so the button stays under the pointer. Under
+  460px the list gives its room to the page and the head's line counts
+  instead (Step 2 of 4: The Hub). A phone's keyboard is not raised by a
+  page's first field. What is behind the wizard keeps its place, hidden
+  (`visibility`, since a `display: none` scroller loses its place), for
+  whoever cancels; with nothing behind it, Cancel puts the window away.
+  `~/tools/playwright/exe-hub-join-test.js` walks it against a mocked hub.
 - A picture window on a phone is put away by swiping it down: the window
   follows the finger from 6px of vertical travel (a sideways drag and a
   second finger stay the browser's), springs back over 160ms under 90px,

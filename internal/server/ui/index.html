@@ -1560,6 +1560,7 @@ body.mobile th.sorted {
   <div class="dd-item" data-act="macos9">Mac OS 9</div>
   <div class="dd-sep"></div>
   <div class="dd-item" data-act="join">Join…</div>
+  <div class="dd-item" data-act="hubjoin">Join a Hub…</div>
   <div class="dd-sep"></div>
   <div class="dd-item" data-act="cfstatus">Cloudflare Status…</div>
   <div class="dd-item" data-act="cfwizard">Cloudflare Setup Wizard…</div>
@@ -3475,6 +3476,7 @@ const ACTIONS = {
   cfstatus: () => sumOpen(),
   cfwizard: () => wizOpen(false),
   join: () => joinOpen(),
+  hubjoin: () => openHubJoin(),
   token: () => tokOpen(),
   welcome: () => openWelcomeWin(),
   docs: where => openDocsWin(where),
@@ -4963,6 +4965,14 @@ function openAppWin(name, args) {
   }
   openWin(w);
 }
+// Join a Hub…: the Hub app's wizard (Special menu, Welcome's Hub card).
+// The word rides the window's opening, or reaches the open window as a
+// message, and is said once: a reload for an update opens the app plain.
+function openHubJoin() {
+  openAppWin("hub", { join: "1" });
+  const fr = document.querySelector("#win-app-hub .app-frame");
+  if (fr) fr._args = undefined;
+}
 // The emulated Mac chooses a guest resolution; fit its window to whole device
 // pixels, including fractional OS scaling, without a separate resize control.
 function fitMacOS9Window(w) {
@@ -6261,7 +6271,7 @@ for (const k of Object.keys(ACTIONS)) if (!DESK_ACTS[k]) DESK_ACTS[k] = { run: A
 DESK_ACTS.url = { run: href => window.open(href, "_blank", "noopener") };
 // what a system app may ask for over the bridge ({exe:"desk", act, args})
 const BRIDGE_ACTS = new Set(["newvm", "winvms", "winmyapps", "winchat", "winconfig", "claude", "codex",
-  "cfstatus", "cfwizard", "join", "docs", "skillguide", "app"]);
+  "cfstatus", "cfwizard", "join", "hubjoin", "docs", "skillguide", "app"]);
 const DESK_EMPTY = { vms: "No VMs", apps: "No Apps", windows: "No Windows" };
 function deskGen(kind) {
   if (kind === "vms") return sortedVMs(lastVMs).map(vm => ({ label: vm.name, items: vmCtxItems(vm) }));

@@ -77,6 +77,7 @@ The small Mac at its left end is the **Apple menu**.
 | Windows | **Log Viewer** | The daemon's log and the log of requests to the API. |
 | Special | **Mac OS 9** | Opens a Mac running Mac OS 9. See [Mac OS 9](https://exe.v2core.com/docs/using/mac-os-9). |
 | Special | **Join…** | Pairs this exe with another one. See [Joining desks together](https://exe.v2core.com/docs/using/joining-desks-together). |
+| Special | **Join a Hub…** | Joins a hub, a step at a time. See [The Hub](https://exe.v2core.com/docs/using/the-hub). |
 | Special | **Cloudflare Status…** | The tunnel's state and its live counters. |
 | Special | **Cloudflare Setup Wizard…** | Sets up the tunnel and the domain. See [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web). |
 | Special | **Set API Token…** | Asks for the API token this browser sends to exe. |
@@ -181,7 +182,8 @@ The magnifier opens one box that finds VMs, chat sessions, notes and todos.
   still needs. A ready feature has a green check beside its name on the
   first page.
 - The card's button goes there: **New VM…**, the pane of Configuration that
-  sets Chat up, the Cloudflare Setup Wizard, the Hub.
+  sets Chat up, the Cloudflare Setup Wizard, and **Join a Hub…** until a
+  hub is joined, the Hub after.
 - **Read More…** opens this manual on that feature's chapter.
 
 On a new install the window opens with the desktop each time, until you
@@ -1131,6 +1133,7 @@ needs a label before it, as in `My terminal<TAB>terminal`.
 | `search` | Open desktop Search. |
 | `trash` | Open the Trash. |
 | `join` | Open the Node Sync dialog (**Special → Join…**) to pair another exe node. |
+| `hubjoin` | Open the Hub app on **Join a Hub**, its four steps for joining a hub. |
 | `cfstatus` | Open Cloudflare Status. |
 | `cfwizard` | Open the Cloudflare Setup Wizard. |
 | `token` | Open the API Token dialog (**Special → Set API Token…**) for this browser. |
@@ -2914,17 +2917,39 @@ has **Summary** there too. On a phone **Draw…**, **Find…**, **Refresh**,
 
 ### Join a hub
 
-The first time it opens, the app asks for a hub's address: whoever runs
-the hub gives it to you. Press **Connect** and the feed appears. The app
-keeps the address and opens on that hub from then on. To run a hub of
-your own, see [exe-hub](https://github.com/livid/exe-hub).
+**Join a Hub** takes you from no hub to your first post in four steps.
+The Hub app opens on it while it has no hub, and it is also at
+**Special → Join a Hub…** and on the Welcome window's Hub card.
+
+1. **Hub Address.** Type the address whoever runs the hub gave you; its
+   name alone will do. With none to hand, **Use hub.v2core.com** fills in
+   exe's own hub, where releases are announced.
+2. **The Hub.** What answered there: its id, how many users and posts it
+   has, and whether posting is open to every key or token-gated. Nothing
+   has been sent to it yet.
+3. **Your Key.** This machine's key is your account, so there is nothing
+   to sign up for. The page shows the key's two names and, under a green
+   check, that it may post. On a token-gated hub that does not take the
+   key yet, it says what the hub asks for instead: how much of which
+   token the address must hold, or an invitation from one of the hub's
+   admins. **Check Again** asks the hub once more. You can go on either
+   way, since reading needs neither.
+4. **Your Profile.** The name, picture and bio your posts will carry.
+   **Join** publishes them on the hub, keeps the address and opens the
+   feed. Leave the name empty to join as a reader with no profile.
+
+**Go Back** returns to the step before, and **Cancel** leaves everything
+as it was. The app keeps the address and opens on that hub from then on.
+To run a hub of your own, see
+[exe-hub](https://github.com/livid/exe-hub).
 
 The status line shows the hub's address and id, and which kind of hub it
 is: **open**, or **token-gated** (the next section says what that asks
 of you). Click the address for **Hub Info**: the hub's address (also as
 a multiaddr), id and public key, each copied with a click, then its gate
 and how many users and posts it has. **Connect…** there moves the app to
-another hub.
+another hub at once, by its address alone; **Special → Join a Hub…**
+moves it with the four steps.
 
 ### Your name and your key
 

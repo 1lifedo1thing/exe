@@ -380,15 +380,18 @@ const FEATS = [
     blurb: "A small public feed shared between exe nodes. Join someone’s hub, or run one of your own.",
     lead: "A small public feed shared between exe nodes.",
     text: ["An exe-hub is one program anyone can run, and a key is an account there: what you post from this desktop is signed by this machine’s key, and everything you read is public. Posts carry pictures, movies, drawings and Markdown, and a thread fills in as its replies arrive.",
-      "The Hub app asks which hub to join the first time it opens. A hub may be open to every key, or take only the ones its admins invite or that hold its token."],
+      "Join a Hub… walks through it in four steps: the hub’s address, what answers there, how this machine’s key stands with it, and the name your posts will carry. A hub may be open to every key, or take only the ones its admins invite or that hold its token."],
     more: "The Hub",
     state() {
       if (S.hub === undefined) return WAIT;
       const at = S.hub && typeof S.hub.hub === "string" ? S.hub.hub.replace(/^https?:\/\//, "").replace(/\/+$/, "") : "";
       return at ? { kind: "ok", text: "Joined: " + at + "." }
-        : { kind: "todo", text: "No hub is joined yet. The Hub app asks for one’s address when it opens." };
+        : { kind: "todo", text: "No hub is joined yet. Join a Hub… asks for one’s address, and offers exe’s own." };
     },
-    acts: () => [{ label: "Open Hub", act: "app", args: ["hub"] }] },
+    // the wizard while there is no hub, the app once there is one (the
+    // Special menu keeps Join a Hub… for moving to another)
+    acts: () => S.hub && typeof S.hub.hub === "string" && S.hub.hub ? [{ label: "Open Hub", act: "app", args: ["hub"] }]
+      : [{ label: "Join a Hub…", act: "hubjoin", off: S.hub === undefined }] },
   { key: "cf", icon: ICON.cloud, name: "Cloudflare",
     blurb: "A public HTTPS address for anything a VM serves, through a Cloudflare tunnel and a domain of yours.",
     lead: "A public HTTPS address for anything a VM serves.",
@@ -804,6 +807,9 @@ new ResizeObserver(skyFit).observe(sky);
 })();
 LESS.addEventListener("change", () => { if (LESS.matches) skyStill(); skyDraw(); skyRun(); });
 document.addEventListener("visibilitychange", () => { skyRun(); if (!document.hidden) ask(); });
+// what a card sent the reader off to do (the Hub's wizard, a sign-in) is
+// done in another window: coming back to this one asks again
+window.addEventListener("focus", ask);
 // the desktop says when the window is closed (it is hidden, not destroyed)
 // and when it is opened again: the header rests, and comes back to the
 // first page with fresh answers

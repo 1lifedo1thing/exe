@@ -532,6 +532,97 @@ button.ghost.qrb .gl { display: block; }
 #dlg .qrtext { text-align: center; }
 #dlg .qrtext .ival { display: inline-block; max-width: 100%; }
 
+/* Join a Hub: the wizard a new user joins a hub by. It takes the app's
+   whole face over the status bar (the feed under it keeps its place,
+   hidden, for whoever cancels): a head with the app's icon, the four
+   steps listed down the left beside the step's own page, and a button row
+   of its own under a separator — Cancel at the left, Go Back and the
+   ringed Continue at the right, as the Installer had them. Every part is
+   there from the first paint and a page only fills it: Go Back goes grey
+   on the first step, a line that will say something keeps its room. The
+   veil's panels (the QR code, an alert) come after it in the page and
+   draw over it. */
+body { position: relative; }
+body.joining #wrap { visibility: hidden; }
+#join { position: absolute; left: 0; right: 0; top: 0; bottom: 15px; display: flex; flex-direction: column;
+  background: var(--g200); line-height: 16px; }
+#join[hidden] { display: none; }
+/* separators are a 1px #999 line over a 1px white one */
+.j-head { flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border-bottom: 1px solid var(--g600); }
+.j-head svg { flex: none; display: block; }
+.j-head h1 { margin: 0; font-size: 12px; line-height: 16px; }
+.j-head p { margin: 0; color: #555; }
+.j-head .narrow { display: none; }
+.j-mid { flex: 1; min-height: 0; display: flex; box-shadow: inset 0 1px 0 #fff; }
+/* the steps: a done one wears the pass mark's green check, the one in
+   hand OS 9's dot and bold type, the ones to come grey. They are read,
+   never pressed. */
+#j-steps { flex: none; width: 132px; margin: 0; padding: 11px 8px 0 14px; list-style: none;
+  border-right: 1px solid var(--g600); }
+#j-steps li { display: flex; align-items: center; gap: 6px; height: 20px; color: #777; white-space: nowrap; }
+#j-steps li.now { color: var(--black); font-weight: bold; }
+#j-steps li.done { color: var(--black); }
+#j-steps .m { flex: none; width: 10px; height: 10px; display: flex; align-items: center; justify-content: center; }
+#j-steps .m svg { display: none; }
+#j-steps li.done .m .tick { display: block; fill: var(--green); }
+/* the dot is stepped pixels at whole scales and a circle between them,
+   where a stepped one comes out a blunt square */
+#j-steps .m .dot { fill: var(--black); }
+#j-steps li.now .m .dot.crisp { display: block; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  #j-steps li.now .m .dot.crisp { display: none; }
+  #j-steps li.now .m .dot.fine { display: block; }
+}
+#j-page { flex: 1; min-width: 0; overflow-y: auto; padding: 12px 14px 4px; box-shadow: inset 1px 0 0 #fff; }
+#j-page > * { max-width: 420px; }
+#j-page h2 { margin: 0 0 6px; font-size: 12px; line-height: 16px; }
+#j-page p { margin: 0 0 10px; }
+#j-page a { color: var(--hl); }
+#j-page .row { margin: 0 0 8px; display: flex; flex-direction: column; gap: 3px; }
+#j-page label { font-size: 11px; }
+#j-page .row .ival { flex: none; align-self: flex-start; max-width: 100%; }
+#j-page .row .kv { display: flex; align-items: center; gap: 8px; }
+#j-page .row .kv .ival { flex: 0 1 auto; min-width: 0; align-self: center; line-height: 20px; }
+#j-page input:disabled { background: var(--g200); color: #777; }
+/* the line under a page's fields says what the wizard is doing and what
+   came of it; it keeps two lines, so the page is as tall with it empty */
+.j-note { min-height: 32px; margin: 0 0 10px; font-size: 11px; color: #555; }
+.j-note.err { color: #7a1010; }
+/* a group under a page's own matter: a second thought, set off by 16px */
+.j-group { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--g600); box-shadow: inset 0 1px 0 #fff; }
+/* how this key stands with the hub: the words, selectable (a mint is to
+   be copied), under the green check when it may post. Asked again, the
+   box keeps the height it had (joinVerdict's keep), so Check Again stays
+   under the pointer that pressed it. */
+#j-verdict { margin: 0 0 10px; user-select: text; cursor: text; }
+#j-verdict div { margin-top: 10px; }
+#j-verdict.ok { color: #0f6b20; }
+#j-verdict.warn { color: #7a1010; }
+#j-verdict .tick { display: inline-block; vertical-align: -1px; margin-right: 4px; fill: var(--green); }
+#j-verdict ul { margin: 2px 0; padding: 0 0 0 16px; }
+#j-verdict .ival { cursor: pointer; }
+/* a button of the page's own gets a row. Where the row also says what
+   the button did (.said), it keeps the two lines those words may take
+   from the first paint, so nothing under it moves when they come. */
+.j-btn { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; }
+.j-btn.said { min-height: 32px; }
+.j-btn button { flex: none; white-space: nowrap; }
+.j-btn span { font-size: 11px; color: #555; min-width: 0; }
+.j-foot { flex: none; display: flex; align-items: center; gap: 12px; padding: 12px;
+  border-top: 1px solid var(--g600); box-shadow: inset 0 1px 0 #fff; }
+.j-foot .gap { flex: 1; min-width: 0; }
+.j-foot button { min-width: 58px; }
+/* a narrow window, and a phone: the list gives its room to the page, and
+   the head counts the steps instead */
+@media (max-width: 459px) {
+  #j-steps { display: none; }
+  #j-page { box-shadow: none; }
+  .j-head .wide { display: none; }
+  .j-head .narrow { display: inline; }
+  .j-foot { flex-wrap: wrap; row-gap: 10px; }
+}
+
 /* a contextual menu, the desktop's Finder one (index.html .dropdown and
    #ctx-menu) in the app — Blue Pencil's block: #ddd face, 1px black
    outline, white and #bbb inset bevel, the hard 2px shadow; rows 3px 22px
@@ -706,6 +797,34 @@ body.mobile #status { padding-right: 8px; }
     </div>
   </div>
   <div id="feed"></div>
+</div>
+
+<div id="join" hidden>
+  <div class="j-head">
+    <svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
+      <path fill="#99ccff" d="M5 5h22v22H5z"/>
+      <path fill="#000000" d="M4 4h24v1H4z M4 4h1v24H4z M4 27h24v1H4z M27 4h1v24h-1z"/>
+      <path fill="#333399" d="M14 14h4v4h-4z"/>
+      <path fill="#6666cc" d="M8 7h3v3H8z M21 7h3v3h-3z M8 22h3v3H8z M21 22h3v3h-3z"/>
+      <path fill="#000000" d="M9 8h1v1H9z M22 8h1v1h-1z M9 23h1v1H9z M22 23h1v1h-1z"/>
+      <path fill="#333399" d="M11 10h1v1h-1z M12 11h1v1h-1z M13 12h1v1h-1z M20 10h1v1h-1z M19 11h1v1h-1z M18 12h1v1h-1z M11 21h1v1h-1z M12 20h1v1h-1z M13 19h1v1h-1z M20 21h1v1h-1z M19 20h1v1h-1z M18 19h1v1h-1z"/>
+      <path fill="#ffffff" d="M14 14h1v1h-1z M8 7h1v1H8z M21 7h1v1h-1z M8 22h1v1H8z M21 22h1v1h-1z"/>
+    </svg>
+    <div>
+      <h1>Join a Hub</h1>
+      <p><span class="wide">A small public feed shared between exe nodes.</span><span class="narrow" id="j-count"></span></p>
+    </div>
+  </div>
+  <div class="j-mid">
+    <ol id="j-steps" aria-label="Steps"></ol>
+    <div id="j-page"></div>
+  </div>
+  <div class="j-foot">
+    <button class="ghost" id="j-cancel">Cancel</button>
+    <span class="gap"></span>
+    <button class="ghost" id="j-back">Go Back</button>
+    <button class="ghost default" id="j-next">Continue</button>
+  </div>
 </div>
 
 <div id="status">
@@ -891,10 +1010,10 @@ async function askHub(base, ms = 8000) {
 }
 
 // ---- writes go through the daemon, which holds the key ----
-async function publish(type, body) {
+async function publish(type, body, base = hub) {
   const r = await api("/v1/hub/publish", { method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ hub, type, body }) });
+    body: JSON.stringify({ hub: base, type, body }) });
   const out = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(out.error || "HTTP " + r.status);
   return out;
@@ -2009,7 +2128,7 @@ function markHits(root, q) {
   }
 }
 function findDialog() {
-  if (!hub || $("#veil").classList.contains("on")) return;
+  if (!hub || J || $("#veil").classList.contains("on")) return;
   const input = el("input", { type: "text", maxlength: 200, value: lastQuery });
   const go = el("button", { class: "ghost default" }, "Find");
   const cancel = el("button", { class: "ghost" }, "Cancel");
@@ -3118,7 +3237,7 @@ $("#file").onchange = e => {
 };
 // a pasted image (screenshot, copied picture) attaches like a chosen file
 document.addEventListener("paste", e => {
-  if ($("#veil").classList.contains("on")) return; // dialogs paste normally
+  if (J || $("#veil").classList.contains("on")) return; // dialogs and the wizard paste normally
   const files = [...e.clipboardData.items]
     .filter(it => it.kind === "file").map(it => it.getAsFile()).filter(Boolean);
   if (!files.length) return;
@@ -4233,7 +4352,8 @@ function toMultiaddr(u) {
 // (the desktop About window sets the pattern). A hub that is down still
 // gets its dialog — from what we last knew — so Connect… stays reachable.
 async function hubInfoDialog() {
-  if (!hub) { hubDialog(true); return; }
+  if (J) return; // the wizard is asking about a hub of its own
+  if (!hub) { joinOpen(); return; }
   try { hubInfo = await hget("/v1/hub"); }
   catch (e) { say("Hub unreachable: " + e.message, true); }
   showHubInfo(hubInfo);
@@ -4269,7 +4389,8 @@ function showHubInfo(info) {
 }
 $("#st-hub").onclick = hubInfoDialog;
 
-// firstRun: the onboarding form, no way out but connecting.
+// firstRun: no way out but connecting — the panel a saved hub that is not
+// answering gets at boot (a first run with no hub is the wizard's, below).
 // onCancel: what Cancel returns to (the Hub Info dialog), else just close.
 // The field opens on the hub we know — empty only before there is one —
 // so a saved hub that did not answer takes one Return to ask again.
@@ -4577,6 +4698,423 @@ function profileDialog(needName) {
 }
 $("#me").onclick = () => profileDialog(false);
 
+// ---- Join a Hub: the wizard ----
+// Four steps, each a page that asks or shows one thing: where the hub is,
+// what answered there, how this node's key stands with it, and the name
+// the posts will carry. Nothing is kept until the last step's Join: that
+// publishes the profile, saves the address and opens the feed. The app
+// opens on it while it has no hub, and the desktop asks for it by name
+// (Special → Join a Hub…, Welcome's Hub card) with ?join=1 or an
+// {exe:"open", join:"1"} message.
+const EXE_HUB = "https://hub.v2core.com"; // exe's own hub, for whoever has no address to hand
+const IN_DESK = window.parent !== window;
+const J_STEPS = ["Hub Address", "The Hub", "Your Key", "Your Profile"];
+const J_DOT = '<svg class="dot crisp" viewBox="0 0 6 6" width="6" height="6" shape-rendering="crispEdges" aria-hidden="true"><path d="M1 0h4v1H1zM0 1h6v4H0zM1 5h4v1H1z"/></svg>' +
+  '<svg class="dot fine" viewBox="0 0 6 6" width="6" height="6" aria-hidden="true"><circle cx="3" cy="3" r="3"/></svg>';
+let J = null; // the join in hand: {step, addr, hub, info, relayed, gate, profile, seeded, name, bio, avatar, busy, note, run}
+const jhost = u => u.replace(/^https?:\/\//, "");
+$("#j-steps").innerHTML = J_STEPS.map(s => `<li><span class="m">${TICK}${J_DOT}</span><span>${s}</span></li>`).join("");
+
+function joinOpen() {
+  if (J) return;
+  hideMenu();
+  // a saved hub that is not answering is the likeliest one to be asked again
+  J = { step: 0, addr: hubInfo ? "" : hub, hub: "", info: null, relayed: false, gate: null, profile: null,
+    seeded: false, name: "", bio: "", avatar: "", busy: false, note: null, run: 0 };
+  document.body.classList.add("joining");
+  $("#join").hidden = false;
+  joinDraw();
+}
+function joinClose() {
+  J = null;
+  $("#join").hidden = true;
+  document.body.classList.remove("joining");
+  fitField(); // the window may have been resized over the hidden composer
+}
+// Cancel goes back to the hub the app is on. With none there is nothing
+// behind the wizard: the window is put away, and opens on the first step.
+function joinCancel() {
+  if (hubInfo) { joinClose(); return; }
+  J.run++;
+  J.step = 0;
+  J.busy = false;
+  J.note = null;
+  joinDraw();
+  if (IN_DESK) parent.postMessage({ exe: "close" }, location.origin);
+}
+
+// Whether this key may post there: true, false, or null where the hub did
+// not say (an older hub has no /v1/gate; a gate may not reach its RPC).
+function joinMay() {
+  const g = J.gate;
+  if (g) return g.banned ? false : ["open", "admin", "invited", "pass"].includes(g.gate) ? true : g.gate === "below" ? false : null;
+  return J.info.gate && J.info.gate.mode === "token" ? null : true;
+}
+// An answer that comes back after Cancel, or after another asking began,
+// is dropped: live() says whether this one is still the one awaited.
+function joinRun() {
+  const me = J, n = ++J.run;
+  return () => J === me && J.run === n;
+}
+// What the hub says of this key, and the profile the key has there
+// already, both by the road the hub answered on. The gate's word is null
+// where the hub gave none. The profile is null where the hub has none
+// (its 404) and undefined where it did not say: a profile that could not
+// be read is not taken for a missing one, since Join would write over it.
+async function joinAskKey() {
+  const get = async path => {
+    try {
+      const r = await fetch(hurl(path, J.hub, J.relayed), { signal: AbortSignal.timeout(20000) });
+      if (!r.ok) { await r.text().catch(() => {}); return r.status === 404 ? null : undefined; }
+      return await r.json();
+    } catch (e) { return undefined; }
+  };
+  if (!who) return [null, null];
+  const [gate, profile] = await Promise.all([
+    get("/v1/gate?author=" + encodeURIComponent(who.pubkey)),
+    get("/v1/profile/" + who.id),
+  ]);
+  return [gate || null, profile];
+}
+// A typed address is a hub's whole address or just its name. A bare name
+// is asked over HTTPS first, a bare IP or a name with a port over plain
+// HTTP first, as each is usually served; a path after it (a post's link,
+// pasted) is left behind.
+function joinCandidates(text) {
+  const v = text.trim();
+  const tries = /^https?:\/\//i.test(v) ? [v]
+    : /^(\d{1,3}(\.\d{1,3}){3}|\[[0-9a-f:]+\]|localhost|[^/]+:\d+)(\/|$)/i.test(v) ? ["http://" + v, "https://" + v]
+    : ["https://" + v, "http://" + v];
+  const out = [];
+  for (const t of tries) {
+    try {
+      const u = new URL(t);
+      if (u.hostname && !out.includes(u.origin)) out.push(u.origin);
+    } catch (e) {}
+  }
+  return out;
+}
+
+function joinNote(text, err) {
+  J.note = text ? { text, err: !!err } : null;
+  const n = $("#j-page .j-note");
+  if (!n) return;
+  n.textContent = text || n.dataset.idle || "";
+  n.classList.toggle("err", !!text && !!err);
+}
+function joinBusy(on) {
+  J.busy = on;
+  joinButtons();
+}
+function joinButtons() {
+  const last = J.step === J_STEPS.length - 1;
+  $("#j-cancel").hidden = !hubInfo && !IN_DESK; // a tab of its own has no window to put away
+  $("#j-back").disabled = J.step === 0 || J.busy;
+  $("#j-next").textContent = last ? "Join" : "Continue";
+  $("#j-next").disabled = J.busy;
+}
+function joinDraw() {
+  [...$("#j-steps").children].forEach((li, i) => {
+    li.className = i < J.step ? "done" : i === J.step ? "now" : "";
+    i === J.step ? li.setAttribute("aria-current", "step") : li.removeAttribute("aria-current");
+  });
+  $("#j-count").textContent = "Step " + (J.step + 1) + " of " + J_STEPS.length + ": " + J_STEPS[J.step];
+  const page = $("#j-page");
+  page.replaceChildren(...[joinAddressPage, joinHubPage, joinKeyPage, joinProfilePage][J.step]());
+  page.scrollTop = 0;
+  joinButtons();
+  if (J.note) joinNote(J.note.text, J.note.err);
+  // the keyboard starts in the page's first field (not on a phone, where
+  // it would raise the keys over the page), else on the ringed button
+  const field = page.querySelector("input[type=text]:not(:disabled)");
+  (field && !IS_MOBILE ? field : $("#j-next")).focus({ preventScroll: true });
+}
+
+// 1. where the hub is
+function joinAddressPage() {
+  const input = el("input", { type: "text", id: "j-addr", placeholder: "hub.example.com",
+    autocapitalize: "off", autocorrect: "off", spellcheck: "false" });
+  input.value = J.addr;
+  input.oninput = () => { J.addr = input.value; if (J.note && !J.busy) joinNote(""); };
+  const use = el("button", { class: "ghost" }, "Use " + jhost(EXE_HUB));
+  use.onclick = () => { input.value = J.addr = EXE_HUB; joinNote(""); $("#j-next").focus(); };
+  return [
+    el("h2", {}, "Where is the hub?"),
+    el("p", {}, "A hub is a program someone runs, and whoever runs it gives you its address. " +
+      (hubInfo ? "This app is on " + jhost(hub) + " now: joining another hub moves it there, and what you posted stays where it is."
+        : "Everything on a hub is public, and this step sends it nothing: it only asks who is there.")),
+    el("div", { class: "row" }, el("label", { for: "j-addr" }, "Hub address"), input),
+    el("div", { class: "j-note", role: "status" }),
+    el("div", { class: "j-group" },
+      el("h2", {}, "No address to hand?"),
+      el("p", {}, "exe has a hub of its own, where its releases are announced and people show what they have made."),
+      el("div", { class: "j-btn" }, use)),
+  ];
+}
+async function joinAsk() {
+  const tries = joinCandidates(J.addr);
+  if (!J.addr.trim()) { joinNote("Type the hub's address first.", true); return; }
+  if (!tries.length) { joinNote("That does not read as an address.", true); return; }
+  const live = joinRun();
+  joinBusy(true);
+  joinNote("Asking " + jhost(tries[0]) + "…");
+  const fail = text => { joinBusy(false); joinNote(text, true); };
+  let at = null, base = "", why = null;
+  for (const t of tries) {
+    try { at = await askHub(t); base = t; break; } catch (e) { why = why || e; }
+    if (!live()) return;
+  }
+  if (!live()) return;
+  if (!at) { fail("No hub answered at " + jhost(tries[0]) + " (" + why.message + ")."); return; }
+  // another hub than the one asked before: what was learnt of the key there goes
+  if (base !== J.hub) { J.seeded = false; J.profile = J.gate = null; }
+  J.hub = base; J.info = at.info; J.relayed = at.relayed;
+  const [gate, profile] = await joinAskKey();
+  if (!live()) return;
+  if (profile === undefined) { fail("A hub answered at " + jhost(base) + ", but not about this machine's key. Try again."); return; }
+  J.gate = gate;
+  J.profile = profile;
+  // the fields start from the profile the key has there, else from this
+  // node's name; once shown they are the user's, and asking again keeps them
+  if (!J.seeded) {
+    J.seeded = true;
+    J.name = profile ? profile.name || "" : (who && who.name) || "";
+    J.bio = profile ? profile.bio || "" : "";
+    J.avatar = profile ? profile.avatar || "" : "";
+  }
+  J.busy = false;
+  J.note = null;
+  J.step = 1;
+  joinDraw();
+}
+
+// 2. what answered there
+function joinHubPage() {
+  const info = J.info, st = info.stats, token = info.gate && info.gate.mode === "token";
+  const row = (label, val, mono) => el("div", { class: "irow" },
+    el("span", { class: "ilab" }, label), el("span", { class: "ival" + (mono ? " mono" : "") }, val));
+  return [
+    el("h2", {}, "This is the hub there"),
+    row("Address", el("a", { href: J.hub + "/", target: "_blank", rel: "noopener" }, jhost(J.hub))),
+    row("Hub id", info.id, true),
+    row("Users", st ? st.profiles.toLocaleString() : "—"),
+    row("Posts", st ? st.posts.toLocaleString() : "—"),
+    row("Posting", token ? "Token-gated" : "Open to every key"),
+    el("p", { style: "margin-top: 10px" }, "Everything on a hub is public: its address opens in any browser, and joining shows the same posts here. " +
+      "What a hub decides is who may post."),
+    el("p", {}, token
+      ? "This one is token-gated: a key may post once its Solana address holds the hub's token, or once one of the hub's admins has invited it. The next step shows how this machine's key stands."
+      : "This one is open: any key may post, this machine's too."),
+  ];
+}
+
+// 3. the key, and how it stands with the hub
+function joinVerdict(keep) {
+  const g = J.gate, may = joinMay(), token = J.info.gate && J.info.gate.mode === "token";
+  const box = el("div", { id: "j-verdict", role: "status" });
+  if (keep) box.style.minHeight = keep + "px";
+  const ok = text => { box.className = "ok"; box.innerHTML = TICK; box.append(text); };
+  if (!who) { box.className = "warn"; box.append("exe did not say which key this machine has, so the hub cannot be asked about it."); }
+  else if (g && g.banned) { box.className = "warn"; box.append("This key is banned on this hub: it may read here, and not post."); }
+  else if (may && g && g.gate === "admin") ok("This key is one of the hub's admins: it may post.");
+  else if (may && g && g.gate === "invited") ok("One of the hub's admins has invited this key: it may post.");
+  else if (may && g && g.gate === "pass") ok("This address holds the hub's token: this key may post.");
+  else if (may) ok("This hub is open: this key may post.");
+  else if (may === false) {
+    const mints = g.mints || [];
+    box.append("This key may read here and not post yet. To post, its address must hold" +
+      (mints.length > 1 ? " one of these:" : mints.length ? ":" : " the hub's token."));
+    if (mints.length) {
+      // each token on two lines: how much of it, and what is held, then
+      // the mint whole, which a click copies
+      const list = el("ul");
+      for (const m of mints) {
+        const units = m.raw ? " raw units" : "";
+        const mint = el("span", { class: "ival mono copy", title: "Click to copy" }, m.mint);
+        mint.onclick = () => { if (getSelection().isCollapsed) copyText(m.mint, "the token's mint"); };
+        list.append(el("li", {}, m.amount + units + " of this token" +
+          (m.held !== undefined ? " (it holds " + m.held + units + ")" : "") + ":", el("br"), mint));
+      }
+      box.append(list);
+    }
+    box.append((mints.length ? "" : " ") + "Or one of the hub's admins invites the key: give them the Id above.",
+      el("div", {}, "Continue either way: joining reads the hub at once, and posting starts when the hub lets the key in."));
+  } else if (g && g.gate === "unavailable") { box.className = "warn"; box.append("The hub could not look at this address just now: its road to Solana is down. Check again in a while."); }
+  else box.append(token ? "This hub is token-gated, and did not say how this key stands. The first post will tell."
+    : "The hub did not say how this key stands.");
+  return box;
+}
+function joinKeyPage() {
+  const token = J.info.gate && J.info.gate.mode === "token";
+  const said = el("span");
+  const again = el("button", { class: "ghost" }, "Check Again");
+  again.onclick = async () => {
+    const live = joinRun();
+    again.disabled = true;
+    said.textContent = "Asking the hub…";
+    const [gate] = await joinAskKey();
+    if (!live() || !again.isConnected) return;
+    if (gate) J.gate = gate;
+    $("#j-verdict").replaceWith(joinVerdict($("#j-verdict").offsetHeight));
+    again.disabled = false;
+    said.textContent = gate ? "Checked. A hub may take minutes to see a new holding."
+      : "The hub did not answer. Try again in a moment.";
+  };
+  const out = [
+    el("h2", {}, "This machine's key is your account"),
+    el("p", {}, "There is no account to make and no password to keep. This machine has a key, and what you post from this desktop is signed with it. A hub knows the key by two names:"),
+    keyRow("Id", who && who.id, "id"),
+    keyRow("Solana address", who && who.address, "Solana address",
+      () => qrDialog("Solana Address", who.address, "Solana address", () => {
+        // the panel goes, and the keyboard with it: back to the ringed button
+        $("#veil").classList.remove("on");
+        $("#j-next").focus({ preventScroll: true });
+      })),
+    joinVerdict(),
+  ];
+  if (token && who) out.push(el("div", { class: "j-btn said" }, again, said));
+  return out;
+}
+
+// 4. the name the posts carry
+function joinProfilePage() {
+  const may = joinMay() !== false && !!who;
+  const name = el("input", { type: "text", id: "j-name", maxlength: 64 });
+  const bio = el("input", { type: "text", id: "j-bio", maxlength: 200 });
+  name.value = J.name; bio.value = J.bio;
+  name.oninput = () => { J.name = name.value; };
+  bio.oninput = () => { J.bio = bio.value; };
+  const avaBox = el("div", { class: "ava-row" });
+  const pick = el("button", { class: "ghost" }, "Choose Picture…");
+  const file = el("input", { type: "file", accept: "image/*", hidden: "" });
+  const face = () => {
+    if (J.avatar) return el("img", { class: "ava-big", src: hurl("/v1/embed/" + J.avatar, J.hub, J.relayed), alt: "" });
+    const c = identicon(who ? who.id : "0");
+    c.className = "ava-big";
+    return c;
+  };
+  const renderAva = () => avaBox.replaceChildren(face(), pick, file);
+  renderAva();
+  pick.onclick = () => file.click();
+  file.onchange = async e => {
+    const f = e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    if (f.size > 8 << 20) { joinNote("That picture is over 8 MB.", true); return; }
+    // the step is held while the picture is on its way
+    const live = joinRun();
+    pick.disabled = true;
+    joinBusy(true);
+    joinNote("Sending the picture…");
+    let cid = "", why = "";
+    try {
+      const r = await api("/v1/hub/avatar?hub=" + encodeURIComponent(J.hub), { method: "POST", body: f });
+      const out = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(out.error || "HTTP " + r.status);
+      cid = out.cid; // the hub minted a 128×128 PNG
+    } catch (e2) { why = e2.message; }
+    if (!live()) return;
+    pick.disabled = false;
+    joinBusy(false);
+    if (cid) { J.avatar = cid; renderAva(); }
+    joinNote(cid ? "" : "The hub did not take the picture: " + why, !cid);
+  };
+  name.disabled = bio.disabled = pick.disabled = !may;
+  const note = el("div", { class: "j-note", role: "status" });
+  note.dataset.idle = !may ? "This key may not post here yet, so the hub takes no name from it. Join to read; Profile… sets the name once the key is let in."
+    : J.profile ? "This key has a profile on this hub already. Join keeps it, with whatever is changed here."
+    : "Join publishes this on the hub, for everyone to read. Leave the name empty to join as a reader, with no profile.";
+  note.textContent = note.dataset.idle;
+  return [
+    el("h2", {}, "Your name on this hub"),
+    el("p", {}, "Posts carry a name, a picture and a line about you. All three can be changed later, under Profile… in the Hub window."),
+    el("div", { class: "row" }, el("label", {}, "Picture"), avaBox),
+    el("div", { class: "row" }, el("label", { for: "j-name" }, "Display name"), name),
+    el("div", { class: "row" }, el("label", { for: "j-bio" }, "Bio"), bio),
+    note,
+  ];
+}
+// Join: the profile goes to the hub first, where there is one to send and
+// the key may send it, so a refusal is read on the page it came from; then
+// the address is kept and the app opens on the hub.
+async function joinFinish() {
+  const live = joinRun(), had = J.profile || {};
+  const body = { name: J.name.trim(), bio: J.bio.trim() };
+  if (J.avatar) body.avatar = J.avatar;
+  const send = joinMay() !== false && !!who && !!body.name &&
+    (body.name !== had.name || body.bio !== (had.bio || "") || J.avatar !== (had.avatar || ""));
+  joinBusy(true);
+  if (send) {
+    joinNote("Publishing the profile…");
+    let why = "";
+    try { await publish("profile.set", body, J.hub); } catch (e) { why = e.message || "no answer"; }
+    if (!live()) return;
+    if (why) {
+      // the gate may have changed its mind since the last step: ask, and
+      // the page says where the key stands now
+      const [gate] = await joinAskKey();
+      if (!live()) return;
+      if (gate) J.gate = gate;
+      J.busy = false;
+      J.note = { text: "The hub did not take the profile: " + why + "." +
+        (joinMay() === false ? "" : " Join again, or empty the name to join without one."), err: true };
+      joinDraw();
+      return;
+    }
+  }
+  joinNote("Joining…");
+  let why = "";
+  try {
+    const r = await api(CONFIG_URL, { method: "PUT", body: JSON.stringify({ hub: J.hub }) });
+    if (!r.ok) { await r.text().catch(() => {}); throw new Error("HTTP " + r.status); }
+  } catch (e) { why = e.message; }
+  if (!live()) return;
+  if (why) { joinBusy(false); joinNote("exe could not keep the address: " + why, true); return; }
+  hub = J.hub; hubInfo = J.info; relayed = J.relayed;
+  joinClose();
+  await connected();
+  toast("Joined " + jhost(hub));
+}
+
+$("#j-cancel").onclick = joinCancel;
+$("#j-back").onclick = () => { if (J.step > 0 && !J.busy) { J.run++; J.step--; J.note = null; joinDraw(); } };
+$("#j-next").onclick = () => {
+  if (J.busy) return;
+  if (J.step === 0) { joinAsk(); return; }
+  if (J.step === J_STEPS.length - 1) { joinFinish(); return; }
+  J.run++;
+  J.step++;
+  J.note = null;
+  joinDraw();
+};
+// Return presses the ringed button and Escape is Cancel, while no panel
+// of the veil's is over the wizard
+document.addEventListener("keydown", e => {
+  if (!J || e.isComposing || $("#veil").classList.contains("on")) return;
+  if (e.key === "Escape") { if (!$("#j-cancel").hidden) { e.preventDefault(); joinCancel(); } return; }
+  if (e.key !== "Enter" || e.target.closest("button, a")) return;
+  e.preventDefault();
+  $("#j-next").click();
+});
+// The desktop asks for the wizard. While the app is still finding its
+// hub the word is kept for the end of that; over a panel someone is
+// working in it is not heard — only the panel that waits for a saved hub
+// to answer steps aside.
+let booted = false, wantJoin = new URLSearchParams(location.search).get("join") === "1", bootDlg = null;
+function joinAsked() {
+  if (!booted) { wantJoin = true; return; }
+  if (J) return;
+  if ($("#veil").classList.contains("on")) {
+    if (!(bootDlg && bootDlg.input.isConnected)) return;
+    bootDlg.close();
+  }
+  joinOpen();
+}
+window.addEventListener("message", e => {
+  if (e.origin !== location.origin || !e.data || e.data.exe !== "open" || e.data.join !== "1") return;
+  joinAsked();
+});
+
 // ---- boot ----
 async function connected() {
   $("#st-hub").textContent = hub.replace(/^https?:\/\//, "") +
@@ -4624,12 +5162,23 @@ async function connected() {
       $("#st-hub").textContent = "Connecting to " + hub.replace(/^https?:\/\//, "") + "\u2026";
       await pause(1000);
     }
-    if (hubInfo) { await connected(); return; }
+    if (hubInfo) {
+      await connected();
+      booted = true;
+      if (wantJoin) joinOpen();
+      return;
+    }
     $("#st-hub").textContent = "Hub unreachable: " + hub;
   }
   feedEl.append(el("div", { class: "muted" }, "Not connected."));
-  const dlg = hubDialog(true, null, hub ? "This hub is not answering. Still trying…" : "");
-  if (!hub) return;
+  booted = true;
+  // no hub yet, or the desktop asked for the wizard by name: Join a Hub
+  if (!hub || wantJoin) {
+    if (!hub) $("#st-hub").textContent = "Not connected";
+    joinOpen();
+    return;
+  }
+  const dlg = bootDlg = hubDialog(true, null, "This hub is not answering. Still trying…");
   const savedHub = hub;
   const waiting = () => !hubInfo && dlg.input.value.trim() === savedHub;
   while (waiting()) {
@@ -4640,7 +5189,7 @@ async function connected() {
     if (!at || !waiting() || dlg.go.disabled) continue;
     hubInfo = at.info;
     relayed = at.relayed;
-    dlg.close();
+    if (dlg.input.isConnected) dlg.close(); // the wizard may have taken its place
     await connected();
   }
 })();
