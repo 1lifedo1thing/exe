@@ -11,4 +11,4 @@ docs/release.md, "The notes", says how it is written.
 - The manual opens on its contents, reads a chapter at a time and can be searched.
 - **Blue Pencil**'s options take a **Custom prompt**, such as "I prefer writing in lowercase".
 - On a Mac, restarting exe shuts the VMs down first. It used to cut their power.
-- In a **Codex** window the mouse wheel scrolls the conversation again, not the composer's past prompts.
+- Right-click a window's title bar for **Save a Screenshot**: a PNG of it lands in Workspace/Screenshots.

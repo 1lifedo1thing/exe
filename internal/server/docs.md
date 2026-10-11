@@ -138,6 +138,23 @@ are open. It is mirrored live to every browser looking at this desk, so
 dragging a window here moves it on your other screens too. A phone shows one
 window at a time and keeps its own.
 
+### Save a screenshot of a window
+
+Right-click a window's title bar (on a touch screen, press and hold it) and
+choose **Save a Screenshot**. A PNG of that window alone lands in the
+Workspace's **Screenshots** folder, named for the window and the time: ready
+for a post or a bug report, and where an agent can read it.
+
+- The picture is the window with its frame and shadow, on a clear ground.
+  Nothing of the desktop or of a window lying over it is in it.
+- The window is saved as it stands: scrolled where you left it, the field
+  you were typing in still ringed. Dialogs have the menu too.
+- On a sharp screen the picture is sharp too: two pixels to the point on
+  most, at Windows' 150 percent as well, and three on a phone.
+- Three things come out empty or plain: a web page from the Workspace and a
+  player from another site (the desktop cannot see into them), a 3D view
+  that is not redrawn every frame, and selected text, which shows unselected.
+
 ### The desktop menu
 
 Right-click an empty part of the desktop (on a touch screen, press and hold
@@ -531,7 +548,8 @@ fullscreen, one at a time. They cannot be moved or resized there.
 - Tap an icon to open it. It swells and fades as its window comes up.
 - Closing a window walks back through the windows you opened before it, like
   a phone's back button.
-- Press and hold the desktop for the desktop menu.
+- Press and hold the desktop for the desktop menu, and a window's title bar
+  for **Save a Screenshot**.
 - The clock is a small clock face. Tap it and it spells the time out for a
   few seconds, or opens the World Clock app when that app is installed.
 - In a Claude Code or Codex window a finger drag scrolls back through the

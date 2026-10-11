@@ -407,6 +407,18 @@ restyling: `internal/server/ui/index.html` (the desktop),
   raises over itself when the hub refuses a file or a post: change them in
   all three. An app's alert sits on its dialog veil, 380px at most and
   16px from a phone's edges, and holds the whole message, selectable.
+- Every title bar has a menu, dialogs' too: a right-click, or a press held
+  550ms on a touch screen (`winMenu`). Its one item, **Save a Screenshot**
+  (`shotWindow`), draws the window a second time from a copy of its markup
+  and the document's style sheets inside an SVG `foreignObject`, at a whole
+  number of pixels to the point. So a window comes out right when what it
+  shows is said in markup and style sheets. Carried over by the code:
+  typed text, ticks, scroll positions, the focus ring, a canvas, a movie's
+  frame, a same-origin frame. Not carried: `:hover`, a selection, a
+  sandboxed frame, a WebGL canvas that does not draw every frame, and a
+  control left to the browser's own theme (`appearance: auto`), which a
+  picture draws its own way. A new window kind is checked against the
+  browser's screenshot with `~/tools/playwright/exe-screenshot-compare.js`.
 - A modal dialog that asks for something (the desktop's API Token, raised
   by itself when the API answers 401): a title, no close box, 380px at
   most. A bold line says why it is there, the guide follows in 16px

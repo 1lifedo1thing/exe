@@ -2938,10 +2938,25 @@ function initWindow(w) {
     termResize();
     winSave();
   });
+  // the title bar's own menu: a right-click, or on a touch screen a press
+  // held 550ms without moving, as on bare desktop (iOS never fires
+  // contextmenu, Android does — showing twice is harmless)
+  tb.addEventListener("contextmenu", e => { e.preventDefault(); clearTimeout(tb._pressT); winMenu(w, e.clientX, e.clientY); });
+  // the right press takes the keys from nothing: the window is saved as
+  // it stood, the field in it still ringed, a terminal's cursor still solid
+  tb.addEventListener("mousedown", e => { if (e.button === 2) e.preventDefault(); });
+  tb.addEventListener("touchstart", e => {
+    clearTimeout(tb._pressT);
+    if (e.touches.length !== 1 || e.target.closest(".tbox")) return;
+    const { clientX: x, clientY: y } = e.touches[0];
+    tb._pressT = setTimeout(() => { ctxGuardUntil = Date.now() + 700; winMenu(w, x, y); }, 550);
+  }, { passive: true });
+  for (const ev of ["touchmove", "touchend", "touchcancel"]) tb.addEventListener(ev, () => clearTimeout(tb._pressT), { passive: true });
   // mobile windows are fullscreen and pinned — no titlebar drag
   if (w.classList.contains("modal") || IS_MOBILE) return;
   tb.addEventListener("pointerdown", e => {
-    if (e.target.closest(".tbox")) return;
+    // the right button opens the menu; it drags nothing
+    if (e.target.closest(".tbox") || e.button === 2) return;
     e.preventDefault();
     focusWin(w);
     // capture the drag's pointer stream on the title bar — otherwise the
@@ -2970,6 +2985,393 @@ function initWindow(w) {
   });
 }
 document.querySelectorAll(".window").forEach(initWindow);
+
+// ---- the title bar's menu: Save a Screenshot ----
+function winMenu(w, x, y) {
+  // picking from a menu takes the keys from the window's field; they go
+  // back first
+  const had = document.activeElement;
+  showCtxMenu(x, y, [{ label: "Save a Screenshot", act: () => {
+    if (had && had !== document.activeElement && w.contains(had)) had.focus({ preventScroll: true });
+    shotSave(w);
+  } }]);
+}
+// A page cannot photograph itself, so the window is drawn a second time: a
+// copy of its markup, with the document's style sheets, goes into an SVG
+// <foreignObject> the size of the viewport — media queries and viewport
+// units then answer as they do live — the browser paints that picture on a
+// canvas, and the canvas is cut to the window. What markup does not say is
+// written into the copy first (shotFreeze): typed text and ticks, how far a
+// pane is scrolled, canvases and movie frames, pictures (as data: URLs — a
+// picture inside a picture loads nothing else), and an app's frame, drawn
+// the same way one level down. A frame with no same-origin — a Workspace
+// web page, another site's player — is out of reach and comes out empty,
+// and so does a 3D canvas that does not draw every frame.
+// The picture is drawn at a whole number of pixels to the point, the next
+// one up on a fractional display (2x at Windows' 150%): the copy is laid
+// out at 1x, and scaled by 1.5 its lines would land between pixels.
+const SHOT_FAR = 100000; // px: further than any pane scrolls
+const shotURLRe = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"']*))\s*\)/g;
+// one resource as a data: URL (null when it cannot be read), fetched once a
+// screenshot
+function shotData(ctx, url) {
+  if (!ctx.urls.has(url)) ctx.urls.set(url, (async () => {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      const blob = await r.blob();
+      return await new Promise((res, rej) => {
+        const f = new FileReader();
+        f.onload = () => res(f.result); f.onerror = rej;
+        f.readAsDataURL(blob);
+      });
+    } catch (e) { return null; }
+  })());
+  return ctx.urls.get(url);
+}
+// reads every url() of a style text, and answers with the function that
+// swaps them for their data: URLs — in that text or a later state of it
+async function shotURLs(ctx, css, base) {
+  const data = new Map();
+  await Promise.all([...css.matchAll(shotURLRe)].map(async m => {
+    const u = (m[1] ?? m[2] ?? m[3]).trim();
+    if (!u || u[0] === "#" || u.startsWith("data:") || data.has(u)) return;
+    data.set(u, null);
+    try { data.set(u, await shotData(ctx, new URL(u, base).href)); } catch (e) {}
+  }));
+  return s => s.replace(shotURLRe, (all, a, b, c) => {
+    const d = data.get((a ?? b ?? c).trim());
+    return d ? `url("${d}")` : all;
+  });
+}
+// a document's style sheets as one text, in order
+async function shotCSS(ctx, doc) {
+  const parts = await Promise.all([...doc.querySelectorAll('style, link[rel~="stylesheet"]')].map(async n => {
+    if (!n.sheet || n.sheet.disabled) return "";
+    let css = n.textContent, base = doc.baseURI;
+    if (n.localName === "link") {
+      base = n.href;
+      try { const r = await fetch(base); css = r.ok ? await r.text() : ""; } catch (e) { css = ""; }
+    }
+    css = (await shotURLs(ctx, css, base))(css);
+    const media = n.getAttribute("media");
+    return media && media !== "all" ? `@media ${media} {\n${css}\n}` : css;
+  }));
+  return parts.join("\n");
+}
+// a canvas, a movie and a frame are plain boxes in the copy (shotBox):
+// what each shows goes behind its box, over the content box
+function shotBack(copy, url) {
+  if (!url || url.length < 32) return; // "data:," is an empty canvas
+  const s = copy.style;
+  s.backgroundImage = `url("${url}")`;
+  s.backgroundSize = "100% 100%";
+  s.backgroundPosition = "0 0";
+  s.backgroundRepeat = "no-repeat";
+  s.backgroundOrigin = "content-box";
+}
+// A copy is drawn from the top: markup cannot say how far a pane was
+// scrolled. Scroll snapping can. The pane is told it must snap, and one
+// child's snap area is cut (scroll-margin) to the single line the pane's
+// edge stood on, so the pane comes up scrolled there. Each axis takes a
+// child of its own, its area stretched far across the other axis: an area
+// only counts for one axis while it shows in the other. A pane with no
+// child to use (bare text, a text field) gets a marker of its own.
+function shotScroll(live, copy, html) {
+  const sx = live.scrollLeft, sy = live.scrollTop;
+  if (!sx && !sy) return;
+  // `html`: the pane is the viewport, `copy` the box that stands for it,
+  // and the one child it scrolls is the copy of <html>
+  const win = live.ownerDocument.defaultView;
+  const box = html ? { left: 0, top: 0 } : live.getBoundingClientRect();
+  const ox = box.left + (html ? 0 : live.clientLeft) - sx, oy = box.top + (html ? 0 : live.clientTop) - sy;
+  // the children that scroll with the pane as boxes of their own
+  const kids = [];
+  const take = (k, c) => {
+    const cs = win.getComputedStyle(k);
+    if (cs.display === "none" || cs.display === "contents" || cs.display === "inline") return;
+    if (cs.position !== "static" && cs.position !== "relative") return;
+    const r = k.getBoundingClientRect();
+    // a box with no height or width snaps the pane somewhere else
+    if (r.width && r.height) kids.push({ el: c, l: r.left - ox, t: r.top - oy, w: r.width, h: r.height });
+  };
+  if (html) take(live, html);
+  else for (let i = 0; i < live.children.length && kids.length < 2; i++) take(live.children[i], copy.children[i]);
+  if (!kids.length || (sx && sy && kids.length < 2)) {
+    const cs = win.getComputedStyle(live);
+    const mark = live.ownerDocument.createElement("x-shot");
+    // one pixel, taken back by its margin: it moves nothing after it
+    mark.setAttribute("style", "display:block;width:1px;height:1px;margin:0 0 -1px;padding:0;border:0");
+    copy.prepend(mark);
+    kids.unshift({ el: mark, l: html ? 0 : parseFloat(cs.paddingLeft) || 0, t: html ? 0 : parseFloat(cs.paddingTop) || 0, w: 1, h: 1 });
+  }
+  copy.style.scrollSnapType = (sx && sy ? "both" : sy ? "y" : "x") + " mandatory";
+  copy.style.scrollPadding = "0";
+  copy.style.scrollBehavior = "auto";
+  const far = SHOT_FAR + "px";
+  if (sy) {
+    const k = kids[0];
+    k.el.style.scrollSnapAlign = "start none";
+    k.el.style.scrollMargin = `${k.t - sy}px ${far} ${sy + 1 - k.t - k.h}px ${far}`;
+  }
+  if (sx) {
+    const k = kids[sy ? 1 : 0];
+    k.el.style.scrollSnapAlign = "none start";
+    k.el.style.scrollMargin = `${far} ${sx + 1 - k.l - k.w}px ${far} ${k.l - sx}px`;
+  }
+}
+// A stand-in for an element the copy cannot hold as it is — a frame and a
+// movie paint black there, a canvas has no size of its own, a text field
+// will not scroll: a plain box that wears the element's computed style,
+// whole, so it takes the same room.
+function shotBox(live, copy, cs) {
+  const box = live.ownerDocument.createElement("div");
+  for (const a of ["id", "class"]) if (copy.hasAttribute(a)) box.setAttribute(a, copy.getAttribute(a));
+  let css = "";
+  for (const p of cs) css += `${p}:${cs.getPropertyValue(p)};`;
+  box.setAttribute("style", css);
+  if (cs.display === "inline") box.style.display = "inline-block";
+  copy.replaceWith(box);
+  return box;
+}
+// what the focus changes on an element and those around it (:focus,
+// :focus-within), said outright: the copy has no focus
+const SHOT_FOCUS = ["outline-color", "outline-style", "outline-width", "outline-offset", "box-shadow",
+  "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "background-color"];
+// and what being a link gives one: in a picture no <a> is a link (:link,
+// :any-link — the browser's own underline among them — match nothing)
+const SHOT_LINK = ["color", "text-decoration-line", "text-decoration-style", "text-decoration-color",
+  "text-decoration-thickness", "text-underline-offset", "background-color"];
+const SHOT_BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+// a picture as a data: URL: its file, or failing that (another origin that
+// gives its pixels but not its file) the pixels it shows
+async function shotPicture(ctx, img, src) {
+  const d = await shotData(ctx, src);
+  if (d) return d;
+  try {
+    const cv = el("canvas");
+    cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+    cv.getContext("2d").drawImage(img, 0, 0);
+    return cv.toDataURL();
+  } catch (e) { return null; }
+}
+// Writes into the copy what the live element shows and its markup does not
+// say. The two trees are walked in step, so nothing here adds or removes an
+// element before its children are done; `jobs` collects what must be waited
+// for. An element that is not displayed is left as it is, children and all.
+function shotFreeze(ctx, live, copy, jobs) {
+  const doc = live.ownerDocument, win = doc.defaultView, tag = live.localName;
+  if (live.namespaceURI === "http://www.w3.org/2000/svg") {
+    // drawn as it stands, but for the pictures it links
+    const a = live.querySelectorAll("image"), b = copy.querySelectorAll("image");
+    a.forEach((im, i) => {
+      const src = im.href && im.href.baseVal;
+      if (!src || src.startsWith("data:")) return;
+      jobs.push(shotData(ctx, new URL(src, doc.baseURI).href).then(d => {
+        b[i].removeAttribute("xlink:href");
+        b[i].setAttribute("href", d || SHOT_BLANK);
+      }));
+    });
+    return;
+  }
+  const cs = win.getComputedStyle(live);
+  if (cs.display === "none") return;
+  if (ctx.focus.has(live)) for (const p of SHOT_FOCUS) copy.style.setProperty(p, cs.getPropertyValue(p));
+  if (tag === "a" && live.hasAttribute("href")) for (const p of SHOT_LINK) copy.style.setProperty(p, cs.getPropertyValue(p));
+  const st = copy.getAttribute("style");
+  if (st && st.includes("url(")) {
+    jobs.push(shotURLs(ctx, st, doc.baseURI).then(fix => copy.setAttribute("style", fix(copy.getAttribute("style")))));
+  }
+  if (tag === "input") {
+    if (live.type === "checkbox" || live.type === "radio") copy.toggleAttribute("checked", live.checked);
+    else if (live.type !== "file") copy.setAttribute("value", live.value);
+    return;
+  }
+  if (tag === "textarea") {
+    if (live.scrollTop || live.scrollLeft) {
+      const box = shotBox(live, copy, cs);
+      // a field shows the line a closing newline opens; a box does not
+      box.textContent = live.value + (live.value.endsWith("\n") ? "\n" : "");
+      shotScroll(live, box);
+    } else copy.textContent = live.value;
+    return;
+  }
+  if (tag === "select") {
+    for (let i = 0; i < live.options.length; i++) copy.options[i].toggleAttribute("selected", live.options[i].selected);
+    return;
+  }
+  if (tag === "canvas") {
+    const box = shotBox(live, copy, cs);
+    try { shotBack(box, live.toDataURL()); } catch (e) {}
+    return;
+  }
+  if (tag === "img") {
+    const src = live.currentSrc || live.src;
+    for (const a of ["srcset", "sizes", "loading"]) copy.removeAttribute(a);
+    if (copy.parentNode && copy.parentNode.localName === "picture") {
+      copy.parentNode.querySelectorAll("source").forEach(s => s.removeAttribute("srcset"));
+    }
+    if (src && !src.startsWith("data:")) jobs.push(shotPicture(ctx, live, src).then(d => {
+      copy.setAttribute("src", d || SHOT_BLANK);
+      // a picture that could not be read still keeps its place
+      if (!d) { copy.style.width = cs.width; copy.style.height = cs.height; }
+    }));
+    return;
+  }
+  if (tag === "video") {
+    const box = shotBox(live, copy, cs);
+    const bw = live.clientWidth, bh = live.clientHeight, vw = live.videoWidth, vh = live.videoHeight;
+    if (bw && bh && vw && vh) {
+      const cv = el("canvas"), fit = cs.objectFit;
+      cv.width = Math.round(bw * ctx.scale); cv.height = Math.round(bh * ctx.scale);
+      const k = fit === "cover" ? Math.max(bw / vw, bh / vh) : Math.min(bw / vw, bh / vh);
+      const dw = fit === "fill" ? bw : vw * k, dh = fit === "fill" ? bh : vh * k;
+      try {
+        cv.getContext("2d").drawImage(live, (bw - dw) / 2 * ctx.scale, (bh - dh) / 2 * ctx.scale, dw * ctx.scale, dh * ctx.scale);
+        shotBack(box, cv.toDataURL());
+      } catch (e) {}
+    }
+    return;
+  }
+  if (tag === "iframe") {
+    const box = shotBox(live, copy, cs);
+    let inner = null;
+    try { inner = live.contentDocument; } catch (e) {}
+    if (inner && inner.documentElement && live.clientWidth && live.clientHeight) {
+      jobs.push(shotDraw(ctx, inner, null).then(cv => shotBack(box, cv.toDataURL()), () => {}));
+    }
+    return;
+  }
+  const a = live.children, b = copy.children;
+  for (let i = 0; i < a.length; i++) shotFreeze(ctx, a[i], b[i], jobs);
+  // the viewport's own scroll is shotDraw's to place
+  if (live !== doc.scrollingElement) shotScroll(live, copy);
+}
+// One document drawn on a canvas: all of it at the size of its viewport (a
+// frame), or with `target` only that element and its line of ancestors,
+// cut to `clip` — { x, y, w, h } in CSS px.
+async function shotDraw(ctx, doc, target, clip) {
+  const win = doc.defaultView, root = doc.documentElement;
+  // a WebGL canvas keeps what it drew only until the frame is shown: read
+  // it in a frame callback, after the app's own (a hidden frame gets none)
+  await new Promise(res => { const t = setTimeout(res, 150); win.requestAnimationFrame(() => { clearTimeout(t); res(); }); });
+  const vw = win.innerWidth, vh = win.innerHeight, jobs = [];
+  for (let e = doc.activeElement; e && e !== doc.body && e !== root; e = e.parentElement) ctx.focus.add(e);
+  let html, head, body, fill = "";
+  const mute = c => {
+    // a style sheet in the copy would win over the one text built below
+    // with its url()s unread; nothing inside <noscript> is meant to show
+    c.querySelectorAll("style, script, noscript").forEach(n => { n.textContent = ""; });
+    return c;
+  };
+  if (target) {
+    let copy = mute(target.cloneNode(true));
+    shotFreeze(ctx, target, copy, jobs);
+    for (let p = target.parentElement; p; p = p.parentElement) {
+      // the ancestors hold the window where it is, and show nothing: no
+      // desktop under it, no veil behind a dialog
+      const shell = p.cloneNode(false);
+      shell.style.setProperty("background", "none", "important");
+      if (p === doc.body) body = shell;
+      shell.append(copy);
+      copy = shell;
+    }
+    html = copy;
+    head = doc.createElement("head");
+    html.prepend(head);
+  } else {
+    html = mute(root.cloneNode(true));
+    shotFreeze(ctx, root, html, jobs);
+    head = html.querySelector("head") || html.insertBefore(doc.createElement("head"), html.firstChild);
+    body = html.querySelector("body");
+    // the page's own ground is the viewport's
+    for (const e of [root, doc.body]) {
+      const c = e && win.getComputedStyle(e).backgroundColor;
+      if (c && c !== "transparent" && c !== "rgba(0, 0, 0, 0)") { fill = c; break; }
+    }
+  }
+  // the viewport: a box of its size around <html>, which scrolls as the
+  // viewport does — by the root's overflow, or failing that the body's
+  const port = doc.createElement("x-shot");
+  let rs = win.getComputedStyle(root), ox = rs.overflowX, oy = rs.overflowY;
+  if (ox === "visible" && oy === "visible" && doc.body) {
+    rs = win.getComputedStyle(doc.body); ox = rs.overflowX; oy = rs.overflowY;
+    if (body) body.style.overflow = "visible";
+  }
+  html.style.overflow = "visible";
+  const over = v => v === "visible" ? "auto" : v === "clip" ? "hidden" : v;
+  port.setAttribute("style", `display:block;width:100%;height:100%;margin:0;padding:0;border:0;overflow-x:${over(ox)};overflow-y:${over(oy)}`);
+  port.append(html);
+  if (doc.scrollingElement === root) shotScroll(root, port, html);
+  await Promise.all(jobs);
+  const style = doc.createElement("style");
+  style.textContent = await shotCSS(ctx, doc);
+  head.replaceChildren(style);
+  // control characters (a terminal's output holds them) are not XML
+  let xml = new XMLSerializer().serializeToString(port).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f￾￿]/g, "");
+  if (xml.toWellFormed) xml = xml.toWellFormed();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${vw}" height="${vh}">` +
+    `<foreignObject x="0" y="0" width="100%" height="100%">${xml}</foreignObject></svg>`;
+  const img = new Image();
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = () => rej(new Error("the browser could not draw the window again"));
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+  if (img.decode) await img.decode().catch(() => {});
+  const k = ctx.scale, c = clip || { x: 0, y: 0, w: vw, h: vh };
+  const cv = el("canvas");
+  cv.width = Math.max(1, Math.round(c.w * k)); cv.height = Math.max(1, Math.round(c.h * k));
+  const g = cv.getContext("2d", { willReadFrequently: true });
+  // WebKit hands the picture over before the pictures and fonts inside it
+  // are ready: draw until two passes in a row come out the same
+  let last = -1;
+  for (let i = 0; i < 5; i++) {
+    g.clearRect(0, 0, cv.width, cv.height);
+    if (fill) { g.fillStyle = fill; g.fillRect(0, 0, cv.width, cv.height); }
+    g.drawImage(img, -c.x * k, -c.y * k, vw * k, vh * k);
+    const px = new Uint32Array(g.getImageData(0, 0, cv.width, cv.height).data.buffer);
+    let sum = 0;
+    for (let j = 0; j < px.length; j++) sum = (sum * 31 + px[j]) | 0;
+    if (sum === last) break;
+    last = sum;
+    await new Promise(res => setTimeout(res, 50));
+  }
+  return cv;
+}
+// a window as a PNG: its frame and the hard shadow it casts, on nothing
+async function shotWindow(w) {
+  const dpr = window.devicePixelRatio || 1;
+  const ctx = { urls: new Map(), focus: new Set(), scale: Math.max(1, Math.ceil(dpr - 0.01)) };
+  const r = w.getBoundingClientRect(), sh = getComputedStyle(w).boxShadow;
+  const m = !sh.includes("inset") && sh.match(/(-?[\d.]+)px (-?[\d.]+)px/);
+  // a window can stand between pixels (a dialog centred on an odd height,
+  // a drag at 150%): the copy paints it on whole ones, each edge rounded,
+  // and a cut anywhere else would smear every line in it
+  const x = Math.round(r.left), y = Math.round(r.top);
+  const clip = { x, y, w: Math.round(r.right) - x + (m ? Math.max(0, +m[1]) : 0), h: Math.round(r.bottom) - y + (m ? Math.max(0, +m[2]) : 0) };
+  const cv = await shotDraw(ctx, document, w, clip);
+  return new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error("the picture could not be made")), "image/png"));
+}
+let shotBusy = false;
+async function shotSave(w) {
+  if (shotBusy) return;
+  shotBusy = true;
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  const title = ((w.querySelector(".title") || {}).textContent || "").replace(/[\/\\:\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ").trim().replace(/^\.+/, "").slice(0, 60).trim() || "Window";
+  const name = `${title} ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}.${p(d.getSeconds())}.png`;
+  toast("Saving a screenshot…");
+  try {
+    const blob = await shotWindow(w);
+    await api(wsUrl("Screenshots/" + name), { method: "PUT", body: blob });
+    toast("Saved to Screenshots: " + name);
+    workspaceChanged("Screenshots/" + name, false, "");
+  } catch (e) {
+    toast("No screenshot: " + e.message);
+  }
+  shotBusy = false;
+}
 
 // invisible edge grips on resizable windows: dragging the left or right
 // edge resizes width (the left edge keeps the right side anchored), the
