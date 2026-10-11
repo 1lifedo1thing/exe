@@ -3,6 +3,9 @@ noVNC 1.6.0, with local integration changes in core/:
   fallback and the existing touch gestures; clamp at guest-pixel edges.
 - Negotiate QEMU's audio extension and dispatch bounded PCM packets to the
   app's opt-in browser audio player through the existing console connection.
+- pointerTrim (rfb.js, _sendMouse and pointerTarget): send a guest pixel as
+  its place inside the part of an absolute pointer's range the guest uses
+  (Mac OS X 10.4.11 leaves 7.5% unused at each edge).
 The vendor/ directory is unmodified.
 Source: https://github.com/novnc/noVNC/releases/tag/v1.6.0
 Copyright and license notices are retained in every source and vendor directory.

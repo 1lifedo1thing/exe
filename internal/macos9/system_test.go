@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -186,5 +188,110 @@ func TestInstallerDownloadResumes(t *testing.T) {
 	}
 	if err = m.download(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A second way into the Mac that does not pass through the emulated keyboard
+// and pointer: Tiger's Remote Login and its screen sharing, forwarded to
+// loopback ports of this machine and to nothing the network can reach. The
+// installer boot has no network and no forwards, the Mac OS 9 Mac has none,
+// and the ports are written down for a daemon that starts later.
+func TestMacOSXForwardsItsSharingServicesToLoopback(t *testing.T) {
+	root := t.TempDir()
+	m := NewMacOSX(root, root)
+	ports, err := m.pickPorts(false)
+	if err != nil || ports["ssh"] == 0 || ports["vnc"] == 0 || ports["ssh"] == ports["vnc"] {
+		t.Fatalf("ports %v: %v", ports, err)
+	}
+	m.ports = ports
+	netdev := argPairs(m.launchArgs(false))["-netdev"]
+	want := fmt.Sprintf("user,id=net0,ipv6=off,hostfwd=tcp:127.0.0.1:%d-:22,hostfwd=tcp:127.0.0.1:%d-:5900", ports["ssh"], ports["vnc"])
+	if len(netdev) != 1 || netdev[0] != want {
+		t.Fatalf("netdev %q, want %q", netdev, want)
+	}
+	if args := strings.Join(m.launchArgs(true), " "); strings.Contains(args, "hostfwd") {
+		t.Fatal("the installer boot forwards a port")
+	}
+	if again, _ := m.pickPorts(false); again["ssh"] != ports["ssh"] || again["vnc"] != ports["vnc"] {
+		t.Fatalf("free ports were not taken again: %v then %v", ports, again)
+	}
+	// A port somebody else holds is passed over, not fought for.
+	held, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", ports["ssh"]))
+	if err != nil {
+		t.Skip(err)
+	}
+	defer held.Close()
+	if other, err := m.pickPorts(false); err != nil || other["ssh"] == ports["ssh"] || other["ssh"] == 0 {
+		t.Fatalf("took a port in use: %v %v", other, err)
+	}
+	// Status names the ports of a running, installed Mac, also to a daemon
+	// that did not launch it; a stopped Mac has none to name.
+	later := NewMacOSX(root, root)
+	writeFixture(t, filepath.Join(root, "installed.json"), "{}", 0600)
+	if s := later.Status(); s.Running || s.Ports != nil {
+		t.Fatalf("a stopped Mac names ports: %+v", s.Ports)
+	}
+	ln, err := net.Listen("unix", filepath.Join(root, "qmp.sock"))
+	if err != nil {
+		t.Skip(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, e := ln.Accept()
+			if e != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	saved := later.savedPorts()
+	if s := later.Status(); !s.Running || s.Ports["ssh"] != saved["ssh"] || s.Ports["vnc"] != saved["vnc"] || saved["ssh"] == 0 {
+		t.Fatalf("a running Mac's ports: %+v, saved %v", s.Ports, saved)
+	}
+	if _, err := m.pickPorts(true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "ports.json")); !os.IsNotExist(err) {
+		t.Fatal("the installer boot left ports written down")
+	}
+	nine := New(t.TempDir())
+	if p, _ := nine.pickPorts(false); p != nil || strings.Contains(strings.Join(nine.launchArgs(false), " "), "hostfwd") {
+		t.Fatal("the Mac OS 9 Mac forwards a port")
+	}
+}
+
+// What a viewer found out about the system's pointer stays with the Mac: one
+// of the corrections the system is known to need, and nothing else.
+func TestPointerTrimIsKeptWithTheMac(t *testing.T) {
+	root := t.TempDir()
+	m := NewMacOSX(root, root)
+	if got := m.Status().Trim; got != 0 {
+		t.Fatalf("a new Mac's trim is %v", got)
+	}
+	if err := m.SetPointerTrim(0.15); err != nil {
+		t.Fatal(err)
+	}
+	if got := NewMacOSX(root, root).Status().Trim; got != 0.15 {
+		t.Fatalf("the trim did not stay with the Mac: %v", got)
+	}
+	for _, bad := range []float64{0.1, 0.5, -0.15, 15} {
+		if err := m.SetPointerTrim(bad); err == nil {
+			t.Fatalf("took %v for a correction", bad)
+		}
+	}
+	if got := m.Status().Trim; got != 0.15 {
+		t.Fatalf("a refused value changed the trim to %v", got)
+	}
+	writeFixture(t, filepath.Join(root, "pointer.json"), `{"trim":0.4}`, 0600)
+	if got := m.Status().Trim; got != 0 {
+		t.Fatalf("a value nobody could have set is reported: %v", got)
+	}
+	if err := m.SetPointerTrim(0); err != nil || m.Status().Trim != 0 {
+		t.Fatal("the trim cannot be taken back")
+	}
+	// Mac OS 9's pointer is its own driver's and takes no correction.
+	if err := New(t.TempDir()).SetPointerTrim(0.15); err == nil {
+		t.Fatal("the Mac OS 9 Mac took a correction")
 	}
 }

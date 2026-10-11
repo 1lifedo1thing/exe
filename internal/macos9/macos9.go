@@ -45,11 +45,18 @@ type Status struct {
 	Installed bool   `json:"installed"`
 	Bytes     int64  `json:"bytes"`
 	Total     int64  `json:"total"`
+	// Loopback ports of this machine that lead to services inside a running
+	// Mac ("ssh", "vnc"), for a Mac that has any (system.forwards).
+	Ports map[string]int `json:"ports,omitempty"`
+	// The share of an absolute pointer's range this Mac's system leaves
+	// unused (system.trims), as a viewer last found it.
+	Trim float64 `json:"trim,omitempty"`
 }
 type Manager struct {
 	sys         *system
 	root        string
-	runtimeRoot string // where the emulator runtime is unpacked
+	runtimeRoot string         // where the emulator runtime is unpacked
+	ports       map[string]int // host ports of the running Mac's forwards
 	mu          sync.Mutex
 	cdMu        sync.Mutex
 	state       Status
@@ -129,6 +136,10 @@ func (m *Manager) Status() Status {
 	s.Steps = append([]Step(nil), s.Steps...)
 	s.Installed = m.installed()
 	s.Running = m.running()
+	if s.Running && s.Installed {
+		s.Ports = m.forwardedLocked()
+	}
+	s.Trim = m.pointerTrim()
 	if !s.Active && s.Running && !s.Installed {
 		s.Phase = "installing"
 	}
@@ -666,7 +677,7 @@ func (m *Manager) launchArgs(installer bool) []string {
 		args = append(args, "-nic", "none")
 		args = append(args, "-cdrom", m.path("media/"+m.sys.media), "-boot", "d")
 	} else {
-		args = append(args, "-boot", "c", "-netdev", m.sys.network, "-device", "sungem,netdev=net0,mac="+m.sys.ethernet)
+		args = append(args, "-boot", "c", "-netdev", m.sys.network+m.hostForwards(), "-device", "sungem,netdev=net0,mac="+m.sys.ethernet)
 	}
 	return args
 }
@@ -681,6 +692,13 @@ func (m *Manager) launch(ctx context.Context, installer bool) error {
 			return err
 		}
 	}
+	ports, err := m.pickPorts(installer)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.ports = ports
+	m.mu.Unlock()
 	args := m.launchArgs(installer)
 	if err := m.command(ctx, m.binary("qemu-system-ppc"), args...); err != nil {
 		return err
@@ -696,6 +714,111 @@ func (m *Manager) launch(ctx context.Context, installer bool) error {
 		}
 	}
 	return errors.New("The emulator started but its control socket did not respond. Continue to retry.")
+}
+
+// SetPointerTrim keeps what a viewer found out about this Mac's system: how
+// much of an absolute pointer's range it leaves unused. It is one of the
+// system's known values, and it stays with the Mac, so that the next viewer
+// starts with the arrow in the right place.
+func (m *Manager) SetPointerTrim(trim float64) error {
+	for _, t := range m.sys.trims {
+		if t == trim {
+			if err := os.MkdirAll(m.root, 0700); err != nil {
+				return err
+			}
+			b, _ := json.Marshal(map[string]float64{"trim": trim})
+			return os.WriteFile(m.path("pointer.json"), append(b, '\n'), 0600)
+		}
+	}
+	return errors.New("This Mac's pointer takes no such correction.")
+}
+
+func (m *Manager) pointerTrim() float64 {
+	var saved struct {
+		Trim float64 `json:"trim"`
+	}
+	if b, err := os.ReadFile(m.path("pointer.json")); err == nil && json.Unmarshal(b, &saved) == nil {
+		for _, t := range m.sys.trims {
+			if t == saved.Trim {
+				return t
+			}
+		}
+	}
+	return 0
+}
+
+// pickPorts chooses a loopback port of this machine for each of the Mac's
+// forwards and writes them down, so that a daemon started later can still
+// say where the running Mac's services are. The ports of the last run are
+// taken again while they are free: an address somebody saved keeps working.
+// The installer boot has no network and so no forwards.
+func (m *Manager) pickPorts(installer bool) (map[string]int, error) {
+	if installer || len(m.sys.forwards) == 0 {
+		_ = os.Remove(m.path("ports.json"))
+		return nil, nil
+	}
+	last := m.savedPorts()
+	ports := map[string]int{}
+	for _, f := range m.sys.forwards {
+		l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", last[f.name]))
+		if err != nil {
+			l, err = net.Listen("tcp", "127.0.0.1:0")
+		}
+		if err != nil {
+			return nil, fmt.Errorf("No free port on this computer for the Mac's %s: %w", f.name, err)
+		}
+		ports[f.name] = l.Addr().(*net.TCPAddr).Port
+		l.Close()
+	}
+	b, err := json.Marshal(ports)
+	if err != nil {
+		return nil, err
+	}
+	if err = os.MkdirAll(m.root, 0700); err != nil {
+		return nil, err
+	}
+	return ports, os.WriteFile(m.path("ports.json"), append(b, '\n'), 0600)
+}
+
+func (m *Manager) savedPorts() map[string]int {
+	ports := map[string]int{}
+	if b, err := os.ReadFile(m.path("ports.json")); err == nil {
+		_ = json.Unmarshal(b, &ports)
+	}
+	return ports
+}
+
+// forwardedLocked is where a running Mac's forwards are: what this daemon
+// launched it with, or what the daemon that did wrote down.
+func (m *Manager) forwardedLocked() map[string]int {
+	if len(m.sys.forwards) == 0 {
+		return nil
+	}
+	if m.ports == nil {
+		m.ports = m.savedPorts()
+	}
+	out := map[string]int{}
+	for _, f := range m.sys.forwards {
+		if p := m.ports[f.name]; p > 0 {
+			out[f.name] = p
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// hostForwards is the forwards as QEMU's user network takes them: bound to
+// this machine's loopback address, never to one the network can reach.
+func (m *Manager) hostForwards() string {
+	var b strings.Builder
+	for _, f := range m.sys.forwards {
+		if p := m.ports[f.name]; p > 0 {
+			fmt.Fprintf(&b, ",hostfwd=tcp:127.0.0.1:%d-:%d", p, f.guest)
+		}
+	}
+	return b.String()
 }
 func (m *Manager) Console(ctx context.Context) (net.Conn, error) {
 	return (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, "unix", m.path("vnc.sock"))

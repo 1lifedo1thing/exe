@@ -45,6 +45,9 @@ func TestMacOS9APIAuthAndOrigin(t *testing.T) {
 		{"POST", "/v1/macosx/start", "test-secret", "https://unrelated.example", 403},
 		{"POST", "/v1/macosx/cd/upload", "test-secret", "https://unrelated.example", 403},
 		{"POST", "/v1/macosx/finish", "test-secret", "", 409},
+		{"POST", "/v1/macosx/pointer", "", "", 401},
+		{"POST", "/v1/macosx/pointer", "test-secret", "https://unrelated.example", 403},
+		{"POST", "/v1/macosx/pointer", "test-secret", "", 400},
 		{"GET", "/v1/macosx/console", "test-secret", "", 503},
 	} {
 		r := httptest.NewRequest(tt.method, "http://exe.test"+tt.path, nil)
@@ -166,6 +169,32 @@ func TestMacOSXBuiltInAppAndItsOwnMac(t *testing.T) {
 	}
 	if nine, ten := status("/v1/macos9"), status("/v1/macosx"); !nine.Installed || ten.Installed || ten.Steps[5].Title != "Install Mac OS X" || nine.Steps[5].Title != "Install Mac OS 9" {
 		t.Fatalf("the two Macs are not apart: %+v %+v", nine, ten)
+	}
+}
+
+// A viewer tells the daemon which correction the Mac's pointer needs, and
+// the status hands it to every viewer; only Mac OS X's Mac takes one.
+func TestMacPointerTrimAPI(t *testing.T) {
+	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	h := s.Handler()
+	post := func(path, body string) (int, string) {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("POST", "http://exe.test"+path, strings.NewReader(body)))
+		return w.Code, w.Body.String()
+	}
+	if code, body := post("/v1/macosx/pointer", `{"trim":0.15}`); code != 200 || !strings.Contains(body, `"trim":0.15`) {
+		t.Fatalf("%d %s", code, body)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "http://exe.test/v1/macosx", nil))
+	if !strings.Contains(w.Body.String(), `"trim":0.15`) {
+		t.Fatalf("the status lacks the trim: %s", w.Body.String())
+	}
+	if code, _ := post("/v1/macosx/pointer", `{"trim":0.3}`); code != 409 {
+		t.Fatalf("an unknown correction: %d", code)
+	}
+	if code, _ := post("/v1/macos9/pointer", `{"trim":0.15}`); code != 409 {
+		t.Fatalf("Mac OS 9 took a correction: %d", code)
 	}
 }
 

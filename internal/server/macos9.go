@@ -78,6 +78,27 @@ func (s *Server) handleMacOS9Finish(w http.ResponseWriter, r *http.Request) {
 	}
 	s.handleMacOS9Status(w, r)
 }
+
+// The viewer says what it found out about the Mac's pointer (see
+// macos9.Manager.SetPointerTrim), and every viewer reads it in the status.
+func (s *Server) handleMacOS9Pointer(w http.ResponseWriter, r *http.Request) {
+	if !macOS9SameOrigin(w, r) {
+		return
+	}
+	var body struct {
+		Trim float64 `json:"trim"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "Invalid pointer request.", http.StatusBadRequest)
+		return
+	}
+	if err := s.mac(r).SetPointerTrim(body.Trim); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	s.handleMacOS9Status(w, r)
+}
 func (s *Server) handleMacOS9Console(w http.ResponseWriter, r *http.Request) {
 	if !macOS9SameOrigin(w, r) {
 		return

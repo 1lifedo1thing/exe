@@ -125,17 +125,21 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   semantics); do not reintroduce a rename.
 - Model calls that face the user run with maximum thinking; never force
   thinking off.
-- An emulated Mac's arrow is where the browser's pointer is, to the pixel,
-  in the Installer and after. This is very important to Livid. Mac OS 9
-  has it by the tablet driver in its ROM; Mac OS X by its own driver, on a
-  board whose only USB pointer is the tablet (`internal/macos9/system.go`:
-  beside a USB mouse the tablet is not the pointer QEMU feeds). Check it
+- An emulated Mac's arrow is where the browser's pointer is, in the
+  Installer and after: never more than a pixel off. This is very
+  important to Livid. Mac OS 9 has it by the tablet driver in its ROM;
+  Mac OS X by its own driver, on a board whose only USB pointer is the
+  tablet (`internal/macos9/system.go`: beside a USB mouse the tablet is
+  not the pointer QEMU feeds). A guest's system update can change it:
+  Tiger at 10.4.11 leaves 15% of the tablet's range unused where 10.4.0
+  used all of it, and the viewer corrects for what it sees the arrow do
+  (`trims` there, `pointerTrim` in the Mac apps' `app.js`). Check it
   through the browser, never over QMP alone, whose absolute events reach
   the tablet whichever pointer the display is feeding: `query-mice` names
   the tablet as current, and `~/tools/playwright/exe-macosx-pointer-test.js`
-  passes on a scratch daemon, on the installer boot and on an installed
-  system. A window that does not settle fails it too
-  (`exe-mac-settle-test.js`).
+  passes on a scratch daemon, on the installer boot, on an installed
+  system and after the guest's system was updated. A window that does not
+  settle fails it too (`exe-mac-settle-test.js`).
 
 ## Docs to keep current
 

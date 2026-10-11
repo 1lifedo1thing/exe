@@ -1625,9 +1625,13 @@ describes them. What differs:
 - **Mac keys…** sends ⌘ Q to quit, ⌘ W to close, ⌘ Tab for the next
   application, ⌘ Space for Spotlight and ⌥ ⌘ Esc to force an application
   to quit: the keys your own computer keeps for itself.
-- **The pointer** is where your browser's pointer is, to the pixel, as in
-  Mac OS 9, from the Installer's first screen on. Mac OS X drives it
-  itself, with nothing loaded into the Mac, and the mouse wheel scrolls.
+- **The pointer** is where your browser's pointer is, as in Mac OS 9, from
+  the Installer's first screen on. Mac OS X drives it itself, with nothing
+  loaded into the Mac, and the mouse wheel scrolls. Tiger as installed puts
+  the arrow on the very pixel. Once updated (10.4.11), its driver leaves the
+  edges of a tablet's range unused; the window sees where the arrow lands,
+  allows for it within a few moves of the pointer, and from then on the
+  arrow is within a pixel of yours.
 - **CD…** takes images up to 9 GiB, so a dual-layer DVD fits. The Mac
   starts with its drive empty: the install DVD stays in the list, to mount
   when you want Xcode from it.
@@ -1649,6 +1653,35 @@ Energy Saver** to **Never**, or run
 Turn Tiger's screen saver off as well, under **System Preferences →
 Desktop & Screen Saver**: with no graphics card to draw it, it keeps a
 whole processor core of this machine busy for as long as it shows.
+
+### A shell and screen sharing from this machine
+
+While the Mac runs, two of Tiger's Sharing services can be reached from
+this machine, and from no other. They are a second way in, for you and for
+an agent, that does not pass through the emulated keyboard and pointer:
+commands as text, and the Mac's own screen sharing.
+
+- **Remote Login** is a shell. Turn it on in the Mac's **System
+  Preferences → Sharing**, then connect to `127.0.0.1` on the port that
+  **Setup details** shows.
+- **Apple Remote Desktop**, with **VNC viewers may control screen with
+  password** set under its **Access Privileges…**, shows the Mac's screen
+  to a VNC viewer at `127.0.0.1` on the other port.
+
+Tiger's SSH server is from 2004. A current `ssh` refuses it ("no matching
+key exchange method") until it is told to allow what that server speaks:
+
+```
+ssh -p <port> -l <account> -o KexAlgorithms=+diffie-hellman-group1-sha1 \
+    -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+    127.0.0.1
+```
+
+The two ports are in the daemon's status as well (`GET /v1/macosx`,
+`ports`), and they stay the same from one start to the next while they are
+free. Nothing answers on them until the service is on in the Mac. Every
+program on this machine can reach them, so there it is the account's
+password that guards the Mac.
 
 ### Clock and network
 

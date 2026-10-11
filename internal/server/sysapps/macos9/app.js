@@ -155,6 +155,63 @@ displayResize.observe(screen);
 // Refit on connection and when the guest changes its framebuffer resolution.
 const framebufferResize = new MutationObserver(fitDisplay);
 framebufferResize.observe(display, {childList: true, subtree: true, attributes: true, attributeFilter: ['width', 'height']});
+// The arrow is where the browser's pointer is. Mac OS X's HID driver, from
+// the updates of Tiger on (10.4.11), leaves 7.5% of a tablet's range unused
+// at each edge, where 10.4.0 used all of it, and nothing in the guest can be
+// set about it: uncorrected, the arrow stands off from the pointer, the more
+// the nearer an edge. The viewer sends each place corrected (pointerTrim in
+// core/rfb.js) and finds out by looking which of the system's corrections
+// (<body data-pointer-trims>) the guest in front of it needs. With the
+// pointer at rest it reads the Mac's arrow, a shape it knows, off the screen
+// it is shown. Found under the pointer, the correction in use is right;
+// found three rests running where another correction would have put it,
+// that one is taken, and the daemon is told, so that every viewer of this
+// Mac begins with it. A page that names no corrections (Mac OS 9's) does
+// none of this.
+const trims = (mac.pointerTrims || '').split(' ').filter(Boolean).map(Number);
+const ARROW = [ // the Mac's arrow, from the row above its tip and the column left of it
+  'WW', 'WBW', 'WBBW', 'WBBBW', 'WBBBBW', 'WBBBBBW', 'WBBBBBBW', 'WBBBBBBBW', 'WBBBBBBBBW', 'WBBBBBWWWWW',
+  'WBBWBBW', 'WBW WBBW', 'WW  WBBW', 'W    WBBW', '     WBBW', '      WWW'];
+let trim = 0, trimVotes = 0, trimVoted, restTimer;
+function setTrim(value, tell) {
+  if (!trims.includes(value) || value === trim) return;
+  trim = value; trimVotes = 0;
+  if (rfb) rfb.pointerTrim = trim;
+  if (tell) fetch(mac.api + '/pointer', {method: 'POST', cache: 'no-store', body: JSON.stringify({trim}),
+    headers: {'Content-Type': 'application/json', ...(token ? {Authorization: 'Bearer ' + token} : {})}}).catch(() => {});
+}
+function arrowAt(ctx, x, y) {
+  if (x < 1 || y < 1 || x + 10 > ctx.canvas.width || y + 15 > ctx.canvas.height) return false;
+  const px = ctx.getImageData(x - 1, y - 1, 11, 16).data;
+  let wrong = 0;
+  for (let r = 0; r < ARROW.length; r++) for (let c = 0; c < ARROW[r].length; c++) {
+    const want = ARROW[r][c]; if (want === ' ') continue;
+    const i = (r * 11 + c) * 4, lo = Math.min(px[i], px[i + 1], px[i + 2]), hi = Math.max(px[i], px[i + 1], px[i + 2]);
+    if ((want === 'B' ? hi > 80 : lo < 176) && ++wrong > 3) return false;
+  }
+  return true;
+}
+// the guest pixel a place sent lands on, in a guest that leaves `unused` of the range unused
+const landsOn = (sent, size, unused) => Math.floor((Math.floor(sent * 32767 / size) - unused / 2 * 32767) * size / ((1 - unused) * 32767));
+function lookForArrow() {
+  const sent = rfb?.pointerSent, canvas = display.querySelector('canvas');
+  if (!connected || !sent || !canvas?.width) return;
+  const ctx = canvas.getContext('2d');
+  const found = unused => {
+    const x = landsOn(sent.sentX, canvas.width, unused), y = landsOn(sent.sentY, canvas.height, unused);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (arrowAt(ctx, x + dx, y + dy)) return true;
+    return false;
+  };
+  if (found(trim)) { trimVotes = 0; return; }
+  const other = trims.find(t => t !== trim && found(t));
+  if (other === undefined) return;
+  if (other !== trimVoted) { trimVoted = other; trimVotes = 0; }
+  if (++trimVotes >= 3) setTrim(other, true);
+}
+if (trims.length > 1) display.addEventListener('pointermove', e => {
+  clearTimeout(restTimer);
+  if (!e.buttons) restTimer = setTimeout(lookForArrow, 350);
+}, true);
 function connect() {
   if (!viewActive || rfb || Date.now() < nextConnect) return;
   const url = new URL(mac.api + '/console', location.href);
@@ -162,6 +219,7 @@ function connect() {
   if (token) url.searchParams.set('token', token);
   const client = new RFB(display, url.href, {wsProtocols: ['binary']});
   rfb = client; client.scaleViewport = true; client.resizeSession = false; client.background = '#333';
+  client.pointerTrim = trim;
   client.addEventListener('capabilities', () => {
     if (rfb !== client) return;
     updateSound();
@@ -207,6 +265,8 @@ function render(s) {
   $('#message').textContent = s.message;
   $('#message').title = s.message;
   $('#hardware').textContent = mac.hardware + ' · ' + (s.installed ? 'Ethernet NAT' : 'Ethernet after installation');
+  // Where this computer reaches the Mac's own Sharing services, on a page that says so (Mac OS X's).
+  for (const el of document.querySelectorAll('[id^="port-"]')) el.textContent = s.ports?.[el.id.slice(5)] || '—';
   $('#start').hidden = s.active || s.running;
   $('#start').textContent = s.installed ? 'Start Mac' : s.phase === 'installing' ? 'Resume installer' : asks(s) ? 'Set up Mac' : 'Continue setup';
   $('#start').disabled = pending;
@@ -241,6 +301,7 @@ function render(s) {
   if (s.phase === 'error' || s.phase === 'interrupted') error(new Error(s.message), 'setup');
   else clearError('setup');
   fitBar();
+  if (typeof s.trim === 'number' || trims.length) setTrim(s.trim || 0);
   if (s.running) connect();
   else if (rfb) { rfb.disconnect(); }
   else $('#connection').textContent = '';

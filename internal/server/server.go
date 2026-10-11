@@ -299,6 +299,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST "+mac+"/start", s.handleMacOS9Start)
 		mux.HandleFunc("POST "+mac+"/cancel", s.handleMacOS9Cancel)
 		mux.HandleFunc("POST "+mac+"/finish", s.handleMacOS9Finish)
+		mux.HandleFunc("POST "+mac+"/pointer", s.handleMacOS9Pointer)
 		mux.HandleFunc("GET "+mac+"/console", s.handleMacOS9Console)
 		mux.HandleFunc("GET "+mac+"/cd", s.handleMacOS9CD)
 		mux.HandleFunc("POST "+mac+"/cd", s.handleMacOS9ChangeCD)

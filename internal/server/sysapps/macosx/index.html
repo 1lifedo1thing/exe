@@ -7,7 +7,7 @@
      script, told by <body data-…> which Mac this page shows. -->
 <link rel="stylesheet" href="../macos9/mac.css">
 </head>
-<body data-api="/v1/macosx" data-hardware="PowerPC G4 · 1 GB" data-cd-gib="9"
+<body data-api="/v1/macosx" data-hardware="PowerPC G4 · 1 GB" data-cd-gib="9" data-pointer-trims="0 0.15"
   data-before-setup="Mac OS X is not set up on this computer yet. Set up Mac downloads Apple’s Tiger install DVD, 2.6 GiB, from the Internet Archive and takes you through the installation."
   data-after-install="The Mac has stopped. If the Installer finished and restarted it, use the button above to start from your hard disk.">
 <header id="bar">
@@ -42,6 +42,7 @@
     <div id="download-progress" hidden><progress id="progress" aria-label="Installer download"></progress><div id="transfer"></div></div>
     <div id="setup" tabindex="0">
       <p id="intro">Setup runs on this computer and continues if you close this dialog. Your Mac’s hard disk is kept for your next visit. <a href="https://archive.org/details/691-5305-A2ZMac_OS_X_v10.4_Tiger._Includes_Xcode_2._Install_Disc_2005_DVD" target="_blank" rel="noreferrer">Installer source</a>.</p>
+      <p id="ports">While the Mac runs, this computer and no other reaches two of its Sharing services: Remote Login on port <b id="port-ssh">—</b> and Apple Remote Desktop’s VNC on port <b id="port-vnc">—</b>, both at 127.0.0.1. Turn them on in the Mac’s System Preferences → Sharing.</p>
       <p id="setup-loading">Checking setup progress…</p>
       <ol id="steps"></ol>
     </div>

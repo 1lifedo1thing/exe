@@ -198,6 +198,7 @@ export default class RFB extends EventTargetMixin {
         this._mousePos = {};
         this._mouseButtonMask = 0;
         this._mouseLastMoveTime = 0;
+        this.pointerTrim = 0; // exe: see pointerTarget
         this._viewportDragging = false;
         this._viewportDragPos = {};
         this._viewportHasMoved = false;
@@ -1255,14 +1256,29 @@ export default class RFB extends EventTargetMixin {
         }
 
         let extendedMouseButtons = mask & 0x7f80;
+        const [px, py] = this.pointerTarget(this._display.absX(x), this._display.absY(y));
 
         if (this._extendedPointerEventSupported && extendedMouseButtons) {
-            RFB.messages.extendedPointerEvent(this._sock, this._display.absX(x),
-                                              this._display.absY(y), mask);
+            RFB.messages.extendedPointerEvent(this._sock, px, py, mask);
         } else {
-            RFB.messages.pointerEvent(this._sock, this._display.absX(x),
-                                      this._display.absY(y), mask);
+            RFB.messages.pointerEvent(this._sock, px, py, mask);
         }
+    }
+
+    // exe: a guest may spread its screen over less than the whole range of an
+    // absolute pointer. Mac OS X 10.4.11 leaves 7.5% of a tablet's range
+    // unused at each edge (pointerTrim 0.15), so the place sent for a guest
+    // pixel is that pixel's place inside the range the guest does use. The
+    // app sets pointerTrim; 0 sends the pixel as it is.
+    pointerTarget(x, y) {
+        const t = this.pointerTrim;
+        const sent = !t ? [x, y] :
+            [Math.round(this._fbWidth * t / 2 + (1 - t) * (x + 0.5)),
+             Math.round(this._fbHeight * t / 2 + (1 - t) * (y + 0.5))];
+        // the guest pixel meant and the place sent for it, for the app to
+        // check against where the guest then draws its arrow
+        this.pointerSent = { x, y, sentX: sent[0], sentY: sent[1] };
+        return sent;
     }
 
     _handleWheel(ev) {

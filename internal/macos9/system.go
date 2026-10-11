@@ -29,8 +29,27 @@ type system struct {
 
 	// machine is the Mac itself: board, memory, display, pointer and clock.
 	machine  func(installer bool) []string
-	network  string // QEMU's -netdev for an installed Mac
-	ethernet string // the address of its network card
+	network  string    // QEMU's -netdev for an installed Mac
+	forwards []forward // services of the Mac this machine can reach
+	ethernet string    // the address of its network card
+	// trims are the shares of an absolute pointer's range the system may
+	// leave unused, split between the two edges: what the viewer has to
+	// allow for to put the arrow where the browser's pointer is. Tiger as
+	// installed (10.4.0) uses the whole range; from its updates on (seen in
+	// 10.4.11) the HID driver drops 15%, 7.5% at each edge, and has no
+	// setting for it. The viewer finds out which and tells the daemon.
+	trims []float64
+}
+
+// A forward is a service inside the Mac that this machine, and nothing
+// beyond it, can reach: QEMU listens on a loopback port of the host and
+// hands each connection to the guest's port. Nobody answers there until the
+// Mac's own Sharing preferences turn the service on. It is a second way
+// into the guest, one that does not pass through the emulated keyboard and
+// pointer: a shell for commands, and the Mac's own screen sharing.
+type forward struct {
+	name  string // as Status names its port: "ssh", "vnc"
+	guest int
 }
 
 var macOS9 = &system{
@@ -86,8 +105,11 @@ var macOSX = &system{
 	// Tiger takes an IPv6 address from the emulator's router and tries it
 	// first for every name; nothing answers there, and each connection
 	// waited 24 seconds before it fell back (0.3 seconds with it off).
-	network:  "user,id=net0,ipv6=off",
+	network: "user,id=net0,ipv6=off",
+	// Remote Login, and Apple Remote Desktop's VNC, in Tiger's Sharing pane.
+	forwards: []forward{{"ssh", 22}, {"vnc", 5900}},
 	ethernet: "52:54:00:10:04:00",
+	trims:    []float64{0, 0.15},
 }
 
 func macOSXMachine(installer bool) []string {
