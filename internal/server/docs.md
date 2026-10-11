@@ -182,8 +182,8 @@ The magnifier opens one box that finds VMs, chat sessions, notes and todos.
   still needs. A ready feature has a green check beside its name on the
   first page.
 - The card's button goes there: **New VM…**, the pane of Configuration that
-  sets Chat up, the Cloudflare Setup Wizard, and **Join a Hub…** until a
-  hub is joined, the Hub after.
+  sets Chat up, the Cloudflare Setup Wizard, **Join a Hub…** until a hub
+  is joined and the Hub after, and **Extras…** on the Apps card.
 - **Read More…** opens this manual on that feature's chapter.
 
 On a new install the window opens with the desktop each time, until you
@@ -2614,6 +2614,7 @@ These are part of exe itself, and each has a chapter of its own.
 | **Dict** | `dict` | A dictionary from English and five other languages into Chinese, Japanese or Korean. | [Dict](https://exe.v2core.com/docs/using/dict) |
 | **Analytics** | `analytics` | The traffic Cloudflare's edge saw for the hostnames this node publishes. | [Analytics](https://exe.v2core.com/docs/using/analytics) |
 | **Welcome** | `welcome` | exe in six cards. It has no desktop icon: choose **Help → Welcome…**. | [The desktop](https://exe.v2core.com/docs/using/the-desktop) |
+| **Extras** | `extras` | Turns the extra apps, Planet and Easel on and off. It has no desktop icon: press **Extras…** on Welcome's Apps card. | This chapter, under **Extras** |
 
 Built-in app IDs use lowercase names; their display titles come from
 `app.json`. Three of them had other IDs once (`Mac OS 9`, `Hub`,
@@ -2625,10 +2626,46 @@ app data keeps its original storage and sync namespace.
 The installer offers a set of extra apps: Notes, Paint, Tides, Todo,
 Weather and World Clock, from
 [exe-apps](https://github.com/livid/exe-apps). Say yes and they go into
-`~/.exe/apps`.
+`~/.exe/apps`. Say no and **Extras** brings them later.
 
 An update brings their new versions, except for an app you edited or
 removed; see [Updating](https://exe.v2core.com/docs/using/updating).
+
+### Extras
+
+Three things add to exe and are not part of it: the extra apps, Planet
+and Easel. **Extras** turns each on and off. Open it with **Extras…** on
+the Apps card of **Help → Welcome…**.
+
+It has a step for each extra and a last one that makes the changes:
+
+1. **Extra Apps**, **Planet**, **Easel.** Each page says what the extra
+   is and how it stands on this machine, and has one check box. Tick it
+   to have the extra on this desktop, clear it to take it off.
+2. **Review.** What will change, extra by extra. Nothing has changed
+   until you press **Apply** here. The desktop's icons follow by
+   themselves.
+
+What turning an extra on does depends on where it comes from:
+
+| The extra | On | Off |
+|---|---|---|
+| The extra apps, on a released exe | Fetches them from the release that is running and places them in `~/.exe/apps`. An update keeps them current. | Removes the ones exe placed. An app you edited stays, and is yours. |
+| The extra apps, from a checkout of exe-apps | Names the folder in `apps_dirs`. | Takes the folder out of `apps_dirs`. |
+| Planet and Easel | Names the program's `apps` folder in `apps_dirs` and its daemon in `services`. | Takes both out again. |
+
+Turning Planet or Easel off changes only exe's configuration. The
+program's files stay, and its daemon keeps running until you stop it.
+
+Planet and Easel are programs of their own, built from their source.
+While one is not on this machine its check box is grey, and the page
+gives a line to hand a coding agent, such as the one in the **Claude
+Code** window, which installs it. If the program is here and exe did not
+find it, type its folder and press **Find**.
+
+An agent turns an extra on with `POST /v1/extras/<name>` and
+`{"on": true}`, where the name is `apps`, `planet` or `easel`;
+`GET /v1/extras` says how each stands.
 
 ### Where an app lives
 
@@ -2705,7 +2742,7 @@ note, a to-do or a field that newer ones wrote.
 
 Two apps come with [exe-planet](https://github.com/livid/exe-planet), the
 site builder that runs beside exe. Its `apps` folder goes in `apps_dirs`,
-and its daemon is the service `planet`.
+and its daemon is the service `planet`: **Extras** sets both.
 
 **Writer** edits any Markdown file in the Workspace: the text on the
 left, the page it makes on the right, saved as you type. An edit made
@@ -2764,7 +2801,8 @@ and choose **Announce on Hub** to send it.
 
 Easel comes with [exe-easel](https://github.com/livid/exe-easel), which
 runs Claude painters at an oil paint simulator beside exe. Its `apps`
-folder goes in `apps_dirs`, and its daemon is the service `easel`.
+folder goes in `apps_dirs`, and its daemon is the service `easel`:
+**Extras** sets both.
 
 A studio is a folder holding an easel, a box of tubes and a brief.
 **New Studio…** makes one, and **Start Painter…** sets a Claude painter

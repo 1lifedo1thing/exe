@@ -277,6 +277,18 @@ func RemoveApps(appsDir, manifestFile string) (removed, kept []string, err error
 	return removed, kept, nil
 }
 
+// ForgetApps drops the record of what was installed, and the plan of an
+// install that did not finish. Whatever bundles are left are their
+// owner's from then on, and an update no longer follows them.
+func ForgetApps(manifestFile string) error {
+	for _, f := range []string{manifestFile, pendingFile(manifestFile)} {
+		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 // placeTree puts a copy of from at to, whole or not at all: the copy is
 // made in staging and renamed into place, and what stood there before
 // goes only once the new one stands. A variable so a test can make one

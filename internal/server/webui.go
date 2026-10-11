@@ -467,16 +467,10 @@ func (s *Server) handleConfigPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nc.Normalize()
-	b, err := json.MarshalIndent(nc, "", "  ")
-	if err != nil {
+	if err := s.storeConfig(&nc); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	if err := os.WriteFile(config.Path(), append(b, '\n'), 0o600); err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	s.cfg.Store(&nc)
 	s.hubAgentKick()
 
 	var restart []string

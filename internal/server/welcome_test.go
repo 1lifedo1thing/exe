@@ -57,23 +57,29 @@ func TestWelcomeMark(t *testing.T) {
 	}
 }
 
-// Welcome is a system app the desktop lists but keeps off its icons: it
-// says so itself, and no other built-in app does.
+// Welcome is a system app the desktop lists but keeps off its icons, and
+// so is Extras, the wizard its Apps card opens: each says so itself, and
+// no other built-in app does.
 func TestWelcomeIsListedHidden(t *testing.T) {
 	s := New(&config.Config{}, nil, nil, "", t.TempDir())
+	hidden := map[string]string{"welcome": "Welcome", "extras": "Extras"}
 	seen := false
 	for _, a := range s.listApps() {
-		if a.Name == "welcome" {
-			seen = true
-			if !a.Hidden || a.Title != "Welcome" || !strings.Contains(a.SystemIcon, `viewBox="0 0 32 32"`) {
-				t.Errorf("welcome: %+v", a)
+		if title, ok := hidden[a.Name]; ok {
+			seen = seen || a.Name == "welcome"
+			if !a.Hidden || a.Title != title || !strings.Contains(a.SystemIcon, `viewBox="0 0 32 32"`) {
+				t.Errorf("%s: %+v", a.Name, a)
 			}
 			if a.Window == nil || a.Window.Grow {
-				t.Errorf("the Welcome window is a fixed size: %+v", a.Window)
+				t.Errorf("the %s window is a fixed size: %+v", title, a.Window)
 			}
+			delete(hidden, a.Name)
 		} else if a.Hidden {
 			t.Errorf("%s is hidden from the desktop", a.Name)
 		}
+	}
+	for name := range hidden {
+		t.Errorf("no %s app among the system apps", name)
 	}
 	if !seen {
 		t.Fatal("no welcome app among the system apps")

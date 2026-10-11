@@ -1,0 +1,6 @@
+{
+  "title": "Extras",
+  "icon": "icon.svg",
+  "hidden": true,
+  "window": { "width": 580, "height": 500, "grow": false }
+}

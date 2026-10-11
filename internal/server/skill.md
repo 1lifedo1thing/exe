@@ -177,6 +177,9 @@ carry `{"resize":[cols,rows]}`. Auth via `?token=` if needed. Prefer plain
 ## Other endpoints
 
 `GET /v1/config` (full daemon config, incl. `ssh_user` and cloudflare setup),
+`GET /v1/extras` and `POST /v1/extras/{apps|planet|easel}` with `{"on":true}`
+(the extra apps, exe-planet and exe-easel on this desktop; add `"dir"` for a
+checkout exe has not found),
 `GET /v1/logs` (streams daemon log), `GET /v1/logs/access` (streams the API access log).
 `POST /v1/vms/{name}/publish` body `{"path":"/home/dev/app","repo":"app","private":true}`
 publishes a VM folder to the signed-in user's GitHub; the daemon holds the

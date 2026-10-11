@@ -410,8 +410,8 @@ const FEATS = [
   { key: "apps", icon: ICON.app, name: "Apps",
     blurb: "Notes, Paint, Tides and more on the desktop. Easel has Claude paint in oils. An agent can build yours.",
     lead: "Small apps on the desktop, and room for your own.",
-    text: ["An app is a folder holding an <code>app.json</code> and an <code>index.html</code>, in <code>~/.exe/apps</code>. It opens in a window of its own and keeps its data on this machine, shared with the machines you join to it. The installer offers six: Notes, Paint, Tides, Todo, Weather and World Clock.",
-      "An app is one page of HTML, so a coding agent can build you one in a sitting. Easel, installed separately, is a bigger one: it sets Claude to work at an oil paint simulator, and you watch the picture being painted."],
+    text: ["An app is a folder holding an <code>app.json</code> and an <code>index.html</code>, in <code>~/.exe/apps</code>. It opens in a window of its own and keeps its data on this machine, shared with the machines you join to it. It is one page of HTML, so a coding agent can build you one in a sitting.",
+      "Three extras bring more. The extra apps are six small ones: Notes, Paint, Tides, Todo, Weather and World Clock. Planet builds websites from Markdown, and Easel sets Claude to work at an oil paint simulator. Extras… turns each on and off."],
     more: "Apps",
     state() {
       if (S.apps === undefined) return WAIT;
@@ -420,9 +420,12 @@ const FEATS = [
       return { kind: "ok", text: plural(shown.length, "app") + (shown.length === 1 ? " is" : " are") + " on this desktop" +
         (easel ? ", Easel among them." : ". Easel is not one of them yet.") };
     },
+    // Extras… is the wizard that turns the extras on and off (the extras
+    // sysapp); the button that opens an app is there once one is on
     acts() {
       const a = appNamed("easel") || appNamed("notes") || appNamed("paint");
-      return a ? [{ label: "Open " + (a.title || a.name), act: "app", args: [a.name] }] : [];
+      return [{ label: "Extras…", act: "app", args: ["extras"], off: S.apps === undefined }]
+        .concat(a ? [{ label: "Open " + (a.title || a.name), act: "app", args: [a.name] }] : []);
     } },
 ];
 const appNamed = id => (S.apps || []).find(a => a.name.toLowerCase() === id);

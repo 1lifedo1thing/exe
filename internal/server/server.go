@@ -171,6 +171,9 @@ type Server struct {
 	// Software Update: the check, the one job, what is on disk (update.go).
 	upd updateState
 
+	// Extras: exe-apps, exe-planet and exe-easel, on and off (extras.go).
+	ext extrasState
+
 	// App-data change fanout to open desktops (see appevents.go).
 	appEv appEvents
 
@@ -354,6 +357,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/push", s.handlePush)
 	mux.HandleFunc("GET /v1/config", s.handleConfigGet)
 	mux.HandleFunc("PUT /v1/config", s.handleConfigPut)
+	mux.HandleFunc("GET /v1/extras", s.handleExtras)
+	mux.HandleFunc("POST /v1/extras/{name}", s.handleExtraSet)
 	mux.HandleFunc("POST /v1/daemon/restart", s.handleDaemonRestart)
 	mux.HandleFunc("GET /v1/tailscale", s.handleTailscale)
 	mux.HandleFunc("POST /v1/tailscale/set", s.handleTailscaleSet)

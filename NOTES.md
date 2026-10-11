@@ -7,6 +7,7 @@ docs/release.md, "The notes", says how it is written.
 - **Software Update** in the Apple menu installs a new release from the desktop.
 - **Welcome…** in the Help menu is exe in six cards. A new install opens on it.
 - **Join a Hub…** in the Hub app: four steps, from a hub's address to your profile.
+- **Extras…** on Welcome's Apps card turns the extra apps, Planet and Easel on and off.
 - **Node Sync…** in the Special menu is the old **Join…**: it pairs this exe with another.
 - The manual opens on its contents, reads a chapter at a time and can be searched.
 - The desktop asks for the API token when it needs one, and `exe token` prints it.

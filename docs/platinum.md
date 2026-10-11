@@ -548,6 +548,30 @@ restyling: `internal/server/ui/index.html` (the desktop),
   (`visibility`, since a `display: none` scroller loses its place), for
   whoever cancels; with nothing behind it, Cancel puts the window away.
   `~/tools/playwright/exe-hub-join-test.js` walks it against a mocked hub.
+- A wizard in a window of its own (Extras, `sysapps/extras`, from
+  Welcome's Apps card): the same head, list, page and button row with no
+  status bar under them, in a fixed-size window with no grow box, sized
+  so that its tallest page fits without a scroll bar (580 by 500). Its
+  steps are a page for each of three things that can be on or off, and a
+  last one, Review. A page says what the thing is, then under a
+  separator how it stands on this machine — a bold line and two lines
+  kept for the answer, under the green check when it is on and nothing
+  is against it, `#7a1010` when something is — and has one check box,
+  which is the choice. A line under the box, two lines kept, says what
+  the last step will do while the box differs from the machine. A thing
+  that cannot be chosen has its box dead and its label `#777`, and in
+  the line's place how to get it: the words for a coding agent in a
+  sunken white box (mono, selectable), Copy Prompt in a row with what it
+  did beside it, and a 20px field with Find on one row for the folder of
+  a copy exe did not find. Review lists each thing on a line, its name
+  bold in an 84px column and what becomes of it beside it, `#777` where
+  nothing changes. Its button is Apply while there is a change to make
+  and Done when there is none; after Apply each line says what came of
+  it, under the green check or in `#7a1010` with the daemon's own words,
+  and the button says Apply again while something is left. Put away by
+  its close box, the wizard starts over the next time. Its icon is a
+  jigsaw piece, as Mac OS drew its extensions.
+  `~/tools/playwright/exe-extras-test.js` walks it.
 - A picture window on a phone is put away by swiping it down: the window
   follows the finger from 6px of vertical travel (a sideways drag and a
   second finger stay the browser's), springs back over 160ms under 90px,

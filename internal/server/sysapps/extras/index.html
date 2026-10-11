@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Extras</title>
+<style>
+/* Platinum values match the exe desktop (same block as Welcome and Notes) */
+:root {
+  --black: #262626;
+  --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999;
+  --hl: #333399; --red: #7a1010; --green: #1f9e33;
+  --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { height: 100%; }
+body { margin: 0; font: 12px/16px var(--font); color: var(--black); background: var(--g200);
+  user-select: none; -webkit-user-select: none; cursor: default; overflow: hidden; }
+
+button { font: inherit; cursor: default; }
+button.ghost { background: var(--g300); color: var(--black);
+  border: 1px solid var(--black); border-radius: 3px;
+  padding: 2px 13px; font-size: 12px; line-height: 14px; font-weight: bold; height: 20px;
+  white-space: nowrap; flex: none;
+  box-shadow: inset 1px 1px 0 var(--g300), inset -1px -1px 0 #777,
+    inset 2px 2px 0 #fff, inset -2px -2px 0 #aaa; }
+button.ghost:active { background: #666; color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
+    inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
+button.ghost:disabled { color: #777; border-color: #888; background: var(--g300); box-shadow: none; }
+/* the one button Return presses wears the ring */
+button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
+button:focus:not(.default) { outline: none; }
+
+/* a Platinum check box: sunken white square, a black check when on
+   (Welcome's, Blue Pencil's options) */
+label.check { display: flex; align-items: center; gap: 5px; }
+input[type=checkbox] { appearance: none; -webkit-appearance: none; margin: 0; width: 12px; height: 12px; flex: none;
+  background: #fff; border: 1px solid var(--black); border-radius: 0;
+  box-shadow: inset 1px 1px 0 #999, 1px 1px 0 #fff; }
+input[type=checkbox]:checked { background: #fff url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" shape-rendering="crispEdges"><path fill="black" d="M1 4h1v1H1zM2 5h1v1H2zM3 6h1v1H3zM4 7h1v1H4zM5 6h1v1H5zM6 5h1v1H6zM7 4h1v1H7zM8 3h1v1H8zM8 2h1v1H8zM2 4h1v1H2zM3 5h1v1H3zM4 6h1v1H4zM5 5h1v1H5zM6 4h1v1H6zM7 3h1v1H7z"/></svg>') center no-repeat; }
+input[type=checkbox]:focus { outline: none; }
+input[type=checkbox]:focus-visible { outline: 2px solid #9999fe; }
+input[type=checkbox]:disabled { border-color: #888; box-shadow: none; background-color: var(--g200); }
+label.check.off { color: #777; }
+
+/* a text field: white, sunken, 20px */
+input[type=text] { font: inherit; color: var(--black); height: 20px; padding: 2px 5px; min-width: 0;
+  background: #fff; border: 1px solid var(--black); border-radius: 0;
+  box-shadow: -1px -1px 0 #999, 1px 1px 0 #fff;
+  user-select: text; -webkit-user-select: text; cursor: text; }
+input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
+
+/* The wizard (docs/platinum.md, "A wizard"; the Hub app's Join a Hub is
+   the first of them): a head with the icon, the steps down the left
+   beside the step's page, and a button row of its own under a separator —
+   Cancel at the left, Go Back and the ringed Continue at the right. Every
+   part is there from the first paint and a page only fills it. This
+   window is the wizard and nothing else, so it has no status bar. */
+#wiz { height: 100%; display: flex; flex-direction: column; }
+/* separators are a 1px #999 line over a 1px white one */
+.w-head { flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border-bottom: 1px solid var(--g600); }
+.w-head svg { flex: none; display: block; }
+.w-head h1 { margin: 0; font-size: 12px; line-height: 16px; }
+.w-head p { margin: 0; color: #555; }
+.w-head .narrow { display: none; }
+.w-mid { flex: 1; min-height: 0; display: flex; box-shadow: inset 0 1px 0 #fff; }
+/* the steps: a done one wears the pass mark's green check, the one in
+   hand OS 9's dot and bold type, the ones to come grey. They are read,
+   never pressed. */
+#w-steps { flex: none; width: 132px; margin: 0; padding: 11px 8px 0 14px; list-style: none;
+  border-right: 1px solid var(--g600); }
+#w-steps li { display: flex; align-items: center; gap: 6px; height: 20px; color: #777; white-space: nowrap; }
+#w-steps li.now { color: var(--black); font-weight: bold; }
+#w-steps li.done { color: var(--black); }
+#w-steps .m { flex: none; width: 10px; height: 10px; display: flex; align-items: center; justify-content: center; }
+#w-steps .m svg { display: none; }
+#w-steps li.done .m .tick { display: block; fill: var(--green); }
+/* the dot is stepped pixels at whole scales and a circle between them,
+   where a stepped one comes out a blunt square */
+#w-steps .m .dot { fill: var(--black); }
+#w-steps li.now .m .dot.crisp { display: block; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  #w-steps li.now .m .dot.crisp { display: none; }
+  #w-steps li.now .m .dot.fine { display: block; }
+}
+#w-page { flex: 1; min-width: 0; overflow-y: auto; padding: 12px 14px 4px; box-shadow: inset 1px 0 0 #fff; }
+#w-page > * { max-width: 440px; }
+#w-page h2 { margin: 0 0 6px; font-size: 12px; line-height: 16px; }
+#w-page p { margin: 0 0 10px; }
+#w-page a { color: var(--hl); }
+.w-wait { color: #777; }
+/* how the extra stands on this machine: a bold line, then two lines kept
+   for the answer, the green check before it when the extra is on */
+.w-here { margin: 0 0 10px; padding-top: 8px; border-top: 1px solid var(--g600); box-shadow: inset 0 1px 0 #fff; }
+.w-here h2 { margin-bottom: 2px; }
+.w-stand { min-height: 32px; color: #555; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; cursor: text; }
+.w-stand.one { min-height: 16px; }
+.w-stand.ok { color: #0f6b20; }
+.w-stand.warn { color: var(--red); }
+.tick { display: block; width: 10px; height: 10px; }
+.w-stand .tick, .r-row .tick { display: inline-block; vertical-align: -1px; margin-right: 4px; fill: var(--green); }
+/* what the last step will do about this extra: two lines kept, so the
+   page is as tall while the box is as it was */
+.w-note { min-height: 32px; margin: 6px 0 10px; font-size: 11px; color: #555; overflow-wrap: anywhere; }
+.w-note.err { color: var(--red); }
+/* an extra that is not on this machine: how to get it, the line an agent
+   takes in a sunken box (selectable: it is to be copied), and a field for
+   the folder of a copy that is here already */
+.w-get { margin: 10px 0 8px; }
+.w-prompt { margin: 0 0 8px; padding: 4px 6px; background: #fff; border: 1px solid var(--black);
+  box-shadow: -1px -1px 0 #999, 1px 1px 0 #fff; font: 11px/16px var(--mono);
+  overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; cursor: text; }
+/* a button of the page's own gets a row, with what it did in words beside it */
+.w-btn { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; min-height: 20px; }
+.w-btn span { font-size: 11px; color: #555; min-width: 0; }
+.w-btn input { flex: 1; }
+.w-btn.tight { margin-bottom: 0; }
+#w-said { margin-top: 6px; }
+.w-field { font-size: 11px; margin: 0 0 3px; }
+/* the last step: each extra on a line, what becomes of it beside its name */
+.r-row { display: flex; align-items: baseline; gap: 8px; margin: 0 0 6px; }
+.r-name { flex: none; width: 84px; font-weight: bold; }
+.r-what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.r-what.same { color: #777; }
+.r-what.ok { color: #0f6b20; }
+.r-what.err { color: var(--red); }
+.w-foot { flex: none; display: flex; align-items: center; gap: 12px; padding: 12px;
+  border-top: 1px solid var(--g600); box-shadow: inset 0 1px 0 #fff; }
+.w-foot .gap { flex: 1; min-width: 0; }
+.w-foot button { min-width: 58px; }
+/* a narrow window, and a phone: the list gives its room to the page, and
+   the head counts the steps instead */
+@media (max-width: 459px) {
+  #w-steps { display: none; }
+  #w-page { box-shadow: none; }
+  .w-head .wide { display: none; }
+  .w-head .narrow { display: inline; }
+  .w-foot { flex-wrap: wrap; row-gap: 10px; }
+}
+
+/* Mac OS 9 scrollbars: the desktop's pixel-sampled block, as Tides has it.
+   The window's frame draws the outer black line, so a bar is 15px (1px
+   leading separator + the sampled 14px face) with no trailing border. A
+   window at its own size never shows one; a short window, or a phone held
+   sideways, does. */
+::-webkit-scrollbar { width: 15px; height: 15px; }
+::-webkit-scrollbar-track:vertical { border-left: 1px solid var(--black);
+  background: linear-gradient(to right, #777 0, #777 1px, #888 1px, #888 2px, #aaa 2px, #aaa 12px, #bbb 12px, #bbb 13px, #ccc 13px, #ccc 14px); }
+::-webkit-scrollbar-thumb:vertical { border: 1px solid var(--black); border-right: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="0" width="6" height="1" fill="%23ccccff"/><rect x="4" y="1" width="7" height="1" fill="%23333399"/><rect x="3" y="2" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="2" width="6" height="1" fill="%23ccccff"/><rect x="4" y="3" width="7" height="1" fill="%23333399"/><rect x="3" y="4" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="4" width="6" height="1" fill="%23ccccff"/><rect x="4" y="5" width="7" height="1" fill="%23333399"/><rect x="3" y="6" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="6" width="6" height="1" fill="%23ccccff"/><rect x="4" y="7" width="7" height="1" fill="%23333399"/></svg>') center no-repeat,
+    linear-gradient(to right, #ccccff 0 1px, #9999ff 1px 13px, #6666cc 13px 14px);
+  box-shadow: inset 0 1px 0 #ccccff, inset 0 -1px 0 #6666cc; }
+::-webkit-scrollbar-thumb:vertical:active {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23ccccff"/><rect x="4" y="0" width="6" height="1" fill="%239999ff"/><rect x="4" y="1" width="7" height="1" fill="%23000066"/><rect x="3" y="2" width="1" height="1" fill="%23ccccff"/><rect x="4" y="2" width="6" height="1" fill="%239999ff"/><rect x="4" y="3" width="7" height="1" fill="%23000066"/><rect x="3" y="4" width="1" height="1" fill="%23ccccff"/><rect x="4" y="4" width="6" height="1" fill="%239999ff"/><rect x="4" y="5" width="7" height="1" fill="%23000066"/><rect x="3" y="6" width="1" height="1" fill="%23ccccff"/><rect x="4" y="6" width="6" height="1" fill="%239999ff"/><rect x="4" y="7" width="7" height="1" fill="%23000066"/></svg>') center no-repeat,
+    linear-gradient(to right, #9999ff 0 1px, #6666cc 1px 13px, #333399 13px 14px);
+  box-shadow: inset 0 1px 0 #9999ff, inset 0 -1px 0 #333399; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical {
+  border-top-color: #ccccff; box-shadow: inset 0 -1px 0 #6666cc; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical:active {
+  border-top-color: #9999ff; box-shadow: inset 0 -1px 0 #333399; }
+.at-y-end::-webkit-scrollbar-thumb:vertical {
+  border-bottom-color: #6666cc; box-shadow: inset 0 1px 0 #ccccff; }
+.at-y-end::-webkit-scrollbar-thumb:vertical:active {
+  border-bottom-color: #333399; box-shadow: inset 0 1px 0 #9999ff; }
+/* Safari redraws a custom scroll bar only when its element's own style
+   changes, and the classes above change nothing of the element's own: the
+   thumb's end merges stayed stale there and doubled the line against the
+   arrows. Each class sets a property of its own, so WebKit sees a change. */
+.scrolled-y { --sb-scrolled-y: 1; } .at-y-end { --sb-at-y-end: 1; }
+::-webkit-scrollbar-button { display: block; width: 16px; height: 16px;
+  background: #ddd; border: 1px solid var(--black);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #bbb;
+  background-position: center; background-repeat: no-repeat; }
+::-webkit-scrollbar-button:vertical { border-right: 0; }
+::-webkit-scrollbar-button:vertical:end:increment:enabled { height: 14px; border-top: 0; border-bottom: 0; }
+::-webkit-scrollbar-button:vertical:decrement {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M0 3h8v1h-8z"/></svg>'); }
+::-webkit-scrollbar-button:vertical:increment {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M0 0h8v1h-8z M1 1h6v1h-6z M2 2h4v1h-4z M3 3h2v1h-2z"/></svg>'); }
+::-webkit-scrollbar-button:active { background-color: #777;
+  box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 #999; }
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:start:increment { display: none; }
+::-webkit-scrollbar-corner { background: var(--g300); }
+</style>
+</head>
+<body>
+
+<div id="wiz">
+  <div class="w-head">
+    <svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
+    <path fill="#9999ff" d="M14 5h1v1h-1z M12 6h2v1h-2z M12 7h2v1h-2z M12 8h2v1h-2z M11 9h3v1h-3z M12 11h3v1h-3z M11 12h4v1h-4z M19 12h1v1h-1z M7 13h12v1h-12z M10 14h9v1h-9z M6 15h1v1h-1z M10 15h9v1h-9z M11 16h8v1h-8z M13 17h8v1h-8z M26 17h1v1h-1z M13 18h8v1h-8z M22 18h4v1h-4z M13 19h8v1h-8z M22 19h4v1h-4z M13 20h7v1h-7z M22 20h1v1h-1z M12 21h7v1h-7z M6 22h1v1h-1z M11 22h8v1h-8z M10 23h9v1h-9z M7 24h12v1h-12z M6 25h1v1h-1z"/>
+    <path fill="#ececfd" d="M11 5h3v1h-3z M11 6h1v1h-1z M11 7h1v1h-1z M11 8h1v1h-1z M12 10h1v1h-1z M11 11h1v1h-1z M6 12h5v1h-5z M15 12h4v1h-4z M6 13h1v1h-1z M6 14h1v1h-1z M12 17h1v1h-1z M22 17h4v1h-4z M12 18h1v1h-1z M21 18h1v1h-1z M12 19h1v1h-1z M12 20h1v1h-1z M11 21h1v1h-1z M10 22h1v1h-1z M6 23h4v1h-4z M6 24h1v1h-1z"/>
+    <path fill="#6666cc" d="M14 6h1v1h-1z M14 7h1v1h-1z M14 8h1v1h-1z M14 9h1v1h-1z M13 10h1v1h-1z M19 13h1v1h-1z M7 14h3v1h-3z M19 14h1v1h-1z M19 15h1v1h-1z M19 16h1v1h-1z M26 18h1v1h-1z M21 19h1v1h-1z M26 19h1v1h-1z M20 20h1v1h-1z M23 20h4v1h-4z M19 21h1v1h-1z M19 22h1v1h-1z M19 23h1v1h-1z M19 24h1v1h-1z M7 25h13v1h-13z"/>
+    <path fill="#000000" d="M11 4h4v1h-4z M10 5h1v1h-1z M15 5h1v1h-1z M10 6h1v1h-1z M15 6h1v1h-1z M10 7h1v1h-1z M15 7h1v1h-1z M10 8h1v1h-1z M15 8h1v1h-1z M10 9h1v1h-1z M15 9h1v1h-1z M11 10h1v1h-1z M14 10h1v1h-1z M5 11h6v1h-6z M15 11h6v1h-6z M5 12h1v1h-1z M20 12h1v1h-1z M5 13h1v1h-1z M20 13h1v1h-1z M5 14h1v1h-1z M20 14h1v1h-1z M5 15h1v1h-1z M7 15h3v1h-3z M20 15h1v1h-1z M5 16h2v1h-2z M10 16h1v1h-1z M20 16h1v1h-1z M22 16h5v1h-5z M5 17h1v1h-1z M11 17h1v1h-1z M21 17h1v1h-1z M27 17h1v1h-1z M11 18h1v1h-1z M27 18h1v1h-1z M11 19h1v1h-1z M27 19h1v1h-1z M5 20h1v1h-1z M11 20h1v1h-1z M21 20h1v1h-1z M27 20h1v1h-1z M5 21h2v1h-2z M10 21h1v1h-1z M20 21h1v1h-1z M22 21h5v1h-5z M5 22h1v1h-1z M7 22h3v1h-3z M20 22h1v1h-1z M5 23h1v1h-1z M20 23h1v1h-1z M5 24h1v1h-1z M20 24h1v1h-1z M5 25h1v1h-1z M20 25h1v1h-1z M5 26h16v1h-16z"/>
+    </svg>
+    <div>
+      <h1>Extras</h1>
+      <p><span class="wide">Three things that add to exe. Each can be on or off.</span><span class="narrow" id="w-count"></span></p>
+    </div>
+  </div>
+  <div class="w-mid">
+    <ol id="w-steps" aria-label="Steps"></ol>
+    <div id="w-page"></div>
+  </div>
+  <div class="w-foot">
+    <button class="ghost" id="w-cancel">Cancel</button>
+    <span class="gap"></span>
+    <button class="ghost" id="w-back">Go Back</button>
+    <button class="ghost default" id="w-next">Continue</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  e.append(...kids);
+  return e;
+}
+
+// the desktop hands its window the API token
+const QUERY = new URLSearchParams(location.search);
+const TOKEN = QUERY.get("token") ||
+  (() => { try { return localStorage.getItem("exe_token") || ""; } catch (e) { return ""; } })();
+const IN_DESK = window.parent !== window;
+// the daemon's answer, or its own words for why not
+async function api(path, body) {
+  const opts = { headers: {} };
+  if (TOKEN) opts.headers["Authorization"] = "Bearer " + TOKEN;
+  if (body) { opts.method = "POST"; opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  const r = await fetch(path, opts);
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(out.error || "HTTP " + r.status);
+  return out;
+}
+const post = msg => { if (IN_DESK) parent.postMessage(msg, location.origin); };
+
+const TICK = '<svg class="tick" viewBox="0 0 10 10" shape-rendering="crispEdges" aria-hidden="true"><path d="M1 4h1v1H1zM2 5h1v1H2zM3 6h1v1H3zM4 7h1v1H4zM5 6h1v1H5zM6 5h1v1H6zM7 4h1v1H7zM8 3h1v1H8zM8 2h1v1H8zM2 4h1v1H2zM3 5h1v1H3zM4 6h1v1H4zM5 5h1v1H5zM6 4h1v1H6zM7 3h1v1H7z"/></svg>';
+const DOT = '<svg class="dot crisp" viewBox="0 0 6 6" width="6" height="6" shape-rendering="crispEdges" aria-hidden="true"><path d="M1 0h4v1H1zM0 1h6v4H0zM1 5h4v1H1z"/></svg>' +
+  '<svg class="dot fine" viewBox="0 0 6 6" width="6" height="6" aria-hidden="true"><circle cx="3" cy="3" r="3"/></svg>';
+
+// ---- the three extras, in words. What each is on this machine comes from
+// the daemon (GET /v1/extras, internal/server/extras.go); the names here
+// are its names.
+const EXTRAS = [
+  { name: "apps", step: "Extra Apps", repo: "exe-apps",
+    title: "Six small apps for the desktop",
+    text: "Notes, Paint, Tides, Todo, Weather and World Clock. Each opens in a window of its own and keeps what you write on this machine. They are plain folders of HTML: worked examples for an app of your own.",
+    box: "Extra apps on this desktop",
+    get: "This exe was built from a checkout, so it takes the extra apps from a checkout of exe-apps. A coding agent does it from this line:",
+    prompt: "Clone https://github.com/livid/exe-apps on this machine and add the folder to apps_dirs in exe's configuration, ~/.exe/config.json." },
+  { name: "planet", step: "Planet", repo: "exe-planet",
+    title: "A site builder: Planet and Writer",
+    text: "exe-planet turns Markdown files in the Workspace into websites. Planet keeps your sites and their posts, and Writer edits a post with its page beside it. It is a program of its own that runs beside exe.",
+    box: "Planet and Writer on this desktop",
+    get: "exe-planet is built from its source, which takes Go. A coding agent does it from this line:",
+    prompt: "Install exe-planet (https://github.com/livid/exe-planet) on this machine by following its README, and keep its daemon running. exe is already installed and running here." },
+  { name: "easel", step: "Easel", repo: "exe-easel",
+    title: "Claude painters at an easel",
+    text: "exe-easel sets Claude to work at an oil paint simulator: a painter mixes its paint, lays it on, looks at the canvas, and stops when it is happy. It is a program of its own that runs beside exe, and it needs Claude Code.",
+    box: "Easel on this desktop",
+    get: "exe-easel is built from its source, and asks for a few tools besides Claude Code. A coding agent does it from this line:",
+    prompt: "Set up exe-easel (https://github.com/livid/exe-easel) on this machine by following its README, asking me before installing anything. exe is already installed and running here." },
+];
+const STEPS = [...EXTRAS.map(x => x.step), "Review"];
+const LAST = STEPS.length - 1;
+
+// X is the wizard: the step, how each extra stands (info, by name; null
+// until the daemon has said), what is wanted of each (want), the folder
+// typed for one that is missing (typed) and found there (dirs), and after
+// Apply what came of each (done).
+let X;
+function fresh() {
+  X = { step: 0, info: null, want: {}, typed: {}, dirs: {}, said: {}, busy: false, done: null, failed: "" };
+}
+fresh();
+const host = u => String(u || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
+const words = list => list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
+
+// ---- what the daemon says ----
+let asking = null;
+function ask() {
+  if (asking) return asking;
+  asking = api("/v1/extras").then(out => {
+    const info = {};
+    for (const x of out.extras || []) {
+      // a folder found here for one the daemon calls missing still stands
+      info[x.name] = x.state === "missing" && X.dirs[x.name]
+        ? { ...x, state: "off", from: "folder", dir: X.dirs[x.name] } : x;
+    }
+    take(info);
+  }, e => { X.failed = e.message; if (!X.info) draw(); }).finally(() => { asking = null; });
+  return asking;
+}
+// take is new word of how the extras stand. What is wanted starts as what
+// is, and follows the machine until the reader has said otherwise.
+function take(info) {
+  const was = JSON.stringify(X.info);
+  for (const x of EXTRAS) {
+    const now = info[x.name], before = X.info && X.info[x.name];
+    if (!now) continue;
+    const on = now.state === "on";
+    if (!(x.name in X.want) || (before && (before.state === "on") === X.want[x.name])) X.want[x.name] = on;
+    if (now.state === "missing") X.want[x.name] = false;
+  }
+  X.info = info;
+  X.failed = "";
+  if (JSON.stringify(info) !== was && !X.busy) draw();
+}
+
+// ---- how an extra stands, in a line or two ----
+function stand(x, i) {
+  const svc = i.service ? host(i.service) : "";
+  const daemon = svc ? (i.running ? " Its daemon answers at " + svc + "."
+    : " Its daemon does not answer at " + svc + ": its apps open, and show nothing until it runs.") : "";
+  if (i.state === "on") {
+    const kind = svc && !i.running ? "warn" : "ok";
+    if (i.from === "release") return { kind, text: "On: " + words(i.have) + ", placed here by exe." + daemon };
+    if (i.from === "apps") return { kind, text: "On: " + words(i.have) + " " + (i.have.length === 1 ? "is" : "are") +
+      " in the apps folder, where someone put " + (i.have.length === 1 ? "it" : "them") + ". exe leaves those alone." };
+    return { kind, text: "On, from " + i.dir + "." + daemon };
+  }
+  if (i.state === "off") {
+    if (i.from === "release") return { kind: "", text: "Off. exe " + i.release + " has them: turning this on fetches them from the release." };
+    return { kind: "", text: "Off. A copy is at " + i.dir + "." + (svc ? (i.running ? " Its daemon is running." : " Its daemon is not running.") : "") };
+  }
+  return { kind: "", text: "Not on this machine." };
+}
+// what the last step will do about it, for the line under the box
+function plan(x, i, want) {
+  const on = i.state === "on";
+  if (want === on) return "";
+  if (want) return i.from === "release"
+    ? "The last step fetches them from the release and places them in the apps folder. An update keeps them current from then on."
+    : "The last step names this folder in exe's configuration" + (i.service ? ", and the daemon at " + host(i.service) : "") + ". Nothing in the folder is changed.";
+  return i.from === "release" ? "The last step removes the apps exe placed. One you have edited stays, and is yours."
+    : "The last step takes " + x.repo + " out of exe's configuration. Its files stay" + (i.service ? ", and its daemon keeps running until you stop it." : ".");
+}
+
+// ---- drawing ----
+$("#w-steps").innerHTML = STEPS.map(s => `<li><span class="m">${TICK}${DOT}</span><span>${s}</span></li>`).join("");
+function buttons() {
+  $("#w-cancel").hidden = !IN_DESK; // a tab of its own has no window to put away
+  $("#w-back").disabled = X.step === 0 || X.busy;
+  const next = $("#w-next"), changes = X.info ? changing().length : 0;
+  next.textContent = X.step < LAST ? "Continue" : changes ? "Apply" : "Done";
+  next.disabled = X.busy || !X.info || (X.step === LAST && next.textContent === "Done" && !IN_DESK);
+}
+function draw() {
+  [...$("#w-steps").children].forEach((li, n) => {
+    li.className = n < X.step ? "done" : n === X.step ? "now" : "";
+    n === X.step ? li.setAttribute("aria-current", "step") : li.removeAttribute("aria-current");
+  });
+  $("#w-count").textContent = "Step " + (X.step + 1) + " of " + STEPS.length + ": " + STEPS[X.step];
+  const page = $("#w-page"), had = document.activeElement && document.activeElement.id;
+  page.replaceChildren(...(!X.info ? [el("p", { class: "w-wait" }, X.failed ? "exe did not say how its extras stand: " + X.failed : "Looking at this machine…")]
+    : X.step === LAST ? reviewPage() : extraPage(EXTRAS[X.step])));
+  buttons();
+  // the keyboard stays where it was on a page drawn again, and starts on
+  // the ringed button
+  const back = had && document.getElementById(had);
+  (back && !back.disabled ? back : $("#w-next")).focus({ preventScroll: true });
+}
+
+// 1 to 3: an extra a page
+function extraPage(x) {
+  const i = X.info[x.name], st = stand(x, i), missing = i.state === "missing";
+  // bundles in the apps folder by hand are not this switch's to remove
+  const locked = missing || (i.state === "on" && i.from === "apps");
+  const box = el("input", { type: "checkbox", id: "w-box" });
+  box.checked = !!X.want[x.name];
+  box.disabled = locked || X.busy;
+  const note = el("div", { class: "w-note", role: "status" });
+  const paintNote = () => { note.textContent = plan(x, i, box.checked); };
+  box.onchange = () => { X.want[x.name] = box.checked; X.done = null; paintNote(); buttons(); };
+  paintNote();
+  const here = el("div", { class: "w-stand" + (st.kind ? " " + st.kind : "") + (missing ? " one" : "") });
+  if (st.kind === "ok") here.innerHTML = TICK; // on, and nothing to say against it
+  here.append(st.text);
+  const out = [
+    el("h2", {}, x.title),
+    el("p", {}, x.text),
+    el("div", { class: "w-here" }, el("h2", {}, "On this machine"), here),
+    el("label", { class: "check" + (locked ? " off" : "") }, box, x.box),
+  ];
+  // a box that cannot be ticked promises nothing: its line gives its room
+  // to how the extra is got
+  out.push(...(missing ? getPage(x) : [note]));
+  return out;
+}
+// the page of an extra that is not here: how to get it, and where it is
+// if it is here after all
+function getPage(x) {
+  const said = el("div", { class: "w-note", id: "w-said", role: "status" }, X.said[x.name] || "");
+  const say = text => { X.said[x.name] = said.textContent = text; };
+  const copied = el("span", { role: "status" });
+  const copy = el("button", { class: "ghost", id: "w-copy" }, "Copy Prompt");
+  copy.onclick = async () => { copied.textContent = await copyText(x.prompt) ? "Copied. Paste it into Claude Code or Codex." : "Copy failed: select the line and copy it."; };
+  const field = el("input", { type: "text", id: "w-dir", placeholder: "/path/to/" + x.repo, spellcheck: "false", autocapitalize: "off", autocorrect: "off" });
+  field.value = X.typed[x.name] || "";
+  field.oninput = () => { X.typed[x.name] = field.value; };
+  const find = el("button", { class: "ghost", id: "w-find" }, "Find");
+  // Find with a folder asks whether the extra is in it; with none, it has
+  // the daemon look again where it looks by itself
+  find.onclick = async () => {
+    const dir = field.value.trim(), me = X;
+    find.disabled = true;
+    say("Looking…");
+    try {
+      if (dir) {
+        const info = await api("/v1/extras/" + x.name, { check: true, dir });
+        if (X !== me) return;
+        if (info.state !== "on") X.dirs[x.name] = info.dir;
+        X.said[x.name] = "";
+        X.want[x.name] = true; // found in order to be turned on
+        take({ ...X.info, [x.name]: info });
+      } else {
+        await ask();
+        if (X !== me) return;
+        if (X.info[x.name].state === "missing") say("Looked again: " + x.repo + " is not where exe looks. Type its folder.");
+      }
+    } catch (e) { if (X === me) say(e.message + "."); }
+    find.disabled = false;
+  };
+  field.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); find.click(); } });
+  return [
+    el("div", { class: "w-get" }, x.get),
+    el("div", { class: "w-prompt" }, x.prompt),
+    el("div", { class: "w-btn" }, copy, copied),
+    el("div", { class: "w-field" }, el("label", { for: "w-dir" }, "Here already? Its folder:")),
+    el("div", { class: "w-btn tight" }, field, find),
+    said,
+  ];
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+  // a plain-http desktop has no clipboard API
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.top = "-1000px";
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) {}
+  ta.remove();
+  return ok;
+}
+
+// 4: what will change, then what did
+const changing = () => EXTRAS.filter(x => X.info[x.name] && X.want[x.name] !== (X.info[x.name].state === "on"));
+function reviewPage() {
+  const rows = EXTRAS.map(x => {
+    const i = X.info[x.name], on = i.state === "on", want = !!X.want[x.name], did = X.done && X.done[x.name];
+    const what = el("span", { class: "r-what" });
+    if (did) {
+      what.classList.add(did.ok ? "ok" : "err");
+      if (did.ok) what.innerHTML = TICK;
+      what.append(did.text);
+    } else if (want !== on) {
+      what.append(want ? "Will be turned on" + (i.from === "release" ? ", fetched from exe " + i.release : ", from " + i.dir)
+        : "Will be turned off");
+    } else {
+      what.classList.add("same");
+      what.append(i.state === "missing" ? "Not on this machine" : on ? "Stays on" : "Stays off");
+    }
+    what.dataset.extra = x.name;
+    return el("div", { class: "r-row" }, el("span", { class: "r-name" }, x.step), what);
+  });
+  const n = changing().length;
+  const note = X.done ? (Object.values(X.done).every(d => d.ok) ? "Done. The desktop's icons follow by themselves."
+      : "Not everything went through. Go Back changes a choice; Apply tries what is left again.")
+    : n ? "Apply makes " + (n === 1 ? "this change" : "these changes") + " now. Nothing else on this machine is touched."
+    : "Nothing to change: each extra stays as it is.";
+  return [
+    el("h2", {}, X.done ? "What was done" : n ? "What will change" : "Nothing to change"),
+    el("p", {}, X.done ? "Each extra, and what came of it." : "Each extra, and what becomes of it."),
+    ...rows,
+    el("div", { class: "w-note", id: "r-note", role: "status" }, note),
+  ];
+}
+// Apply: one extra after another, each line saying what came of it
+async function apply() {
+  const me = X, todo = changing();
+  X.busy = true;
+  X.done = X.done || {};
+  for (const x of todo) delete X.done[x.name];
+  draw();
+  for (const x of todo) {
+    const want = X.want[x.name], line = $('.r-what[data-extra="' + x.name + '"]');
+    line.textContent = want ? (X.info[x.name].from === "release" ? "Fetching from the release…" : "Turning on…") : "Turning off…";
+    try {
+      const body = { on: want };
+      if (want && X.dirs[x.name]) body.dir = X.dirs[x.name];
+      const info = await api("/v1/extras/" + x.name, body);
+      if (X !== me) return;
+      X.info = { ...X.info, [x.name]: info };
+      delete X.dirs[x.name];
+      const kept = info.kept && info.kept.length ? " " + words(info.kept) + " " + (info.kept.length === 1 ? "stays: it was" : "stay: they were") +
+        " edited, or never exe's to remove." : "";
+      // an extra that kept an app is still on, and is what it now says it is
+      X.want[x.name] = info.state === "on";
+      X.done[x.name] = { ok: true, text: (want ? "Turned on." : "Turned off.") + kept };
+    } catch (e) {
+      if (X !== me) return;
+      X.done[x.name] = { ok: false, text: "Could not: " + e.message + "." };
+    }
+    draw();
+  }
+  // one that failed is still a change to make: the button says Apply again
+  X.busy = false;
+  draw();
+}
+
+// ---- the buttons and the keys ----
+function close() {
+  fresh();
+  draw();
+  ask();
+  post({ exe: "close" });
+}
+$("#w-cancel").onclick = () => { if (!X.busy) close(); };
+$("#w-back").onclick = () => { if (X.step > 0 && !X.busy) { X.step--; draw(); } };
+$("#w-next").onclick = () => {
+  if (X.busy || !X.info) return;
+  if (X.step < LAST) { X.step++; if (X.done && changing().length) X.done = null; draw(); return; }
+  if ($("#w-next").textContent === "Apply") { apply(); return; }
+  close();
+};
+// Return presses the ringed button and Escape is Cancel
+document.addEventListener("keydown", e => {
+  if (e.isComposing) return;
+  if (e.key === "Escape") { if (!$("#w-cancel").hidden) { e.preventDefault(); $("#w-cancel").click(); } return; }
+  if (e.key !== "Enter" || e.target.closest("button, a, input[type=text]")) return;
+  e.preventDefault();
+  $("#w-next").click();
+});
+
+// clicks inside the frame never reach the window's own mousedown handler
+document.addEventListener("pointerdown", () => post({ exe: "focus" }), true);
+// OS 9 scrollbar end-merges need the same scrolled/at-end flags as the desktop
+document.addEventListener("scroll", e => {
+  const t = e.target;
+  if (!(t instanceof Element)) return;
+  t.classList.toggle("scrolled-y", t.scrollTop >= 1);
+  t.classList.toggle("at-y-end", t.scrollTop >= 1 && t.scrollTop >= t.scrollHeight - t.clientHeight - 1);
+}, { capture: true, passive: true });
+// What a page sent the reader off to do (an agent installing a program)
+// is done in another window: coming back asks again. The desktop says
+// when the window is opened again after being put away.
+window.addEventListener("focus", () => { if (!X.busy) ask(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !X.busy) ask(); });
+window.addEventListener("message", e => {
+  if (e.origin !== location.origin || !e.data || typeof e.data.exe !== "string" || X.busy) return;
+  // put away by its close box, the wizard starts over the next time
+  if (e.data.exe === "hide") { fresh(); draw(); }
+  else if (e.data.exe === "show") ask();
+});
+
+draw();
+ask();
+</script>
+</body>
+</html>
