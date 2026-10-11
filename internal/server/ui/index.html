@@ -2497,6 +2497,10 @@ const IS_MOBILE = new URLSearchParams(location.search).has("mobile")
 if (IS_MOBILE) document.body.classList.add("mobile");
 // the terminal menus word their key hints for the client's keyboard
 const IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform || "");
+// an iPhone or an iPad — whose Safari calls itself a Mac, though no Mac
+// has a touch screen
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.platform || "")
+  || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 // iOS Safari auto-zooms into focused inputs whose font is under 16px;
 // maximum-scale=1 disables only that auto-zoom (pinch zoom still works
 // since iOS 10), keeping the 12px Platinum type. Scoped to iOS — the same
@@ -8069,6 +8073,24 @@ function newTerm() {
     term._clip = text;
     clipWrite(text).then(ok => toast(ok ? "Copied selection" : "Couldn't reach the clipboard — right-click and choose Copy"));
     return true;
+  });
+  // Space is the one plain key xterm leaves to keypress; every other it
+  // sends on keydown and cancels. On an iPad or an iPhone Safari may keep
+  // an uncancelled Space for itself: with the keys in xterm's field but
+  // the page's selection no longer in it — and xterm's focus() on a field
+  // that has the focus never puts it back — Safari scrolls whatever around
+  // the terminal can scroll by a page (a window body its box has outgrown,
+  // the page) and sends no keypress at all, so the terminal never hears of
+  // the key. There Space goes the way of the other keys: sent on keydown
+  // (as xterm's own _keyDown sends them), the event cancelled. A Space an
+  // input method is composing with stays its own, and a chord with
+  // Control, Option or ⌘ stays xterm's
+  if (IS_IOS) term.attachCustomKeyEventHandler(e => {
+    if (e.type !== "keydown" || e.key !== " " || e.keyCode !== 32 || e.isComposing
+      || e.ctrlKey || e.altKey || e.metaKey) return true;
+    e.preventDefault(); e.stopPropagation();
+    term._core.coreService.triggerDataEvent(" ", true);
+    return false;
   });
   return term;
 }
