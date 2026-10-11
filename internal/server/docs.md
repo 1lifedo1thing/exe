@@ -13,431 +13,1059 @@ shows the current choice, which this browser remembers between visits.
 
 ## The desktop
 
-The menu bar works like the classic Mac it resembles:
+The desktop is exe's control panel. It is a page in your browser, drawn as a
+Mac OS 9 desk: this machine's virtual machines (VMs), agent sessions, apps
+and published sites are its icons and windows. It opens on a computer and on
+a phone.
 
-- **Apple menu** — About This Computer (see below), and Software Update…,
-  which moves an installed exe to the newest release
-  ([Updating](https://exe.v2core.com/docs/using/updating)). A diamond
-  beside the Apple, and beside that line, says a release is waiting.
-- **File** — New VM…, Upload to Workspace…, Close Window, Refresh.
-- **Windows** — reopen the core windows: Virtual Machines, Chat, Newsfeed,
-  Icon Editor, Configuration, Log Viewer.
-- **Special** — Mac OS 9, Join… (pair another exe machine), Cloudflare Status and
-  Setup Wizard, Set API Token….
-- **Help** — Welcome (below), this manual, and the Agent Skill Guide for
-  handing exe to a coding agent. The manual opens on its contents and
-  shows a chapter at a time: click a chapter's name, or turn the pages
-  with **Contents**, **Previous** and **Next**. To find something, type
-  in the field over the page: the contents narrow to the chapters that
-  hold every word you typed, in capitals or not and inside longer words,
-  each with how many places hold them and up to three of its lines.
-  Click a line to open the chapter at that word; the found words stand
-  on yellow there too. **Contents** (or Return in the field) brings the
-  list back, and emptying the field — Escape, or the circled × at its
-  right end — gives back the page you were reading. A reference from one
-  chapter to another turns to it in the same window, and the window
-  comes back where you left it. It opens just tall enough to show the
-  whole contents page, and keeps a height you drag it to.
-- **Show All Windows** — the button at the right, left of the magnifier:
-  every open window shrinks into a grid. The one under the pointer turns
-  blue and shows its name; click it to bring it forward, or click the desk,
-  the button again, or press Escape to put them all back. The desktop menu
-  reaches it as `showall`.
-- **Search** — the magnifier: one box finds VMs, chat sessions, notes and
-  todos.
+### What the desktop is for
 
-**Welcome**, under Help, is exe in six cards: virtual machines, Chat, the
-Claude Code and Codex windows, the Hub, Cloudflare and apps. Click one for
-a short account of it. Each card says how that feature stands on this
-machine — ready, with a green check beside its name on the first page, or
-what it still needs — and its button goes there: New VM…, the pane of
-Configuration that sets Chat up, the Cloudflare Setup Wizard, the Hub.
-**Read More…** opens this manual on that feature's chapter. On a new install the
-window opens with the desktop each time, until you clear **Show this
-window when the desktop opens**; that box belongs to this machine, not to
-the browser. An exe that was installed before the window existed opens it
-from the menu only.
+For you:
+
+- **Run your VMs.** Every VM has an icon whose screen shows its state.
+  Double-click it for the VM's window, or choose **File → New VM…** to make
+  another.
+- **Work beside your agents.** **Claude Code** and **Codex** open in windows
+  of their own, and on a machine with tmux their sessions keep running after
+  you close the browser. The desktop counts the tokens they use, and a
+  notification can tell you when a turn ends.
+- **Open apps and files.** Every installed app has an icon, and
+  **Workspace** is the folder of files you, your agents and your apps share.
+- **Watch what you have published.** A lamp says whether your Cloudflare
+  tunnel is healthy, and **Windows → My Apps** shows every address you have
+  published.
+- **See how the machine is doing.** **About This Computer** shows its memory
+  and disk, and a small chart follows its CPU, memory, GPU, network or disk.
+- **Find the desk as you left it.** The layout of the windows is saved on
+  the machine and mirrored to every browser that has the desk open, so a
+  window you move here moves on your other screens too.
+
+A coding agent, such as Claude Code or Codex, does not need the desktop. It
+drives the same exe over HTTP, the command line and SSH, and **Help → Agent
+Skill Guide…** gives you a prompt that teaches it how. Three things an agent
+or a script does that way show on the desk:
+
+- **A note in the Newsfeed.** `POST /v1/newsfeed` with a title and a body
+  puts a note in the Newsfeed of this machine and of every machine joined to
+  it: finished work, or a problem you should see.
+- **A notification.** A script on the exe machine sends its own words to
+  every device that has notifications on (`POST /v1/push`).
+- **The desktop menu.** `GET /v1/ui/menu` and `PUT /v1/ui/menu` read and
+  replace the right-click menu. An agent changes it only when you ask.
+
+### The menu bar
+
+The menu bar runs along the top and works like the classic Mac it resembles.
+The small Mac at its left end is the **Apple menu**.
+
+| Menu | Item | What it does |
+| --- | --- | --- |
+| Apple | **About This Computer** | Shows the machine, its memory and disk, and each running VM. |
+| Apple | **Software Update…** | Moves an installed exe to the newest release. See [Updating](https://exe.v2core.com/docs/using/updating). |
+| Apple | **Reload for Update** | Reloads the desktop into a new build. It is there only while unsaved work holds that reload back. |
+| Apple | The name of an open window | Brings that window to the front. |
+| File | **New VM…** | Makes a VM. See [Virtual machines](https://exe.v2core.com/docs/using/virtual-machines). |
+| File | **Upload to Workspace…** | Puts a file from this device, 10 MB at most, in the Workspace. |
+| File | **Close Window** | Closes the window in front. |
+| File | **Refresh** | Loads the lists of VMs and apps again. |
+| Windows | **Virtual Machines** | The list of VMs. |
+| Windows | **My Apps** | Every address you have published, an icon each. |
+| Windows | **Chat** | The Chat window. It is in the menu once Chat has a model to work with. |
+| Windows | **Newsfeed** | Events from this machine and the machines joined to it. |
+| Windows | **Icon Editor** | Repaints the desktop's icons. |
+| Windows | **Configuration** | Edits exe's settings. See [Configuration](https://exe.v2core.com/docs/using/configuration). |
+| Windows | **Log Viewer** | The daemon's log and the log of requests to the API. |
+| Special | **Mac OS 9** | Opens a Mac running Mac OS 9. See [Mac OS 9](https://exe.v2core.com/docs/using/mac-os-9). |
+| Special | **Join…** | Pairs this exe with another one. See [Joining desks together](https://exe.v2core.com/docs/using/joining-desks-together). |
+| Special | **Cloudflare Status…** | The tunnel's state and its live counters. |
+| Special | **Cloudflare Setup Wizard…** | Sets up the tunnel and the domain. See [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web). |
+| Special | **Set API Token…** | Asks for the API token this browser sends to exe. |
+| Help | **Welcome…** | exe in six cards. |
+| Help | **exe Documentation…** | This manual. |
+| Help | **Agent Skill Guide…** | A prompt that hands exe to a coding agent. |
+
+Under a rule, the Apple menu lists every open window by name, with a check
+mark beside the one in front. On a phone, where one window fills the screen,
+that list is how you go from one open window to another.
+
+A diamond beside the small Mac, and beside **Software Update…** in its menu,
+says a newer release is waiting.
+
+At the right end of the bar:
+
+- **Show All Windows** — the button with four small windows on it.
+- **Search** — the magnifier.
+- The clock. Rest the pointer on it for the date. A click opens the World
+  Clock app, when that app is installed.
+
+### Icons on the desktop
+
+Double-click an icon to open it. A single click selects it.
+
+- **Workspace** — the folder of files you, your agents and your apps share.
+  See
+  [Workspace and files](https://exe.v2core.com/docs/using/workspace-and-files).
+- **Terminal** — a shell on the machine exe runs on.
+- **Claude Code** and **Codex** — each appears when its CLI is installed on
+  this machine. The three have a chapter of their own,
+  [Claude Code, Codex and Terminal](https://exe.v2core.com/docs/using/claude-code-codex-and-terminal).
+- One icon for each VM. Its screen is green while the VM runs, amber while
+  it starts or stops, dark when it is stopped and red when it is in error.
+- One icon for each installed app. See
+  [Apps](https://exe.v2core.com/docs/using/apps).
+- **Newsfeed**, **Chat** and the **Trash**. **Chat** appears once Chat has a
+  model to work with: Ollama answers, or, when Chat runs on a ChatGPT
+  subscription, you are signed in.
+
+### Move, resize and close windows
+
+Windows behave like OS 9 windows. The close box is at the left end of the
+title bar; the zoom box and the shade box, where a window has them, are at
+the right end.
+
+| To | Do this |
+| --- | --- |
+| Move a window | Drag its title bar. |
+| Resize it | Drag its left, right or bottom edge, or the grow box in its bottom-right corner. Not every window can be resized. |
+| Collapse it to its title bar | Click the shade box, or double-click the title bar. The same again brings it back. |
+| Switch between two sizes | Click the zoom box. |
+| Close it | Click the close box. **File → Close Window** closes the window in front. |
+| Bring it to the front | Click it, or choose its name in the Apple menu. |
+
+The whole layout is saved on the daemon: positions, stacking, which windows
+are open. It is mirrored live to every browser looking at this desk, so
+dragging a window here moves it on your other screens too. A phone shows one
+window at a time and keeps its own.
+
+### The desktop menu
+
+Right-click an empty part of the desktop (on a touch screen, press and hold
+it) for the **desktop menu**: a NeXT-style menu at the pointer, with
+shortcuts to VMs, apps, windows and tools. Choose **Customize…** to edit it.
+
+The format, every supported action and examples are in the chapter
+[Desktop context menu](https://exe.v2core.com/docs/using/desktop-context-menu).
+
+### Show All Windows
+
+The button left of the magnifier shrinks every open window into a grid, so
+you see them all at once.
+
+- The window under the pointer turns blue and shows its name. Click it to
+  bring it forward.
+- Click the desk or the button again, or press Escape, to put them all back.
+
+The desktop menu reaches it as `showall`. A phone has no such button.
+
+### Search for a VM, a chat, a note or a todo
+
+The magnifier opens one box that finds VMs, chat sessions, notes and todos.
+
+- A VM is found by its name or its address, a chat by its title or summary,
+  a note or a todo by its text.
+- Click a result, or move through them with the arrow keys and press Return.
+  The box closes and the thing itself opens: the VM's window, the chat, or
+  the note or todo in its app.
+- Escape closes the box.
+
+### Welcome
+
+**Help → Welcome…** is exe in six cards: **Virtual Machines**, **Chat**,
+**Claude Code and Codex**, **The Hub**, **Cloudflare** and **Apps**.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreifwrbkkq74w5knqzrsbhxcbri7ehkq2n6patknhucbb2tck5tvzmu" alt="The Welcome window: a night sky over a row of Macs, and under it the six features, two to a row" width="600" height="497">
 
-**About This Computer**, under the Apple menu, is the OS 9 box: the build,
-the machine, its addresses (click one to copy), Built-in Memory, how much of
-it is allotted to running VMs, Disk Space where VM disks live, and Largest
-Unused Block — what the host could still hand a new VM. Below the rule, one
-memory bar per running VM shows its allotment, scaled so the largest fills
-the column, with exe's own footprint as the first row. It refreshes every
-few seconds while open.
+- Click a card for a short account of that feature. **Back** returns to the
+  six.
+- Each card says how the feature stands on this machine: ready, or what it
+  still needs. A ready feature has a green check beside its name on the
+  first page.
+- The card's button goes there: **New VM…**, the pane of Configuration that
+  sets Chat up, the Cloudflare Setup Wizard, the Hub.
+- **Read More…** opens this manual on that feature's chapter.
+
+On a new install the window opens with the desktop each time, until you
+clear **Show this window when the desktop opens**. That box belongs to this
+machine, not to the browser. An exe that was installed before the window
+existed opens it from the menu only.
+
+### Read and search the manual
+
+**Help → exe Documentation…** opens this manual in a window of the desktop.
+It opens on its contents and shows a chapter at a time.
+
+- Click a chapter's name to read it, or turn the pages with **Contents**,
+  **Previous** and **Next**.
+- A reference from one chapter to another turns to it in the same window.
+- Close the window and open it again, and it comes back where you left it.
+- It opens just tall enough to show the whole contents page, and keeps a
+  height you drag it to.
+
+To find something, type in the field over the page, **Search the manual**:
+
+- The contents narrow to the chapters that hold every word you typed, in
+  capitals or not and inside longer words.
+- Each found chapter stands under its own number, with how many places hold
+  the words and up to three lines of its text. The found words are marked in
+  yellow, in the list and on the pages.
+- A chapter's name opens it at the top, and a line opens it at that word.
+  While the field holds words, **Contents** (or Return in the field) brings
+  the list back.
+- Emptying the field ends the search: press Escape, or click the small
+  circled × that stands at the field's right end while it holds anything.
+  The yellow goes, and if you opened none of the found chapters you are back
+  on the page you were reading.
+
+### Hand exe to a coding agent
+
+**Help → Agent Skill Guide…** is for handing exe to a coding agent. Its
+window gives the address of the skill file, which teaches an agent to create
+VMs, run commands inside them over SSH and publish their ports, and a prompt
+to paste into the agent. **Copy Prompt** copies it. When this browser holds
+an API token, the prompt includes it and the window says so.
+
+### About This Computer
+
+**Apple menu → About This Computer** is the OS 9 box, about the machine exe
+runs on.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreightb5vb7wkbiirymaoj7ewmkedjeea2mcpl3x66gsscdylpjs434" alt="About This Computer: the build, the machine, its addresses, memory and disk, and a memory bar for exe and each running VM" width="482" height="378">
 
-**Updates arrive by themselves.** When the daemon restarts with a new
-desktop or new system apps, an open desktop notices and reloads — a few
-seconds after the daemon is back, at once in a tab you are not looking at.
-It waits while you are typing or clicking, while a menu or dialog is up, and
-for as long as there is unsaved work: text typed into a field and still
-there (in a closed window too), an editor with unsaved changes, unsaved
-Icon Editor pixels. Blue Pencil saves its drafts as you type, so its text
-never holds an update. While work holds it, the Apple menu shows **Reload
-for Update** to take the update anyway. A restart that changes nothing the
-browser runs leaves your windows alone.
+| Line | What it says |
+| --- | --- |
+| **Version** | The build of exe. |
+| **System**, **Machine** | The operating system, the processor architecture and the number of CPUs; the machine's model and its name. |
+| **Addresses** | Its addresses on the local network and on Tailscale. Click one to copy it. |
+| **Built-in Memory** | The machine's memory. |
+| **VM Memory** | How much of it is allotted to running VMs. |
+| **Disk Space** | The space free on the disk where VM disks live. |
+| **Largest Unused Block** | The memory the host could still hand a new VM. |
 
-Right-click the desktop (long-press on a phone) for the **desktop menu**: a
-NeXT-style menu at the pointer, with shortcuts to VMs, apps, windows and
-tools. Choose **Customize…** to edit it. The
-[Desktop context menu](https://exe.v2core.com/docs/using/desktop-context-menu)
-chapter covers the format, every supported action and examples.
+Below the rule, one memory bar per running VM shows its allotment, scaled so
+the largest fills the column. exe's own footprint is the first row. The
+window refreshes every few seconds while it is open.
 
-Desktop icons: **Workspace** (shared files), **Terminal** (a shell on this
-host machine), **Claude Code** and **Codex** (each appears when its CLI is
-installed on this host; the three have a chapter of their own,
-[Claude Code, Codex and Terminal](https://exe.v2core.com/docs/using/claude-code-codex-and-terminal)),
-one icon per VM,
-one per installed app, plus **Newsfeed**, **Chat** (appears when Ollama is
-reachable) and the **Trash**. Double-click opens things.
+### The Control Strip
+
+The **Control Strip** in the bottom-left corner is OS 9's tray: a row of
+small modules, each with a live figure about this machine. Click a module
+for its menu.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreiadh2tua4bcsuus4cm7hrzhgz7hisurbvughod6t2ytfoqocedfny" alt="The Control Strip: the Cloudflare, Tailscale, Solana ticker and agent usage modules" width="271" height="24">
 
-The **Control Strip** in the bottom-left corner is OS 9's tray. Its first
-module is the Cloudflare heartbeat: the lamp on the cloud is green while
-the tunnel is healthy, yellow when it needs attention, grey while it is
-still checking. On a desktop, beside the lamp is how many bytes a second
-this node's connector is sending out — its answers, what visitors
-download; a phone's tile is the lamp alone. Its menu
-shows the tunnel's replicas and edge connections, plus this node's request
-rate, bytes a second sent and received, active requests, totals and origin
-errors. Open **Cloudflare Status…** for the same live counters and connector
-uptime, or **Analytics…** for the traffic Cloudflare counted (the
-[Analytics](https://exe.v2core.com/docs/using/analytics) chapter). Local traffic refreshes every five seconds while the strip is
-open on a desktop, and while the menu or the window is open on a phone; tunnel-wide connection counts refresh every 30 seconds. Bytes come
-from cloudflared's QUIC connections to Cloudflare, so a connector on HTTP/2
-shows a dash, and files Cloudflare answers from its cache never reach the
-tunnel and are not counted. Traffic totals
-are for this node's connector, include every hostname on its tunnel, and
-reset when cloudflared restarts. Unavailable data is shown as a dash.
-The menu also offers the Setup Wizard and Check Now.
-Right of it, on a machine with Tailscale installed, the **Tailscale**
-module: a panel of nine lamps that lights Tailscale's four while the tailnet
-is connected, blue while the machine's traffic leaves through an exit node,
-yellow when something needs attention (a health warning, a login due), all
-dim while Tailscale is off. Its menu says which machine this is and how many
-devices are online; **Tailscale Active** and **Inactive** turn it on and off;
-**Exit Node** picks one of the devices offering one (and Allow LAN Access);
-**Devices** lists the online ones and **Serve** the Tailscale Serve rules —
-pick a row to copy its address; then Accept Routes, Use Tailscale DNS,
-Shields Up and Tailscale SSH toggle (rest the pointer on one for what it
-does), and Admin Console… opens Tailscale's.
-Turning it off or raising shields while the desktop is itself reached
-through Tailscale asks first, because the desktop would go with it. The
-daemon asks the `tailscale` CLI on the machine and changes only those
-settings (`GET /v1/tailscale`, `POST /v1/tailscale/set`); it runs as
-Tailscale's operator user, so no sudo. Beside it, the **Solana ticker**
-shows a token's coin and its dollar
-price: SOL, or PUMP, MET or SKR — pick the one the tile wears from its menu.
-The menu lists them all with their day change, and the ecosystem tokens
-with their price in SOL as well — the zeros after the point fold into a
-small sunk count, so PUMP's 0.00003717 SOL reads 0.0₄3717 SOL, MET's
-0.002404 SOL reads 0.0₂2404 SOL, and the column lines up (a dollar price
-folds from three zeros); the figures are Coinbase's public spot
-prices, fetched once a minute by the daemon and shared by every desktop on
-the node — and Jupiter's, for a token Coinbase cannot quote or when it does
-not answer (the menu's first line then names Jupiter; a Jupiter API key
-from portal.jup.ag goes in `jupiter.api_key` of `~/.exe/config.json`).
-**Notify Me of Big Moves** in that menu turns on push notifications for
-this device (on a phone, the app added to the Home
-Screen): you hear when a token moves more in an hour or a day than it
-rarely does — SOL 2.5% / 6%, PUMP 5% / 12%, MET 6% / 15%, SKR 8% / 25% —
-never more than four times per token in 24 hours; a move that qualifies
-while the four are spent is counted into the next one. **Recent Moves**
-lists the last ones, **Send a Test Notification** checks the road, and the
-menu item again turns it off. Next to it, the **agent usage meter** shows
-how many tokens Claude Code or Codex has used on this machine today —
-pick the agent the tile wears from its menu, and **Show Plan Limit** puts
-the fullest of that agent's usage windows there instead (`46% wk`). The
-menu lists both agents with today's tokens and their five-hour and weekly
-windows, the windows in columns so one agent's week stands under the
-other's (a window an agent lacks stays blank); each agent's submenu splits today and the last seven days into
-tokens sent fresh, read back from the prompt cache and written, draws the
-week as a column a day — a figure on the busiest day and on today, every
-day's own split in its tooltip — and says when each window resets. The daemon counts from the CLIs' own logs —
-Claude Code's transcripts, Codex's rollouts — so every session on the
-machine is in, not only the ones opened from this desktop
-(`GET /v1/agents/usage`). Claude Code's windows are as fresh as its last
-reply in a Claude Code window here; Codex's are read live on the ChatGPT
-sign-in. An agent appears once it is installed and has left figures; with
-neither, the tile stays away.
+| Module | Its tile shows | It is there |
+| --- | --- | --- |
+| Cloudflare | A lamp for the tunnel and, on a computer, the bytes a second going out. | Always. |
+| Tailscale | A panel of lamps for the tailnet. | On a machine with Tailscale installed. |
+| Solana ticker | A token's coin and its dollar price. | Always. |
+| Agent usage meter | The tokens Claude Code or Codex used today, or how full its plan's usage window is. | Once Claude Code or Codex is installed. |
+| Activity | A chart of CPU, memory, GPU, network or disk, and its figure now. | On Linux. |
+
+The tab at the right end hides the strip down to the tab alone; click it
+again to bring the strip back. The arrows at its two ends scroll the row a
+module at a time when it holds more than it shows. This browser remembers
+whether the strip is hidden and what you chose for each tile.
+
+### Control Strip: Cloudflare
+
+The lamp on the cloud is green while the tunnel is healthy, yellow when it
+needs attention or is not set up yet, and grey while it is still checking.
+
+On a computer, the figure beside the lamp is how many bytes a second this
+machine's connector is sending out: its answers, what visitors download. A
+phone's tile is the lamp alone.
+
+The menu shows:
+
+- The tunnel's replicas and edge connections.
+- This machine's own connections and active requests, its request rate, the
+  bytes a second it sends and receives, its total of requests and its origin
+  errors.
+- **Cloudflare Status…**, a window with the same live counters and the
+  connector's uptime.
+- **Analytics…**, the traffic Cloudflare counted. See
+  [Analytics](https://exe.v2core.com/docs/using/analytics).
+- **Cloudflare Setup Wizard…** and **Check Now**.
+
+How to read the figures:
+
+- Local traffic refreshes every five seconds while the strip is open on a
+  computer, and while the menu or the status window is open on a phone.
+  Tunnel-wide connection counts refresh every 30 seconds.
+- Bytes come from cloudflared's QUIC connections to Cloudflare, so a
+  connector on HTTP/2 shows a dash.
+- Files Cloudflare answers from its cache never reach the tunnel and are not
+  counted.
+- Traffic totals are for this machine's connector, include every hostname on
+  its tunnel, and reset when cloudflared restarts.
+- Unavailable data is shown as a dash.
+
+### Control Strip: Tailscale
+
+On a machine with Tailscale installed, the module is a panel of nine lamps.
+
+| Lamps | What they say |
+| --- | --- |
+| Tailscale's four are lit | The tailnet is connected. |
+| The four are blue | The machine's traffic leaves through an exit node. |
+| The four are yellow | Something needs attention: a health warning, a login due. |
+| All are dim | Tailscale is off. |
+
+The menu's first lines say which machine this is and how many devices are
+online. Under them:
+
+| Item | What it does |
+| --- | --- |
+| **Tailscale Active**, **Tailscale Inactive** | Turn Tailscale on and off. |
+| **Log In…** | Stands in place of that pair when Tailscale needs a login, and opens the login link. |
+| **Exit Node** | Picks one of the devices that offer one, or **None**. **Allow LAN Access** is in the same submenu. |
+| **Devices** | Lists the devices that are online. Pick a row to copy its address. |
+| **Serve** | Lists the Tailscale Serve rules. Pick a row to copy its address. |
+| **Accept Routes**, **Use Tailscale DNS**, **Shields Up**, **Tailscale SSH** | Switch each setting on or off. Rest the pointer on one for what it does. |
+| **Copy This Machine's Address** | Copies this machine's name on the tailnet, or its address. |
+| **Admin Console…** | Opens Tailscale's admin console. |
+| **Check Now** | Asks Tailscale again. |
+
+The rows from **Exit Node** to **Copy This Machine's Address** are there
+while Tailscale is connected.
+
+Three changes ask first, because the desktop could go with them: turning
+Tailscale off or raising the shields while the desktop is itself reached
+through Tailscale, and choosing an exit node while you reach the desktop
+over the local network with **Allow LAN Access** off.
+
+The daemon asks the `tailscale` CLI on the machine and changes only those
+settings (`GET /v1/tailscale`, `POST /v1/tailscale/set`). It runs as
+Tailscale's operator user, so it needs no sudo.
+
+### Control Strip: Solana ticker
+
+The tile shows a token's coin and its dollar price: SOL, PUMP, MET or SKR.
+Pick the one the tile wears from its menu.
+
+The menu lists all four with their day change, and PUMP, MET and SKR with
+their price in SOL as well. Its first line names the source of the prices
+and their time, and **Update Now** fetches them again.
+
+A long run of zeros after the point folds into a small sunk count, so PUMP's
+0.00003717 SOL reads 0.0₄3717 SOL, MET's 0.002404 SOL reads 0.0₂2404 SOL,
+and the column lines up. A price in SOL folds from two zeros, a dollar price
+from three.
+
+The figures are Coinbase's public spot prices, fetched once a minute by the
+daemon and shared by every desktop open on this machine. Jupiter's prices
+stand in for a token Coinbase cannot quote, or when Coinbase does not
+answer; the menu's first line then names Jupiter. A Jupiter API key from
+portal.jup.ag goes in `jupiter.api_key` of `~/.exe/config.json`.
+
+The same menu turns notifications on. **Notifications: turn them on**,
+further down, says how.
+
+### Control Strip: agent usage
+
+The **agent usage meter** shows how many tokens Claude Code or Codex has
+used on this machine today. From its menu:
+
+- Pick the agent the tile wears.
+- **Show Plan Limit** puts the fullest of that agent's usage windows on the
+  tile instead (`46% wk`). **Show Tokens Today** puts the tokens back.
+- **Update Now** reads the figures again.
+
+The menu lists both agents with today's tokens and their five-hour and
+weekly windows. The windows stand in columns, so one agent's week is under
+the other's; a window an agent lacks stays blank.
+
+Each agent's submenu has the detail:
+
+- Today and the last seven days, each split into tokens sent fresh, read
+  back from the prompt cache and written.
+- The week as a column a day, with a figure on the busiest day and on today.
+  Every day's own split is in its tooltip.
+- How full each usage window is, and when it resets.
+
+The daemon counts from the CLIs' own logs, Claude Code's transcripts and
+Codex's rollouts, so every session on the machine is in, not only the ones
+opened from this desktop (`GET /v1/agents/usage`). Claude Code's usage
+windows are as fresh as its last reply in a Claude Code window here. Codex's
+are read live on the ChatGPT sign-in.
+
+An agent has its row once it is installed and has left figures. One that is
+installed and has left none is named with the words **installed, no usage on
+record**. With neither agent installed, the tile stays away.
+
+### Control Strip: activity
 
 The **activity module**, a little monitor at the end of the strip, charts
 this machine: CPU, memory, GPU, network and disk, a sample every two
-seconds. Its tile shows the last minute of one of them and its figure now
-(`23%`, or `1.2 MB/s` for network and disk, both directions added); the
-menu shows all five as charts over the last four minutes with their words —
-CPU's share of all cores and its hottest sensor's temperature, memory in
-use (total less what the kernel says is available), the GPU's use,
-temperature and power from `nvidia-smi`, bytes a
-second in and out over the physical network interfaces and read and written
-on the physical disks — and picking a row puts it on the tile. Percentages
-fill their chart at 100%; rates fill it at their busiest moment in view,
-two-way rates stacked. Counting only physical interfaces and disks counts
-every byte once: a VM's traffic crosses its tap, the bridge and the NIC.
-The daemon samples only while a desktop reads (`GET /v1/host/monitor`),
-so the figures start when the strip opens and stop ten minutes after the
-last desktop folds it away or goes hidden; it keeps the last ten minutes.
-It reads Linux so far; on another system the tile stays away. A host
-without `nvidia-smi` has no GPU row. The tab at the right hides the strip
-down to the tab alone.
+seconds.
+
+- The tile shows the last minute of one of them and its figure now: `23%`,
+  or `1.2 MB/s` for network and disk, both directions added.
+- The menu shows all five as charts over the last four minutes (about two on
+  a phone's narrow screen), each with its words. Pick a row to put it on the
+  tile.
+
+| Row | Its words |
+| --- | --- |
+| CPU | Its share of all cores, and its hottest sensor's temperature. |
+| Memory | Memory in use: the total less what the kernel says is available. |
+| GPU | Its use, temperature and power, from `nvidia-smi`. A host without `nvidia-smi` has no GPU row. |
+| Network | Bytes a second in and out over the physical network interfaces. |
+| Disk | Bytes a second read and written on the physical disks. |
+
+Percentages fill their chart at 100%. Rates fill it at their busiest moment
+in view, with two-way rates stacked. Counting only physical interfaces and
+disks counts every byte once: a VM's traffic crosses its tap, the bridge and
+the NIC.
+
+The daemon samples only while a desktop reads (`GET /v1/host/monitor`). The
+figures start when the strip opens and stop ten minutes after the last
+desktop folds it away or goes hidden, and the daemon keeps the last ten
+minutes. It reads Linux so far; on another system the tile stays away.
+
+### Notifications: turn them on
+
+exe can send push notifications to this device: a browser on a computer, or,
+on a phone, the desktop added to the Home Screen (**Install the desktop as
+an app**, further down).
+
+1. Click the Solana ticker in the Control Strip.
+2. Choose **Notify Me of Big Moves**, and allow notifications when the
+  browser asks.
+3. Choose **Send a Test Notification** in the same menu to check that one
+  reaches the device.
+
+The menu item again turns them off. That one switch covers everything in the
+four sections that follow: none of them has a setting of its own.
+
+### Notifications: big price moves
+
+You hear when SOL, PUMP, MET or SKR makes a move that is rare for it, within
+an hour or within a day:
+
+| Token | In an hour | In a day |
+| --- | --- | --- |
+| SOL | 2.5% | 6% |
+| PUMP | 5% | 12% |
+| MET | 6% | 15% |
+| SKR | 8% | 25% |
+
+There are never more than four per token in 24 hours. A move that qualifies
+while the four are spent is counted into the next one. **Recent Moves** in
+the ticker's menu lists the last eight.
+
+### Notifications: weather
 
 With notifications on, the daemon also watches the sky over the first city
-in the Weather app — the row your drag put on top. When Open-Meteo's
-quarter-hour rows put rain in the next 60 minutes, a push says **Rain
-possible soon** — or **likely**, when the chance is high — and a second
-one says **Next hour looks dry** when a fresh forecast clears it. Three
-more hazards ride the same watch, their lines the National Weather
-Service's own: **Dangerous heat** at a feels-like of 105°F, **High wind**
-at gusts of 35 mph, and **Fire weather** when humidity at or under 15%
-meets those gusts — a red-flag hour that then keeps the plain wind push
-quiet, so a Santa Ana taps once. Each hazard clears with its own easing
-push, at most four warnings per hazard in 24 hours, in °F and mph for a US
-city and °C and km/h elsewhere. Reorder the Weather list and the watcher
-follows; there is no setting to flip.
+in the Weather app, the row your drag put on top. Reorder the Weather list
+and the watcher follows.
 
-The same switch tells you when an agent is done. When a turn ends in a
-Claude Code or Codex window's session, a push says **Claude Code finished**
-or **Codex finished** with the session's title under it; when a Chat run
-ends on its own — a VM's Agent tab starts one too — it says **Chat
-finished** with the chat's title, or **Chat stopped** with the error that
-ended it. Tap the notification and the desktop opens that window on that
-session or chat, whether it was already open or has to be loaded first. A
-turn that ends within a minute of your last keystroke in that session from
-a desktop window, or of your last message in that chat, stays quiet: you
-are still there. So does a run you stopped yourself. One notification
-stands per session, a later turn's replacing the earlier one. Only
-sessions started from the desktop's windows are followed — a `claude` run
-in a shell of your own carries none of the desktop's hooks.
+| Push | When it comes |
+| --- | --- |
+| **Rain possible soon**, or **Rain likely** when the chance is high | Open-Meteo's quarter-hour forecast puts rain in the next 60 minutes. |
+| **Next hour looks dry** | A fresh forecast clears the rain. |
+| **Dangerous heat** | A feels-like temperature of 105°F. |
+| **High wind** | Gusts of 35 mph. |
+| **Fire weather** | Humidity at or under 15% meets those gusts. |
+
+The heat, wind and fire lines are the National Weather Service's own. A
+fire-weather hour is a red-flag hour, and it keeps the plain wind push
+quiet, so a Santa Ana taps once.
+
+Each push names the city, and each hazard clears with its own easing push.
+There are at most four warnings per hazard in 24 hours. They speak °F and
+mph for a US city, °C and km/h elsewhere.
+
+### Notifications: an agent has finished
+
+The same switch tells you when an agent is done.
+
+| Push | When it comes |
+| --- | --- |
+| **Claude Code finished** or **Codex finished**, with the session's title | A turn ends in a session of a Claude Code or Codex window. |
+| **Chat finished**, with the chat's title | A Chat run ends on its own. A VM's Agent tab starts one too. |
+| **Chat stopped**, with the error that ended it | A Chat run ends in an error. |
+
+For a chat pinned to a VM the push says **Chat with** and the VM's name. Tap
+the notification and the desktop opens that window on that session or chat,
+whether it was already open or has to be loaded first.
+
+Some turns stay quiet:
+
+- A turn that ends within a minute of your last keystroke in that session
+  from a desktop window, or of your last message in that chat. You are still
+  there.
+- A run you stopped yourself.
+- A session that was not started from the desktop's windows. A `claude` run
+  in a shell of your own carries none of the desktop's hooks.
+
+One notification stands per session: a later turn's replaces the earlier
+one.
+
+### Notifications: from your own script
 
 A script on the exe machine can send its own words the same way:
-`curl -s 127.0.0.1:7777/v1/push -d '{"title":"Backup","body":"Done."}'`
-reaches every browser that turned notifications on. A `tag` makes a later
-push replace the earlier one, and a `url` (a path, such as `/`) is what a
-tap opens. Only callers on the machine itself are taken; the same request
-over Tailscale is refused.
 
-Windows behave like OS 9 windows: drag the title bar to move, drag the
-left/right/bottom edges or the grow corner to resize, click the shade box to
-collapse a window to its title bar, the zoom box to toggle its size. The
-whole layout — positions, stacking, which windows are open — is saved on the
-daemon and mirrored live to every browser looking at this desk, so dragging
-a window here moves it on your other screens too.
+```
+$ curl -s 127.0.0.1:7777/v1/push -d '{"title":"Backup","body":"Done."}'
+```
 
-On a phone the desktop becomes a home screen of icons and windows go
-fullscreen, one at a time; a tapped icon swells and fades as its window
-comes up, and closing a window walks back through the stack like a
-phone's back button. In a Claude Code or Codex window a finger drag
-scrolls back through the session's history, and a flick keeps it going.
-In Todo and Weather a finger scrolls the list; to move a row, press and
-hold it for half a second until it tints, then drag it to its new place.
-A picture window swipes down to close, the window under it showing
-through the gap as it goes.
+It reaches every browser that turned notifications on. A title and a body
+are both needed.
 
-Over HTTPS — a Tailscale Serve address, say — the desktop installs as an
-app: **Add to Home Screen** on an iPhone or iPad, the install button in
-Chrome's or Edge's address bar. It then opens in a window of its own with
-the menu bar right under the status bar. When the daemon is not answering —
-restarting, or the device offline — the desktop shows an alert in place of
-the browser's error page and comes back by itself once the daemon does.
+- A `tag` makes a later push with the same tag replace the earlier one.
+- A `url` (a path, such as `/`) is what a tap opens.
+
+Only callers on the machine itself are accepted; the same request over
+Tailscale is refused.
+
+### On a phone
+
+On a phone the desktop becomes a home screen of icons, and windows go
+fullscreen, one at a time. They cannot be moved or resized there.
+
+- Tap an icon to open it. It swells and fades as its window comes up.
+- Closing a window walks back through the windows you opened before it, like
+  a phone's back button.
+- Press and hold the desktop for the desktop menu.
+- The clock is a small clock face. Tap it and it spells the time out for a
+  few seconds, or opens the World Clock app when that app is installed.
+- In a Claude Code or Codex window a finger drag scrolls back through the
+  session's history, and a flick keeps it going.
+- In Todo and Weather a finger scrolls the list. To move a row, press and
+  hold it for half a second until it tints, then drag it to its new place.
+- A picture window swipes down to close, the window under it showing through
+  the gap as it goes.
+
+### Install the desktop as an app
+
+Over HTTPS (a Tailscale Serve address, say) the desktop installs as an app:
+
+- On an iPhone or iPad, use **Add to Home Screen**.
+- In Chrome or Edge, use the install button in the address bar.
+
+It then opens in a window of its own, with the menu bar right under the
+status bar.
+
+When the daemon is not answering, because it is restarting or the device is
+offline, the desktop shows an alert in place of the browser's error page and
+comes back by itself once the daemon does.
+
+### Updates to the desktop
+
+Updates arrive by themselves. When the daemon restarts with a new desktop or
+new system apps, an open desktop notices and reloads: a few seconds after
+the daemon is back, and at once in a tab you are not looking at. A restart
+that changes nothing the browser runs leaves your windows alone.
+
+The reload waits:
+
+- While you are typing or clicking.
+- While a menu or a dialog is up.
+- For as long as there is unsaved work: text typed into a field and still
+  there (in a closed window too), an editor with unsaved changes, unsaved
+  Icon Editor pixels.
+
+Blue Pencil saves its drafts as you type, so its text never holds an update.
+While unsaved work holds the reload back, the Apple menu shows **Reload for
+Update** to take the update anyway.
+
+This is the open desktop catching up with a daemon that has restarted.
+Moving exe itself to a newer release is **Software Update…**; see
+[Updating](https://exe.v2core.com/docs/using/updating).
+
+### Icon Editor: repaint the icons
 
 Every system icon is hand-plotted pixel art, and **Windows → Icon Editor**
-lets you repaint it: the gallery lists each one (the VM Mac, folders,
-documents, the Trash, built-in apps such as Mac OS 9, the minis in search
-results, even the Apple menu),
-and double-clicking opens a fat-bits editor — pencil, eraser, eyedropper,
-fill, undo, the Platinum palette plus a custom color well. Save applies the
-art everywhere at once, follows the desk into every browser and joined
-node, and survives restarts; Revert brings the factory icon back. On a VM
-icon, pixels painted the factory screen-green keep changing color with the
-VM's state. **New Icon…** adds icons of your own on a 32×32 or 16×16 grid —
-draw them, copy their SVG for use anywhere, delete them when done. System
-icons can only be repainted, never deleted. Restored editors keep their position,
-stacking and shaded state even when their icon loads after the desktop layout.
+lets you repaint it.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreifywpjwrpr7wss5xiw5aukrugxpvupownkyis6pjq5vlzvdwidhby" alt="The Icon Editor's gallery of system icons, with New Icon at its top" width="562" height="383">
 
+The gallery lists each one: the VM Mac, folders, documents, the Trash,
+built-in apps such as Mac OS 9, the minis in search results, even the Apple
+menu. Double-click one to open it in a fat-bits editor.
+
+- The tools are a pencil, an eraser, an eyedropper, a fill and **Undo**,
+  with the Platinum palette and a custom color well.
+- **Save** applies the art everywhere at once. It follows the desk into
+  every browser and every machine joined to this one, and survives restarts.
+- **Revert** brings the factory icon back.
+- On a VM icon, pixels painted the factory screen-green keep changing color
+  with the VM's state.
+
+**New Icon…** adds icons of your own on a 32×32 or 16×16 grid: draw them,
+copy their SVG for use anywhere, delete them when done. System icons can
+only be repainted, never deleted.
+
+An editor left open is restored with the rest of the layout, in its
+position, stacking and shaded state.
+
 ## Claude Code, Codex and Terminal
 
-**Terminal** is a shell on the machine exe runs on. **Claude Code** and
-**Codex** are windows of the same kind with that agent's CLI in them: each
-has its icon on the desktop when its CLI is installed on this machine. On
-a host with tmux a session outlives its window: close the window, the tab
-or the laptop and it works on, and opening the window again, from any
-device, returns to the same conversation.
+Three kinds of window on the desktop are terminals on the machine exe runs
+on. **Claude Code** and **Codex** each run that coding agent's CLI, and
+**Terminal** is a plain shell. Where the machine has tmux, a program that
+keeps a terminal session running with no window on it, what runs in them
+does not stop with the window: close the window, the tab or the laptop and
+it works on.
 
-A Claude Code window's status line shows the session's figures at its
-right — the model, context in use, tokens, cost and the plan's 5-hour and
-7-day usage windows — kept current after every reply by Claude Code's own
-status-line hook; hover for the long form. A status line of your own in
-`~/.claude/settings.json` keeps working inside the terminal. A Codex
-window's shows the ChatGPT subscription's 5-hour and weekly usage windows
-(the sign-in under **Configuration → OpenAI**), re-read once a minute
-while the window is open; hover for the reset times.
+### What they are for
+
+For you:
+
+- **Work that outlives the browser.** A session keeps running with no window
+  open. Open the window again, from any device, and you are back in the same
+  conversation.
+- **Several conversations side by side.** A column in the window lists the
+  agent's sessions, and a dot marks one that is still working or one that
+  waits for you.
+- **Usage in view.** The status line shows a Claude Code session's model,
+  context, tokens and cost, and for either agent how much of the plan's
+  usage windows is spent.
+- **Word when a turn ends.** With notifications on, a push says the agent
+  has finished, and a tap opens the window on that session.
+  [The desktop](https://exe.v2core.com/docs/using/the-desktop) says how to
+  turn them on.
+- **Conversations started elsewhere.** A Codex thread from the ChatGPT app
+  on your phone, a `claude` run over SSH or in an IDE: the window lists
+  them, and a click continues one here.
+- **A shell on the machine.** A Terminal window keeps its shell through a
+  reload, a closed browser and a restart of the daemon.
+
+For a coding agent:
+
+- **A session not tied to a browser.** The CLI runs in a tmux session on the
+  machine, so a long turn goes on while nobody is looking.
+- **Files by drag and drop.** A file you drop on the window is uploaded and
+  its path typed at the prompt, so the agent reads a screenshot or a log
+  from disk.
+- **Its state shows.** When it finishes a turn, or stops for a permission or
+  a question, its row is marked, and the end of a turn can send you a push.
+  It is not left waiting unseen.
+- **Other tools can start it.** Over the API a script, or another agent,
+  opens a session with a first message, types into a running one and ends
+  it: work you can watch in the window and take over.
+- **exe close at hand.** The session runs on the machine exe runs on. Hand
+  the agent the Agent Skill Guide and it uses exe's VMs as its sandboxes.
+  [The coding agent](https://exe.v2core.com/docs/using/the-coding-agent) has
+  the guide.
+
+### Open a window
+
+Double-click the **Terminal**, **Claude Code** or **Codex** icon on the
+desktop. An agent's icon is there only when its CLI is installed on this
+machine; hover it for the folder its sessions start in.
+
+- An agent has one window. Its icon brings that window forward when it is
+  already open.
+- Every double-click on **Terminal** opens another window: **Terminal**,
+  **Terminal 2** and so on.
+
+The desktop menu can open all three too, and can run one command in a
+terminal window of its own.
+[Desktop context menu](https://exe.v2core.com/docs/using/desktop-context-menu)
+lists its actions.
+
+### The agent window
 
 <img src="https://hub.v2core.com/v1/embed/bafybeiedurlk54ghfmghdxnscdn6xejkss37uekbun2xrrrxbukqwamwkq" alt="The Claude Code window: its sessions down the left, the chosen one's conversation in the terminal, and the model, context, tokens, cost and weekly usage on the status line" width="896" height="487">
 
-The mouse wheel scrolls back through the conversation in either window.
-Claude Code takes the wheel itself and scrolls its own transcript. Codex
-leaves its transcript to the terminal, and on a host with tmux that is
-the tmux session's history: the wheel scrolls it there (tmux's copy
-mode, with its `[123/980]` position at the top right), and typing
-returns to the live screen first, so the keys reach Codex as in any
-terminal.
+A Claude Code or Codex window has three parts. The session column, on a
+machine with tmux, runs down the left. The terminal with the conversation
+fills the rest. The status line at the foot shows the connection at its left
+and usage at its right.
 
-To copy text, drag across it. In a Codex window that selects it as in
-any terminal; right-click and choose **Copy**. Claude Code in its
-fullscreen mode draws the selection itself, and as the drag ends the
-text goes straight onto your computer's clipboard. Should the browser
-refuse the page its clipboard, the text waits for **Copy** in the
-right-click menu instead, until your next click or key. Shift+drag
-(Option+drag on a Mac) makes the terminal's own selection in a Claude
-Code window, for **Copy** the same way.
+### Usage on the status line
 
-To hand the agent a file — a screenshot, a log, a document — drag it from
-your computer onto the window. It is uploaded to the Workspace root, the
-same as a drop on the desktop, and its path on this machine is typed at
-the cursor, quoted if it needs it, so "look at this" is all the prompt
-then needs; the agent reads the file from there (Claude Code shows an
-image it is given a path to). Several files arrive as several paths. A
-plain Terminal window takes a drop the same way; a VM's window does not,
-since a host path means nothing in the guest. If the window's link is
-down when the upload lands — a laptop back from sleep, the daemon
-restarting — the file is in the Workspace all the same, and its path
-waits in a row under the terminal: **Insert** types it once the window
-is connected again, **Copy** puts it on the clipboard for another window,
-**Dismiss** forgets it. Nothing is uploaded twice.
+| Window | What the status line shows | How current it is |
+| --- | --- | --- |
+| Claude Code | The session's model, context in use, tokens, cost, and the plan's 5-hour and 7-day usage windows. | Updated after every reply, by Claude Code's own status-line hook. |
+| Codex | The ChatGPT subscription's 5-hour and weekly usage windows. | Re-read once a minute while the window is open. |
 
-On a host with tmux, a Claude Code or Codex window lists the agent's
-sessions down its left, one row per tmux session, titled the way the CLI
-titles its terminal — Claude Code keeps that on its current task, and
-Codex, which the desktop starts with its terminal title set to the
-thread, on the thread's name (a session started before that keeps its
-old title until it is restarted). Click a
-row and the window moves to that session; **New** starts another
-conversation in a session of its own, at the top: the list runs latest
-first, the icon's own session at the bottom. While the window
-shows another session, a pulsing green dot marks one still working and a
-black dot one that waits for you — its turn finished, or a permission or
-question pending. Claude Code reports those through its hooks; Codex
-through its `notify` command, which the desktop points at the session
-(a `notify` of your own in `~/.codex/config.toml` still runs after it),
-and through the terminal bell, which the desktop has Codex ring at the
-end of a turn and for an approval so tmux notes it while no window is
-looking. Hover a row for which. The status line's
-figures follow the session on screen. A window opens on the session it
-showed last — from any browser, and after the daemon restarts: tmux
-itself remembers where the window was — with its row scrolled into
-view, and dragging the line between the list and the terminal sets the list's
-width, kept with the window's layout. A row's contextual menu opens
-with when the session started, in grey, then starts a new session,
-copies the row's title, or archives the session, after a dialog: the session and its process end, and the conversation stays on
-this machine for `/resume` inside Claude Code or Codex — the desktop keeps no list
-of its own. Archive shows only once the conversation exists; when the
-window was showing that session it moves to the one before it.
+Hover the figures for the long form, which adds when each usage window
+resets. A figure at 90% or more turns red.
+
+- **Claude Code.** The figures follow the session on screen. The plan's
+  usage windows show on a subscription, after the session's first reply. A
+  status line of your own in `~/.claude/settings.json` keeps working inside
+  the terminal.
+- **Codex.** The figures are read on the ChatGPT sign-in under
+  **Configuration → OpenAI**, and without it the status line shows the
+  connection alone.
+  [The coding agent](https://exe.v2core.com/docs/using/the-coding-agent)
+  says how to sign in.
+
+The Control Strip's agent usage meter counts what both agents have used on
+the whole machine today.
+[The desktop](https://exe.v2core.com/docs/using/the-desktop) describes it.
+
+### Sessions: several conversations in one window
+
+On a machine with tmux, the column down the window's left lists the agent's
+sessions, one row for each tmux session. Each is a conversation of its own.
+
+- **Switch.** Click a row and the window moves to that session.
+- **Start another.** **New**, under the list, starts another conversation in
+  a session of its own, at the top of the list.
+- **Resize the column.** Drag the line between the list and the terminal.
+  The width is kept with the window's layout.
+
+The list runs newest first, so the session the icon first opened is normally
+at the bottom. On a phone the column is a strip of tabs above the terminal.
 
 <img src="https://hub.v2core.com/v1/embed/bafybeigr4z6peilck47xgpbqq6lcxn2ka3hb36nhuxfglswhcw7yn5uco4" alt="The Codex window: its sessions down the left, a finished turn in the terminal, and the subscription's weekly usage on the status line" width="821" height="487">
 
-A window whose link drops — the tab left behind while the laptop slept, a
-network that came and went, the daemon restarted — reconnects on its own,
-in the background, to the session it showed; a window whose tmux client
-was detached with the sessions still there does the same. Only when the
-agent's last session has ended does it stop and say so: close and reopen
-it for a fresh conversation. The same session can be open in more than
-one window at once — a phone beside the desktop — and the terminal takes
-the size of whichever was attached, typed in or resized last.
+A row is titled the way the CLI titles its terminal. Claude Code keeps that
+on its current task. Codex, which the desktop starts with its terminal title
+set to the thread, keeps it on the thread's name. Until the CLI has set a
+title, a row reads the agent's name and the session's number, such as
+**Claude Code 2**.
 
-A Terminal window keeps its shell the same way on a host with tmux: each
-one is a tmux session of its own (`exe-term-1`, `exe-term-2`, … — `tmux
-attach -t exe-term-2` picks one up over SSH), so reloading the page,
-closing the browser by accident, the laptop sleeping or the daemon
-restarting only takes the window away from the shell, never the shell.
-The window reconnects on its own, and the next time the desktop loads in
-this browser the Terminal windows it had come back where they were, with
-whatever ran in them still running; so does any Terminal no window shows
-anywhere, one left on a phone say. A Terminal another desk is showing
-stays there. The close box ends the shell, as in any terminal app, and so
-does `exit`: the window closes with it. tmux stays out of the way in
-these sessions — no status line, no prefix key, so Ctrl+B reaches the
-shell, and `tmux` run inside works as it would anywhere — and the wheel
-scrolls back through the session's history as in a Codex window. On a
-host without tmux a Terminal is a one-off shell that ends with its window.
+A window opens on the session it showed last, with its row scrolled into
+view. That holds from any browser and after the daemon restarts, because
+tmux itself remembers where the window was.
 
-A Codex thread started elsewhere on this machine — in the ChatGPT app on
-your phone (its remote Codex runs here), the Codex app, VS Code — is a
-conversation on this machine all the same, and the Codex window's column
-lists the latest ten under a rule below its sessions, titled the way the
-app titles them, with a hollow dot (a green one while a turn runs there).
-Hover a row for where and when it started. Click it, or choose **Continue
-Here** from its menu, and the thread opens in a session of its own, in the
-folder it was started in: the row moves up among the sessions and the
-conversation carries on here; leave it be and it stays where it is. The
-status line says **opening session…** while it starts. If opening fails,
-the error is shown and you can click again; a reconnect also allows a
-fresh attempt once the window is connected. The API takes the same:
-`POST /v1/agents/codex/sessions` with `{"resume":
-"<thread id>"}`, and `GET …/sessions` lists the threads beside the
-sessions.
+### See which session needs you
 
-The Claude Code window's column lists Claude Code sessions started
-elsewhere on this machine the same way — `claude` run in a Terminal
-window, over SSH, in an IDE — the latest ten, titled as Claude Code
-titles them (your own `/rename` first), with the hollow dot; a green one
-while its CLI is still open there, or a turn runs there. A session whose
-window or shell died with it — a Terminal window closed, the daemon
-restarted — is right there to click: it continues in a session of the
-column's own, in the folder it was started in, as `claude --resume` would.
-Headless runs (`claude -p`, the hub watcher's turns) are not listed, nor
-are the column's own sessions. `POST /v1/agents/claude/sessions` with
-`{"resume": "<session id>"}` is the same from the API.
+While the window shows another session, a mark before a row's title says how
+that session stands:
 
-The column is also an API, for tools that want a conversation you can
-watch: `GET /v1/agents/claude/sessions` lists the rows with their states,
-`POST /v1/agents/claude/sessions` opens a numbered session with a first
-message (and, for Claude Code, a session to resume or fork, a permission
-mode and a `model`), `POST …/sessions/<name>/prompt` types a message into one, `DELETE
-…/sessions/<name>` ends it. The message's `prompt` goes in as a paste, and
-Claude Code treats pasted text as material rather than as your words, so
+| Mark | The session |
+| --- | --- |
+| A pulsing green dot | Is still working. |
+| A black dot | Waits for you: its turn has finished, or a permission or a question is pending. |
+
+Hover a row for which of these it is. The session on screen has no mark,
+since the terminal shows how it stands.
+
+How the desktop learns it:
+
+- **Claude Code** reports through its hooks.
+- **Codex** reports through its `notify` command, which the desktop points
+  at the session, and through the terminal bell, which the desktop has Codex
+  ring at the end of a turn and for an approval, so tmux notes it while no
+  window is looking.
+
+The desktop gives each session these settings as it starts it and does not
+write to your own settings files. A `notify` of your own in
+`~/.codex/config.toml` still runs after the desktop's, and Claude Code hooks
+of your own keep running.
+
+### Archive a session
+
+Right-click a row for its menu:
+
+| Item | What it does |
+| --- | --- |
+| When the session started, in grey | Says when; it is not a command. |
+| **New Session** | Starts a new session, as **New** does. |
+| **Copy Title** | Copies the row's title. |
+| **Archive…** | Ends the session and its process, after a dialog. |
+
+An archived conversation stays on this machine, where `/resume` inside
+Claude Code or Codex brings it back. The desktop keeps no list of its own.
+
+- **Archive…** shows only once the conversation exists.
+- A turn still in flight when you archive is lost.
+- When the window was showing that session, it moves to the one started
+  before it, or failing that the one after. Archiving the agent's only
+  session leaves the window with none, and it stops as it does whenever the
+  last session ends.
+
+### Continue a conversation started elsewhere
+
+A conversation started on this machine outside the window is a conversation
+on this machine all the same. Under a rule below its sessions, the column
+lists the latest ten of them:
+
+- **In the Codex window:** threads started in the ChatGPT app on your phone
+  (its remote Codex runs here), in the Codex app or in VS Code, titled the
+  way the app titles them.
+- **In the Claude Code window:** sessions started by `claude` run in a
+  Terminal window, over SSH or in an IDE, titled as Claude Code titles them,
+  your own `/rename` first.
+
+Each of these rows has a hollow dot, or a green one while a turn runs there.
+For Claude Code the dot is green too while its CLI is still open there.
+Hover a row for where and when it started.
+
+To carry one on here:
+
+1. Click the row, or right-click it and choose **Continue Here**.
+2. The status line says **opening session…** while it starts.
+3. The conversation opens in a session of its own, in the folder it was
+  started in, and its row moves up among the sessions.
+
+If that folder is gone, the session opens in the agent's usual one. Leave a
+row be and the conversation stays where it is. If opening fails, the error
+is shown and you can click again; a reconnect also allows a fresh attempt
+once the window is connected.
+
+A Claude Code session whose window or shell died with it, because a Terminal
+window was closed or the daemon restarted, is right there to click: it
+continues as `claude --resume` would.
+
+Not listed: headless runs (`claude -p`, the turns of a tool that watches a
+hub), `codex` started in a terminal of your own, and the conversations the
+column's own sessions hold.
+
+### Closing and reconnecting
+
+- **Close the window** and its sessions run on. Open the agent's icon again
+  to come back to them.
+- **A window whose link drops** reconnects on its own, in the background, to
+  the session it showed: a tab left behind while the laptop slept, a network
+  that came and went, the daemon restarted. A window whose tmux client was
+  detached with the sessions still there does the same.
+- **When the agent's last session has ended**, and only then, the window
+  stops and says so. Close and reopen it for a fresh conversation.
+- **The same session in two windows** at once, a phone beside the desktop,
+  works. The terminal takes the size of whichever was attached, typed in or
+  resized last.
+
+### Scroll back
+
+The mouse wheel scrolls back through the conversation in either window.
+
+- **Claude Code** takes the wheel itself and scrolls its own transcript.
+- **Codex** leaves its transcript to the terminal, and on a machine with
+  tmux that is the tmux session's history. The wheel scrolls it there, in
+  tmux's copy mode, with its `[123/980]` position at the top right. Typing
+  returns to the live screen first, so the keys reach Codex as in any
+  terminal.
+
+On a phone, drag a finger instead of turning a wheel.
+
+### Copy, paste and links
+
+To copy text, drag across it.
+
+- **In a Codex or Terminal window** the drag selects the text as in any
+  terminal. Right-click and choose **Copy**.
+- **In a Claude Code window**, Claude Code in its fullscreen mode draws the
+  selection itself, and as the drag ends the text goes straight onto your
+  computer's clipboard. Should the browser refuse the page its clipboard,
+  the text waits for **Copy** in the right-click menu instead, until your
+  next click or key.
+- **Shift+drag** (Option+drag on a Mac) in a Claude Code window makes the
+  terminal's own selection, for **Copy** the same way.
+
+The right-click menu also has **Paste**, which puts the clipboard's text in
+at the cursor, and **Select All**. If the browser will not let the page read
+the clipboard, its own paste keys still work.
+
+A web address in a terminal is underlined under the pointer, and a click
+opens it in a new tab.
+
+### Hand the agent a file
+
+To give the agent a screenshot, a log or a document, drag the file from your
+computer onto the window.
+
+1. The file is uploaded to the Workspace root, the same as a drop on the
+  desktop.
+2. Its path on this machine is typed at the cursor, quoted if it needs it.
+3. "look at this" is all the prompt then needs: the agent reads the file
+  from there. Claude Code shows an image it is given a path to.
+
+Several files arrive as several paths. A file over 10 MB is refused, and a
+folder cannot be dropped. A plain Terminal window takes a drop the same way;
+a VM's window does not, since a path on this machine means nothing in the
+guest.
+
+If the window's link is down when the upload lands, with a laptop back from
+sleep or the daemon restarting, the file is in the Workspace all the same.
+Its path waits in a row under the terminal:
+
+| Button | What it does |
+| --- | --- |
+| **Insert** | Types the path once the window is connected again. |
+| **Copy** | Puts the path on the clipboard, for another window. |
+| **Dismiss** | Forgets the path. |
+
+Nothing is uploaded twice.
+
+### Terminal windows
+
+On a machine with tmux a Terminal window keeps its shell the way an agent
+window keeps its sessions. Each Terminal is a tmux session of its own, named
+`exe-term-1`, `exe-term-2` and so on, and `tmux attach -t exe-term-2` picks
+one up over SSH.
+
+- **The shell outlives the window's link.** Reloading the page, closing the
+  browser by accident, the laptop sleeping or the daemon restarting only
+  takes the window away from the shell, never the shell. The window
+  reconnects on its own.
+- **Windows come back.** The next time the desktop loads in this browser,
+  the Terminal windows it had come back where they were, with whatever ran
+  in them still running. So does any Terminal no window shows anywhere, one
+  left on a phone say. A Terminal another desk is showing stays there.
+- **The close box ends the shell**, as in any terminal app, and so does
+  `exit`: the window closes with it.
+- **tmux stays out of the way.** These sessions have no tmux status line and
+  no prefix key, so Ctrl+B reaches the shell, and `tmux` run inside works as
+  it would anywhere.
+- **The wheel scrolls back** through the session's history, as in a Codex
+  window.
+
+### Start and drive sessions over the API
+
+The session column is also an API, for tools that want a conversation you
+can watch. The calls are written for Claude Code here; put `codex` in place
+of `claude` for Codex. Like every API call, they need the API token when one
+is set.
+
+| Request | What it does |
+| --- | --- |
+| `GET /v1/agents/claude/sessions` | Lists the rows with their states and, as `threads`, the conversations started elsewhere. |
+| `POST /v1/agents/claude/sessions` | Opens a numbered session and answers with its `name` and `number`. |
+| `POST /v1/agents/claude/sessions/<name>/prompt` | Types a message into a session. |
+| `DELETE /v1/agents/claude/sessions/<name>` | Ends the session, as **Archive…** does. |
+
+A session's `<name>` is its tmux session's: `exe-claude` for the one the
+icon opens and `exe-claude-2`, `exe-claude-3` and so on after it, or
+`exe-codex` and `exe-codex-2` for Codex.
+
+A new session takes these fields, all optional. Codex takes `prompt` and
+`resume` alone.
+
+| Field | What it sets |
+| --- | --- |
+| `prompt` | The first message. |
+| `resume` | A conversation to continue: a Claude Code session id, or a Codex thread id. |
+| `fork` | With `resume`, fork the conversation instead of continuing the same one (Claude Code's `--fork-session`). |
+| `session_id` | The id the new Claude Code session gets, so the caller can find its transcript. |
+| `permission_mode` | One of `default`, `acceptEdits`, `plan` and `auto`. |
+| `model` | The model, by alias or full name. |
+| `name` | The session's title in the column: one line of up to 80 characters. |
+
+A Codex thread resumed this way opens in the folder it was started in, as a
+click on its row does.
+
+A message is `{"prompt": "…", "say": "…"}`. The `prompt` goes in as a paste,
+and Claude Code treats pasted text as material rather than as your words. So
 give the request a `say` as well: one line, typed ahead of the paste, that
-tells the session what to do with it. The hub watcher builds this way: an instruction
-you post in one of Claude's hub threads opens as a session in the Claude
-Code window's column, works there in view, reports in the thread when it
-is done and stays open in the window to be continued.
+tells the session what to do with it.
+
+A tool that watches a hub builds this way. An instruction you post in one of
+Claude's hub threads opens as a session in the Claude Code window's column,
+works there in view, reports in the thread when it is done and stays open in
+the window to be continued.
+
+### On a machine without tmux
+
+Sessions need tmux, and a Windows machine has none. Without it the three
+windows are still there, with less behind them:
+
+- A Terminal is a one-off shell that ends with its window. On Windows the
+  shell is PowerShell.
+- A Claude Code or Codex window has no session column, and each time it
+  opens it is a fresh run of the CLI.
+- On Windows a Claude Code window's status line has no usage figures.
 
 ## Desktop context menu
 
-The desktop context menu is a NeXT-style menu that opens at the pointer.
+The desktop menu opens at the pointer when you right-click an empty part
+of the desktop. Unlike the menu bar, it is yours to write: a short text
+file with a label and an action on each line, so that what you open most
+is one right-click away.
+
+### What a menu of your own is for
+
+For you:
+
+- **Shortcuts to your own things.** One line opens a project's folder in
+  the Workspace, a file in the text editor, a VM on its Terminal tab, an
+  app or a web address.
+- **A command-line tool in a window.** `terminal btop` opens btop in a
+  window of its own, and any other command on the host works the same
+  way.
+- **Lists that fill themselves.** `@vms`, `@apps` and `@windows` show
+  this desktop's VMs, apps and open windows each time the menu opens.
+  Each VM brings a submenu to open, start, stop or restart it.
+- **Your order and your words.** Rename and reorder the items, group
+  them in submenus, and leave out what you never use.
+- **The same menu everywhere.** A saved menu reaches the other open
+  desktops and syncs to joined nodes.
+
+For a coding agent, such as Claude Code or Codex:
+
+- **It can change the menu for you.** An agent reads the menu with
+  `GET /v1/ui/menu` and replaces it with `PUT /v1/ui/menu`. The daemon
+  checks what it sends as it checks **Save**, so a file with a mistake
+  never replaces your menu.
+- **Only when you ask.** The Agent Skill Guide tells an agent to change
+  your menu only when you ask it to. "Add the demo VM's terminal to my
+  desktop menu" is such a request.
+
+### Open the menu
+
 Right-click an empty part of the desktop, or long-press it on a touch
 screen. A quick two-finger tap also opens the menu; on a phone this works
-inside an ordinary window too, away from controls, menus and dialogs.
-
-The factory menu offers New VM, Terminal, Workspace, lists of VMs, apps
-and windows, Show All Windows, tools, Cloudflare and Help. You can rename
-or reorder items, add shortcuts and group them in submenus.
+inside an ordinary window too, away from controls, menus and dialogs. It
+is a NeXT-style menu: it opens where the pointer is, with its submenus
+beside it.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreicioeb4dotyt2cxdkhzjsgolzxxtnl53etfnqvgpzpxnctlja4emy" alt="A customized desktop menu open on the desk, its Virtual Machines list showing two VMs" width="340" height="369">
 
+The factory menu offers New VM, Terminal, Workspace, lists of VMs, apps
+and windows, Show All Windows, tools, Cloudflare and Help. Its last item
+is **Customize…**, which opens the menu editor.
+
 ### Edit and save
 
-Choose **Customize…** to open the menu editor. Edit the text, then click
-**Save**, or press **Command-S** on a Mac or **Ctrl-S** elsewhere. Save
-checks the format first: an error identifies and selects the bad line,
-and your current menu stays in place until the file is valid.
+1. Open the menu and choose **Customize…**. The **Desktop Menu** window
+   opens on the menu's text.
+2. Edit the text. In this window the Tab key types a tab.
+3. Click **Save**, or press **Command-S** on a Mac or **Ctrl-S**
+   elsewhere.
+
+Save checks the format first: an error identifies and selects the bad
+line, and your current menu stays in place until the file is valid.
+
+Until you save a menu of your own, the editor shows the factory menu. Its
+opening comments describe the format and name every action.
+
 The scrollbars run along the document's right and bottom edges; drag the
 resize tile where they meet to make the editor wider or taller.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreia3c6lsc3lfvgmuilnaevilaigaeg7tco5ktic4upy3rr6sgx4n6q" alt="The Desktop Menu editor with System :menu.txt open: a label on each line, then its action" width="522" height="420">
 
-The menu is stored as `System :menu.txt` (normally
-`~/.exe/appdata/System/menu.txt`). A saved change reaches other open
-desktops and syncs to joined nodes. Each desktop fills the automatic lists
-from its own VMs, installed apps and open windows. Existing custom menus
-keep their contents when the factory menu changes; add new shortcuts to
-your own file with **Customize…**.
+### Where the menu is kept
+
+Your menu is stored as `System :menu.txt` (normally
+`~/.exe/appdata/System/menu.txt`). The file is there only once you have
+saved a menu of your own.
+
+A saved change reaches other open desktops and syncs to joined nodes; see
+[Joining desks together](https://exe.v2core.com/docs/using/joining-desks-together).
+Each desktop fills the automatic lists from its own VMs, installed apps
+and open windows.
+
+A menu of your own keeps its contents when the factory menu changes, so a
+new shortcut in the factory menu does not appear in yours by itself. Add
+it to your own file with **Customize…**.
+
+### Let an agent change the menu
+
+An agent, or a script of your own, reaches the same menu over HTTP:
+
+- `GET /v1/ui/menu` answers with the menu's text in `text`, the parsed
+  menu in `menu`, and `default`, which is true while the factory menu is
+  in use.
+- `PUT /v1/ui/menu` takes the new text as the request body, in plain
+  text, and applies it as **Save** does. A file with a mistake changes
+  nothing and is answered `400` with `{"error": "line N: …"}`. An empty
+  body restores the factory menu.
+
+```sh
+$ curl -s http://127.0.0.1:7777/v1/ui/menu
+$ curl -s -X PUT --data-binary @menu.txt http://127.0.0.1:7777/v1/ui/menu
+```
+
+When `api_token` is set, both calls need the
+`Authorization: Bearer <token>` header; see
+[Configuration](https://exe.v2core.com/docs/using/configuration).
 
 ### Menu format
 
@@ -459,17 +1087,14 @@ and can be copied directly.
 | `@apps` | Insert an automatic list at this position. |
 | `Applications<TAB>@apps` | Put an automatic list inside a named submenu. |
 
+A line that starts with `#` is a comment and one that starts with `@` is
+read as a list, so a label cannot begin with either. Put comments on
+their own lines, rather than after an action.
+
 Indent submenu children consistently, for example with two spaces per
 level. The top level has no indentation. When returning to a parent
 level, use exactly its earlier indentation. Only a plain submenu heading
 can have indented children; an action or automatic list cannot.
-
-Except for `terminal`, arguments are separated by whitespace: quotation
-marks do not combine words into one argument. A Workspace path or app
-name containing spaces therefore cannot be used directly in an `edit`,
-`workspace` or `app` item. Use `workspace` to browse to that file or folder,
-or `@apps` to list apps by their display names. Put comments on their own
-lines, rather than after an action.
 
 ### All supported actions
 
@@ -484,7 +1109,7 @@ needs a label before it, as in `My terminal<TAB>terminal`.
 | `newvm` | Open the New VM dialog. |
 | `upload` | Open Upload to Workspace. |
 | `closewin` | Close the front window. |
-| `showall` | Toggle the overview of all open windows. |
+| `showall` | Show All Windows: toggle the overview of all open windows. |
 | `refresh` | Refresh the VM and app lists, including My Apps when it is open. |
 | `terminal [command]` | Open a new terminal on the host. With a command, run that command instead of an interactive shell. |
 | `claude` | Open the host's Claude Code window. Disabled when its CLI is unavailable. |
@@ -492,7 +1117,7 @@ needs a label before it, as in `My terminal<TAB>terminal`.
 | `workspace [folder]` | Open the Workspace root, or a folder relative to that root. |
 | `edit <file>` | Open a file in the text editor, using a path relative to the Workspace root. |
 | `app <name>` | Open an installed app by its app ID. Disabled when it is unavailable. |
-| `vm <name> [tab]` | Open a VM's detail window, optionally on a specific tab listed below. Defaults to Services; disabled if the VM does not exist on this node. |
+| `vm <name> [tab]` | Open a VM's detail window, optionally on a specific tab (see **VM tabs**). Defaults to Services; disabled if the VM does not exist on this node. |
 | `chat [vm]` | Open Chat. With a VM name, show that VM's chats and pin new chats to it; without one, show all chat sessions. Disabled when Chat is unavailable. |
 | `winvms` | Open the Virtual Machines window. |
 | `winmyapps` | Open My Apps, the window of published sites and their domains. |
@@ -503,37 +1128,55 @@ needs a label before it, as in `My terminal<TAB>terminal`.
 | `winlog` | Open the Log Viewer. |
 | `search` | Open desktop Search. |
 | `trash` | Open the Trash. |
-| `join` | Open the Join dialog to pair another exe node. |
+| `join` | Open the Node Sync dialog (**Special → Join…**) to pair another exe node. |
 | `cfstatus` | Open Cloudflare Status. |
 | `cfwizard` | Open the Cloudflare Setup Wizard. |
-| `token` | Open Set API Token for this browser. |
+| `token` | Open the API Token dialog (**Special → Set API Token…**) for this browser. |
 | `url <address>` | Open an `http://` or `https://` address in a new browser tab. |
-| `docs` | Open the Using exe manual in the desktop. |
+| `docs` | Open this manual in the desktop, in the exe Documentation window. |
 | `skillguide` | Open the Agent Skill Guide. |
 | `update` | Open Software Update. |
 | `welcome` | Open the Welcome window. |
 | `customize` | Open this menu's editor. |
 
+There is no separate `macos9` action in the customization format; use
+`app macos9`.
+
+### Arguments, paths and app names
+
+Except for `terminal`, arguments are separated by whitespace: quotation
+marks do not combine words into one argument. A Workspace path or app
+name containing spaces therefore cannot be used directly in an `edit`,
+`workspace` or `app` item. Use `workspace` to browse to that file or
+folder, or `@apps` to list apps by their display names.
+
 For `workspace` and `edit`, use relative paths such as `Projects/demo` or
 `Projects/demo/README.md`. Absolute paths and paths that escape the
-Workspace are rejected. For built-in apps, use their lowercase IDs:
-`app macos9`, `app hub` or `app bluepencil`. Other apps use their installed
-folder name. There is no separate `macos9` action in the customization
-format; use `app macos9`.
+Workspace are rejected.
 
-The command after `terminal` is kept as one command line, including spaces,
-quotes and shell operators. For example, `Monitor<TAB>terminal btop` opens
-btop on the host if it is installed. On Linux and macOS it runs in the
-host user's login shell; on Windows it runs in PowerShell. The terminal
-session ends when the command exits. To reach a VM's shell instead, use
-`vm <name> term`.
+For built-in apps, use their lowercase IDs: `app macos9`, `app hub`,
+`app bluepencil`, `app dict` or `app analytics`. Other apps use their
+installed folder name; see [Apps](https://exe.v2core.com/docs/using/apps).
+
+### Run a command in a window
+
+The command after `terminal` is kept as one command line, including
+spaces, quotes and shell operators. For example,
+`Monitor<TAB>terminal btop` opens btop on the host if it is installed. To
+reach a VM's shell instead, use `vm <name> term`.
+
+On Linux and macOS the command runs in the host user's login shell; on
+Windows it runs in PowerShell. The terminal session ends when the command
+exits.
 
 A command's window opens at 80×31 characters at least — what btop needs
 with its GPU box, and room enough for any other tool — and cannot be
 dragged smaller. It remembers its size and position, so the next open of
-the same command puts it back where it was left. Choosing the item again
-while the command runs brings its window forward; after the command has
-exited, it runs it again in the same window's place.
+the same command puts it back where it was left.
+
+Choosing the item again while the command runs brings its window forward;
+after the command has exited, it runs it again in the same window's
+place.
 
 ### VM tabs
 
@@ -563,12 +1206,16 @@ They take no arguments. An empty list shows a disabled **No VMs**,
 | `@apps` | Installed apps, including built-in apps, shown by their display names. | `Applications<TAB>@apps` |
 | `@windows` | Open windows on this desktop, sorted by title. Pick one to bring it forward. | `Windows<TAB>@windows` |
 
-Each `@vms` submenu offers **Open**, **Open Terminal**, **btop**, **Chat with this
-VM**, **Start** or **Stop**, **Restart**, **Copy IP**, **Expose Port…** and
-**Publish to GitHub…**. Availability follows the VM's state, its IP and
-Chat availability. Delete is not included. These operations are supplied
-by `@vms`; names such as `start`, `stop` and `restart` are not standalone
-customization actions.
+Each `@vms` submenu offers **Open**, **Open Terminal**, **btop**,
+**Chat with this VM**, **Start** or **Stop**, **Restart**, **Copy IP**,
+**Expose Port…** and **Publish to GitHub…**. Availability follows the
+VM's state, its IP and Chat availability. Delete is not included.
+
+These operations are supplied by `@vms`; names such as `start`, `stop`
+and `restart` are not standalone customization actions.
+
+`@apps` leaves out Welcome, which has no desktop icon either; the
+`welcome` action opens it.
 
 ### Example menu
 
@@ -605,18 +1252,22 @@ Help
 Customize…  customize
 ```
 
-### Limits and recovery
+### Limits
 
 The menu may contain up to 300 entries, counting headings, actions,
 automatic-list entries in the file and separators across all levels.
-Expanded list contents do not count toward that limit. Labels may be up
-to 60 characters; the file must be UTF-8 and at most 64 KiB. You can nest
-three submenu levels below the root (four levels in total).
+Expanded list contents do not count toward that limit.
+
+Labels may be up to 60 characters; the file must be UTF-8 and at most
+64 KiB. You can nest three submenu levels below the root (four levels in
+total).
+
+### Recover or reset the menu
 
 If you remove `customize`, the desktop appends **Customize…** so you can
 always get back to the editor. If a stored or synced file cannot be
-parsed, the desktop uses the factory menu and adds **The menu file has an
-error…** to open the editor on the problem.
+parsed, the desktop uses the factory menu and adds
+**The menu file has an error…** to open the editor on the problem.
 
 To reset, choose **Restore Defaults** and confirm, or clear the editor
 completely and **Save**. This removes the custom menu from every desktop
@@ -625,248 +1276,769 @@ a file containing just comments is still a custom menu.
 
 ## Mac OS 9
 
-Choose **Special → Mac OS 9** (also available among the built-in apps) to open
-an interactive Power Mac G4 running Mac OS 9.2.2. Its Monitors control panel
-offers only 640×480, 800×600, and 1024×768, with 800×600 as the default. The first launch shows each
-setup step: preparing QEMU, downloading the 497 MiB Universal installer,
-checking its checksum, creating a 2 GB persistent disk, and starting the Mac.
-**Setup details** opens these steps and live download progress in a compact in-app
-dialog over the Mac. Close it with **OK** or Escape; setup continues, and the
-guest display keeps its size and connection.
-Automatic emulator installation supports Ubuntu 24.04; other hosts need
-`qemu-system-ppc` and `qemu-img` installed first (on macOS, `brew install qemu`).
+The **Mac OS 9** app is a real Mac in a window: an emulated Power Mac G4
+running Mac OS 9.2.2, with a hard disk of its own. exe's desktop only
+resembles a classic Mac. This one is the system itself, with its Finder, its
+control panels and the software written for it.
+
+### What it is for
+
+- **Run classic Mac software.** Mount a CD image (ISO, CDR, IMG or Toast)
+  and use what is on it in the system it was written for.
+- **A Mac that stays as you left it.** What you install and save is kept on
+  its 2 GB hard disk, on this node. Closing the window leaves the Mac
+  running, and opening it again returns to the same Mac.
+- **A Mac on the network.** Once installed it reaches the internet through
+  this machine, and classic HTTP browsers work in it.
+- **The whole screen, and sound.** The Mac can fill your screen, and on a
+  node with the optional audio runtime its sound plays in your browser.
+
+The Mac is not one of exe's Linux virtual machines. It is emulated in
+software and needs no hypervisor, so it also runs on a node that cannot run
+VMs.
+
+### What it needs
+
+- **An emulator.** Automatic emulator installation supports Ubuntu 24.04.
+  Other hosts need `qemu-system-ppc` and `qemu-img` installed first (on
+  macOS, `brew install qemu`).
+- **Room on this node.** The installer is a 497 MiB download, and the Mac's
+  hard disk is 2 GB.
+- **For sound**, an optional audio runtime that exe does not fetch by
+  itself; see **Sound** in this chapter.
+
+### Set it up the first time
+
+1. Choose **Special → Mac OS 9**; it is also among the built-in apps. The
+   first launch shows each setup step: preparing QEMU, downloading the
+   497 MiB Universal installer, checking its checksum, creating a 2 GB
+   persistent disk, and starting the Mac.
+2. When the Mac's screen appears, follow the guide the app shows above it.
+   It takes you through Drive Setup and Apple Software Restore inside the
+   Mac.
+3. After Restore reports success, shut down the guest:
+   **Special → Shut Down** in the Mac's own menu bar.
+4. Click **Installation finished — start my Mac**.
+
+Subsequent launches use the saved installation: opening the app starts the
+Mac from its disk.
+
+**Setup details** opens the steps and live download progress in a compact
+in-app dialog over the Mac. Close it with **OK** or Escape; setup continues,
+and the guest display keeps its size and connection.
+
+### If setup stops
+
+Setup can be paused and retried, and closing the window keeps both setup and
+a running Mac alive.
+
+- **Pause setup** stops a setup that is under way, and **Continue setup**
+  takes it up again.
+- If exe restarts during a download, choose **Continue setup** once the
+  connection returns.
+- Use **Resume installer** if the Mac was shut down before Restore
+  completed.
+- Completed installer downloads are reused after checksum verification;
+  partial downloads restart.
+- A failed Start keeps its error visible so you can address the cause and
+  retry.
+
+### Start it, leave it, shut it down
+
+- **Start.** Opening the app starts a Mac that is shut down. With the window
+  already open, click **Start Mac**.
+- **Leave.** Closing the window leaves the Mac running. An open window
+  reconnects automatically after an exe restart or a temporary network
+  interruption, returning to the same running Mac.
+- **Shut down** from **Special → Shut Down** inside the Mac to save its
+  files cleanly.
+
+### The window
 
 <img src="https://hub.v2core.com/v1/embed/bafkreiezokqwstse7romg3g2ybez6hv2soyoqdknotaahcm3y3j7vh5c24" alt="The Mac OS 9 window: a running Power Mac G4 with the Finder, its Control Strip, and the app's own buttons above it" width="814" height="687">
 
-The app guides you through Drive Setup and Apple Software Restore inside the
-Mac. After Restore reports success, shut down the guest and click
-**Installation finished — start my Mac**. Subsequent launches use the saved
-installation. Setup can be paused and retried, and closing the window keeps
-both setup and a running Mac alive. An open window reconnects automatically
-after an exe restart or a temporary network interruption, returning to the same
-running Mac. A failed Start keeps its error visible so you can address the cause
-and retry. If exe restarts during a download, choose Continue setup once
-the connection returns. Use **Resume installer** if the Mac was shut down before Restore completed.
-Completed installer downloads are reused
-after checksum verification; partial downloads restart.
+The app's own buttons are in a row above the Mac's screen. The status line
+at the foot names the hardware, a PowerPC G4 with 512 MB of memory, and says
+whether the display is connected.
 
-The pointer follows your browser cursor directly, including when you leave and
-re-enter the window. A bundled open-source USB tablet driver loads at boot;
-no guest installation is needed. Mouse-wheel scrolling is not supported by
-that driver; use the Mac’s scrollbar controls.
+| Button | What it does |
+|---|---|
+| **Start Mac** | Starts the Mac when it is shut down. During setup the same button reads **Continue setup** or **Resume installer**. |
+| **Pause setup** | Stops a setup that is under way. |
+| **Setup details** | Shows the setup steps and the download's progress. |
+| **Mac keys…** | Sends a common Command-key shortcut to the Mac, or wakes its display. |
+| **Full screen** | Gives the Mac more room. |
+| **Sound off** | Enables the Mac's sound in your browser, where the node has audio support. |
+| **CD…** | Shows the mounted CD and the disc images you can mount. |
 
-The Mac’s clock starts at this machine’s own local date and time, so a browser
-in the guest judges today’s certificates against today’s date and HTTPS works
-without a visit to Date & Time. Only the installation boot is pinned to 2003,
-where the Universal installer and the era’s software expect to be.
+### Keyboard and mouse
 
-Click **CD…** in the toolbar to see the full mounted CD filename, mount an
-available disc image, or **Eject** it. The toolbar also shows the filename when
-space permits. **Upload image…** adds an ISO, CDR, IMG, or Toast raw disc image
-(up to 2 GiB) from your browser; select it and click **Mount**. Images stay on
-this node and existing files are kept when filenames match. Changes take effect
-without restarting the Mac. The displayed filename follows ejects inside Mac
-OS 9 too. If the Mac locks the disc, eject it in Finder first, or close programs
-using it before choosing **Force eject**. Force eject can leave the old volume
-visible in Finder; restart the Mac if that happens. After a Mac restart, mount the desired
-CD again. On a phone, tap the CD glyph to see its full filename and controls.
+Click the Mac's screen to type in it.
 
-If this node has the optional Mac audio runtime installed, click **Sound off**
-to enable sound in your browser; the button changes to **Sound on**. Click it
-again to mute. Browser playback needs this first click. Sound stops when the
-window is closed or hidden, and an enabled session resumes after reconnecting.
-The button is disabled on nodes without audio support. On narrow screens it
-shows a speaker glyph. Sound travels through the existing authenticated display
-connection; it does not play through the server's speakers.
+The pointer follows your browser cursor directly, including when you leave
+and re-enter the window. A bundled open-source USB tablet driver loads at
+boot; no guest installation is needed. Mouse-wheel scrolling is not
+supported by that driver; use the Mac's scrollbar controls.
 
-If the connected display turns black after being idle, choose **Mac keys… →
-Wake display**, or press Shift with the Mac focused. This wakes Energy Saver
-without typing or restarting the guest; mouse movement alone may not wake it.
+Use **Mac keys…** for common Command-key shortcuts: ⌘ Q to quit, ⌘ W to
+close, ⌘ O to open and ⌘ L to open a location.
+
+### The display
+
+The Mac's Monitors control panel offers only 640×480, 800×600 and 1024×768,
+with 800×600 as the default.
+
+The app window fits the selected guest resolution automatically. Each guest
+pixel occupies a whole number of physical screen pixels (1×, 2×, 3×, and so
+on), including at Windows' 125% or 150% display scaling. The largest crisp
+size that fits is used; this can be smaller than a fractionally enlarged
+display. There is no separate grow tile. If even 1× will not fit, the
+display shrinks proportionally to keep the whole Mac visible.
+
+Use **Full screen** for more room. Full screen uses the same scaling and
+adjusts when you move between monitors or change browser zoom.
+
+- When browser fullscreen is unavailable, including in iPad Home Screen
+  apps, the Mac expands within exe; tap **Exit full screen** to return.
+- Browser fullscreen also supports older iPad Safari; use the browser's exit
+  control or Escape to return.
+
+### When the display turns black
+
+If the connected display turns black after being idle, choose
+**Mac keys… → Wake display**, or press Shift with the Mac focused. This
+wakes Energy Saver without typing or restarting the guest; mouse movement
+alone may not wake it.
+
 To keep the Mac awake, open **Apple menu → Control Panels → Energy Saver**
 inside the guest and set system sleep to **Never**. Under **Show Details**,
 also disable a separate display-sleep timer if one is enabled.
 
-The app window fits the selected guest resolution automatically. Each guest
-pixel occupies a whole number of physical screen pixels (1×, 2×, 3×, and so on),
-including at Windows’ 125% or 150% display scaling. The largest crisp size that
-fits is used; this can be smaller than a fractionally enlarged display.
-There is no separate grow tile. If even 1× will not fit, the display shrinks
-proportionally to keep the whole Mac visible. Full screen uses the same scaling
-and adjusts when you move between monitors or change browser zoom.
+### CDs
 
-Use **Full screen** for more room. When browser fullscreen is unavailable,
-including in iPad Home Screen apps, the Mac expands within exe; tap
-**Exit full screen** to return. Browser fullscreen also supports older iPad
-Safari; use the browser’s exit control or Escape to return.
-Use **Mac keys…** for common Command-key
-shortcuts. Shut down from **Special → Shut Down inside the Mac** to save its
-files cleanly. The installed guest has a `sungem` Ethernet adapter with outbound NAT and
-DHCP; networking is disabled while booting the installer. Classic HTTP browsers work; modern HTTPS compatibility depends on the
-guest browser. Audio is not configured.
+Click **CD…** in the toolbar to see the full mounted CD filename, mount an
+available disc image, or **Eject** it. The toolbar also shows the filename
+when space permits. On a phone, tap the CD glyph to see its full filename
+and controls.
+
+To put a new disc in the drive:
+
+1. Click **CD…**, then **Upload image…**, and choose an ISO, CDR, IMG or
+   Toast raw disc image (up to 2 GiB) from your browser.
+2. Select it under **Available images** and click **Mount**.
+
+Images stay on this node and existing files are kept when filenames match.
+Changes take effect without restarting the Mac, and the displayed filename
+follows ejects inside Mac OS 9 too. After a Mac restart, mount the desired
+CD again.
+
+If the Mac locks the disc, eject it in Finder first, or close programs using
+it before choosing **Force eject**. Force eject can leave the old volume
+visible in Finder; restart the Mac if that happens.
+
+### Sound
+
+If this node has the optional Mac audio runtime installed, click
+**Sound off** to enable sound in your browser; the button changes to
+**Sound on**. Click it again to mute. Browser playback needs this first
+click.
+
+- Sound stops when the window is closed or hidden, and an enabled session
+  resumes after reconnecting.
+- The button is disabled on nodes without audio support: without the runtime
+  the Mac has no sound.
+- On narrow screens the button shows a speaker glyph.
+- Sound travels through the existing authenticated display connection; it
+  does not play through the server's speakers.
+
+exe does not install that runtime by itself; its
+[build and reuse guide](https://github.com/livid/exe/blob/main/docs/macos9-audio.md)
+says how to.
+
+### Clock and network
+
+The Mac's clock starts at this machine's own local date and time, so a
+browser in the guest judges today's certificates against today's date and
+HTTPS works without a visit to Date & Time. Only the installation boot is
+pinned to 2003, where the Universal installer and the era's software expect
+to be.
+
+The installed guest has a `sungem` Ethernet adapter with outbound NAT and
+DHCP; networking is disabled while booting the installer. Classic HTTP
+browsers work; modern HTTPS compatibility depends on the guest browser.
+
+### Where it is kept
 
 The runtime, installer, setup progress and disk live in `~/.exe/mac-os9/`
-(or `$EXE_HOME/mac-os9/`), outside app-data sync. The display uses private local
-sockets and the same API token as exe. No public VNC port is opened. The API is
-`GET /v1/macos9`, `POST /v1/macos9/start`, `/cancel`, `/finish`, and the binary
-WebSocket at `/v1/macos9/console`.
+(or `$EXE_HOME/mac-os9/`), outside app-data sync: the Mac belongs to this
+node and is not copied to joined ones.
+
+The display uses private local sockets and the same API token as exe. No
+public VNC port is opened.
+
+The API is `GET /v1/macos9`, `POST /v1/macos9/start`, `/cancel` and
+`/finish`, the binary WebSocket at `/v1/macos9/console`, and for the CD
+drive `GET` and `POST /v1/macos9/cd` and `POST /v1/macos9/cd/upload`.
 
 ## Virtual machines
 
-Choose **File → New VM…** (or the New VM… button in the Virtual Machines
-window). Only the name is required; the defaults are 2 CPUs, 2048 MB of
-memory and a 20 GB disk. The very first VM downloads the Debian base image
-(~3 GB) once — later VMs clone it and boot in seconds. VMs persist: stopping
-one keeps its disk, starting boots it again, deleting destroys the disk too.
+A virtual machine (VM) is a persistent Linux computer of your own that runs
+on this machine, for you and your agents to work in. It has its own disk,
+its own private address and a user who may do anything inside it. VMs are
+what exe exists for: the rest of the desktop is there to make them, work in
+them and show what runs in them.
+
+### What a VM is for
+
+For you:
+
+- **A machine to build in.** Install packages, write code, start servers.
+  The user inside (`dev`) has passwordless `sudo`, and the VM is the sandbox
+  boundary: you may install and run anything in it.
+- **It stays as you left it.** Stopping a VM keeps its disk, and starting it
+  boots the same machine again. Only deleting a VM destroys its disk.
+- **You reach it from where you work.** A terminal in the browser, or `ssh`,
+  `scp` and port forwards from your own terminal; see
+  [SSH from your own terminal](https://exe.v2core.com/docs/using/ssh-from-your-own-terminal).
+- **What runs in it can go public.** A port a server listens on inside the
+  VM can get an HTTPS address on your own domain; see
+  [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web).
+- **A new one is quick.** It is cloned from a base image and is usually
+  ready in about ten seconds.
+
+For a coding agent, such as Claude Code or Codex:
+
+- **A sandbox of its own.** The agent makes a VM, or takes one you name, and
+  builds, runs and tests there: an isolated machine where it may install
+  anything.
+- **Everything has a command.** VMs are made, started, stopped and deleted
+  over HTTP or from a shell, and commands run inside one over plain SSH.
+  **From a shell or over HTTP**, further down, lists them.
+- **Notes to start from.** Every VM has notes you write, and agents are told
+  to read them before working in a VM they do not know.
+- **The built-in agent works here too.** A VM's **Agent** tab gives it a
+  shell in that VM; see
+  [The coding agent](https://exe.v2core.com/docs/using/the-coding-agent).
+
+### Make a VM
+
+Choose **File → New VM…**, or press **New VM…** in the Virtual Machines
+window.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreihgifdv4knmxe7hrxsnv3tybqwv2cbfcf47zcmdmydnuxrtgnmzuu" alt="The New VM dialog: a name, CPUs, memory, disk and the System pop-up" width="332" height="246">
 
-The **System** pop-up picks the VM's Linux: **Debian 13**, the default, or
-**Alpine 3.24** — a ~93 MB download the first time, a lean guest for
-disposable experiments. An Alpine guest runs OpenRC and `apk`, not systemd
-and `apt`; its user's shell is `ash`, and prebuilt glibc binaries do not run
-on its musl libc. Chat, a chat pinned to the VM and the Agent tab are told
-which system a VM runs — its recorded image opens their context — so on
-Alpine they reach for `apk` and `doas`; Publish installs with `apt` and
-expects the Debian image.
+1. Type a **Name**: lowercase letters, digits and hyphens. Only the name is
+   required.
+2. Fill in **CPUs**, **Memory (MB)** and **Disk (GB)** if you want other
+   sizes. Left empty they are 2 CPUs, 2048 MB of memory and a 20 GB disk, or
+   the defaults you set on the **VMs** tab of **Windows → Configuration**.
+3. Pick the **System**: **Debian 13**, the default, or **Alpine 3.24**.
+4. Press **Create**. The VM is made and booted, and the dialog closes when
+   it is ready to use.
 
-A node without a hypervisor — a NAS, a container without `/dev/kvm` — runs
-the desktop without VMs: the list stays empty and says why, About This
-Computer shows the same reason, and everything else works as usual.
+The very first VM downloads the Debian base image (about 3 GB) once. Later
+VMs are cloned from it and boot in seconds. A VM's disk takes only the room
+its contents need on the host: 20 GB is how far it may grow, not space set
+aside.
 
-Right-click a running VM and choose **btop** to open its process monitor in
-an 80×24 terminal window. It runs the VM's installed `btop` over SSH; press
-**q** to quit and close the window. A failed launch leaves its error visible.
+### Debian or Alpine
+
+The **System** pop-up picks the VM's Linux.
+
+- **Debian 13** is the default: `apt`, `sudo`, `bash` and systemd.
+- **Alpine 3.24** is a lean guest for disposable experiments, a download of
+  about 93 MB the first time. It runs OpenRC and `apk`, not systemd and
+  `apt`. Its user's shell is `ash` and it has `doas` in place of `sudo`.
+  Prebuilt glibc binaries do not run on its musl libc.
+
+An Alpine VM can be made on a Linux host only: on macOS and on Windows exe
+refuses that system.
+
+exe records which system each VM was made with. Chat, a chat pinned to the
+VM and the **Agent** tab are told it, so on Alpine they reach for `apk` and
+`doas`. **Publish to GitHub…** installs `git` with `apt` and expects a
+Debian VM.
+
+### The Virtual Machines window
+
+**Windows → Virtual Machines** lists every VM with its state, its specs and,
+while it runs, its IP address. Click a column's heading to sort by it, and
+again to turn the order round. Each VM also has an icon on the desktop.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreidvhuabfxo7lqmwu33nslajdbuexc42slkqjbazf7hzlcnmjjzseq" alt="The Virtual Machines window listing two running VMs with their specs and IP addresses" width="562" height="131">
 
-Double-click a VM in the list to open its window. Its status line shows the
-state lamp, then middot-separated: the IP, how much disk the VM really holds
-on the host — allocated space, not the sparse file's nominal size — and the
-guest's system with its version, read from the guest itself. At the line's
-right edge, its load average over one, five and fifteen minutes, refreshed
-every five seconds while the window is open. The tabs:
+- **Open a VM.** Double-click its row or its icon; on a phone, tap it.
+- **Stop** shuts the VM down and keeps its disk. On a stopped VM the button
+  is **Start**, which boots it again.
+- **Delete** asks **Sure?**: press it again within three seconds. The VM,
+  its disk and its notes are then gone for good.
+- **Refresh** reads the list again, and **New VM…** opens the dialog.
 
-- **Services** — TCP ports listening inside the VM, with one-click links,
-  plus the routes already published to the web. Servers must bind
-  `0.0.0.0` (not `127.0.0.1`) to show up here or be exposable.
-- **Terminal** — a full SSH terminal in the browser.
-- **Agent** — tell the built-in coding agent what to build; it gets a shell
-  in this VM and streams its work live.
-- **Expose** — publish a VM port to an HTTPS subdomain (see
-  [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web)).
-- **Sessions** — every chat pinned to this VM, agent runs included, each
-  with a model-written one-line summary of what it accomplished; click one
-  to reopen it in the Chat window.
-- **Notes** — free-form notes about the VM, saved automatically. Agents are
-  told to read these before working in an unfamiliar VM, so write down what
-  runs where.
+Right-click a VM for its menu:
+
+| Menu item | What it does |
+|---|---|
+| **Open** | Opens the VM's window. |
+| **Open Terminal** | Opens the VM's window on its **Terminal** tab. |
+| **btop** | Opens the VM's process monitor in an 80×24 terminal window. It runs the VM's installed `btop` over SSH; press **q** to quit and close the window. A failed launch leaves its error visible. Only for a running VM. |
+| **Chat with this VM** | Opens the Chat window on this VM, once a chat backend is set up. |
+| **Stop** or **Start** | The same as the row's button. |
+| **Restart** | Stops a running VM and starts it again. |
+| **Copy IP** | Puts the VM's IP address on the clipboard. |
+| **Expose Port…** | Opens the VM's window on its **Expose** tab. |
+| **Publish to GitHub…** | Sends a folder of a running VM to GitHub; see [Publishing to GitHub](https://exe.v2core.com/docs/using/publishing-to-github). |
+| **Delete** | The same as the row's button. |
+
+### A VM in its own window
+
+Double-click a VM to open its window. The line at its top shows the VM's
+state, then its IP, how much disk the VM really holds on the host (allocated
+space, not the sparse file's nominal size) and the guest's system with its
+version, read from the guest itself. At the right edge is the load average
+over one, five and fifteen minutes, refreshed every five seconds while the
+window is open.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreiajs7o257w7yffrgteuxigohvbvcy5vapumuy2yfvxb7awv4ujoiu" alt="A VM's window on its Services tab: the state, IP, disk and system, then the ports listening inside it and the addresses they are published at" width="682" height="379">
 
+| Tab | What it is for |
+|---|---|
+| **Services** | The TCP ports listening inside the VM, each with a link that opens it, and the routes already published to the web. A server must bind `0.0.0.0`, not `127.0.0.1`, to show up here or to be exposed. |
+| **Terminal** | A full SSH terminal in the browser. |
+| **Agent** | Tell the built-in coding agent what to build. It gets a shell in this VM and streams its work live. |
+| **Expose** | Publishes a VM port at an HTTPS subdomain; see [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web). |
+| **Sessions** | Every chat pinned to this VM, agent runs included, each with a one-line summary a model wrote of what it accomplished. Click one to reopen it in the Chat window. |
+| **Notes** | Free-form notes about the VM, saved automatically. Agents are told to read them before working in an unfamiliar VM, so write down what runs where. Under them the tab shows what the built-in agent has remembered about the VM, with **Forget**, pressed twice, to erase it. |
+
+### From a shell or over HTTP
+
+Everything the windows do has a command. `exe` is typed on the machine that
+runs the daemon. The HTTP calls go to the address the desktop is served at,
+and are what an agent uses.
+
+| To | Command | HTTP |
+|---|---|---|
+| List the VMs | `exe ls` | `GET /v1/vms` |
+| Make a VM and boot it | `exe create demo` | `POST /v1/vms` |
+| Start a stopped VM | `exe start demo` | `POST /v1/vms/demo/start` |
+| Stop it, keeping its disk | `exe stop demo` | `POST /v1/vms/demo/stop` |
+| Delete it and its disk | `exe rm demo` | `DELETE /v1/vms/demo` |
+| Read its state and IP | `exe ip demo` prints the IP | `GET /v1/vms/demo` |
+| Read or replace its notes | none | `GET` or `PUT /v1/vms/demo/notes` |
+| Open a shell or run one command in it | `exe ssh demo` or `exe ssh demo uname -a` | none: use SSH |
+
+- **Sizes and system.** `exe create` takes `-cpus`, `-mem` (MB), `-disk`
+  (GB) and `-image alpine`. Over HTTP the body is JSON, and only `name` is
+  required:
+  `{"name":"demo","cpus":2,"memory_mb":2048,"disk_gb":20,"image":"alpine"}`.
+- **Create and start wait.** Both answer only when the VM has booted, has an
+  IP and answers SSH, so what they return is usable at once. Allow ten
+  minutes or more when the first VM still has the base image to download.
+- **The token.** When `api_token` is set, every HTTP call carries
+  `Authorization: Bearer <token>`; see
+  [Configuration](https://exe.v2core.com/docs/using/configuration).
+- **Errors** are JSON, `{"error":"…"}`: `404` for a VM that does not exist,
+  `409` for one that is not running, `503` on a machine that cannot run VMs.
+- **Commands inside a VM** go over the daemon's SSH gate, which starts a
+  stopped VM by itself: `ssh -p 2222 demo@this-host 'uname -a'`. See
+  [SSH from your own terminal](https://exe.v2core.com/docs/using/ssh-from-your-own-terminal).
+
+**Help → Agent Skill Guide…** is all of this written for an agent, served at
+`/skill.md`. [How VMs Work](/docs/vms), on the website, says what a VM is
+made of on Linux, macOS and Windows.
+
+### When exe restarts
+
+VMs run inside the exe daemon. When it stops or restarts, they shut down
+with it, and the ones that were running start again when it comes back.
+
+### A machine that cannot run VMs
+
+A node without a hypervisor (a NAS, a container without `/dev/kvm`) runs the
+desktop without VMs. The Virtual Machines window stays empty and says why:
+**This node cannot run VMs**, followed by the reason.
+**Apple menu → About This Computer** gives its VM memory as unavailable on
+this node. Everything else works as usual.
+[Running without VMs](/docs/getting-started#running-without-vms-a-nas-a-container),
+on the website, has more.
+
 ## SSH from your own terminal
 
-The daemon speaks SSH on port **2222**, and the username picks where you
-land:
+You do not need the desktop to work in a VM. The daemon speaks SSH, so your
+own terminal, `scp` and your scripts reach a VM directly, and a coding agent
+runs its commands in a VM the same way.
+
+### Connect
+
+The daemon's SSH gate listens on port **2222**, and the username picks where
+you land:
+
+- **A VM's name** lands you in that VM, as its user: a full SSH session. A
+  stopped VM is started first, and `scp`, `sftp` and `-L`/`-R` forwarding
+  all work.
+- **exe** lands you in the lobby, which runs commands for the VMs themselves
+  and has no shell.
 
 ```sh
-ssh -p 2222 demo@this-host        # straight into the VM "demo" (auto-starts it)
+ssh -p 2222 demo@this-host        # into the VM "demo" (auto-starts it)
 scp -P 2222 app.py demo@this-host:~/          # scp, sftp, -L/-R all work
 ssh -p 2222 -L 8000:localhost:8000 demo@this-host   # tunnel a VM port
 
-ssh -p 2222 exe@this-host         # the lobby: ls, new, start, stop, rm,
-                                  # ip, code, expose, routes (--json too)
+ssh -p 2222 exe@this-host         # the lobby, at its prompt
+ssh -p 2222 exe@this-host ls --json           # or one lobby command
 ```
 
-Keys that get in: any public key in the daemon user's `~/.ssh`, the service
-key in `~/.exe/ssh/`, and keys listed in `~/.exe/ssh/authorized_clients`
-(authorized_keys format — add your phone or laptop key there; edits apply
-immediately). There is no first-come key adoption, so the gate is safe to
-leave on a LAN.
+The port is `ssh_listen` in **Windows → Configuration**; `off` there turns
+the gate off.
+
+### The lobby
+
+The lobby's commands are `ls`, `new`, `start`, `stop`, `rm`, `ip`, `code`,
+`expose`, `unexpose` and `routes`, and `help` lists them with their
+arguments. `ls`, `new`, `start` and `routes` take `--json`, for scripts and
+agents.
+
+`code` runs the built-in agent in a VM, and `expose` publishes a VM port.
+[The coding agent](https://exe.v2core.com/docs/using/the-coding-agent) and
+[Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web)
+say more.
+
+### Keys that get in
+
+- Any public key in the daemon user's `~/.ssh`.
+- The service key in `~/.exe/ssh/`.
+- Keys listed in `~/.exe/ssh/authorized_clients`, in authorized_keys format.
+  Add your phone or laptop key there; edits apply immediately.
+
+There is no first-come key adoption, so the gate is safe to leave on a LAN.
 
 ## The coding agent
 
-Point exe at Ollama in **Windows → Configuration** (`ollama.base_url` and
-`ollama.model`; `ollama.effort` sets the thinking effort on models that
-support it, or `off` to disable thinking). A local signed-in Ollama at `http://127.0.0.1:11434` can
-use cloud models like `glm-5.2:cloud` with no API key; `https://ollama.com`
-needs one. Then:
+exe has a coding agent of its own: say what you want built, and it builds it
+inside one of your VMs. If you already work with Claude Code, Codex or
+another agent, exe teaches that agent to use the VMs instead.
 
-- The **Agent** tab in a VM window starts the agent on that VM: **Run
-  Agent** opens a new chat pinned to the VM, your prompt its first
-  message, and the Chat window streams the run and takes what you say
-  next. It can install packages, write code and start services — it has
-  passwordless sudo (doas on Alpine) *inside the VM*, and the VM is the
-  sandbox boundary.
-- The **Chat** icon and window appear once a chat backend is usable: a
-  conversation that can see and drive your whole VM cloud. Replies run in
-  the daemon, not in the browser: closing the tab (or losing the network)
-  never interrupts a long task — reopen the chat and select the session,
-  marked with a green dot while streaming, to rejoin it live. The **Stop**
-  button actually cancels the run.
+### What it is for
+
+For you:
+
+- **Build in a VM by asking.** Type what you want in a VM's **Agent** tab.
+  The agent installs packages, writes code and starts services there, and
+  you watch it work.
+- **Run the whole cloud by talking.** The **Chat** window is a conversation
+  that can see and drive every VM: create one, work inside it, publish its
+  port.
+- **Tasks that outlast the browser.** A reply runs in the daemon. Close the
+  tab and it carries on; come back and rejoin it live.
+- **Work kept inside the VM.** The agent is free to install and run what it
+  needs there, and the VM is the sandbox boundary.
+- **Your choice of model.** Ollama, local or cloud, or a ChatGPT
+  subscription.
+
+For a coding agent of your own, once it has read the Agent Skill Guide:
+
+- **A sandbox when it needs one.** It creates a VM, or starts one that
+  exists, and may install and run anything inside it.
+- **A shell in the VM.** It runs commands, copies files in and tunnels ports
+  over SSH.
+- **A way to show its work.** It finds the ports listening in a VM and
+  publishes one at an HTTPS address.
+- **Notes to read and to leave.** Each VM carries notes, which the agent
+  reads before working in a VM it does not know and can rewrite.
+- **A line to you.** It posts a note to the Newsfeed, on this node and every
+  joined one, when work is finished or something is wrong.
+- **A helper.** It can pass a task on to the built-in agent.
+
+### Choose a model
+
+The built-in agent needs a model. Set one up in **Windows → Configuration**.
+
+Ollama is the default, on the **Ollama** tab:
+
+| Setting | What it sets |
+| --- | --- |
+| `ollama.base_url` | Where Ollama is. A local signed-in Ollama at `http://127.0.0.1:11434` can use cloud models like `glm-5.2:cloud` with no API key; `https://ollama.com` needs one. |
+| `ollama.model` | The model. |
+| `ollama.effort` | The thinking effort on models that support it, or `off` to disable thinking. |
+
+The Chat window can run on a ChatGPT subscription instead of Ollama. On the
+**OpenAI** tab:
+
+1. Click **Sign in with ChatGPT…** and finish the sign-in in the browser. It
+  is the OAuth flow the Codex CLI uses, with no API key.
+2. Set `chat_provider` to `openai`.
+3. Pick a model (`gpt-5.4`, `gpt-5.4-codex`, …) and, if you like, a
+  reasoning effort.
+4. Press **Save**.
+
+The browser sign-in redirects to `localhost:1455`, and the daemon listens on
+all interfaces there. When the daemon runs on another machine, swap
+`localhost` for the daemon's host in that final URL, or paste the URL into
+the tab's paste field.
+
+Tokens live in `~/.exe/openai.json` and refresh themselves. While you are
+signed in, the tab also shows the subscription's rate-limit usage (the
+rolling 5-hour and weekly windows, with their reset times) and any credit
+balance.
+
+A VM's **Agent** tab follows the same choice, since what it starts is a
+chat: with `chat_provider` set to `openai`, its runs are on the ChatGPT
+subscription too. To change provider, model or effort without opening
+Configuration, click the Chat window's status line.
+
+### Run the agent on a VM
 
 <img src="https://hub.v2core.com/v1/embed/bafkreiguvunbfzvv4srl3kc444sa4kyrsg4jgvrtnqk4vp7sgsp2urzgni" alt="A VM's Agent tab: a prompt for the agent and the Run Agent button" width="602" height="379">
 
-The Chat window can also run on a **ChatGPT subscription** instead of
-Ollama: in **Windows → Configuration → OpenAI**, click **Sign in with
-ChatGPT…** (the OAuth flow the Codex CLI uses — no API key), set
-`chat_provider` to `openai`, pick a model (`gpt-5.4`, `gpt-5.4-codex`, …)
-plus an optional reasoning effort, and Save. The browser sign-in redirects to `localhost:1455`; the daemon
-listens on all interfaces there, so when it runs on another machine swap
-`localhost` for the daemon's host in that final URL — or paste the URL
-into the tab's paste field. Tokens live in `~/.exe/openai.json` and refresh themselves.
-While signed in the tab also shows the subscription's rate-limit usage —
-the rolling 5-hour and weekly windows, with their reset times — and any
-credit balance. A VM's Agent tab follows the same choice, since what it
-starts is a chat: with `chat_provider` set to `openai` its runs are on
-the ChatGPT subscription too. What stays on Ollama whatever is chosen is
-`exe code` on the command line, and the `POST /v1/vms/{name}/agent` call
-behind it.
+1. Open the VM's window and click its **Agent** tab.
+2. Type what you want built.
+3. Press **Run Agent**.
 
-Prefer your own agent? See **Help → Agent Skill Guide**: exe serves a
-`/skill.md` file that teaches Claude Code, Codex or any other coding agent
-how to drive the API and the VMs.
+**Run Agent** opens a new chat pinned to the VM, with your prompt as its
+first message. The Chat window streams the run and takes what you say next.
+
+The agent can install packages, write code and start services. It has
+passwordless sudo (doas on Alpine) inside the VM, and the VM is the sandbox
+boundary.
+
+### The Chat window
+
+The **Chat** icon and window appear once a chat backend is usable. Chat is a
+conversation that can see and drive your whole VM cloud: it can create,
+start, stop and delete VMs, run commands and edit files inside them, publish
+a port and push a folder to GitHub.
+
+- **Replies run in the daemon**, not in the browser. Closing the tab, or
+  losing the network, never interrupts a long task.
+- **To rejoin a reply**, reopen the chat and select the session, which is
+  marked with a green dot while it is streaming.
+- **Stop** actually cancels the run. The **Send** button reads **Stop**
+  while a reply runs, and **Queue** once you have typed something: your
+  message then joins the run in progress.
+- **It asks first.** Before Chat deletes a VM or removes a published
+  address, a dialog asks you to approve it.
+- **A chat pinned to one VM**, which is what the Agent tab starts, works in
+  that VM alone.
+
+### From the command line
+
+`exe code`, on the machine exe runs on, runs the agent in a running VM and
+prints its work as it goes:
+
+```sh
+exe code demo "build a guestbook app on port 8000"
+```
+
+`exe code`, and the `POST /v1/vms/{name}/agent` call behind it, stay on
+Ollama whatever `chat_provider` says. So does `code` in the SSH lobby.
+
+### Hand exe to your own agent
+
+Prefer your own agent? exe serves a `/skill.md` file that teaches Claude
+Code, Codex or any other coding agent how to drive the API and the VMs.
+
+1. Choose **Help → Agent Skill Guide…**. The window shows the guide's
+  address and a prompt that tells an agent to read it.
+2. Press **Copy Prompt**.
+3. Paste the prompt into your agent.
+
+When this browser holds an API token, the prompt carries it and the window
+says so. Share that prompt with care.
+
+The guide also gives the agent its limits. It is not to stop or delete a VM
+it did not create unless you ask, and it publishes to GitHub or changes the
+desktop menu only when you ask.
+
+The SSH gate an agent works through is in
+[SSH from your own terminal](https://exe.v2core.com/docs/using/ssh-from-your-own-terminal).
+To run Claude Code or Codex on this machine, in a window that keeps its
+sessions, see
+[Claude Code, Codex and Terminal](https://exe.v2core.com/docs/using/claude-code-codex-and-terminal).
 
 ## Publishing to the web
 
-One-time setup: run **Special → Cloudflare Setup Wizard…** with a Cloudflare
-API token (Zone → DNS → Edit, Account → Cloudflare Tunnel → Edit, and Zone →
-Analytics → Read for the Analytics app) and a remotely-managed tunnel. The Cloudflare module in the Control Strip
-(bottom-left) shows tunnel health at a glance.
+Publishing gives something that runs on this machine a real address on the
+web: `https://<name>.<your-domain>`, HTTPS on a domain of your own. A web
+app in a VM or a service on the host becomes a link you can open from
+anywhere and hand to someone else.
 
-Live local traffic uses cloudflared's loopback metrics listener at
-`http://127.0.0.1:20241`. If it uses another local port, set
-`cloudflare.metrics_url` in **Configuration → Cloudflare** to the base
-address (without `/metrics`). exe verifies that the local connector belongs
-to the selected tunnel. A machine without a local cloudflared connector
-can still show the tunnel-wide connection counts; its local counters stay
-unavailable. A Cloudflare API failure labels cached connection counts as
-last known rather than reporting them as live.
+- **A link to share.** One click in a VM's window publishes a port, and the
+  service is live at its address.
+- **Nothing to open, nothing to renew.** Visitors come in through your
+  Cloudflare Tunnel, so no port is forwarded on your router, and Cloudflare
+  answers HTTPS for the name: there is no certificate to manage.
+- **Undone as quickly.** Unpublishing removes the address. The app keeps
+  running in its VM and can be published again.
+- **An agent can finish the job.** A coding agent that built something in a
+  VM publishes it with one HTTP call, one `exe expose` command or one line
+  over SSH, and hands you the address. The built-in Chat agent has the same
+  as a tool.
 
-Then, in a VM's **Expose** tab, pick a port and an optional subdomain (it
-defaults to the VM name). exe creates the DNS record, updates the tunnel
-ingress, and routes the hostname through its reverse proxy to the VM — one
-click later the service is live at `https://<sub>.<your-domain>`. Current
-routes are listed in the Services tab and in **Special → Cloudflare
-Status…**, where they can be unpublished.
+This chapter puts a running service on the web.
+[Publishing to GitHub](https://exe.v2core.com/docs/using/publishing-to-github)
+puts a project's code on GitHub, and
+[Analytics](https://exe.v2core.com/docs/using/analytics) shows who came to
+what you published.
 
-The CLI can also publish a permanent redirect without a VM:
+### What publishing does
+
+A published name is a *route*: a hostname, and where its requests are sent.
+Publishing one does three things:
+
+1. Creates the hostname's DNS record at Cloudflare, pointing at your tunnel.
+2. Adds a rule to the tunnel, its *ingress*, that sends the hostname to
+  exe's reverse proxy on this machine.
+3. Adds the route to that proxy, which passes each request on to the VM's
+  port.
+
+Routes survive a daemon restart.
+
+### Set up Cloudflare once
+
+Publishing needs three things at Cloudflare:
+
+- A domain there (a *zone*) whose DNS records exe may manage.
+- A cloudflared tunnel, running on this machine or on another in your
+  network. A remotely-managed tunnel (Zero Trust → Networks → Tunnels) works
+  best: exe changes its rules through the API.
+- An API token. Create it at dash.cloudflare.com → API Tokens → Create Token
+  → Custom token, with two permissions: **Zone → DNS → Edit** and
+  **Account → Cloudflare Tunnel → Edit**. Add **Zone → Analytics → Read**
+  for the Analytics app.
+
+Then choose **Special → Cloudflare Setup Wizard…** and give them to exe:
+
+1. Paste the token. **Validate & Continue** checks each answer against
+  Cloudflare before the next step opens.
+2. Pick the account, the zone and the tunnel from the lists the wizard
+  offers, or enter an ID by hand.
+3. Type the base domain. Apps publish as `<name>.<this domain>`: use the
+  zone's own name (`example.com`) or a namespace under it, such as
+  `apps.example.com`.
+4. On the last step, click **Save Configuration**. The settings apply at
+  once, with no restart.
+
+The wizard writes the `cloudflare.*` settings (`api_token`, `account_id`,
+`zone_id`, `tunnel_id` and `domain`), which **Configuration → Cloudflare**
+shows too.
+
+Two things decide whether a published name finds its way back to this
+machine:
+
+- `advertise_host`, in **Windows → Configuration**, is this machine's
+  address as the cloudflared host reaches it: a LAN or Tailscale IP. A new
+  install fills in the Tailscale IP when the machine has one. The wizard's
+  last step warns when it is empty; a publish then skips the tunnel rule and
+  says so. When you change it, Save repoints the tunnel rule of every
+  published name.
+- A locally managed tunnel, one configured by a file on the cloudflared
+  host, takes no rules from exe, and the wizard says so. Add one catch-all
+  rule by hand that sends your names to exe's proxy, or recreate the tunnel
+  in the Zero Trust dashboard. exe still manages the DNS records and the
+  routes.
+
+### Publish a VM port
+
+1. Start your server in the VM, listening on `0.0.0.0`. One that listens on
+  `127.0.0.1` only cannot be published.
+2. Open the VM's window and click its **Expose** tab. Right-clicking the VM
+  in the **Virtual Machines** window and choosing **Expose Port…** lands
+  there too.
+3. Type the **VM port** and, if you like, a **Subdomain**. Left blank, the
+  subdomain is the VM's name.
+4. Click **Expose**.
+
+The tab prints the route, the tunnel rule and the address,
+`https://<sub>.<your-domain>`, with a warning line for any step that failed.
+After a failed Cloudflare call the wizard opens, so you can check the
+settings.
+
+The **Services** tab is a shortcut: it lists the ports listening in the VM,
+and **Expose** beside one publishes it under the VM's name.
+
+A name leads to one place. Publishing under a name that is already in use
+moves it to the new port, so a VM's second port needs a subdomain of its
+own.
+
+### See what is published, and unpublish
+
+- A VM's **Services** tab shows each published port of that VM with its
+  address as a link, and an **Unexpose** button. Click it twice: it asks
+  **Sure?** first.
+- **Windows → My Apps** shows every published name as an icon, whatever it
+  leads to. Double-click one to open the site; right-click it for **Open**,
+  **Copy URL** and **Unpublish…**.
+- `exe routes` prints the same list in a terminal.
+
+Unpublishing removes the DNS record, the tunnel rule and the route. What was
+published is not touched: an app keeps running in its VM and can be exposed
+again.
+
+### Publish from a terminal
+
+```sh
+exe expose demo -port 8000 -sub guestbook   # https://guestbook.example.com
+exe routes                                  # every name and where it leads
+exe unexpose guestbook.example.com          # remove one, by its full name
+```
+
+`-sub` is optional: without it the name is the VM's. The SSH lobby
+([SSH from your own terminal](https://exe.v2core.com/docs/using/ssh-from-your-own-terminal))
+has the same three commands, for a script or an agent on another machine:
+
+```sh
+ssh -p 2222 exe@this-host expose demo 8000 guestbook
+ssh -p 2222 exe@this-host routes --json
+ssh -p 2222 exe@this-host unexpose guestbook.example.com
+```
+
+### What an agent can call
+
+An agent that drives exe over HTTP has the whole of publishing:
+
+| To | Call |
+| --- | --- |
+| See what listens in a VM | `GET /v1/vms/{name}/ports` |
+| Publish a VM port | `POST /v1/vms/{name}/expose` with `port` and, optionally, `subdomain` |
+| Publish a redirect | `POST /v1/routes/redirect` with `host` and `target` |
+| Publish a service that is not in a VM | `POST /v1/routes` with `host` and `backend` |
+| List the routes | `GET /v1/routes` |
+| Unpublish a name | `DELETE /v1/routes/{host}` |
+
+A publish answers with `host`, `url` and `backend`. A `warnings` array in
+the answer means it only partly applied. To publish a VM port, the VM must
+be running and Cloudflare set up.
+
+**Help → Agent Skill Guide…** opens the guide exe serves to agents at
+`/skill.md`; it teaches all of these calls but `POST /v1/routes`. The
+built-in Chat agent
+([The coding agent](https://exe.v2core.com/docs/using/the-coding-agent)) has
+tools for a VM's ports: it lists ports and routes and publishes on its own,
+and unpublishes only after you approve a confirmation dialog.
+
+### Redirect a hostname
+
+A name can answer with a permanent redirect instead, with no VM behind it:
 
 ```sh
 exe expose example.com -redirect https://exe.example.com
 exe expose www.example.com -redirect https://exe.example.com
 ```
 
-Use your configured domain or one of its full subdomain names, or a name in
-another zone your Cloudflare token can edit, such as a second domain on
-the same account: its DNS record goes in that zone, and the tunnel and
-proxy are the same. `-backend` takes those names too. The target
-must be an HTTP(S) origin, with no path, query, fragment or credentials.
-exe creates the same DNS and tunnel rules, then answers with **308 Permanent
-Redirect**, preserving each request's path and query string. For example,
-`https://example.com/docs/?from=home` becomes
-`https://exe.example.com/docs/?from=home`. The method and body survive when
-the client follows the redirect. `exe routes` lists these routes as
-`redirect:https://…`; `exe unexpose <host>` removes one.
+- The name is your configured domain, one of its full subdomain names, or a
+  name in another zone your Cloudflare token can edit, such as a second
+  domain on the same account. Its DNS record goes in that zone; the tunnel
+  and the proxy are the same.
+- The target is an HTTP(S) origin on another hostname, with no path, query,
+  fragment or credentials.
+- exe creates the same DNS record and tunnel rule, then answers with
+  **308 Permanent Redirect**, preserving each request's path and query
+  string: `https://example.com/docs/?from=home` becomes
+  `https://exe.example.com/docs/?from=home`. The method and body survive
+  when the client follows the redirect.
+- `exe routes` lists these routes as `redirect:https://…`, and
+  `exe unexpose <host>` removes one.
+
+### Publish a service that is not in a VM
 
 A hostname can also route to a service on this machine that is not a VM,
 such as a daemon on the loopback address:
@@ -875,21 +2047,74 @@ such as a daemon on the loopback address:
 exe expose charts.example.com -backend http://127.0.0.1:7799
 ```
 
-The backend is an HTTP(S) origin with no path; every request's own path
-and query reach it, with the hostname in `Host`, so one backend can serve
-several names. The same DNS record, tunnel ingress and proxy route are
-created, and `exe unexpose <host>` removes them. The API form is `POST
-/v1/routes` with `host` and `backend`.
+- The backend is an HTTP(S) origin with no path. Every request's own path
+  and query reach it, with the hostname in `Host`, so one backend can serve
+  several names.
+- The name follows the redirect's rule: in your domain, or in another zone
+  your token can edit.
+- The same DNS record, tunnel rule and proxy route are created, and
+  `exe unexpose <host>` removes them.
 
-A route can also say where the same site lives on IPFS. `PUT
-/v1/routes/<host>/dnslink` with `{"path": "/ipfs/<cid>"}` writes the DNSLink
-record, the TXT record `_dnslink.<host>` holding `dnslink=/ipfs/<cid>`, so
-`ipfs resolve /ipns/<host>` and IPFS gateways find that content. `DELETE` on
-the same path removes it, and so does `exe unexpose <host>`. exe-planet
-does this for an exposed site that also publishes to IPFS: every publish
-writes its new CID there.
+`-redirect` and `-backend` take a full hostname and stand alone: neither
+combines with `-port`, `-sub` or the other.
 
-### Local services
+### Publish the exe homepage
+
+The daemon carries a site of its own inside the binary: the exe homepage and
+its documentation. `exe site` publishes it under your domain, with the same
+DNS record and tunnel rule as a VM port:
+
+```sh
+exe site             # https://exe.example.com
+exe site -sub home   # https://home.example.com
+```
+
+`exe routes` shows it as `exe:site`, and `exe unexpose <host>` removes it
+like any other name.
+
+### Point a name at IPFS
+
+A route can also say where the same site lives on IPFS, through a DNSLink
+record:
+
+- `PUT /v1/routes/<host>/dnslink` with `{"path": "/ipfs/<cid>"}` writes it:
+  the TXT record `_dnslink.<host>` holding `dnslink=/ipfs/<cid>`.
+  `ipfs resolve /ipns/<host>` and IPFS gateways then find that content.
+- `DELETE` on the same path removes the record, and so does
+  `exe unexpose <host>`.
+- Only a name exe has published can have one, and the path is `/ipfs/<cid>`
+  or `/ipns/<name>`.
+
+exe-planet, the site builder that runs beside exe, does this for an exposed
+site that also publishes to IPFS: every publish writes its new CID there.
+
+### Check the tunnel
+
+- The Cloudflare module in the Control Strip, bottom-left, shows tunnel
+  health at a glance.
+  [The desktop](https://exe.v2core.com/docs/using/the-desktop) describes its
+  lamp and its menu.
+- **Special → Cloudflare Status…** shows the last check of the token, the
+  DNS access and the tunnel, then the tunnel's replicas and connections, the
+  live traffic of this machine's connector and the saved settings.
+  **Re-check Now** checks again; **Start Over…** opens the wizard with empty
+  fields.
+
+Live local traffic is read from cloudflared's loopback metrics listener at
+`http://127.0.0.1:20241`. If it uses another local port, set
+`cloudflare.metrics_url` in **Configuration → Cloudflare** to the base
+address (without `/metrics`). exe verifies that the local connector belongs
+to the selected tunnel.
+
+A machine without a local cloudflared connector can still show the
+tunnel-wide connection counts; its local counters stay unavailable. A
+Cloudflare API failure labels cached connection counts as last known rather
+than reporting them as live.
+
+### Local services for the desk
+
+This one is not publishing. It lets the desktop itself reach a service on
+this machine, with the API token still on guard.
 
 A daemon on this machine's loopback, such as `127.0.0.1:7799`, is out of a
 browser's reach when the desk is opened over Tailscale Serve or from a
@@ -899,213 +2124,722 @@ phone. Name it in `~/.exe/config.json` and the daemon relays to it:
 "services": { "planet": "http://127.0.0.1:7799" }
 ```
 
-`/v1/svc/planet/<path>` then reaches `http://127.0.0.1:7799/<path>` with
-the method, body and query unchanged. The API token is checked here and
-never forwarded, nor are the desk's cookies; the service's cookies and
-CORS headers stay behind. A change to `services` through **PUT
-/v1/config** takes effect at once.
+- `/v1/svc/planet/<path>` then reaches `http://127.0.0.1:7799/<path>` with
+  the method, body and query unchanged.
+- A name is lowercase letters, digits and hyphens; its address is an HTTP(S)
+  origin with no path.
+- The API token is checked here and never forwarded, whether it came in a
+  header or as `?token=`; nor are the desk's cookies. The service's cookies
+  and CORS headers stay behind.
+- A change to `services` through `PUT /v1/config` takes effect at once.
 
 ## Publishing to GitHub
 
-Right-click a running VM and choose **Publish to GitHub…** to turn a
-project folder inside it into a GitHub repository. One-time setup: create
-an OAuth app under github.com → Settings → Developer settings → OAuth Apps
-(enable **Device Flow**; no callback URL or client secret needed), put its
-client ID in **Configuration → GitHub**, and sign in — a code appears here,
-you enter it at github.com/login/device, done.
+**Publish to GitHub…** turns a project folder inside a VM into a GitHub
+repository in one step. exe commits what is not committed yet, creates the
+repository on your account, private by default, and pushes. Publish the same
+folder again later and the new commits go to the same repository.
 
-The dialog lists the folders in the VM's home; pick one, name the
-repository (private by default), and Publish. exe installs git in the VM if
-needed, commits any uncommitted work as your GitHub account's noreply
-identity, creates the repository, and pushes. Publishing again later pushes
-the new commits to the same repository.
+- **For you**, what was built in a VM lands on GitHub without your setting
+  up git, a remote or a key in the VM.
+- **For the VM**, nothing is handed over: no GitHub credentials ever enter
+  it. Your sign-in stays on this machine, out of reach of whatever runs in
+  the VM, an agent included.
+- **For an agent**, publishing is one tool or one HTTP call that the daemon
+  carries out. A plain `git push` inside a VM always fails, because that is
+  the point.
+
+[Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web)
+gives a running service an address; this chapter puts the code itself on
+GitHub.
+
+### Sign in to GitHub once
+
+exe signs in with GitHub's device flow, through an OAuth app of your own:
+
+1. At github.com, open Settings → Developer settings → OAuth Apps and create
+  an app. Enable **Device Flow**. The flow needs no callback URL and no
+  client secret.
+2. Open **Windows → Configuration → GitHub**, put the app's client ID there
+  (`github.client_id`) and Save.
+3. Click **Sign in with GitHub…**. github.com/login/device opens in a new
+  tab, and a code appears in the window.
+4. Enter the code at GitHub. The window then says who you are signed in as.
+
+Once the client ID is saved, the Publish dialog offers the same sign-in at
+its top. **Sign Out**, clicked twice, removes the token from this machine.
+
+### Publish a folder
+
+1. In the **Virtual Machines** window, right-click a running VM and choose
+  **Publish to GitHub…**.
+2. Pick the **Project folder in the VM**. The dialog lists the folders in
+  the VM's home.
+3. Check the **Repository name**, which starts as the folder's name.
+4. Leave **Private repository** ticked, or clear it for a public one.
+5. Click **Publish**.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreiasgpixuvyoargp7mmhpljkz2rp3f6oet5du6dnjrwrwzhjgwswcy" alt="The Publish to GitHub dialog: the signed-in account, the project folder in the VM, the repository name and Private repository" width="422" height="235">
 
-The Chat agent can do the same: tell it to "push to github" and it uses the
-daemon's github_push tool — a plain `git push` inside a VM always fails,
-because that is the point.
+The dialog lists each step as it happens and ends with a link to the
+repository. The Newsfeed notes the publish too, with a link to the commit.
 
-The point of the design: **no GitHub credentials ever enter the VM.** The
-sign-in token lives only on this machine (`~/.exe/github.json`), and the
-push travels through a proxy that exists just for that one operation and
-answers only for that one repository — the VM's git talks to it without
-ever holding a token, on disk or in memory.
+### What Publish does
+
+The daemon does the work, over SSH into the VM:
+
+1. Installs git in the VM if it is missing. The install uses `apt`, so it
+  expects a Debian VM.
+2. Makes the folder a git repository if it is not one yet, on a branch named
+  `main`.
+3. Commits any uncommitted work. If git has no identity for the folder yet,
+  exe sets one for that repository only: your GitHub account, under its
+  noreply address.
+4. Creates the repository on your account, or uses the one that already has
+  that name. **Private repository** counts only when the repository is
+  created.
+5. Points the folder's `origin` at the repository and pushes the current
+  branch.
+
+It stops early for a folder that sits inside a larger git repository
+(publish that repository's own folder instead) and for a detached HEAD
+(check out a branch first).
+
+Publishing again goes through the same steps, so it commits what changed and
+pushes the new commits to the same repository.
+
+### Let an agent publish
+
+- **The Chat agent.** Tell it to "push to github" and it uses the daemon's
+  `github_push` tool on the project folder.
+- **Any other agent.** `POST /v1/vms/{name}/publish` with
+  `{"path":"/home/dev/app","repo":"app","private":true}` does what the
+  dialog does. It streams its steps and ends with the repository's address
+  and the pushed commit. Say `"private":true`: left out, a new repository is
+  public.
+
+Either may leave the repository name out. exe then reuses the folder's
+`origin` when it points at your account, so publishing again updates the
+same repository, and otherwise takes the folder's name. If `origin` points
+at another account, it stops and asks for a name.
+
+You sign in first, as above: without a sign-in the publish fails and says
+where to sign in. The Agent Skill Guide tells agents to publish only when
+you ask, since the call can create a repository on your account.
+
+### Why the VM never holds your token
+
+The point of the design: **no GitHub credentials ever enter the VM.**
+
+- The sign-in token lives only on this machine, in `~/.exe/github.json`.
+- The push travels through a proxy that exists just for that one operation
+  and answers only for that one repository.
+- The VM's git talks to that proxy without ever holding a token, on disk or
+  in memory. The daemon adds the token on its own side.
 
 ## Analytics
 
-The **Analytics** app shows the traffic Cloudflare's edge saw for every
-hostname this node publishes: the same list as **My Apps**, VM ports,
-local services, the homepage and redirects alike. It reads Cloudflare's
-analytics with the node's own token, which needs **Zone → Analytics →
-Read** on top of the wizard's two permissions; without it the window says
-so. The Cloudflare module's menu in the Control Strip opens it too.
+Once something is published, the **Analytics** app answers the next
+question: is anyone reading it? It shows the traffic Cloudflare's edge saw
+for the hostnames this node publishes: the same list as **My Apps**, VM
+ports, local services, the homepage and redirects alike.
 
-Pick a span, **1 Hour**, **24 Hours**, **7 Days** or **30 Days**, and a host
-in the pop-up (or click its row in **Hosts**; click it again for all of
-them). The pop-up lists each host beside its icon, the one My Apps shows:
-the app's touch icon or favicon, the homepage's for the names that
-redirect to it, and a diamond for an app that declares none. The tiles count requests, the requests Cloudflare stopped, visits
-(Cloudflare's: a page view that came from another site or none), data
-served, the share of requests from bots Cloudflare has verified, and
-server errors (5xx), each against the span before it. 30 days has no span
-before: Cloudflare keeps these numbers 31 days. The chart draws requests,
-visits and stopped requests over the span, a minute, 15 minutes, an hour
-or a day a point; the last points, which Cloudflare is still counting, are
-drawn pale. Point at the chart to read one.
+- **For you**: which name is busy, which pages are asked for, from which
+  countries and with which browsers, and whether a crawler is hammering a
+  site or a server is answering with errors.
+- **Nothing to add to a site.** The numbers are Cloudflare's own count, read
+  with the node's token. Nothing goes into your pages.
+- **For an agent**: the same numbers are one HTTP call, so an agent that
+  published a site can check that it is being reached and is not answering
+  with errors.
 
-**Stopped** is what Cloudflare's security answered itself: a challenge
-page or a block, from a rule of your own in the zone's WAF, a managed rule
-or the browser check. Those requests never reached your host, but they are
-in **Requests** too, since Cloudflare counts every request that reached
-its edge; a crawler that keeps hammering a challenge shows as a Requests
-line with a Stopped line close under it. **Hosts** can rank by it, to see
-which name draws them.
+[Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web)
+is how a name gets here; this chapter is about who came.
 
-The chart follows the view picked in **Hosts**: **Requests** and **Visits**
-draw requests, visits and stopped requests together; **Data**, **Errors**
-and **Stopped** draw data served, server errors or stopped requests alone,
-on a scale of their own, and the reading under the pointer says the same.
+### Open it
+
+Double-click the **Analytics** icon on the desktop, or choose **Analytics…**
+from the Cloudflare module's menu in the Control Strip.
+
+The app reads Cloudflare's analytics with the node's own token, which needs
+**Zone → Analytics → Read** on top of the wizard's two permissions. Without
+it the window says so. The numbers are those of the zone chosen in the
+Cloudflare setup: a name published in another zone is listed, but its
+traffic is not counted here.
+
+The window has, from the top: the span buttons and the host pop-up, six
+tiles, a chart, and ranked lists. The status line names your domain and the
+span, and says when the numbers were last updated.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreicygtsslkz6zbwpqbj6ygwlhbxbvhu7hsowdvvijhqt4mptfpnc4u" alt="The Analytics window over the last hour: requests, visits, data served, verified bots and server errors, the chart, and the hosts by requests" width="662" height="587">
 
-Click a row in **Bots** to narrow everything to that category, keeping the
-chosen host: the tiles, the chart, the host totals and the other lists then
-count only, say, AI crawlers, and the status line says so. The Bots list
-itself stays whole, so another category is one click away; the chosen row
-again lifts it.
+### Choose a span and a host
 
-Under the chart, ranked lists for the chosen hosts: **Hosts** by requests, visits,
-data, errors or stopped requests; **Pages**, the most requested paths or those answered with
-an error, each marked with its host when all are shown; **Countries**;
-**Bots** by Cloudflare's categories; **Responses** by status, cache status
-or content type; **Clients** by browser, system or device. A Host header
-that carries a port (scanners try Cloudflare's other ports) counts with its
-host. Busy spans are sampled by Cloudflare and the status line says
-"sampled". The window refreshes every minute while it is open, and the
-daemon keeps each answer a minute, so several windows cost one query.
-Switching is quick because answers are kept twice over: the window paints
-a view it has shown before from memory and then brings it up to date, and
-the daemon, behind an All Hosts answer, fetches the view of each host that
-had traffic, so the first switch to a host needs no trip to Cloudflare.
-An answer up to 15 minutes old is shown at once while a fresh one is
-fetched (the status line says "Updating…").
-The same numbers are `GET /v1/cloudflare/analytics?range=24h&host=…&bot=…`.
+- **Span**: click **1 Hour**, **24 Hours**, **7 Days** or **30 Days**.
+- **Host**: pick one in the pop-up, or **All Hosts**. Clicking a host's row
+  in **Hosts** picks it too; click it again for all of them.
+
+The pop-up lists each host beside its icon, the one My Apps shows: the app's
+touch icon or favicon, the homepage's for the names that redirect to it, and
+a diamond for an app that declares none.
+
+### What the tiles count
+
+| Tile | Counts |
+| --- | --- |
+| **Requests** | Every request that reached Cloudflare's edge. |
+| **Stopped** | The requests Cloudflare challenged or blocked itself. |
+| **Visits** | Cloudflare's visits: a page view that came from another site or none. |
+| **Data served** | How much data was sent in answer. |
+| **Verified bots** | The share of requests from bots Cloudflare has verified. |
+| **Server errors** | The answers with a 5xx status. |
+
+Each tile also shows its change against the span before it. **30 Days** has
+no span before: Cloudflare keeps these numbers 31 days.
+
+### Stopped requests
+
+**Stopped** is what Cloudflare's security answered itself: a challenge page
+or a block, from a rule of your own in the zone's WAF, a managed rule or the
+browser check.
+
+Those requests never reached your host, but they are in **Requests** too,
+since Cloudflare counts every request that reached its edge. A crawler that
+keeps hammering a challenge shows as a Requests line with a Stopped line
+close under it. **Hosts** can rank by Stopped, to see which name draws them.
+
+### Read the chart
+
+The chart draws requests, visits and stopped requests over the span. Point
+at it to read one point. The last points, which Cloudflare is still
+counting, are drawn pale.
+
+| Span | A point is |
+| --- | --- |
+| **1 Hour** | a minute |
+| **24 Hours** | 15 minutes |
+| **7 Days** | an hour |
+| **30 Days** | a day |
+
+The chart follows the view picked in **Hosts**. **Requests** and **Visits**
+draw requests, visits and stopped requests together. **Data**, **Errors**
+and **Stopped** draw data served, server errors or stopped requests alone,
+on a scale of their own, and the reading under the pointer says the same.
+
+### The ranked lists
+
+Under the chart are ranked lists for the chosen hosts. The buttons beside a
+list's name pick its view.
+
+| List | Ranks |
+| --- | --- |
+| **Hosts** | The published names, by **Requests**, **Visits**, **Data**, **Errors** or **Stopped** requests. |
+| **Pages** | The most requested paths (**Top**), or those answered with an error, status 400 and up (**Errors**). Each is marked with its host when all hosts are shown. |
+| **Countries** | Where the requests came from. |
+| **Bots** | Verified bots, by Cloudflare's categories. |
+| **Responses** | Answers by **Status**, by **Cache** status or by content type (**Types**). |
+| **Clients** | Requests by browser, system or device: **Browsers**, **Systems**, **Devices**. |
+
+A Host header that carries a port (scanners try Cloudflare's other ports)
+counts with its host.
+
+### Narrow to one kind of bot
+
+Click a row in **Bots** to narrow everything to that category, keeping the
+chosen host. The tiles, the chart, the host totals and the other lists then
+count only, say, AI crawlers, and the status line says so.
+
+The Bots list itself stays whole, so another category is one click away.
+Click the chosen row again to lift the filter.
+
+### How fresh the numbers are
+
+- The window refreshes every minute while it is open, and the daemon keeps
+  each answer a minute, so several windows cost one query.
+- Switching is quick because answers are kept twice over. The window paints
+  a view it has shown before from memory and then brings it up to date.
+- The daemon, behind an All Hosts answer, fetches the view of each host that
+  had traffic (the twelve busiest at most), so the first switch to a host
+  needs no trip to Cloudflare.
+- An answer up to 15 minutes old is shown at once while a fresh one is
+  fetched; the status line says "Updating…".
+- Busy spans are sampled by Cloudflare, and the status line says "sampled".
+
+### The same numbers for an agent
+
+`GET /v1/cloudflare/analytics?range=24h&host=…&bot=…` returns what the
+window shows: the totals, those of the span before, the chart's points,
+every host's totals and the ranked lists.
+
+- `range` is `1h`, `24h`, `7d` or `30d`.
+- `host` is one published name; leave it out for all of them.
+- `bot` is one of Cloudflare's verified bot categories, such as
+  `AI Crawler`; leave it out for all traffic.
+
+The Agent Skill Guide (**Help → Agent Skill Guide…**) describes the answer
+field by field.
 
 ## Workspace and files
 
-The **Workspace** is `~/.exe/workspace` on this machine: a shared folder
-where you, agents and apps exchange files. The desktop icon opens a Finder
-view — double-click text files to edit them in place, images to view them,
-web pages (`.html`) to see them rendered in a window of their own (the page
-runs sandboxed, apart from the desktop; the right-click menu's **Open in
-New Window** shows it in a browser window instead, and **Edit Source**
-opens the text). A movie (`.mp4`, `.mov`, `.webm`) or a sound (`.m4a`,
-`.mp3`, `.wav` and friends) opens in a QuickTime-style player window: play,
-scrub, step a frame at a time, click the speaker to mute. The movie streams
-from the daemon, so a long clip starts at once and scrubbing seeks instead
-of downloading. The **Artifacts** folder is where the agents
-publish the pages they make — Claude's claude.ai artifacts land there.
-Type a name's first letters to select it, as in the classic Finder: `a`
-jumps to the first name starting with "a", and letters typed quickly
-spell more of it (`ar` reaches Artifacts). The arrow keys move the
-selection an icon left or right, or a row up or down. The same keys work
-in My Apps and the Icon Editor gallery.
-Right-click for Get Info and Download; right-click a window's empty space
-for New Folder, New Text File and Upload; **File → Upload to Workspace…**
-brings files in from this browser. Files can also be dragged from your
-computer onto the desktop (lands in the Workspace root), onto a Finder
-window (lands in its folder), onto a folder icon (lands in that folder),
-or onto a Claude Code, Codex or Terminal window (lands in the root, and
-the path is typed into the window).
-New files brought in this way are announced on the Newsfeed, so every desk
-in the mesh sees them arrive; overwriting an existing file stays quiet.
+The **Workspace** is one folder on this machine, `~/.exe/workspace`, that
+you, your coding agents and your apps all read and write. It is where a
+file changes hands: what one of you puts there, the others find. Its icon
+on the desktop opens it in a Finder window.
+
+### What the Workspace is for
+
+For you:
+
+- **Bring a file to this machine.** Drag it from your computer onto the
+  desktop, and it is in the Workspace.
+- **Hand a file to an agent.** Drop a screenshot, a log or a document on
+  a Claude Code or Codex window. It lands in the Workspace, and its path
+  is typed into the window for the agent to read.
+- **Look at what an agent made.** A text file, a picture, a web page, a
+  movie or a sound opens in a window of its own on the desktop.
+- **Take a file away.** **Download** saves a Workspace file to the
+  computer your browser runs on.
+- **Keep the same files on every desk.** Joined desks sync their
+  Workspace files; see
+  [Joining desks together](https://exe.v2core.com/docs/using/joining-desks-together).
+
+For a coding agent, such as Claude Code or Codex:
+
+- **A plain folder.** An agent that works on this machine reads and
+  writes `~/.exe/workspace` as it does any folder. What it leaves there,
+  you open from the Workspace window.
+- **Where its sessions begin.** The desktop starts Claude Code and Codex
+  in this folder. The one exception is a machine that holds exe's own
+  source at `/www/exe`: there they start in that folder.
+- **The files you give it.** A file dropped on its window arrives here,
+  and the path typed into the window is the file's path on this machine.
+- **Somewhere to show its work.** A web page, a picture or a movie it
+  saves here opens on your desktop with a double-click.
+
+Apps use the folder too: Writer edits any Markdown file in it, and Easel
+saves its pictures there. See
+[Apps](https://exe.v2core.com/docs/using/apps).
+
+### Open the Workspace
+
+Double-click the **Workspace** icon on the desktop; on a phone, tap it.
+The window shows the folder's contents as icons. The line under the title
+bar says how many items there are and how much disk space is free.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreigcssoqlxnaybr7d7yjusstyejrfd4utagcwqzonbjzhadtwcbs4m" alt="The Workspace window with folders, a picture, a movie, a sound and text files" width="522" height="266">
 
+Each folder opens in a window of its own, as in the classic Finder. Names
+that begin with a dot are not shown.
+
+A line of your desktop menu can open the Workspace or one of its folders;
+see
+[Desktop context menu](https://exe.v2core.com/docs/using/desktop-context-menu).
+
+### What a double-click opens
+
+| The item | What opens |
+|---|---|
+| A folder | A window of its own. |
+| A text file under 1 MB: plain text, Markdown, JSON, source code, logs, `.svg` | The text editor. |
+| A picture: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.ico`, `.avif` | A picture window. |
+| A web page: `.html`, `.htm` | The page, rendered in a window of its own. |
+| A movie: `.mp4`, `.m4v`, `.mov`, `.webm` | A QuickTime-style player window. |
+| A sound: `.m4a`, `.mp3`, `.wav`, `.aac`, `.ogg`, `.oga`, `.flac` | The same player, without a picture. |
+| Anything else | A new browser tab. |
+
+The text editor edits the file in place and saves as you type.
+
+A web page runs sandboxed, apart from the desktop: its scripts run, and
+it cannot reach the desktop's API or its token. The right-click menu's
+**Open in New Window** shows it in a browser window instead, and
+**Edit Source** opens its text in the editor.
+
+In the player you can play, scrub, step a frame at a time, and click the
+speaker to mute. The movie streams from the daemon, so a long clip starts
+at once and scrubbing seeks instead of downloading.
+
+### Select with the keyboard
+
+Type a name's first letters to select it, as in the classic Finder: `a`
+jumps to the first name starting with "a", and letters typed quickly
+spell more of it (`ar` reaches a folder named Artifacts).
+
+The arrow keys move the selection an icon left or right, or a row up or
+down. The same keys work in My Apps and the Icon Editor gallery.
+
+### Right-click a file or a folder
+
+| Item | What it does |
+|---|---|
+| **Open** | The same as a double-click. |
+| **Open in New Window** | Shows a web page in a browser window. Web pages only. |
+| **Edit Source** | Opens a web page's text in the editor. Web pages under 1 MB only. |
+| **Move To Trash** | Moves the item into the Workspace's hidden `.Trash` folder. |
+| **Get Info** | Shows the item's kind, size, place and date modified, with a **Download** button. |
+| **Duplicate** | Makes a copy beside the file. Files only. |
+| **Download** | Saves the file to the computer your browser runs on. Files only. |
+
+An item moved to the Trash is not deleted. It sits in
+`~/.exe/workspace/.Trash`, under its name with a number in front, and the
+desktop's **Trash** window does not list it. To restore it, move it out
+of that folder.
+
+Right-click a window's empty space for **New Folder…**,
+**New Text File…** and **Upload…**. A new name cannot begin with a dot or
+hold a slash.
+
+### Bring files in, take files out
+
+Drag files from your computer onto any of these:
+
+- The desktop: they land in the Workspace root.
+- A Workspace window: they land in that window's folder.
+- A folder icon in a Workspace window: they land in that folder.
+- A Claude Code, Codex or Terminal window: they land in the root, and
+  each path is typed into the window. See
+  [Claude Code, Codex and Terminal](https://exe.v2core.com/docs/using/claude-code-codex-and-terminal).
+
+Two menu items bring files in from this browser as well.
+**File → Upload to Workspace…** puts one file in the root, and
+**Upload…**, in the menu of a window's empty space, puts files in that
+window's folder.
+
+A file can be 10 MB at most, and a file with the name of one already
+there replaces it. Folders cannot be dragged in; drag their files.
+
+New files brought in this way are announced on the Newsfeed, so every desk
+in the mesh sees them arrive; overwriting an existing file stays quiet.
+
+To take a file out, right-click it and choose **Download**.
+
+### Files an agent writes
+
+A Workspace window lists its folder when it opens, and again when a file
+changes through the desktop, an app or a joined desk. A file an agent
+wrote straight into the folder shows the next time the folder is opened:
+double-click the folder's icon again.
+
+Web pages are worth a folder of their own. The **Artifacts** folder is
+where agents publish the pages they make: a copy of each claude.ai
+artifact Claude publishes, for one. exe does not make that folder or fill
+it by itself, so tell your agent to keep its pages there.
+
+Between joined desks a file travels if it is 10 MB or less. A bigger one
+that an agent put in the folder stays on this machine, and so does
+everything whose name begins with a dot, the Trash included. An empty
+folder does not travel until it holds a file.
+
+### The Workspace over HTTP
+
+The desktop and the apps reach the Workspace through the daemon's API. A
+script, or an agent on another machine, can use the same calls. The Agent
+Skill Guide tells an agent to leave them alone unless you ask: an agent on
+this machine works in the folder itself.
+
+| Call | What it does |
+|---|---|
+| `GET /v1/workspace` | Lists every file with its path, size and date modified. |
+| `GET /v1/workspace?dir=<folder>` | Lists one folder: its files and its folders. An empty `dir` is the root. |
+| `GET /v1/workspace/<path>` | Returns the file. |
+| `PUT /v1/workspace/<path>` | Stores the request body as that file, 10 MB at most, and makes its folders as needed. |
+| `POST /v1/workspace/<path>` with `{"to": "<new path>"}` | Moves or renames a file or a folder. |
+| `POST /v1/workspace/<path>?mkdir=1` | Makes a folder. |
+| `DELETE /v1/workspace/<path>` | Deletes the file. |
+
+Paths are relative to the Workspace, and one that leaves it is refused.
+When `api_token` is set, each call needs the
+`Authorization: Bearer <token>` header; see
+[Configuration](https://exe.v2core.com/docs/using/configuration).
+
 ## Apps
 
-Built-in app IDs use lowercase names (`macos9`, `hub`, `bluepencil`); their
-display titles come from `app.json`. Older links and saved settings still
-work. Existing app data keeps its original storage and sync namespace.
+An app is a small program that runs in a window of the desktop and has an
+icon of its own there. Some apps are built into exe, a set of extra ones
+comes with the installer, and any other is a folder holding two files.
+That makes an app a good thing to ask a coding agent to build for you.
 
-Icons beyond the built-ins are desktop apps: folders in `~/.exe/apps`, each
-just an `app.json` plus an `index.html`, served straight from disk — edit
-one and its open windows pick up the change by themselves, no rebuild. Each app gets private storage under
-`~/.exe/appdata` plus the shared Workspace. Apps are a good thing to ask a
-coding agent to build for you.
+### What apps are for
 
-An app window keeps up with its app: when the app's files change, on this
-desk or while a tablet slept, each open window of it reloads once you are
-not using it — at once in a tab you are not looking at, after a few quiet
-seconds for a closed window, after half a minute without a key or a click
-for one on screen — and never while it holds words you have typed and not
-saved. It comes back on the file it last had open. Saves are guarded too:
-a window still on older code cannot take back a note, a to-do or a field
-that newer ones wrote.
+For you:
 
-Two apps come with exe-planet, the site builder that runs beside exe (its
-`apps` folder goes in `apps_dirs`). Writer edits any Markdown file in the
-Workspace: the text on the left, the page it makes on the right, saved as
-you type; an edit made elsewhere reloads a clean file and leaves an unsaved
-one alone. Planet is three columns like the Mac app: your sites, the chosen
-site's posts, pages and drafts as a list view, and the chosen article's
-built page. New Post and Edit open the article in Writer; right-click a
-site or an article for the rest. A to-do list in a post (`- [ ] words`)
-can be ticked in that page: click an item's box and its line in the
-Markdown flips, on a site that wears Paper, Platinum or Sepia. Publish… is where a site leaves this
-node: expose it under a name in your domain (the same route, DNS record
-and tunnel rule a VM's Expose makes), or send every changed build to
-IPFS under a key this node keeps, or both. With both on, each new CID
-also goes to the name's DNSLink record (`_dnslink.<name>`), so IPFS
-gateways find the site by its name too. Both are off until you turn
-them on, and Export… bundles the site with its key for another node.
+- **Tools on the desktop.** Notes, a to-do list, tide charts, a
+  proofreader, a dictionary: each opens in a window beside your VMs and
+  terminals, and fills the screen on a phone.
+- **Data that stays yours.** Each app keeps its data in private storage
+  on this machine, and joined desks sync it.
+- **Windows that keep up.** When an app's files change, its open windows
+  reload by themselves once you are not using them.
+- **An app made to order.** When no app does what you want, ask an agent
+  for one. It is two files in a folder, and nothing has to be built or
+  restarted.
+- **Whole programs on the desk.** A program that runs beside exe can
+  bring apps of its own: Planet and Writer publish a site, and Easel
+  sets Claude painters to work.
+
+For a coding agent, such as Claude Code or Codex:
+
+- **A whole app is a small job.** An app is a folder with an `app.json`
+  and an `index.html`: plain HTML, CSS and JavaScript.
+- **No build and no restart.** The daemon serves the folder straight
+  from disk, and each edit reaches the open windows by itself.
+- **Storage is provided.** An app saves its own data through
+  `/v1/apps/<Name>/data/<file>`, and files you should see go to the
+  Workspace.
+- **The conventions are written down.** The
+  [exe-apps](https://github.com/livid/exe-apps) repository holds the
+  extra apps and, in its `README.md` and `CLAUDE.md`, how an app is laid
+  out, how it talks to the desktop and how it saves.
+
+### Open an app
+
+Double-click an app's icon on the desktop; on a phone, tap it. The
+factory desktop menu lists the same apps under **Apps**, and a line of
+your own there can open one; see
+[Desktop context menu](https://exe.v2core.com/docs/using/desktop-context-menu).
+
+### The built-in apps
+
+These are part of exe itself, and each has a chapter of its own.
+
+| App | ID | What it is | Chapter |
+|---|---|---|---|
+| **Mac OS 9** | `macos9` | A Power Mac G4 running Mac OS 9.2.2. | [Mac OS 9](https://exe.v2core.com/docs/using/mac-os-9) |
+| **Hub** | `hub` | A small public feed shared between exe nodes. | [The Hub](https://exe.v2core.com/docs/using/the-hub) |
+| **Blue Pencil** | `bluepencil` | A proofreader that runs on your own model. | [Blue Pencil](https://exe.v2core.com/docs/using/blue-pencil) |
+| **Dict** | `dict` | A dictionary from English and five other languages into Chinese, Japanese or Korean. | [Dict](https://exe.v2core.com/docs/using/dict) |
+| **Analytics** | `analytics` | The traffic Cloudflare's edge saw for the hostnames this node publishes. | [Analytics](https://exe.v2core.com/docs/using/analytics) |
+| **Welcome** | `welcome` | exe in six cards. It has no desktop icon: choose **Help → Welcome…**. | [The desktop](https://exe.v2core.com/docs/using/the-desktop) |
+
+Built-in app IDs use lowercase names; their display titles come from
+`app.json`. Three of them had other IDs once (`Mac OS 9`, `Hub`,
+`BluePencil`). Older links and saved settings still work, and existing
+app data keeps its original storage and sync namespace.
+
+### The extra apps
+
+The installer offers a set of extra apps: Notes, Paint, Tides, Todo,
+Weather and World Clock, from
+[exe-apps](https://github.com/livid/exe-apps). Say yes and they go into
+`~/.exe/apps`.
+
+An update brings their new versions, except for an app you edited or
+removed; see [Updating](https://exe.v2core.com/docs/using/updating).
+
+### Where an app lives
+
+Icons beyond the built-ins are desktop apps: folders in `~/.exe/apps`,
+each just an `app.json` plus an `index.html`, served straight from disk.
+The folder's name is the app's ID.
+
+`apps_dirs` in `~/.exe/config.json` names more folders to look in. It is
+on the Daemon tab of **Configuration**; see
+[Configuration](https://exe.v2core.com/docs/using/configuration). That is
+how a program beside exe adds its apps.
+
+When two apps have the same name, the one in `~/.exe/apps` wins over one
+in `apps_dirs`, and either wins over a built-in app.
+
+### Have an agent build an app
+
+1. Tell an agent that works on this machine what the app should do. The
+   **Claude Code** and **Codex** windows are such agents.
+2. Have it make a folder for the app in `~/.exe/apps`, with an `app.json`
+   and an `index.html` in it.
+3. Choose **File → Refresh**. The new app's icon appears on the desktop.
+4. Open the app. From then on, each change the agent makes shows in the
+   open window by itself.
+
+The extra apps in the same folder are worked examples, and exe-apps holds
+the conventions.
+
+An `app.json` looks like this:
+
+```json
+{
+  "title": "Tides",
+  "icon": "icon.svg",
+  "window": { "width": 620, "height": 420, "grow": true }
+}
+```
+
+`title` is the name you see, and without one the folder's name is used.
+`icon` is a picture in the folder. `window` is the size the window opens
+at, with `grow` true when the app draws a resize corner of its own.
+
+### Where an app keeps its data
+
+Each app gets private storage under `~/.exe/appdata`, in a folder of its
+own, plus the shared Workspace. The private storage is for the app's own
+state, at most 10 MB a file. The Workspace is for files you want to see
+and use elsewhere; see
+[Workspace and files](https://exe.v2core.com/docs/using/workspace-and-files).
+
+Joined desks sync app data; see
+[Joining desks together](https://exe.v2core.com/docs/using/joining-desks-together).
+The lists that Notes, Todo, World Clock and Weather keep, and Blue
+Pencil's drafts, merge record by record, so edits made on two desks at
+once both survive. Any other file syncs whole.
+
+### An open window keeps up with its app
+
+When the app's files change, on this desk or while a tablet slept, each
+open window of it reloads once you are not using it:
+
+- At once in a tab you are not looking at.
+- After a few quiet seconds for a closed window, which is hidden and
+  still loaded.
+- After half a minute without a key or a click for a window on screen.
+- Never while it holds words you have typed and not saved.
+
+The window comes back on the file it last had open.
+
+Saves are guarded too: a window still on older code cannot take back a
+note, a to-do or a field that newer ones wrote.
+
+### Writer and Planet
+
+Two apps come with [exe-planet](https://github.com/livid/exe-planet), the
+site builder that runs beside exe. Its `apps` folder goes in `apps_dirs`,
+and its daemon is the service `planet`.
+
+**Writer** edits any Markdown file in the Workspace: the text on the
+left, the page it makes on the right, saved as you type. An edit made
+elsewhere reloads a clean file and leaves an unsaved one alone.
+
+**Planet** is three columns like the Mac app:
+
+- Your sites.
+- The chosen site's posts, pages and drafts, as a list view.
+- The chosen article's built page.
+
+**New Post** and **Edit** open the article in Writer; right-click a site
+or an article for the rest.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreiawlo2odksnfrqdqi4txaanzhb4b2cq6enapldb6a3e3uusvlj4ny" alt="The Planet window: sites on the left, the chosen site's posts in the middle, and the built page on the right" width="762" height="467">
 
-The same sheet can put an exposed site on an exe hub. Turn on **Announce**
-and give the hub's address: this node invites the site's own key there
-(the site's key is also its IPNS name and a Solana address), and from then
-on each post you publish — a draft moved into Posts — announces itself on
-the hub under the site's name, with a link back. Under the post on your
-site, a Reply window and a Replies window show the answers it gets, live;
-a reader replies with a Solana wallet that meets the hub's gate, signing
-a message and never a transaction. Posts published before you turned it
-on stay put; right-click one and choose **Announce on Hub** to send it.
+A to-do list in a post (`- [ ] words`) can be ticked in that page: click
+an item's box and its line in the Markdown flips. This works on a site
+that wears Paper, Platinum or Sepia.
 
-Easel comes with exe-easel, which runs Claude painters at an oil paint
-simulator beside exe (its `apps` folder goes in `apps_dirs`, its daemon is
-the service `easel`).
+### Publish a Planet site
+
+**Publish…** is where a site leaves this node. Everything on the sheet is
+off until you turn it on.
+
+- **On the web.** Expose the site under a name in your domain. It gets
+  the same route, DNS record and tunnel rule a VM's Expose makes; see
+  [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web).
+- **On IPFS.** Send every changed build to IPFS under a key this node
+  keeps.
+- **Both.** Each new CID then also goes to the name's DNSLink record
+  (`_dnslink.<name>`), so IPFS gateways find the site by its name too.
+
+**Export…** bundles the site with its key for another node.
+
+### Announce posts on a hub
+
+The same sheet can put an exposed site on an exe hub; see
+[The Hub](https://exe.v2core.com/docs/using/the-hub).
+
+Turn on **Announce** and give the hub's address. This node invites the
+site's own key there; the site's key is also its IPNS name and a Solana
+address.
+
+From then on each post you publish, which is a draft moved into Posts,
+announces itself on the hub under the site's name, with a link back.
+
+Under the post on your site, a Reply window and a Replies window show the
+answers it gets, live. A reader replies with a Solana wallet that meets
+the hub's gate, signing a message and never a transaction.
+
+Posts published before you turned Announce on stay put. Right-click one
+and choose **Announce on Hub** to send it.
+
+### Easel
+
+Easel comes with [exe-easel](https://github.com/livid/exe-easel), which
+runs Claude painters at an oil paint simulator beside exe. Its `apps`
+folder goes in `apps_dirs`, and its daemon is the service `easel`.
+
 A studio is a folder holding an easel, a box of tubes and a brief.
 **New Studio…** makes one, and **Start Painter…** sets a Claude painter
 to work there. The painter is Claude Code with Opus 5.5 unless you pick
-another model, and it is given nothing but the easel. It mixes its paint
-from the tubes and lays it on with simulated brushes, a chunk of Lua at a
-time. It looks at the canvas between chunks and keeps a journal, and it
-stops when it is happy with the picture. The window follows it live:
-**Canvas** shows its latest look, **Session** its words, chunks and looks
-as they come, and **Journal** and **Code** its notes and its log. The log
-is the painting: replaying it paints the same canvas. When a painter is
-done, the picture finishes itself a couple of minutes later: it dries
-right through, is varnished and lets its paint crack. A **Replay** movie
-of it being painted again follows. Both are made again whenever the
-painting changes. **Finish…** and **Replay…** are there only to redo
-them another way: no varnish, a longer movie. **Save to Workspace** puts
-the picture and the movie in the Workspace's `Easel` folder. While no
-painter is at work, the **Easel** tab paints by hand, from the same Lua.
+another model, and it is given nothing but the easel.
+
+The painter mixes its paint from the tubes and lays it on with simulated
+brushes, a chunk of Lua at a time. It looks at the canvas between chunks
+and keeps a journal, and it stops when it is happy with the picture.
 
 <img src="https://hub.v2core.com/v1/embed/bafybeidqcyzdmsmky5tftee7ddeyinaqdcevgaim74prfjma2cpxvl22na" alt="The Easel window: its studios down the left, and on the Canvas tab a finished painting of an open fridge lighting a dark kitchen" width="762" height="497">
 
+The window follows the painter live, a tab for each view:
+
+| Tab | What it shows |
+|---|---|
+| **Canvas** | The painter's latest look at the canvas. |
+| **Session** | Its words, chunks and looks as they come. |
+| **Journal** | Its notes. |
+| **Code** | Its log. The log is the painting: replaying it paints the same canvas. |
+| **Easel** | An easel to paint at by hand, from the same Lua, while no painter is at work. |
+
+When a painter is done, the picture finishes itself a couple of minutes
+later: it dries right through, is varnished and lets its paint crack. A
+**Replay** movie of it being painted again follows. Both are made again
+whenever the painting changes.
+
+**Finish…** and **Replay…** are there only to redo them another way: no
+varnish, a longer movie. **Save to Workspace** puts the picture and the
+movie in the Workspace's `Easel` folder.
+
 ## Joining desks together
 
-**Special → Join…** pairs this exe with another one (say, your laptop's)
-using a short one-time code. Joined desks sync continuously: app data,
-Workspace files and the Newsfeed flow both ways, with conflicting edits
-resolved automatically and the losing copy preserved next to the winner.
+Joining pairs this exe with another one (say, your laptop's). From then on
+the two share what their apps save, their Workspace files and their
+Newsfeed: a note written on one is on the other when you sit down at it.
 
-The **Newsfeed** is the shared timeline of the mesh: VMs created and
-deleted, nodes joining, sync conflicts — and agents can post to it, so
-finished work or problems show up on every desk.
+### What joining gives you
+
+Joined nodes sync continuously, both ways:
+
+- **App data.** What the apps save: your notes, to-dos, settings and the
+  rest.
+- **Workspace files**, up to 10 MB each. A file an agent writes into the
+  Workspace on one node reaches the others too.
+- **The Newsfeed.** One timeline of what happened on every node.
+
+VMs, the configuration and the Mac OS 9 disk are not synced: each stays on
+its own node. Joining gives the other node the sync and nothing more: not
+your VMs, your configuration or a shell.
+
+### Join two nodes
+
+The two nodes must be able to reach each other, as they can on one tailnet.
+
+1. On the other node, choose **Special → Join…**. In the **Node Sync**
+   dialog that opens, press **New Join Code**: the code works once, for ten
+   minutes. **This node**, above the code, shows that node's address.
+2. On this node, choose **Special → Join…**. Under **Join another node**
+   type the other node's address (its Tailscale IP, with `:port` after it if
+   its desktop is not on 7777) and the code, and press **Join**.
+
+**Joined nodes** lists each node with a lamp that is green while it answers,
+its address and how many milliseconds away it is. **Leave**, pressed twice,
+stops the sync with that node, which is told and drops this one too. Join a
+third node to either of two joined ones and all three sync with one another.
+
+### When two nodes change the same thing at once
+
+Lists the apps keep item by item, such as to-dos and notes, are merged item
+by item, so what either node added or changed survives. For any other file
+one copy wins and the other is saved in `~/.exe/sync-conflicts`, and the
+Newsfeed says so.
+
+### The Newsfeed
+
+The **Newsfeed** (**Windows → Newsfeed**, or its icon on the desktop) is the
+shared timeline of the mesh: VMs created and deleted, nodes joining, sync
+conflicts. Each item names the node it came from. Agents can post to it with
+`POST /v1/newsfeed`, so finished work or problems show up on every desk.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreiax4eitncarscykxoemj73yk2lakp4xpxy4r33mmzlzjeepsjr5fq" alt="The Newsfeed: a file added to the Workspace, a project published to GitHub, VMs created and deleted" width="432" height="372">
 
@@ -1605,234 +3339,632 @@ itself.
 
 ## Blue Pencil
 
-The **Blue Pencil** app is a proofreader that runs on your own model: type
-or paste into the top field and the checked version fills in below as you
-write — spelling, grammar, punctuation and capitalization corrected, the
-wording left alone. Every correction is marked in pencil blue; hover one to
-see what it replaced. **Copy** takes the corrected text, **Accept** puts it
-back into the top field, **Clear** empties it to start over (undo brings
-the text back). Click the model name in the status bar for the
-options: which backend the check runs on — the Ollama endpoint, or the
-ChatGPT subscription signed in under **Configuration → OpenAI** — a model
-of that backend just for this app (the ChatGPT list is what the
-subscription serves, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, …),
-how hard it thinks (Max by default — the best reading of the passage is
-worth the wait; Ollama's Off is fastest, but some models then think out
-loud in the answer; a level a ChatGPT model rejects runs at its default),
-and whether changes are marked at all.
+The **Blue Pencil** app is a proofreader that runs on your own model. Type
+or paste a draft into the top field and the checked version fills in below
+as you write: spelling, grammar, punctuation and capitalization corrected,
+the wording left alone.
+
+### What Blue Pencil is for
+
+- **A proofread before your words go out.** Write here, or paste what
+  you wrote elsewhere. Every change is marked, so you see what the
+  pencil did before you take it: **Accept** puts the checked text in
+  place of yours, and **Copy** takes it somewhere else.
+- **Your words stay yours.** The pencil is told to change only what is
+  wrong and to leave the rest as you wrote it.
+- **Private on a local model.** The check runs on the Ollama endpoint exe
+  is pointed at, so with a local model nothing you write leaves this
+  machine. A ChatGPT subscription is the other choice.
+- **Several drafts at once.** Each draft has a row down the left of the
+  window and is kept as you type. The pencil goes on checking the ones
+  you are not looking at.
+- **The same pencil in the Hub.** Once Blue Pencil works on this node,
+  the Hub app's composer is proofread in place as you write a post.
+
+An app, a script or a coding agent that talks to exe over HTTP gets one
+thing from it: the call Blue Pencil is built on, which asks the model one
+question and streams the answer.
+**Ask the model from an app or a script**, at the end of this chapter,
+describes it.
+
+### The window
 
 <img src="https://hub.v2core.com/v1/embed/bafkreid4jiirth7777z32dmbzjkeyrh6d6zywg77z4dtjmgwsxdoducgpa" alt="Blue Pencil: a draft in the top field, and below it the checked text with five corrections marked in blue" width="602" height="467">
 
-Drafts are listed down the window's left, the way a Claude Code or Codex
-window lists its sessions: one row per draft, newest first, titled by its
-first line. Click a row to open that draft; **New** starts another beside
-it. The pencil keeps working on the drafts you are not looking at — the
-open one first, then the rest — and while the window shows one draft, a
-pulsing green dot marks another still being checked and a black dot one
-it finished, waiting for you; hover a row for which. A row's contextual
-menu opens with when the draft was started, in grey, then starts a new
-draft, copies the row's text or its checked text, or deletes the draft
-after a dialog. An empty draft is dropped the moment you leave it, so the
-list never fills with blank rows — on a phone, where the column is a strip
-of tabs above the fields, Clear and then any other row is how a draft
-goes. Dragging the line between the list and the fields sets the list's
-width. Every draft is kept, checked paragraphs included: reload the
-window, or open it on another desk sharing this node, and the column
-comes back as it was without asking the model again; which draft is open
-is this browser's own. With a draft open on two desks at once, the text
-belongs to the desk you type in: a check that finishes on the other desk
-adds its corrections and never changes your words, and text that does
-arrive from another desk waits for a word still being composed (an IME, a
-phone keyboard) and leaves the caret where it was. Words typed into a
-draft that another desk has changed since this window last read it — on
-waking, or before a slow read comes back — are never traded for that
-desk's: the draft takes the other desk's version, what you typed goes
-into a draft of its own at the top of the column, and a note says so.
+Your drafts are listed down the left, with **New** under them. Beside
+the list, the top field is where you write, and the field under it shows
+the checked text. **Clear**, **Copy** and **Accept** are in a row below
+the two fields.
+
+The status line at the foot says how the check stands: **Checking…**,
+then **No changes** or the number of changes. Its right end names the
+model and its thinking level. Click that name for the options.
+
+### Check a draft
+
+1. **Type or paste** into the top field.
+2. **Pause.** Once you have stopped typing for 0.7 seconds the pencil
+   starts on what you changed. Command-Return or Control-Return in the
+   field starts it at once.
+3. **Watch the lower field fill in**, a paragraph at a time. A paragraph
+   the pencil has not reached yet stands in grey as you typed it, and
+   the one it is on is written out as the model answers.
+4. **Take the result.** **Accept** puts the checked text into the top
+   field, and **Copy** puts it on the clipboard.
+
+| Button | What it does |
+|---|---|
+| **Clear** | Empties the top field to start over. |
+| **Copy** | Copies the checked text: the paragraphs checked so far as corrected, the rest as you typed them. |
+| **Accept** | Puts that same text into the top field, in place of what you typed. |
+
+**Clear** and **Accept** go in as typing does, so Undo brings your text
+back. **Copy** and **Accept** stay grey until a paragraph has been
+checked.
+
+Blank lines separate the paragraphs. A draft of more than 20,000
+characters is not checked, and the status line says so.
+
+### Read the marks
+
+- **Words on pale blue, with a blue rule under them,** are what the
+  pencil wrote. Hover over them to see what they replaced, or that they
+  were added.
+- **Words struck out in red** are what the pencil removed, with nothing
+  put in their place.
+- Everything else is as you typed it.
+
+The status line counts the changes. To see the corrected text with no
+marks at all, turn off **Mark changes in the checked text** in the
+options.
+
+### What the pencil leaves alone
+
+The model is told to correct every error of spelling, grammar,
+punctuation and capitalization, and to leave alone:
+
+- **Your words**, their meaning, tone and voice. A sentence that is
+  already correct is not rewritten, and nothing is shortened, expanded
+  or reordered.
+- **Line breaks, Markdown, code, URLs, names and numbers.**
+- **The language.** A passage is corrected in its own language, never
+  translated.
+- **Questions and instructions in the draft.** The passage is a document
+  to proofread, not a message to the model, so it answers and follows
+  none of them.
+
+### Keep several drafts
+
+The column down the left lists your drafts, the way a Claude Code or
+Codex window lists its sessions: one row per draft, newest first, titled
+by its first line.
+
+- Click a row to open that draft.
+- **New** starts another beside it.
+- An empty draft is dropped the moment you leave it, so the list never
+  fills with blank rows.
+- Drag the line between the list and the fields to set the list's
+  width.
+
+The pencil keeps working on the drafts you are not looking at: the open
+one first, then the rest. While the window shows one draft, a mark on
+another row says how that one stands. Hover a row for which.
+
+| Mark on a row | What it means |
+|---|---|
+| A pulsing green dot | The pencil is still checking that draft. |
+| A black dot | The pencil finished it, and it is waiting for you. |
+
+Right-click a row for its contextual menu. It opens with when the draft
+was started, in grey, and then offers:
+
+- **New Draft**, which starts a new draft;
+- **Copy Text**, which copies the row's text as you typed it;
+- **Copy Checked Text**, which copies its checked text;
+- **Delete…**, which deletes the draft after a dialog. The draft then
+  goes from every desk sharing this node.
+
+On a phone the column is a strip of tabs above the fields, with **New**
+at its right end. There, **Clear** and then any other row is how a draft
+goes.
+
+Every draft is kept, checked paragraphs included. Reload the window, or
+open it on another desk sharing this node, and the column comes back as
+it was without asking the model again. Drafts are app data, so desks
+joined to this one get them too, merged draft by draft; see
+[Joining desks together](https://exe.v2core.com/docs/using/joining-desks-together).
+Which draft is open, and how wide the list is, are this browser's own.
+
+### One draft on two desks
+
+With a draft open on two desks at once, the text belongs to the desk you
+type in.
+
+- A check that finishes on the other desk adds its corrections and never
+  changes your words.
+- Text that does arrive from another desk waits for a word still being
+  composed (an IME, a phone keyboard) and leaves the caret where it was.
+- Words typed into a draft that another desk has changed since this
+  window last read it — on waking, or before a slow read comes back —
+  are never traded for that desk's. The draft takes the other desk's
+  version, what you typed goes into a draft of its own at the top of the
+  column, and a note says so.
+
+### Choose the model
+
+Click the model name at the right end of the status line, and
+**Blue Pencil Options** opens:
+
+| Option | What it sets |
+|---|---|
+| **Check on** | The backend the check runs on: **Ollama**, the endpoint in Configuration, or **ChatGPT**, the subscription signed in under **Configuration → OpenAI**. |
+| **Model** | A model of that backend for this app alone. **Configured** keeps the one named in Configuration. |
+| **Thinking** | How hard the model thinks. **Max** is the default: the best reading of the passage is worth the wait. |
+| **Mark changes in the checked text** | Whether changes are marked at all. |
+
+- **Which models.** The list is what the backend serves. The ChatGPT
+  list is what the subscription serves: `gpt-5.6-sol`, `gpt-5.6-terra`,
+  `gpt-5.6-luna`, … For Ollama, the dialog's own advice is that a small
+  local model is plenty for proofreading and answers faster.
+- **Which level.** Ollama's **Off** is fastest, but some models then
+  think out loud in the answer. A level a ChatGPT model rejects runs at
+  its default. **Configured** keeps the effort set in Configuration.
+
+Another backend, model or thinking level is another opinion, so every
+draft is checked again, the open one first. The options are kept with
+the app's data: every desk on this node checks with them, and so does
+the Hub composer.
+
+### Where your text goes
 
 The check runs on the Ollama endpoint in **Configuration**
 (`ollama.base_url`, `ollama.model`) unless the options point it at
-ChatGPT, so with a local model nothing you write leaves this machine; on
-ChatGPT the passage goes to OpenAI. Text is checked a paragraph at a time
-and only the paragraph you touched is re-checked, which keeps long
-documents cheap. A draft open on two desks of this node — or in the Hub
-composer too — still costs one model call a paragraph: the desk you type
-in asks first, the others join its answer as it streams, and a paragraph
-edited mid-check has its call cancelled once every desk has let go of it.
+ChatGPT. With a local model nothing you write leaves this machine. On
+ChatGPT the passage goes to OpenAI.
+
+### What a check costs
+
+Text is checked a paragraph at a time, and only the paragraph you
+touched is checked again, which keeps long documents cheap.
+
+A draft open on two desks of this node — or in the Hub composer too —
+still costs one model call a paragraph. The desk you type in asks first,
+and the others join its answer as it streams. A paragraph edited
+mid-check has its call cancelled once every desk has let go of it.
+
+### If nothing is checked
+
+The status line says why, in red:
+
+- **The backend is not set up.** Ollama has no address, or nobody is
+  signed in to ChatGPT. Both are set in **Windows → Configuration**, the
+  sign-in on its **OpenAI** pane.
+- **No model is chosen** for the backend, here or in Configuration.
+  Click the model name and pick one.
+- **The draft is too long**: over 20,000 characters.
+- **The model failed**, or answered nothing. The line gives the reason,
+  and your next edit tries again.
+
+### In the Hub composer
 
 A working Blue Pencil also proofreads the **Hub** app's composer, in
-place: blue rules under what it would change and a floating menu to
-accept them (see The Hub). It runs on the settings chosen here.
+place: blue rules under what it would change, and a floating menu to
+accept them. It runs on the settings chosen here.
+[The Hub](https://exe.v2core.com/docs/using/the-hub) says how to use it.
 
-Any app can ask that model a question the same way: `POST
-/v1/chat/complete` with `{"system": …, "prompt": …}` streams the answer as
-newline-delimited JSON — `{"delta": …}` lines, then `{"done": true}` — and
-optional `model`, `effort` and Ollama `options` (`temperature`, `seed`, …)
-fields override the configuration for that one call. `"provider":
-"openai"` runs it on the ChatGPT subscription instead (`openai.model`,
-`openai.effort`, and the sign-in under Configuration → OpenAI). With
-`"share": true`, identical calls are one model call: whoever asks while
-another asker's call is running reads that answer from its start, the
-call ends when the last asker hangs up, and a finished answer is kept ten
-minutes for whoever asks next — those read `"shared": true` on the done
-line. Leave it off when every call should sample afresh.
+### Ask the model from an app or a script
+
+Any app can ask the model a question the way Blue Pencil does.
+`POST /v1/chat/complete` asks one question and streams the answer back,
+with no session, no tools and no history. The daemon holds the model's
+address and key, so the caller needs neither. Like every `/v1/` call it
+takes the daemon's API token where one is set.
+
+The body is JSON:
+
+| Field | What it is |
+|---|---|
+| `prompt` | The question. It cannot be empty, and holds up to 64 KB. |
+| `system` | The instructions the model answers under, up to 8 KB. |
+| `provider` | `"openai"` runs the call on the ChatGPT subscription: `openai.model`, `openai.effort`, and the sign-in under Configuration → OpenAI. Left out, the call runs on the Ollama endpoint. |
+| `model`, `effort` | Optional. They override the configuration for this one call. |
+| `options` | Optional. Ollama options such as `temperature` and `seed`, for this one call. |
+| `share` | Optional. `true` lets identical calls be one model call. |
+
+The answer is newline-delimited JSON: `{"delta": …}` lines, a fragment
+of the answer in each, then `{"done": true}` with the `model` and the
+`provider` that ran it.
+
+```
+$ curl -sN 127.0.0.1:7777/v1/chat/complete -d '{"prompt": "Say hello."}'
+{"delta":"Hello"}
+{"delta":"!"}
+{"done":true,"model":"…","provider":"ollama"}
+```
+
+A call that cannot start answers a JSON `{"error": …}` with an error
+status, and one that fails part way ends on an `{"error": …}` line.
+Closing the request cancels the model call.
+
+With `"share": true`, identical calls — the same backend, model, effort,
+prompts and options — are one model call:
+
+- Whoever asks while another asker's call is running reads that answer
+  from its start.
+- The call ends when the last asker hangs up.
+- A finished answer is kept ten minutes for whoever asks next.
+- An asker who joined a call, or read a kept answer, finds
+  `"shared": true` on the done line.
+
+Leave `share` off when every call should sample afresh. Blue Pencil
+itself asks with `share` on and Ollama's `temperature` at 0: proofreading
+wants the likeliest correction, and the same one each time.
 
 ## Dict
 
 The **Dict** app is a dictionary from English, German, French, Spanish,
-Italian or Latin into Chinese, Japanese or Korean. Pick the two languages
-in the pop-ups at the top (English → Chinese to begin with), type a word
-or a phrase and press Return (the circled × at the end of the field
-empties it). An entry gives the word's pronunciation in
-IPA (British and American for English, Classical and Ecclesiastical for
-Latin), the forms a learner needs (a German noun's article and plural, a
-Latin verb's principal parts), its senses, each with short equivalents and
-a definition, two example sentences with their translations — one simple,
-one more complex — its etymology, related words, and how it lives in
-literature, with a quotation or two when the model knows one word for word.
-Look up an inflected form (*ran*, *ging*, *amāvī*) and you get the
-headword's entry, with a line saying which form you typed. An obvious typo
-(*recieve*, *Weltschmertz*) is read as the word it stands for: the field
-takes the word, and the entry opens under a line saying what you typed,
-with **Look up … as typed** for the rare time the check is wrong. A typo
-never gets a page of its own; Dict remembers it, so the next time it goes
-straight to the word. A related word, or a suggestion offered for a
-lookup that is no word, looks itself up when clicked.
+Italian or Latin into Chinese, Japanese or Korean. A word it has not met
+is written by a model while you watch, and then kept, so the next time
+its entry opens at once.
+
+### What Dict is for
+
+For you:
+
+- **A whole entry for a word or a phrase.** Pronunciation, forms,
+  senses, examples, etymology, related words and the word in literature,
+  explained in Chinese, Japanese or Korean.
+- **It reads past your typing.** An inflected form opens the headword's
+  entry, and an obvious typo is read as the word it stands for.
+- **A dictionary that grows as you use it.** Every entry it writes is
+  kept on this node, and a word looked up before opens at once.
+- **No waiting at the window.** A new entry takes a minute or two, in a
+  tab of its own. Read on, look up more words or close the window: the
+  entry is still written and kept.
+- **On your phone.** Dict also opens on its own, outside the desktop,
+  and an iPhone can keep it on its home screen.
+
+For a script or a coding agent that talks to exe over HTTP:
+
+- **The same dictionary as JSON.** One call reads a kept entry, and
+  another has a missing one written and streams the work as it goes.
+  **Look words up over HTTP**, further down, has the calls.
+
+### A first lookup
+
+1. **Pick the two languages** in the pop-ups at the top. They begin at
+   English → Chinese.
+2. **Type a word or a phrase** and press Return, or click **Look Up**.
+   The circled × at the end of the field empties it.
+3. **Read the entry.** A word the dictionary keeps opens at once. One it
+   does not have yet is written while you watch, which takes a minute or
+   two.
+4. **Go on from there.** A related word in the entry looks itself up
+   when clicked.
+
+A lookup is one line of up to 80 characters. Capitals and extra spaces
+do not matter: *Serendipity* and *serendipity* are one entry.
+
+### What an entry holds
 
 <img src="https://hub.v2core.com/v1/embed/bafybeic5ko7amlhalzkaoqu5qw5lakdmvvvklalvghfilwridvi4yhxlvm" alt="Dict open on serendipity, English into Chinese: the pronunciations, the sense with its definition, a simple and a complex example, the etymology and related words" width="562" height="647">
 
-Entries are kept in the node's own dictionary, `~/.exe/dict.db` (SQLite),
-so a word looked up before opens at once. A word the dictionary does not
-have yet is written by Codex: an ephemeral session of the Codex CLI on
-this host (a thread of `codex app-server` that is never saved and never
-joins Codex's resume list) on `gpt-6-astra` at extra-high reasoning, run
-read-only in an empty folder with its shell tools, apps, plugins and hooks
-off. First it checks the spelling, which takes a few seconds: a typo of a
-word the dictionary already keeps opens that word's entry then and there,
-and a lookup that is no word at all stops with suggestions. The entry
-itself takes a minute or two, and you can watch it work: under the word,
-a line for each step as it comes, with the time it began — the session
-starting, the spelling checked, each pass of reasoning (Codex's one-line summary of it
-once there is one, how long it took at its end), the entry beginning —
-and from then on the entry itself, drawn as it is written, the page
-following the writing down while you stay at its foot. The status line
-counts the time and the characters written, and at the end the tokens
-the session spent. The session belongs to the daemon, not the window:
-close the window and the entry is still written and kept, and a window
-that asks for the word meanwhile — this one reopened, or another desk —
-joins it, every step so far included, rather than starting another. A
-lookup that is not a word of the source language comes back with
-suggestions, and nothing is kept. Changing the languages shows the word's entry
-for the new pair if the dictionary has one and otherwise waits for **Look
-Up**, so a stray change of pop-up never starts a session. A host without
-the Codex CLI still opens every entry it keeps, and answers the rest with
-**No Usable LLM Backend**; Codex must be signed in (`codex login`) for the
-rest to be written.
+Under the headword an entry gives, from the top:
 
-Each lookup has a tab, along the top of the page. A word the dictionary
-keeps opens at once in the tab you are on, in place of what was there. A
-word that has to be written opens in a tab of its own beside the entry
-you were reading, which stays as it was for the minute or two the
-writing takes; only a tab with no entry on it (a new one, or one whose
-lookup came to nothing) is written in. A lookup made while the tab you
-are on is still writing opens beside it too, and the first keeps writing.
-Looking up a word that a tab is already writing takes you to that tab.
-A tab writing out of sight wears the pulsing green dot, and one that
-finished while you looked elsewhere wears a black dot until you open it.
-There is no limit on how many words are written at once: each gets its
+| Part | What it gives |
+|---|---|
+| Pronunciation | The word in IPA: British and American for English, Classical and Ecclesiastical for Latin. |
+| Forms | The forms a learner needs, such as a German noun's article and plural, or a Latin verb's principal parts. |
+| **Definition** | The word's senses, each with short equivalents and a definition. |
+| **Examples** | Two sentences with their translations, one simple and one more complex. |
+| **Etymology** | Where the word comes from. |
+| **Related Words** | Words related to it, each of which looks itself up when clicked. |
+| **In Literature** | How the word lives in literature, with a quotation or two when the model knows one word for word. |
+
+A Chinese entry is written in Simplified Chinese.
+
+### Inflected forms and typos
+
+Look up an inflected form (*ran*, *ging*, *amāvī*) and you get the
+headword's entry, with a line saying which form you typed.
+
+An obvious typo (*recieve*, *Weltschmertz*) is read as the word it
+stands for:
+
+- The field takes the word, and the entry opens under a line saying what
+  you typed.
+- **Look up … as typed**, on that line, is for the rare time the check
+  is wrong.
+- A typo never gets a page of its own. Dict remembers it, so the next
+  time it goes straight to the word.
+
+### When it is not a word
+
+A lookup that is not a word of the source language comes back with
+suggestions, and nothing is kept. A suggestion looks itself up when
+clicked.
+
+### Watch an entry being written
+
+A word the dictionary does not have yet takes a few seconds for its
+spelling and a minute or two for the entry. You can watch the work:
+
+- **The steps.** Under the word, a line for each step as it comes, with
+  the time it began: the session starting, the spelling checked, each
+  pass of reasoning, the entry beginning. A pass of reasoning shows
+  Codex's one-line summary of it once there is one, and how long it took
+  at its end.
+- **The entry.** From then on the entry itself, drawn as it is written.
+  The page follows the writing down while you stay at its foot.
+- **The status line.** It counts the time and the characters written,
+  and at the end the tokens the session spent.
+
+The session belongs to the daemon, not the window. Close the window and
+the entry is still written and kept. A window that asks for the word
+meanwhile — this one reopened, or another desk — joins the session,
+every step so far included, rather than starting another.
+
+### Where entries come from
+
+Entries are kept in the node's own dictionary, `~/.exe/dict.db`
+(SQLite), so a word looked up before opens at once.
+
+A word the dictionary does not have yet is written by Codex: an
+ephemeral session of the Codex CLI on this host, on `gpt-6-astra` at
+extra-high reasoning.
+
+- The session is a thread of `codex app-server` that is never saved and
+  never joins Codex's resume list.
+- It runs read-only in an empty folder, with its shell tools, apps,
+  plugins and hooks off.
+- First it checks the spelling, which takes a few seconds. A typo of a
+  word the dictionary already keeps opens that word's entry then and
+  there, and a lookup that is no word at all stops with suggestions.
+- Then it writes the entry, which takes a minute or two.
+
+A host without the Codex CLI still opens every entry it keeps, and
+answers the rest with **No Usable LLM Backend**. Codex must be signed in
+(`codex login`) for the rest to be written.
+
+A lookup that goes wrong says why on its page, with **Try Again** under
+the reason. A session that has not answered after ten minutes is
+stopped.
+
+### Tabs
+
+Each lookup has a tab, along the top of the page. Where a lookup opens
+depends on whether its entry has to be written:
+
+- **A word the dictionary keeps** opens at once in the tab you are on,
+  in place of what was there.
+- **A word that has to be written** opens in a tab of its own beside the
+  entry you were reading, which stays as it was for the minute or two
+  the writing takes. Only a tab with no entry on it (a new one, or one
+  whose lookup came to nothing) is written in.
+- **A lookup made while the tab you are on is still writing** opens
+  beside it too, and the first keeps writing.
+- **A word that a tab is already writing** takes you to that tab.
+
+A tab you are not looking at can wear a mark:
+
+| Mark on a tab | What it means |
+|---|---|
+| A pulsing green dot | The tab is writing out of sight. |
+| A black dot | The tab finished while you looked elsewhere. The dot stays until you open it. |
+
+There is no limit on how many words are written at once. Each gets its
 session straight away, and the window follows all of them over a single
 connection, so a pile of writing tabs never ties up the browser. Tabs
 narrow as they crowd, and past that the bar scrolls sideways (a wheel, a
-trackpad or a finger). Changing the languages while the open tab writes
-opens the word in the new pair in a new tab. Closing a tab that is
+trackpad or a finger).
+
+The × on a tab closes it; a lone tab has none. Closing a tab that is
 writing does not stop its session: the entry is still written and kept.
+
 The window remembers its tabs, the open one and its languages in this
-browser; after a reload, a tab that was writing rejoins its session, and
-one whose session was lost to a daemon restart starts it again.
+browser, and a reload brings back up to twelve tabs. A tab that was
+writing rejoins its session, and one whose session was lost to a daemon
+restart starts it again.
 
-Dict also works on its own, outside the desktop: open `/apps/dict/` on
-your exe's address (`https://<host>.ts.net/apps/dict/` over Tailscale
-Serve) and, on an iPhone, **Share → Add to Home Screen**. It opens full
-screen with its own icon, the red dictionary on the desk's lavender,
-keeps clear of the notch, the home indicator and the blur iOS lays under
-the status bar of a home-screen app, fits itself above the keyboard so
-the field never slides off the top, and uses the API token
-the desktop saved in that browser, if your exe has one.
+### Change the languages
 
-`GET /v1/dict?from=en&to=zh&q=word` answers a kept entry (for a known
-typo its word's, with `corrected` saying what was typed; `exact=1` reads
-the text as typed), 404 when there is none. `POST /v1/dict` with `{"from",
-"to", "q"}` answers a kept entry at once as one `{"entry": …}` line of
-newline-delimited JSON, or writes it: `{"writing": true, …}` (its `q` the
-word the session writes), then the session's `{"step": {"t", "kind", …}}`
-lines (`session`, `spell`, `spelled` with its `verdict` on the `typed`
-text, `think`, `summary`, `thought`, `answer`, `usage`, `retry`) and `{"text": …}` lines, the entry's JSON a fragment at a time,
-with a `{"wait": seconds}` line every five seconds besides; last comes
-`{"entry": …}` (with the session's `tokens`, and `corrected` for a typo),
-`{"notfound": true, "suggestions": […]}` or `{"error": …}`. `"exact":
-true` skips the spelling check. A lookup that joins a session reads every
-line from the start, and joins only a session it can trust: a plain lookup
-never shares an exact one's, whose text may be a typo, and an exact lookup
-never shares a spelling check still out — each starts its own.
+Change a pop-up and Dict shows the word's entry for the new pair, if the
+dictionary has one. If it has none, the page says so and waits for
+**Look Up**, so a stray change of pop-up never starts a session.
 
-The window itself does not hold a request per lookup. `POST
-/v1/dict/start` (the same body) answers at once: `{"entry": …}`, or the
-session as `{"flight": id, "key", "q", "model", "effort", "wait"}`.
-`GET /v1/dict/stream` is one connection to every session the daemon is
-running, and those finished in the last two minutes: each announced as
-`{"flight": id, "began": {…}}`, then its lines as above with `"flight"`
-added, then its last line; `{"ready": true}` ends the first round and
-`{"ping": …}` keeps a quiet stream open.
+Changing the languages while the open tab writes opens the word in the
+new pair in a new tab.
+
+### Dict on a phone
+
+Dict also works on its own, outside the desktop:
+
+1. On the phone, open `/apps/dict/` on your exe's address. Over
+   Tailscale Serve that is `https://<host>.ts.net/apps/dict/`.
+2. On an iPhone, choose **Share → Add to Home Screen**.
+
+From the home screen it opens full screen with its own icon, the red
+dictionary on the desk's lavender. There it:
+
+- keeps clear of the notch, the home indicator and the blur iOS lays
+  under the status bar of a home-screen app;
+- fits itself above the keyboard, so the field never slides off the top;
+- uses the API token the desktop saved in that browser, if your exe has
+  one.
+
+In a narrow window, a phone's among them, the two languages take a row
+of their own above the word.
+
+### Look words up over HTTP
+
+Two calls answer a lookup. Both name the languages by their codes and
+the word as `q`: `from` is `en`, `de`, `fr`, `es`, `it` or `la`, and
+`to` is `zh`, `ja` or `ko`. Like every `/v1/` call they take the
+daemon's API token where one is set.
+
+**Read a kept entry.** `GET /v1/dict?from=en&to=zh&q=word` answers a
+kept entry, and 404 when there is none. For a known typo it answers its
+word's entry, with `corrected` saying what was typed; `exact=1` reads
+the text as typed.
+
+```
+$ curl -s '127.0.0.1:7777/v1/dict?from=en&to=zh&q=serendipity'
+```
+
+The answer is one JSON object: `from`, `to`, `q`, the `entry` itself,
+the `model` and `effort` that wrote it, and `created`, the time it was
+written.
+
+**Look up, and write if need be.** `POST /v1/dict` with
+`{"from", "to", "q"}` answers newline-delimited JSON. A kept entry comes
+at once, as one `{"entry": …}` line. Otherwise a session writes it, and
+these lines follow it as it works:
+
+| Line | What it says |
+|---|---|
+| `{"writing": true, …}` | The first line: a session is writing. Its `q` is the word the session writes. |
+| `{"step": {"t", "kind", …}}` | A step of the session. |
+| `{"text": …}` | The entry's JSON, a fragment at a time. |
+| `{"wait": seconds}` | Sent every five seconds besides, for as long as the session works. |
+| `{"entry": …}` | The last line: the entry, with the session's `tokens`, and `corrected` for a typo. |
+| `{"notfound": true, "suggestions": […]}` | The last line when the lookup is no word. |
+| `{"error": …}` | The last line when the session failed. |
+
+A step's `kind` is `session`, `spell`, `spelled` (with its `verdict` on
+the `typed` text), `think`, `summary`, `thought`, `answer`, `usage` or
+`retry`.
+
+`"exact": true` in the body skips the spelling check. A word that has to
+be written on a host without the Codex CLI answers 503.
+
+A lookup that joins a session reads every line from the start, and joins
+only a session it can trust. A plain lookup never shares an exact one's,
+whose text may be a typo, and an exact lookup never shares a spelling
+check still out. Each starts its own.
+
+### How the window follows its sessions
+
+The window itself does not hold a request per lookup. It uses two more
+calls:
+
+- `POST /v1/dict/start`, with the same body, answers at once:
+  `{"entry": …}`, or the session as
+  `{"flight": id, "key", "q", "model", "effort", "wait"}`.
+- `GET /v1/dict/stream` is one connection to every session the daemon is
+  running, and to those finished in the last two minutes.
+
+On the stream each session is announced as
+`{"flight": id, "began": {…}}`. Its lines follow as `POST /v1/dict`
+sends them, with `"flight"` added, and then its last line.
+`{"ready": true}` ends the first round, and `{"ping": …}` keeps a quiet
+stream open.
 
 ## Updating
 
 An exe installed with the one-line installer (Linux, macOS and Windows; see
-[Getting Started](/docs/getting-started#installing)) is a release, named
-for its date: `exe version` says which, and so does the
-daemon log when it starts.
+[Getting Started](/docs/getting-started#installing)) is a release, named for
+its date, such as `2026.10.09`. Software Update moves this machine to the
+newest release from the desktop, and `exe update` does the same from a
+shell.
 
-**Apple menu → Software Update…** does it from the desktop, on a phone as
-well as at a desk. The window says which release is installed and which is
-the newest, and shows what changed in it. **Update Now** asks first, since
-exe restarts to finish and a restart stops the running VMs and starts them
-again; the alert names them. Then it downloads the release, checks it,
-replaces the binary and restarts — in the daemon, so you can close the
-window, or the browser: the update goes on, a second Update Now from
-another device joins the same one, and the window says where it stands
-whenever it is opened again. When exe is back the window names the version
-that runs now and, for a quarter of an hour, each VM that was running
-before and how it is doing. On Linux, when the release changes the
-root-owned network helper, the two `sudo` lines that install the new one
-are shown there too.
+### What you get
 
-The desktop looks for a newer release when it loads, at most twice a day,
-by asking where the newest one is: nothing about this machine is sent. A
-daemon no desktop is open on asks nothing. **Check Now** asks at once.
+- **See what is new before you take it.** The window names the release that
+  is installed and the newest one, and shows what changed in it.
+- **Update from where you are.** It works from the desktop, on a phone as
+  well as at a desk. The update runs in the daemon, so you can close the
+  window, or the browser, and it goes on.
+- **Know what a restart costs.** exe restarts to finish, which stops the
+  running VMs and starts them again. The alert names them first, and
+  afterwards the window says how each one came back.
+- **One command for a script or an agent.** `exe update -check` only says
+  whether a newer release exists, and `exe update -y` installs it and
+  restarts without asking.
 
-A release that is installed but not yet running — a restart you put off in
-a shell, say — shows as such, and the button is **Restart Now**.
+### Which release is this
+
+`exe version` says which release is installed, and so does the daemon log
+when it starts. In **Apple menu → Software Update…**, the **Installed** line
+says it too.
+
+### Update from the desktop
+
+1. Choose **Apple menu → Software Update…**. The window says which release
+   is installed and which is the newest, and shows what changed in it.
+2. Press **Update Now**. It asks first, since exe restarts to finish and a
+   restart stops the running VMs and starts them again; the alert names
+   them.
+3. Press **Update**. exe downloads the release, checks it, replaces the
+   binary and restarts.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreiae6itihmsgm3w6cixhpvu5j77jicn4ijrybtf33mihqchupc575a" alt="The Software Update window: the installed release, a newer one, what changed in it, and the Update Now button" width="400" height="470">
 
-The same from a shell:
+All of that happens in the daemon, so you can close the window, or the
+browser: the update goes on. A second **Update Now** from another device
+joins the same update, and the window says where it stands whenever it is
+opened again.
+
+### After the restart
+
+When exe is back the window names the version that runs now and, for a
+quarter of an hour, each VM that was running before and how it is doing.
+
+On Linux, when the release changes the root-owned network helper, the two
+`sudo` lines that install the new one are shown there too.
+
+### When exe looks for a newer release
+
+- The desktop looks when it loads, and the daemon passes the question on at
+  most twice a day.
+- Opening the Software Update window looks again when the last answer is
+  more than ten minutes old, and **Check Now** asks at once.
+- A daemon no desktop is open on asks nothing.
+- Looking is asking where the newest release is: nothing about this machine
+  is sent.
+
+A diamond beside the Apple, and beside **Software Update…** in its menu,
+says a release is waiting.
+
+### Installed but not yet running
+
+A release that is installed but not yet running (a restart you put off in a
+shell, say) shows as such, and the button is **Restart Now**. From a shell,
+`exe daemon restart` restarts into it.
+
+### Update from a shell
 
 ```sh
 exe update          # move to the latest release
 exe update -check   # only say whether there is a newer one
+exe update -y       # move to it and restart without asking
 ```
 
 `exe update` downloads the release, checks it against the release's
 checksums and replaces the binary. The daemon goes on running the old one
-until it restarts, and a restart stops and starts every VM — so it asks
-first, and `-y` answers yes ahead of time. The extra apps the installer
-brought follow the release, except one you edited or removed. On Linux,
-when a release changes the root-owned network helper, the update prints
-the two `sudo` lines that install the new one. On Windows the binary that
-was running is moved aside as `exe.exe.old`, since Windows does not let a
-running program be replaced, and removed by the next update.
+until it restarts, and a restart stops and starts every VM, so it asks
+first; `-y` answers yes ahead of time. Run where nobody can answer, in a
+script or by an agent, it installs the release and leaves the restart to
+you.
 
-`exe setup` asks the installer's questions again for whatever is not set
-up yet, `exe setup vms` is only its VM step, and `exe uninstall` removes
-exe and leaves your data in `~/.exe`.
+- **The extra apps** the installer brought follow the release, except one
+  you edited or removed.
+- **On Linux**, when a release changes the root-owned network helper, the
+  update prints the two `sudo` lines that install the new one.
+- **On Windows** the binary that was running is moved aside as
+  `exe.exe.old`, since Windows does not let a running program be replaced,
+  and removed by the next update.
+
+### Related commands
+
+| Command | What it does |
+|---|---|
+| `exe version` | Says which release this is. |
+| `exe daemon restart` | Restarts the daemon; its VMs stop and start again. |
+| `exe setup` | Asks the installer's questions again for whatever is not set up yet. |
+| `exe setup vms` | Only the installer's VM step. |
+| `exe uninstall` | Removes exe and leaves your data in `~/.exe`. |
+
+### An exe built from source
 
 An exe built from a checkout has no version and is updated there:
 `git pull && make build`. Software Update says so, and still names the
@@ -1840,41 +3972,114 @@ newest release.
 
 ## Configuration
 
-**Windows → Configuration** edits `~/.exe/config.json` in place; most fields
-hot-reload on Save, and fields marked `*` take effect after a daemon
-restart. Highlights:
+exe's settings are in one file, `~/.exe/config.json`.
+**Windows → Configuration** edits it in place, and **Windows → Log Viewer**
+shows what the daemon is doing and who is calling its API.
 
-- `listen` — the address of this UI and API. Bind it to your Tailscale IP
-  to use exe from your phone.
-- `api_token` — set it before listening beyond localhost; every API call
-  then needs it. The desktop asks for it by itself the first time a
-  browser opens it, and checks it before keeping it (in localStorage);
-  `exe token`, run on the machine that runs exe, shows it again, and
-  **Special → Set API Token…** brings the dialog back.
-- `ssh_user` — the user created in every VM (default `dev`).
-- `ollama.*`, `chat_provider`, `openai.model`, `cloudflare.*` — see
-  [The coding agent](https://exe.v2core.com/docs/using/the-coding-agent) and
-  [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web).
+### What they are for
+
+- **Decide who reaches exe.** Set the address the desktop and the API listen
+  on (your Tailscale IP, to use exe from your phone) and the token every API
+  call must carry.
+- **Connect it to the rest.** The model behind Chat and the Agent tab,
+  GitHub, a hub and Cloudflare each have a tab of their settings.
+- **Size new VMs.** The CPUs, memory and disk a VM gets when you leave them
+  empty.
+- **Look closer when something is wrong.** The Log Viewer streams the
+  daemon's own log and every request to the API, live.
+
+An agent reads the same over HTTP: `GET /v1/config` is the whole
+configuration, and `GET /v1/logs` and `GET /v1/logs/access` stream the two
+logs. Chat can read the end of the daemon log as well, to work out why a
+publish or a VM failed. Changing the configuration is yours to do: an agent
+leaves it alone unless you ask.
+
+### The Configuration window
 
 <img src="https://hub.v2core.com/v1/embed/bafkreib5o3chahprhedmnmlt5ewo25povt6sfx5rfqqiawty3pwxv3b77i" alt="The Configuration window on its Daemon tab: listen, proxy_listen, ssh_listen, advertise_host, api_token and more" width="662" height="476">
 
+The fields are grouped on tabs: **Daemon**, **VMs**, **Firecracker**,
+**Ollama**, **OpenAI**, **GitHub**, **Hub** and **Cloudflare**. Change what
+you want and press **Save**.
+
+- Most fields hot-reload on Save: they take effect at once.
+- Fields marked `*` take effect after a daemon restart: `ssh_user`,
+  `image_url` and everything on the **Firecracker** tab.
+  **Restart Daemon…**, on the **Daemon** tab, does it when pressed twice;
+  the VMs restart too.
+- `listen`, `proxy_listen` and `ssh_listen` rebind as you save. If `listen`
+  moved, reload the page at the new address.
+- **Bind to Tailscale IP**, on the **Daemon** tab of a machine on a tailnet,
+  fills `listen` with that address for you to save.
+
+A few keys have no field in the window; `vm_dir`, the folder that holds the
+VMs' disks, is one. Edit the file for those and restart the daemon, which
+reads the file when it starts. [Configuration](/docs/config), on the
+website, has a longer table of the keys, `vm_dir` among them.
+
+### The settings you will want first
+
+| Key | Tab | What it sets |
+|---|---|---|
+| `listen` | Daemon | The address of this UI and API. Bind it to your Tailscale IP to use exe from your phone. |
+| `api_token` | Daemon | Set it before listening beyond localhost; every API call then needs it. |
+| `ssh_listen` | Daemon | The address of the SSH gate, `:2222` unless changed; `off` disables it. |
+| `ssh_user` | Daemon | The user created in every VM (default `dev`). It is marked `*`. |
+| `default_cpus`, `default_memory_mb`, `default_disk_gb` | VMs | The size of a new VM when you leave its fields empty: 2 CPUs, 2048 MB and 20 GB unless changed. |
+| `ollama.*`, `chat_provider`, `openai.model` | Ollama, OpenAI | See [The coding agent](https://exe.v2core.com/docs/using/the-coding-agent). |
+| `github.client_id` | GitHub | See [Publishing to GitHub](https://exe.v2core.com/docs/using/publishing-to-github). |
+| `hub.*` | Hub | See [The Hub](https://exe.v2core.com/docs/using/the-hub). |
+| `cloudflare.*` | Cloudflare | See [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web). |
+
+### The API token
+
+The desktop asks for the token by itself the first time a browser opens it,
+and checks it before keeping it (in localStorage).
+
+- `exe token`, run on the machine that runs exe, shows it again.
+- **Special → Set API Token…** brings the dialog back.
+
+### The Log Viewer
+
 **Windows → Log Viewer** streams two logs live, a tab each, when something
-needs a closer look. **Daemon Log** is the daemon's own log. **Access Log**
-is every request to the API (this UI included), also kept in
-`~/.exe/access.log`: one line each with the time, the caller's address,
-the request, its status, size and duration, and for Tailscale Serve the
-tailnet login. API tokens in the URL are written as `redacted`, and in
-both logs every email address is masked to its first letter and domain
-(`someone@example.com` shows as `s***@example.com`). The file moves to `access.log.1` at 64 MB, so the two keep
-about a fortnight. Each tab has a **Filter** field at its top: it shows
-only the lines holding every word you type, in any case, and a word
-starting with `-` leaves out the lines holding it (`GET -healthz`); new
-lines pass through it as they arrive, the status line counts the
-matches, and Escape clears it. Each tab keeps its own filter and its own
-place while you look at the other, and a line you have scrolled up to
-stays under your eye while the log keeps filling: through the trim that
-drops the oldest lines once the printout is long, and through the
-reconnect that follows a daemon restart, which resends the recent lines
-and looks yours up again (a line the daemon no longer holds sends you to
-the tail). This page lives at `/docs.md`, and the machine-readable
-counterpart for agents at `/skill.md`.
+needs a closer look.
+
+- **Daemon Log** is the daemon's own log, also kept in `~/.exe/daemon.log`.
+- **Access Log** is every request to the API (this UI included), also kept
+  in `~/.exe/access.log`: one line each with the time, the caller's address,
+  the request, its status, size and duration, and for Tailscale Serve the
+  tailnet login.
+
+API tokens in the URL are written as `redacted`, and in both logs every
+email address is masked to its first letter and domain
+(`someone@example.com` shows as `s***@example.com`).
+
+The access log's file moves to `access.log.1` at 64 MB, so the two keep
+about twelve days of requests while two desktops are open.
+
+### Filter a log
+
+Each tab has a **Filter** field at its top. It shows only the lines holding
+every word you type, in any case, and a word starting with `-` leaves out
+the lines holding it (`GET -healthz`).
+
+- New lines pass through the filter as they arrive.
+- The status line counts the matches.
+- Escape clears the field.
+- Each tab keeps its own filter and its own place while you look at the
+  other.
+
+### Keep your place in a log
+
+A line you have scrolled up to stays under your eye while the log keeps
+filling:
+
+- through the trim that drops the oldest lines once the printout is long;
+- through the reconnect that follows a daemon restart, which resends the
+  recent lines and looks yours up again. A line the daemon no longer holds
+  sends you to the tail.
+
+### This manual
+
+This page lives at `/docs.md`, and the machine-readable counterpart for
+agents at `/skill.md`.

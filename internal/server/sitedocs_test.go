@@ -112,10 +112,10 @@ func TestSiteDocs(t *testing.T) {
 		}
 	}
 	// every word of the manual is on exactly one chapter page
-	if strings.Contains(using, "The menu bar works like") {
+	if strings.Contains(using, "works like the classic Mac") {
 		t.Error("the manual's front carries a chapter's text as well")
 	}
-	if _, desk := getDoc(t, h, "/docs/using/the-desktop"); !strings.Contains(desk, "The menu bar works like") {
+	if _, desk := getDoc(t, h, "/docs/using/the-desktop"); !strings.Contains(desk, "works like the classic Mac") {
 		t.Error("a chapter lost its text")
 	}
 	if code, _ := getDoc(t, h, "/docs/using/nothing"); code != http.StatusNotFound {
