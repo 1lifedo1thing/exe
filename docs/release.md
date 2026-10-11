@@ -117,6 +117,15 @@ curl -fsSL http://<this machine>:7796/install.sh | sh
 exe update
 ```
 
+On a Mac reached over SSH, give the installer's shell a locale the Mac
+knows — `… | LC_ALL=en_US.UTF-8 sh`. SSH carries this machine's
+`LANG=en_US.utf8` across, macOS has no locale of that spelling and falls
+back to C, and a Mac's `sh` (bash 3.2) reads a script differently there
+than in the UTF-8 locale every Terminal window has: both releases of
+2026-10-10 passed on `birdie` that way while `echo "… $version…"` ended
+the install for anyone at a Mac's own keyboard ("version?: unbound
+variable" — the first byte of the ellipsis read as a letter of the name).
+
 To test an update, build two versions and put the older one's name in
 `dist/release/LATEST` before installing; change the file to move "the
 latest release" on. `deploy/release.sh build --worktree <version>` builds

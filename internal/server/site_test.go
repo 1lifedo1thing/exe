@@ -220,6 +220,13 @@ func TestSiteInstallScript(t *testing.T) {
 	if depth0 != 2 {
 		t.Errorf("%d top-level commands, want `set -eu` and the call to main", depth0)
 	}
+	// A Mac's sh is bash 3.2, which in a UTF-8 locale counts the first byte
+	// of "…" as a letter: `$version…` is then a variable nobody set, and
+	// `set -u` ends the install there. No sh on Linux shows it, so it is
+	// looked for here: a name that runs into such a byte wears braces.
+	if m := regexp.MustCompile(`\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]`).FindString(script); m != "" {
+		t.Errorf("%q: a variable followed by a byte that is not ASCII needs braces", m)
+	}
 	sh, err := exec.LookPath("sh")
 	if err != nil {
 		t.Skip("no sh to parse the script with")

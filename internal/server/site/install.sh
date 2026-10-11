@@ -65,7 +65,9 @@ main() {
 	trap 'exit 143' TERM
 
 	binary=exe-$os-$arch.tar.gz
-	echo "Downloading exe $version…"
+	# Braces before anything that is not ASCII: bash 3.2, a Mac's sh, takes
+	# the first byte of "…" for a letter of the name in a UTF-8 locale.
+	echo "Downloading exe ${version}…"
 	for file in SHA256SUMS "$binary" exe-apps.tar.gz; do
 		curl -fsSL --retry 3 -o "$tmp/$file" "$base/download/$version/$file" ||
 			fail "could not download $file of exe $version"
