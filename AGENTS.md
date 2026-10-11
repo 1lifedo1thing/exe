@@ -26,6 +26,12 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   record the CID, a working download URL and SHA-256 in the relevant doc.
   Verify the pin and a fresh download; keep the binaries out of Git.
   Releases are the exception: they live on GitHub only.
+- `NOTES.md` is what the next release tells its users changed, and
+  Software Update shows it. A change a user of a release will notice gets
+  its line there in the commit that ships it: what they get and where it
+  is, not the commit subject. At most eight short items — when a ninth
+  turns up, the one a user would miss least goes. `deploy/release.sh
+  notes` checks it; the rules are in `docs/release.md`, "The notes".
 - Releases (Linux and macOS, x86-64 and ARM64 each, and Windows x86-64;
   `docs/release.md`): build with `deploy/release.sh build` — the macOS
   binaries are built and signed on the Mac named in `deploy/release.env` —

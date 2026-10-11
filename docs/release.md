@@ -38,10 +38,52 @@ Nine files, with the same names in every release, so
 | `install.sh`, `install.ps1` | the installers, as the daemon serves them at `/install.sh` and `/install.ps1` |
 | `SHA256SUMS` | the checksums of the eight |
 
+A tenth file, `NOTES.md`, says what changed. It is words to show, so it is
+not in `SHA256SUMS`; see "The notes" below.
+
 Neither the installer nor `exe update` calls `api.github.com` (60 requests
 an hour for an address). The latest version is read from where
 `/releases/latest` redirects to, and files come from
 `/releases/download/<tag>/<name>`.
+
+## The notes
+
+`NOTES.md`, at the top of the repository, is what the next release says
+changed. Software Update shows it under "What changed in <version>" to
+somebody deciding whether to press Update Now, in a box six lines high
+and some fifty characters wide. So it is short, and written for them:
+
+- **When.** A change that a user of a release will notice gets its line
+  in the commit that ships it. Written at release time from the commit
+  log, the notes come out as the log: long, and in the builder's words.
+- **What.** Something new to use, something that now works differently,
+  a fix for a fault a user could have met. Not a refactor, a test, a
+  change to the docs, or anything only a checkout sees.
+- **How.** One item (`- …`) a change: what the user gets and where it is,
+  with the name of the thing to click in bold. The commit subject is not
+  it. "**Join a Hub…** in the Hub app: four steps, from a hub's address to
+  your profile." is.
+- **How much.** At most eight items, of at most 110 characters each,
+  which is two lines of the box. When a ninth turns up, the one a user
+  would miss least goes. Details belong in the manual, and a release with
+  more to say says it on its GitHub page (`publish`, below).
+
+```sh
+deploy/release.sh notes   # the next release's notes, or what is wrong with them
+```
+
+It refuses a file that is missing or names no change, more than eight
+items, a line over 110 characters, and an item the last release already
+had. `build` asks the same of the commit before it compiles anything, and
+puts the notes into the release without the file's comment.
+
+A release's notes cannot be changed once it is published, so they are
+read where they will be shown, in the Software Update window of a machine
+under test (below), before `publish`. To change them then: edit
+`NOTES.md`, commit, build again.
+
+After publishing, `publish` empties the file to its comment and commits
+that, so that what is written in it from then on is the next release's.
 
 ## Build
 
@@ -52,9 +94,11 @@ deploy/release.sh build 2026.10.09.2 # a version by name
 
 This writes `dist/release/<version>/` and touches nothing else here. It
 builds a clean export of the commit, so uncommitted files in the working
-tree are not in it. The Linux, Windows and apps tarballs are the same
-bytes whenever they are built from the same commits with the same Go; the
-macOS ones carry the time they were signed.
+tree are not in it. It starts with the commit's `NOTES.md` and stops
+there if the notes will not do ("The notes" above); a `--worktree` build
+takes the file as it is, or goes without. The Linux, Windows and apps
+tarballs are the same bytes whenever they are built from the same commits
+with the same Go; the macOS ones carry the time they were signed.
 
 The Windows binary is cross-built here like the Linux ones (no cgo, so no
 Windows machine is needed to build it) and packed as a `.tar.gz` like the
@@ -181,9 +225,10 @@ Mac's restart was found to cut the power (2026-10-10, fixed the same day):
 the window was right that the VM had come back once and stayed stopped
 the second time, and the guest said why.
 
-`NOTES.md` is not built: `publish` writes it (below). For a test, put one
-in the version's folder by hand; without it the window links the release's
-page instead.
+`NOTES.md` is in the build, so the window under test shows the notes the
+release will carry. Read them there: it is the last look before they are
+published for good. A build without the file (a `--worktree` build of a
+tree that has none) makes the window link the release's page instead.
 
 The machines: `lab` (an exe VM: Debian 13, ARM64, no `/dev/kvm`) for the
 installer, the service, `exe update` and `exe uninstall`; `precision`
@@ -199,7 +244,7 @@ how to drive it is under "Windows" below. Never run a released build's
 ## Publish
 
 ```sh
-deploy/release.sh publish 2026.10.09 [notes.md]
+deploy/release.sh publish 2026.10.09 [page.md]
 ```
 
 It publishes the files `build` made, and refuses if they changed, if the
@@ -207,16 +252,19 @@ commit is not on `main`, if the tag exists, or if the macOS binaries are
 not Developer ID signed and notarized. It tags the commit, pushes
 `main` and the tag, uploads the nine files to a draft, publishes the draft
 as the latest release, and checks that GitHub's `latest` now serves the
-checksums that were built. Without a notes file the notes are the install
-lines and the commit subjects since the last release.
+checksums that were built. Then it empties `NOTES.md` in the checkout and
+commits that, without pushing it.
 
-The notes go up twice: as the release's text on GitHub, and as a tenth
-file, `NOTES.md`, which the desktop's Software Update reads the way every
-other file of a release is read (no GitHub API, and a mirror serves it).
-Notes somebody wrote are both; generated ones leave the install lines out
-of `NOTES.md`, since whoever reads it there has exe installed. It is not
-in `SHA256SUMS`: it is words to show, and they are shown as text. The two
-releases before it, 2026.10.10 and 2026.10.10.2, have none.
+The notes go up twice. As a tenth file, `NOTES.md`, the one `build` made:
+the desktop's Software Update reads it the way every other file of a
+release is read (no GitHub API, and a mirror serves it), and `publish`
+refuses a build that has none. And in the release's text on GitHub, under
+the install lines, which whoever reads `NOTES.md` has no use for: they
+have exe installed. A release with more to say there — what was not tried,
+what to know before installing — gives `publish` a file to use as that
+text instead; `NOTES.md` stays as it was built. The two releases before
+this, 2026.10.10 and 2026.10.10.2, have no `NOTES.md`, and Software Update
+says of them that they came without notes.
 
 Afterwards: rebuild and restart the daemon on spark (it serves
 `/install.sh`, `/install.ps1` and the homepage), run the real one-liners

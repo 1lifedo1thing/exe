@@ -6,7 +6,8 @@
 #
 #   deploy/release.sh build [version]            build dist/release/<version>/ from HEAD
 #   deploy/release.sh build --worktree <version> the same from the files on disk, to test with
-#   deploy/release.sh publish <version> [notes]  tag it, push it, publish it on GitHub
+#   deploy/release.sh notes                      what the next release will say changed, checked
+#   deploy/release.sh publish <version> [page]   tag it, push it, publish it on GitHub
 #
 # A version is the UTC date, 2026.10.09, and 2026.10.09.2 for a second one
 # that day. GitHub Releases is where the files live and what says which
@@ -26,6 +27,12 @@
 # Testing a build before it is published: serve dist/release/ in GitHub's
 # layout and point the installer and `exe update` at it with
 # EXE_RELEASE_URL (docs/release.md has the recipe).
+#
+# What changed is NOTES.md at the top of the repository: a few lines for
+# whoever has exe installed, which Software Update shows before Update Now
+# is pressed. `build` puts it in the release and refuses a commit whose
+# notes are missing, long, or the last release's; `publish` cannot change
+# it, so the test before publishing is where it is read in the window.
 #
 # The macOS binaries are built and signed on a Mac, reached over ssh:
 # EXE_MAC_BUILDER=user@host, set in deploy/release.env (which is not in the
@@ -79,6 +86,44 @@ pack() { # pack <dir> <out.tar.gz> <mtime> <names...>
 	# --mode: the builder's umask is not part of a release
 	printf '%s\n' "$@" | tar --sort=name --mtime="@$stamp" --owner=0 --group=0 --numeric-owner \
 		--mode='u=rwX,go=rX' -C "$dir" -cf - -T - | gzip -9n >"$out"
+}
+
+# Software Update's box shows six lines of some fifty characters, and
+# scrolls. The notes are held to what reads there at a glance: the changes
+# a user would notice first. The rest is in the manual and on the
+# release's page.
+notes_most=8   # items
+notes_long=110 # characters a line: two lines of the box, or just over
+
+# a notes file as a release carries it: without its comments (each on
+# lines of its own) and the blank lines around what is left
+notes_text() { # notes_text <NOTES.md>
+	awk '/<!--/ { c = 1 } !c { print } /-->/ { c = 0 }' "$1" | sed '/./,$!d' |
+		awk '{ l[NR] = $0 } /./ { n = NR } END { for (i = 1; i <= n; i++) print l[i] }'
+}
+
+# The notes of a release built from <commit>, printed, or the reason they
+# will not do. An item is a line that starts "- "; the last release is the
+# newest tag <commit> has behind it.
+notes_checked() { # notes_checked <NOTES.md> <commit>
+	local file=$1 commit=$2 text items line prev stale=
+	[ -f "$file" ] || die "NOTES.md is not there: it says what changed, for Software Update to show"
+	text=$(notes_text "$file")
+	items=$(grep -c '^- ' <<<"$text" || true)
+	[ "$items" -gt 0 ] || die "NOTES.md names no change: write what a user will notice in this release, an item (\"- …\") each"
+	[ "$items" -le "$notes_most" ] ||
+		die "NOTES.md has $items items, and Software Update's box is small: keep the $notes_most a user would notice first"
+	while IFS= read -r line; do
+		[ ${#line} -le "$notes_long" ] ||
+			die "a line of NOTES.md is ${#line} characters, over $notes_long: say it shorter — $line"
+	done <<<"$text"
+	prev=$(git -C "$root" describe --tags --abbrev=0 "$commit" 2>/dev/null || true)
+	if [ -n "$prev" ] && git -C "$root" cat-file -e "$prev:NOTES.md" 2>/dev/null; then
+		stale=$(grep -Fx -f <(git -C "$root" show "$prev:NOTES.md" | grep '^- ') <<<"$text" || true)
+	fi
+	[ -z "$stale" ] || die "NOTES.md still holds what $prev said: take these out, they are released
+$stale"
+	printf '%s\n' "$text"
 }
 
 # The macOS binaries: built on the Mac (they link Apple's frameworks
@@ -186,6 +231,17 @@ build() {
 		git -C "$root" archive "$commit" | tar -x -C "$work/src"
 	fi
 
+	# What changed, first: it is the one part somebody has to have written,
+	# and a commit without it is not worth the minutes the rest takes. A
+	# test build takes the file as it is, or goes without one.
+	if [ -z "$worktree" ]; then
+		notes_checked "$work/src/NOTES.md" "$commit" >"$work/out/NOTES.md"
+	elif [ -f "$work/src/NOTES.md" ] && [ -n "$(notes_text "$work/src/NOTES.md")" ]; then
+		notes_text "$work/src/NOTES.md" >"$work/out/NOTES.md"
+	else
+		echo "note: no NOTES.md in this build: Software Update will say the release came without notes"
+	fi
+
 	local arch
 	for arch in amd64 arm64; do
 		echo "building linux/$arch"
@@ -262,12 +318,17 @@ build() {
 	(cd "$out" && ls -l "${binaries[@]}" exe-apps.tar.gz "${scripts[@]}" SHA256SUMS | awk '{printf "  %9d  %s\n", $5, $9}')
 	[ "$sign" = developer-id ] || echo "macOS signature: $sign — a build to test with, not one to publish"
 	echo "in $out"
+	if [ -f "$out/NOTES.md" ]; then
+		echo
+		echo "What changed, as Software Update will show it (NOTES.md):"
+		sed 's/^/  /' "$out/NOTES.md"
+	fi
 }
 
 publish() {
-	local version=${1:-} notes=${2:-}
+	local version=${1:-} page=${2:-}
 	valid "$version" || die "publish which version? deploy/release.sh publish 2026.10.09"
-	local out=$root/dist/release/$version commit prev f
+	local out=$root/dist/release/$version commit f
 	[ -d "$out" ] || die "$out is not there: build it, and test it, first"
 	commit=$(cat "$out/.commit")
 	[ "$commit" != worktree ] || die "$version was built from the working tree, which is for testing: build it from a commit"
@@ -286,35 +347,31 @@ publish() {
 
 	# What changed is one of the release's files as well as its text on
 	# GitHub: the desktop's Software Update reads NOTES.md the way exe reads
-	# every other file of a release, and a mirror serves it too. Notes
-	# somebody wrote are both; without them GitHub's text opens with the
-	# install lines, which a desktop that is already installed has no use
-	# for, and NOTES.md is the list of changes alone.
-	if [ -n "$notes" ]; then
-		cp "$notes" "$out/NOTES.md"
-		notes=$out/NOTES.md # gh is run from $out: a path that still holds there
+	# every other file of a release, and a mirror serves it too. `build`
+	# made it from the commit's NOTES.md, and the test showed it in the
+	# window. GitHub's page says the same under the install lines, which a
+	# desktop that is already installed has no use for — or is the longer
+	# text given here, for a release with more to say to whoever reads it
+	# there.
+	[ -s "$out/NOTES.md" ] || die "$out has no NOTES.md: build $version again from a commit that says what changed"
+	if [ -n "$page" ]; then
+		[ -s "$page" ] || die "$page is not there, or empty"
+		page=$(realpath "$page") # gh is run from $out
 	else
-		notes=$(mktemp)
-		prev=$(git -C "$root" describe --tags --abbrev=0 "$commit" 2>/dev/null || true)
-		if [ -n "$prev" ]; then
-			{
-				echo "Since $prev:"
-				echo
-				git -C "$root" log --no-merges --format='- %s' "$prev..$commit"
-			} >"$out/NOTES.md"
-		else
-			echo "The first release." >"$out/NOTES.md"
-		fi
+		page=$(mktemp)
 		{
-			echo "Install or update, on Linux and macOS (x86-64 and ARM64):"
+			echo "Install or update, on Linux and macOS (x86-64 and ARM64) and on Windows (x86-64):"
 			echo
 			echo '```sh'
-			echo "curl -fsSL https://exe.v2core.com/install.sh | sh    # new machine"
+			echo "curl -fsSL https://exe.v2core.com/install.sh | sh    # Linux, macOS"
+			echo "irm https://exe.v2core.com/install.ps1 | iex         # Windows, in PowerShell"
 			echo "exe update                                            # an installed exe"
 			echo '```'
 			echo
+			echo "What changed:"
+			echo
 			cat "$out/NOTES.md"
-		} >"$notes"
+		} >"$page"
 	fi
 
 	git -C "$root" tag "$version" "$commit"
@@ -322,7 +379,7 @@ publish() {
 	# the files go up on a draft; publishing it is what makes the release,
 	# and from then on it cannot be changed
 	(cd "$out" && gh release create "$version" --repo "$repo" --draft --verify-tag \
-		--title "exe $version" --notes-file "$notes" "${assets[@]}" NOTES.md)
+		--title "exe $version" --notes-file "$page" "${assets[@]}" NOTES.md)
 	gh release edit "$version" --repo "$repo" --draft=false --latest
 
 	# what the world gets now has to be what was built
@@ -330,6 +387,21 @@ publish() {
 	got=$(curl -fsSL "https://github.com/$repo/releases/latest/download/SHA256SUMS")
 	[ "$got" = "$(cat "$out/SHA256SUMS")" ] || die "GitHub's latest release does not serve the checksums that were built — look at https://github.com/$repo/releases"
 	echo "exe $version is published: https://github.com/$repo/releases/tag/$version"
+
+	# The notes are out, so the file starts again: what is written in it
+	# from here on is the next release's. Only when nobody has touched it
+	# since the build; lines somebody has added since stay, and the next
+	# build names the released ones among them.
+	if git -C "$root" diff --quiet "$commit" -- NOTES.md 2>/dev/null; then
+		awk '/<!--/ { c = 1 } c { print } /-->/ { c = 0 }' "$root/NOTES.md" >"$root/NOTES.md.new"
+		mv "$root/NOTES.md.new" "$root/NOTES.md"
+		git -C "$root" commit -q --only NOTES.md -m "Docs: the notes start again after $version" \
+			-m "What NOTES.md said is in $version; what a user will notice from here on is written there for the release after it." &&
+			echo "NOTES.md starts again, committed and not pushed" ||
+			echo "note: NOTES.md was emptied and not committed — commit it"
+	else
+		echo "note: NOTES.md has changed since the build: take out by hand what $version said"
+	fi
 }
 
 case ${1:-} in
@@ -337,12 +409,15 @@ build)
 	shift
 	build "$@"
 	;;
+notes)
+	notes_checked "$root/NOTES.md" HEAD
+	;;
 publish)
 	shift
 	publish "$@"
 	;;
 *)
-	sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
 	exit 2
 	;;
 esac
