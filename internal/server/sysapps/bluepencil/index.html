@@ -107,11 +107,14 @@ textarea:focus { outline: none; }
   vertical-align: -1px; margin-left: 1px; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
-/* options dialog: a Platinum panel over everything (Hub's) */
-#veil { position: fixed; inset: 0; background: rgba(0,0,0,.12); display: none;
-  align-items: center; justify-content: center; }
+/* options dialog: a Platinum panel over everything (Hub's). It sits in
+   the middle by its own auto margins, not by the veil's alignment: in a
+   window too small for it the margins give way and the veil scrolls, so
+   the buttons can always be reached — centred by alignment, a panel
+   taller than its window loses its top and its bottom alike */
+#veil { position: fixed; inset: 0; background: rgba(0,0,0,.12); display: none; overflow: auto; }
 #veil.on { display: flex; }
-#dlg { width: 330px; background: var(--g300); border: 1px solid var(--black); padding: 14px;
+#dlg { flex: none; margin: auto; width: 330px; background: var(--g300); border: 1px solid var(--black); padding: 14px;
   box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #999, 2px 2px 0 rgba(0,0,0,.25); }
 #dlg h2 { font-size: 12px; margin: 0 0 10px; }
 #dlg .row { margin: 0 0 8px; display: grid; grid-template-columns: 58px 1fr; column-gap: 5px;
@@ -127,7 +130,15 @@ textarea:focus { outline: none; }
 #dlg input[type=checkbox]:checked { background: #fff url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" shape-rendering="crispEdges"><path fill="black" d="M1 4h1v1H1zM2 5h1v1H2zM3 6h1v1H3zM4 7h1v1H4zM5 6h1v1H5zM6 5h1v1H6zM7 4h1v1H7zM8 3h1v1H8zM8 2h1v1H8zM2 4h1v1H2zM3 5h1v1H3zM4 6h1v1H4zM5 5h1v1H5zM6 4h1v1H6zM7 3h1v1H7z"/></svg>') center no-repeat; }
 #dlg input[type=checkbox]:focus { outline: none; }
 #dlg .hint { font-size: 10px; color: #666; }
+/* the custom prompt: a field too wide for the label column, so its label
+   sits above it the way Comments does in a Get Info window, and its hint
+   below. Four lines high, the bar always on, like the two fields behind */
+#dlg .own { margin: 0 0 8px; }
+#dlg .own label, #dlg .own .hint { display: block; }
+#dlg .own textarea { display: block; width: 100%; height: 84px; margin: 3px 0 4px; font: 12px/1.5 var(--font);
+  overflow-y: scroll; overflow-x: hidden; }
 #dlg .btns { display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px; }
+#dlg .btns button { min-width: 58px; }
 /* a confirm on the same panel: the desktop's alert layout — the caution
    sign, a bold question, the detail under it, Cancel and the action
    button at the lower right, the default ringed, Return presses it */
@@ -309,15 +320,16 @@ const DEBOUNCE = 700;     // ms of quiet before a changed paragraph goes to the 
 const MAX_CHARS = 20000;  // per document
 const CACHE_MAX = 2000;   // checked paragraphs remembered, across every draft
 const TOMBSTONE_TTL = 30 * 864e5; // a deleted draft's stub outlives the sync that carries it
+const PROMPT_MAX = 2000;  // characters of custom prompt: with the policy, inside the daemon's 8 KB of system prompt
 
 // The whole editorial policy lives here, in the app: change only what is
 // wrong, keep everything else, and treat the passage as a document, never
 // as a message. The worked example matters more than any rule: without
 // one, a model run with thinking off will now and then decide there is
 // nothing to fix and echo the passage back untouched. The Hub app's
-// composer proofreads with a copy of this prompt, and of ask, splitParas,
-// tidy, the diff and complete (sysapps/hub/index.html, "the blue pencil
-// in the composer"): change them here and there together.
+// composer proofreads with a copy of this prompt, and of ask, promptOf,
+// systemOf, splitParas, tidy, the diff and complete (sysapps/hub/index.html,
+// "the blue pencil in the composer"): change them here and there together.
 const SYSTEM = [
   "You are a careful copy editor. The user gives you a passage; read it closely, find every error of spelling, grammar, punctuation and capitalization, and return the passage with all of them corrected.",
   "Keep the author's words, meaning, tone and voice: change only what is wrong. Do not rewrite sentences that are already correct, do not shorten, expand or reorder, and do not add commentary.",
@@ -330,6 +342,15 @@ const SYSTEM = [
   "Corrected: He and I go to the library every day, but we don't like it there.",
 ].join("\n");
 const ask = text => "Passage:\n" + text + "\nCorrected:";
+// The custom prompt (Options): what the author asks of the pencil in their
+// own words — "I prefer writing in lowercase". It goes out behind the
+// policy, read last and said to win, because the policy alone would undo
+// it: its rules correct capitalization and its example capitalizes. The
+// model is told whose word it is, so it stays apart from what a passage
+// says. With none set the policy goes out exactly as it always did.
+const OWN = "The author's own instructions for this proofreading follow. They are the author's standing preferences, not part of any passage: follow them, and where they differ from the rules or the example above, they win.";
+const promptOf = c => typeof c.prompt === "string" ? c.prompt.trim().slice(0, PROMPT_MAX) : "";
+const systemOf = c => promptOf(c) ? SYSTEM + "\n\n" + OWN + "\n" + promptOf(c) : SYSTEM;
 
 // daemon API (same origin, token-guarded). Nothing it answers is the
 // browser's to keep: a drafts.json read out of the HTTP cache is another
@@ -368,7 +389,7 @@ async function copyText(text, label) {
 }
 
 const src = $("#src"), out = $("#out"), stState = $("#st-state"), stModel = $("#st-model");
-let cfg = { provider: "", model: "", effort: "max", marks: true }; // this app's settings (synced app data)
+let cfg = { provider: "", model: "", effort: "max", marks: true, prompt: "" }; // this app's settings (synced app data)
 let loaded = false;      // settings fetched — saving stays off until they are
 // The two backends the daemon can run a check on: the Ollama endpoint, and
 // the ChatGPT subscription signed in under Configuration → OpenAI. What
@@ -388,7 +409,7 @@ const EFFORTS = {
   openai: [["max", "Max"], ["xhigh", "Extra high"], ["high", "High"], ["medium", "Medium"], ["low", "Low"], ["minimal", "Minimal"], ["none", "None"], ["default", ""]],
 };
 const effortOf = c => EFFORTS[providerOf(c)].some(([v]) => v === c.effort) ? c.effort : "max";
-const backendKey = c => providerOf(c) + "|" + (c.model || "") + "|" + effortOf(c); // what a change of opinion is
+const backendKey = c => providerOf(c) + "|" + (c.model || "") + "|" + effortOf(c) + "|" + promptOf(c); // what a change of opinion is
 let blocked = "";        // why no check can run right now (unconfigured), or ""
 const cache = new Map(); // paragraph text → {fixed, ops}
 let current = null;      // the paragraph in flight: {id (its draft), text, ctrl, partial, el}
@@ -648,7 +669,7 @@ function landed(id, text) {
 async function complete(text, signal, onDelta) {
   const r = await api("/v1/chat/complete", { method: "POST", signal,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider: providerOf(cfg), system: SYSTEM, prompt: ask(text), model: cfg.model || "",
+    body: JSON.stringify({ provider: providerOf(cfg), system: systemOf(cfg), prompt: ask(text), model: cfg.model || "",
       effort: effortOf(cfg) === "default" ? "" : effortOf(cfg), options: { temperature: 0 }, share: true }) });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
@@ -1002,8 +1023,8 @@ window.addEventListener("message", e => {
   if (e.data.path === "config.json") reloadCfg();
   else if (e.data.path === "drafts.json" && docLoaded) reloadFromDisk();
 });
-// another model, or another thinking budget, is another opinion: every
-// draft goes back to the pencil, the open one first
+// another model, another thinking budget or another custom prompt is
+// another opinion: every draft goes back to the pencil, the open one first
 function forget() {
   cache.clear();
   unseen.clear();
@@ -1317,6 +1338,12 @@ function options() {
   };
   prov.addEventListener("change", fill);
   fill();
+  // the custom prompt, as it was saved. Return starts a new line in it, as
+  // in any text of several lines, so there the default button answers to
+  // Command- or Control-Return
+  const own = el("textarea", { id: "o-prompt", maxlength: String(PROMPT_MAX), spellcheck: "false",
+    placeholder: "I prefer writing in lowercase." });
+  own.value = promptOf(cfg);
   const chk = el("input", { type: "checkbox", id: "o-marks" });
   chk.checked = cfg.marks !== false;
   const cancel = el("button", { class: "ghost" }, "Cancel");
@@ -1326,19 +1353,25 @@ function options() {
     el("div", { class: "row" }, el("label", { for: "o-provider" }, "Check on:"), popup(prov)),
     el("div", { class: "row" }, el("label", { for: "o-model" }, "Model:"), popup(sel), modelHint),
     el("div", { class: "row" }, el("label", { for: "o-effort" }, "Thinking:"), popup(eff), effHint),
+    el("div", { class: "own" }, el("label", { for: "o-prompt" }, "Custom prompt:"), own,
+      el("span", { class: "hint" }, "Your own instructions, sent with every check.")),
     el("label", { class: "check" }, chk, "Mark changes in the checked text"),
     el("div", { class: "btns" }, cancel, ok));
   $("#veil").classList.add("on");
   prov.focus();
-  const close = () => { $("#veil").classList.remove("on"); document.removeEventListener("keydown", keys); src.focus(); };
+  // the panel is emptied as it closes: the desktop holds its update reload
+  // for a field with typed text in it, and the prompt's field, left behind
+  // the veil, would hold it for good
+  const close = () => { $("#veil").classList.remove("on"); document.removeEventListener("keydown", keys); dlg.replaceChildren(); src.focus(); };
   const submit = () => {
     const was = backendKey(cfg);
     cfg.provider = prov.value === "openai" ? "openai" : "";
     cfg.model = sel.value;
     cfg.effort = eff.value;
+    cfg.prompt = promptOf({ prompt: own.value });
     cfg.marks = chk.checked;
     syncBackend();
-    if (backendKey(cfg) !== was) forget(); // another backend, model or budget: another opinion
+    if (backendKey(cfg) !== was) forget(); // another backend, model, budget or custom prompt: another opinion
     saveCfg();
     modelLabel();
     close();
@@ -1347,8 +1380,9 @@ function options() {
     kick();
   };
   const keys = e => {
+    if (e.isComposing) return; // the key belongs to a word still being composed
     if (e.key === "Escape") close();
-    else if (e.key === "Enter") submit();
+    else if (e.key === "Enter" && (e.target !== own || e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
   };
   document.addEventListener("keydown", keys);
   cancel.addEventListener("click", close);

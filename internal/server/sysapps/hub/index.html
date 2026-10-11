@@ -3489,9 +3489,10 @@ const PENCIL_CACHE_MAX = 500;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Blue Pencil's editorial policy and its reading of the model's answer,
-// copied from sysapps/bluepencil/index.html (SYSTEM, ask, splitParas,
-// tidy, the word-level diff, complete): the composer must get the same
-// opinion the app would give. Change them there and here together.
+// copied from sysapps/bluepencil/index.html (SYSTEM, ask, OWN, promptOf,
+// systemOf, splitParas, tidy, the word-level diff, complete): the composer
+// must get the same opinion the app would give. Change them there and
+// here together.
 const PENCIL_SYSTEM = [
   "You are a careful copy editor. The user gives you a passage; read it closely, find every error of spelling, grammar, punctuation and capitalization, and return the passage with all of them corrected.",
   "Keep the author's words, meaning, tone and voice: change only what is wrong. Do not rewrite sentences that are already correct, do not shorten, expand or reorder, and do not add commentary.",
@@ -3504,6 +3505,13 @@ const PENCIL_SYSTEM = [
   "Corrected: He and I go to the library every day, but we don't like it there.",
 ].join("\n");
 const pencilAsk = text => "Passage:\n" + text + "\nCorrected:";
+// Blue Pencil's custom prompt (its Options: "I prefer writing in
+// lowercase") goes out behind the policy, read last and said to win, as
+// the app sends it; with none set the policy goes out alone.
+const PENCIL_PROMPT_MAX = 2000;
+const PENCIL_OWN = "The author's own instructions for this proofreading follow. They are the author's standing preferences, not part of any passage: follow them, and where they differ from the rules or the example above, they win.";
+const pencilPromptOf = c => typeof c.prompt === "string" ? c.prompt.trim().slice(0, PENCIL_PROMPT_MAX) : "";
+const pencilSystemOf = c => pencilPromptOf(c) ? PENCIL_SYSTEM + "\n\n" + PENCIL_OWN + "\n" + pencilPromptOf(c) : PENCIL_SYSTEM;
 function splitParas(text) {
   return text.split(/(\n(?:[ \t]*\n)+)/).map((t, i) => ({ text: t, sep: i % 2 === 1 }));
 }
@@ -3557,7 +3565,7 @@ async function pencilComplete(text, signal) {
   const c = pencilCfg;
   const r = await api("/v1/chat/complete", { method: "POST", signal,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider: c.provider, system: PENCIL_SYSTEM, prompt: pencilAsk(text), model: c.model,
+    body: JSON.stringify({ provider: c.provider, system: pencilSystemOf(c), prompt: pencilAsk(text), model: c.model,
       effort: c.effort === "default" ? "" : c.effort, options: { temperature: 0 }, share: true }) });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
@@ -3584,20 +3592,22 @@ async function pencilComplete(text, signal) {
 }
 
 // Is there a working Blue Pencil? Its settings (synced app data: backend,
-// model, thinking level — none saved yet means its defaults), what the
-// daemon has configured for that backend, and for ChatGPT whether anyone
-// is signed in: Blue Pencil's own test (its loadDaemon and syncBackend).
+// model, thinking level, custom prompt — none saved yet means its
+// defaults), what the daemon has configured for that backend, and for
+// ChatGPT whether anyone is signed in: Blue Pencil's own test (its
+// loadDaemon and syncBackend).
 // pencilWhy is why no check can run, "" when one can. The Hub window does
 // not hear Blue Pencil's change events, so the answer is read again
 // before a check once it is a minute old — a model chosen there, or a
 // backend set up after this window opened, is picked up by the next
-// pause in the typing. Another backend, model or thinking level is
-// another opinion: what was checked under the old one is forgotten.
+// pause in the typing. Another backend, model, thinking level or custom
+// prompt is another opinion: what was checked under the old one is
+// forgotten.
 const PENCIL_EFFORTS = {
   ollama: ["max", "high", "medium", "low", "off", "default"],
   openai: ["max", "xhigh", "high", "medium", "low", "minimal", "none", "default"],
 };
-let pencilCfg = { provider: "ollama", model: "", effort: "max" };
+let pencilCfg = { provider: "ollama", model: "", effort: "max", prompt: "" };
 let pencilWhy = "not read yet", pencilAt = 0, pencilKey = "";
 async function pencilLoad() {
   if (Date.now() - pencilAt < PENCIL_TTL) return;
@@ -3621,14 +3631,14 @@ async function pencilLoad() {
     }
     const model = saved.model || d.model || "";
     if (!why && !model) why = "no model chosen";
-    pencilCfg = { provider, model: saved.model || "", effort };
+    pencilCfg = { provider, model: saved.model || "", effort, prompt: pencilPromptOf(saved) };
     const eff = effort === "default" ? d.effort || "" : effort;
     tip = "Proofread by Blue Pencil on " + model + (eff ? " (" + eff + ")" : "");
   } catch (e) {
     why = "unreachable: " + e.message;
     pencilAt = 0; // ask again at the next pause
   }
-  const key = pencilCfg.provider + "|" + pencilCfg.model + "|" + pencilCfg.effort;
+  const key = pencilCfg.provider + "|" + pencilCfg.model + "|" + pencilCfg.effort + "|" + pencilCfg.prompt;
   if (key !== pencilKey) { pencilKey = key; pCache.clear(); }
   pencilWhy = why;
   pencilTip = why ? "" : tip;

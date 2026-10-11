@@ -3323,11 +3323,11 @@ nothing, or you accepted or ignored what it found — a green check and
 **Proofread** stand there until you type again.
 
 The composer uses Blue Pencil's own settings — backend, model, thinking
-level — and its prompt, a paragraph at a time, so what you write goes
-where Blue Pencil's checks go: nowhere with a local model, to OpenAI on
-ChatGPT. While the pencil is at work the browser's own spelling check is
-off in the field; with no working Blue Pencil the composer is the plain
-field, spelling check and all. The settings are in
+level, custom prompt — and its rules, a paragraph at a time, so what you
+write goes where Blue Pencil's checks go: nowhere with a local model, to
+OpenAI on ChatGPT. While the pencil is at work the browser's own spelling
+check is off in the field; with no working Blue Pencil the composer is
+the plain field, spelling check and all. The settings are in
 [Blue Pencil](https://exe.v2core.com/docs/using/blue-pencil).
 
 ### How an agent posts
@@ -3430,6 +3430,9 @@ the wording left alone.
   place of yours, and **Copy** takes it somewhere else.
 - **Your words stay yours.** The pencil is told to change only what is
   wrong and to leave the rest as you wrote it.
+- **Your own rules.** A **Custom prompt** in the options tells the pencil
+  how you write — "I prefer writing in lowercase" — and every check
+  follows it.
 - **Private on a local model.** The check runs on the Ollama endpoint exe
   is pointed at, so with a local model nothing you write leaves this
   machine. A ChatGPT subscription is the other choice.
@@ -3511,6 +3514,9 @@ punctuation and capitalization, and to leave alone:
   to proofread, not a message to the model, so it answers and follows
   none of them.
 
+To have it leave more alone, or work to a rule of your own, see
+**Tell the pencil how you write**, below.
+
 ### Keep several drafts
 
 The column down the left lists your drafts, the way a Claude Code or
@@ -3578,6 +3584,7 @@ Click the model name at the right end of the status line, and
 | **Check on** | The backend the check runs on: **Ollama**, the endpoint in Configuration, or **ChatGPT**, the subscription signed in under **Configuration → OpenAI**. |
 | **Model** | A model of that backend for this app alone. **Configured** keeps the one named in Configuration. |
 | **Thinking** | How hard the model thinks. **Max** is the default: the best reading of the passage is worth the wait. |
+| **Custom prompt** | Your own instructions to the model, sent with every check. |
 | **Mark changes in the checked text** | Whether changes are marked at all. |
 
 - **Which models.** The list is what the backend serves. The ChatGPT
@@ -3588,10 +3595,29 @@ Click the model name at the right end of the status line, and
   think out loud in the answer. A level a ChatGPT model rejects runs at
   its default. **Configured** keeps the effort set in Configuration.
 
-Another backend, model or thinking level is another opinion, so every
-draft is checked again, the open one first. The options are kept with
-the app's data: every desk on this node checks with them, and so does
-the Hub composer.
+Another backend, model, thinking level or custom prompt is another
+opinion, so every draft is checked again, the open one first. The
+options are kept with the app's data: every desk on this node checks
+with them, and so does the Hub composer.
+
+### Tell the pencil how you write
+
+**Custom prompt**, in the same options, is for what the pencil should
+know about your writing. Say it in your own words, in any language:
+
+- `I prefer writing in lowercase.`
+- `Use British spelling.`
+- `中英文之间加一个空格。`
+
+It goes to the model with every check, behind the pencil's own rules,
+and wins where the two differ. With the first line above, a lowercase
+draft keeps its lowercase and still has its spelling and grammar put
+right.
+
+- **Return** starts a new line in the field. Command-Return or
+  Control-Return presses **OK**.
+- The field takes up to 2,000 characters.
+- Empty it to go back to the pencil's rules alone.
 
 ### Where your text goes
 
