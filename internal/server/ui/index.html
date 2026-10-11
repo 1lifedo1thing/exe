@@ -1025,7 +1025,27 @@ pre.out { background: #10120f; color: #cfe3cf; border: 1px solid var(--black); p
    in bold — and every found word on yellow, as the Hub marks what Find
    found. A line is a link in the text's own colour: the chapter's name is
    the one blue line of its entry. */
-#docs-find { flex: none; }
+#docs-find { flex: none; position: relative; }
+/* The field's clear box: a 13px grey disc with a white cross at the
+   field's right end, there while the field holds anything, and a press on
+   it empties the field as Escape does. Its box is the field's own height
+   and 23px of its width, the disc in the middle, 5px in from the field's
+   edge; the field keeps that room clear of its text whether the disc is
+   there or not, so no letter moves when it comes. Pressed, the disc goes
+   dark, as a button's face does. Stepped pixels at whole scales (.px);
+   between 1x and 2x a copy in geometry (.vec), where a one-pixel
+   diagonal would smear. */
+#docs-find input { padding-right: 24px; }
+#docs-x { position: absolute; top: 8px; bottom: 8px; right: 9px; width: 23px; padding: 0; border: 0;
+  background: none; color: var(--g700); display: none; align-items: center; justify-content: center; }
+#docs-find.has #docs-x { display: flex; }
+#docs-x:active { color: var(--black); }
+#docs-x svg { display: block; flex: none; }
+#docs-x .vec { display: none; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  #docs-x .px { display: none; }
+  #docs-x .vec { display: inline; }
+}
 #docs-md mark { background: #ffff66; color: inherit; }
 #docs-md ol.docs-found { margin: 6px 0 4px; padding: 0 0 0 26px; }
 #docs-md ol.docs-found li { margin: 0; padding: 2px 0 6px; }
@@ -1424,6 +1444,8 @@ body.mobile #log-panel { flex: 1 1 auto; }
 body.mobile #log-box { flex: 1 1 auto; height: auto !important; }
 body.mobile #news-list { height: 100% !important; }
 body.mobile #docs-body { height: 100% !important; }
+/* a finger's target round the manual's clear box, as round the close box */
+body.mobile #docs-x::before { content: ""; box-sizing: border-box; position: absolute; inset: -8px; }
 body.mobile .term-window .hostterm-box { height: 100%; }
 /* an agent window's session column becomes a strip of tabs above the terminal */
 body.mobile .term-window .agent-wrap { height: 100%; flex-direction: column; }
@@ -2003,6 +2025,18 @@ body.mobile th.sorted {
     <div class="win-frame paper">
       <div id="docs-find">
         <input type="text" id="docs-q" placeholder="Search the manual" autocomplete="off" spellcheck="false" disabled>
+        <button id="docs-x" tabindex="-1" aria-label="Clear" title="Clear">
+          <svg width="13" height="13" viewBox="0 0 13 13" shape-rendering="crispEdges">
+            <g class="px">
+              <path fill="currentColor" d="M4 0h5v1H4zM2 1h9v1H2zM1 2h11v2H1zM0 4h13v5H0zM1 9h11v2H1zM2 11h9v1H2zM4 12h5v1H4z"/>
+              <path fill="#fff" d="M3 3h1v1H3zM4 4h1v1H4zM5 5h1v1H5zM6 6h1v1H6zM7 7h1v1H7zM8 8h1v1H8zM9 9h1v1H9zM9 3h1v1H9zM8 4h1v1H8zM7 5h1v1H7zM5 7h1v1H5zM4 8h1v1H4zM3 9h1v1H3z"/>
+            </g>
+            <g class="vec" shape-rendering="geometricPrecision">
+              <circle cx="6.5" cy="6.5" r="6.5" fill="currentColor"/>
+              <path fill="none" stroke="#fff" stroke-width="1.3" d="M3.4 3.4l6.2 6.2M9.6 3.4l-6.2 6.2"/>
+            </g>
+          </svg>
+        </button>
       </div>
       <div class="win-body" style="padding:0">
         <div id="docs-body" class="vflush">
@@ -4000,6 +4034,7 @@ function docsFound(box) {
 // leaves it there and takes the yellow off.
 function docsFind() {
   const was = docsQ, scroller = $("#docs-body");
+  $("#docs-find").classList.toggle("has", $("#docs-q").value !== ""); // the clear box
   docsQ = docsWords($("#docs-q").value);
   if (!docsLoaded || (!docsQ && !was)) return;
   const back = docsAt >= 0 ? { at: docsAt, top: scroller.scrollTop } : docsBack;
@@ -4012,14 +4047,18 @@ function docsFind() {
   }
 }
 $("#docs-q").addEventListener("input", docsFind);
+const docsClear = () => { $("#docs-q").value = ""; docsFind(); };
 // Return brings the found chapters back over a chapter opened from them (as
 // the Contents button does while the field holds words); Escape empties
-// the field
+// the field, and so does the clear box at its right end — which leaves
+// the keyboard where it was, in the field or out of it
 $("#docs-q").addEventListener("keydown", e => {
   if (e.isComposing) return;
   if (e.key === "Enter" && docsQ && docsAt >= 0) docsFind();
-  if (e.key === "Escape" && e.target.value) { e.target.value = ""; docsFind(); }
+  if (e.key === "Escape" && e.target.value) docsClear();
 });
+$("#docs-x").addEventListener("mousedown", e => e.preventDefault());
+$("#docs-x").onclick = docsClear;
 $("#docs-toc").onclick = () => docsShow(-1);
 $("#docs-prev").onclick = () => docsShow(docsAt - 1);
 $("#docs-next").onclick = () => docsShow(docsAt + 1);

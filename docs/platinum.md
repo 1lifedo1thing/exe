@@ -307,7 +307,17 @@ restyling: `internal/server/ui/index.html` (the desktop),
   and Return lead back to the found chapters; emptied — Escape does it, as
   in the Log Viewer's filter — the field gives back the page the search
   was begun from, where it was being read, or leaves a found chapter on
-  the paper without its marks. The window never changes height for any of
+  the paper without its marks. While the field holds anything a clear
+  box stands at its right end (`#docs-x`): a 13px disc of `--g700` with a
+  white cross of seven pixels a stroke, 5px in from the field's edge in a
+  box 23px wide and the field's height, and the field keeps that room
+  clear of its text whether the disc is there or not, so no letter moves
+  when it comes. Pressed it goes to `--black`; a press empties the field
+  as Escape does and leaves the keyboard where it was, in the field or
+  out of it (no keyboard rises on a phone, where a finger has 8px more
+  round the box). It is off the Tab round: Escape is its key. Stepped
+  pixels at whole scales, a copy in geometry between 1x and 2x, where a
+  one-pixel diagonal smears. The window never changes height for any of
   it, and the default height's limit gives up the bar's own, so a short
   screen's window ends where it did.
 - A pad of pages (Notes, `/www/exe-apps/Notes`): Mac OS's Note Pad,

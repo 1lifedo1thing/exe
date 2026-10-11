@@ -33,11 +33,11 @@ The menu bar works like the classic Mac it resembles:
   each with how many places hold them and up to three of its lines.
   Click a line to open the chapter at that word; the found words stand
   on yellow there too. **Contents** (or Return in the field) brings the
-  list back, and emptying the field (Escape does it) gives back the page
-  you were reading. A reference from one chapter to another turns to it
-  in the same window, and the window comes back where you left it. It
-  opens just tall enough to show the whole contents page, and keeps a
-  height you drag it to.
+  list back, and emptying the field — Escape, or the circled × at its
+  right end — gives back the page you were reading. A reference from one
+  chapter to another turns to it in the same window, and the window
+  comes back where you left it. It opens just tall enough to show the
+  whole contents page, and keeps a height you drag it to.
 - **Show All Windows** — the button at the right, left of the magnifier:
   every open window shrinks into a grid. The one under the pointer turns
   blue and shows its name; click it to bring it forward, or click the desk,
