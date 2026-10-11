@@ -1559,7 +1559,7 @@ body.mobile th.sorted {
 <div class="dropdown" id="dd-special" hidden>
   <div class="dd-item" data-act="macos9">Mac OS 9</div>
   <div class="dd-sep"></div>
-  <div class="dd-item" data-act="join">Join…</div>
+  <div class="dd-item" data-act="join">Node Sync…</div>
   <div class="dd-item" data-act="hubjoin">Join a Hub…</div>
   <div class="dd-sep"></div>
   <div class="dd-item" data-act="cfstatus">Cloudflare Status…</div>
@@ -11214,7 +11214,8 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-// ---- node sync: Join dialog (Special ▸ Join…) ----
+// ---- node sync: the Node Sync dialog (Special ▸ Node Sync…; the action
+// is still "join", as menus people customized say it) ----
 // Latency refreshes every 5 s while the dialog is open (the daemon probes
 // its peers and caches for 5 s; ?force=1 bypasses that cache), matching the
 // VM list's polling cadence.

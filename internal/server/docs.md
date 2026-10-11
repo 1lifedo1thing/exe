@@ -76,7 +76,7 @@ The small Mac at its left end is the **Apple menu**.
 | Windows | **Configuration** | Edits exe's settings. See [Configuration](https://exe.v2core.com/docs/using/configuration). |
 | Windows | **Log Viewer** | The daemon's log and the log of requests to the API. |
 | Special | **Mac OS 9** | Opens a Mac running Mac OS 9. See [Mac OS 9](https://exe.v2core.com/docs/using/mac-os-9). |
-| Special | **Join…** | Pairs this exe with another one. See [Joining desks together](https://exe.v2core.com/docs/using/joining-desks-together). |
+| Special | **Node Sync…** | Pairs this exe with another one. See [Joining desks together](https://exe.v2core.com/docs/using/joining-desks-together). |
 | Special | **Join a Hub…** | Joins a hub, a step at a time. See [The Hub](https://exe.v2core.com/docs/using/the-hub). |
 | Special | **Cloudflare Status…** | The tunnel's state and its live counters. |
 | Special | **Cloudflare Setup Wizard…** | Sets up the tunnel and the domain. See [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web). |
@@ -1132,7 +1132,7 @@ needs a label before it, as in `My terminal<TAB>terminal`.
 | `winlog` | Open the Log Viewer. |
 | `search` | Open desktop Search. |
 | `trash` | Open the Trash. |
-| `join` | Open the Node Sync dialog (**Special → Join…**) to pair another exe node. |
+| `join` | Open the Node Sync dialog (**Special → Node Sync…**) to pair another exe node. |
 | `hubjoin` | Open the Hub app on **Join a Hub**, its four steps for joining a hub. |
 | `cfstatus` | Open Cloudflare Status. |
 | `cfwizard` | Open the Cloudflare Setup Wizard. |
@@ -2820,10 +2820,10 @@ your VMs, your configuration or a shell.
 
 The two nodes must be able to reach each other, as they can on one tailnet.
 
-1. On the other node, choose **Special → Join…**. In the **Node Sync**
-   dialog that opens, press **New Join Code**: the code works once, for ten
+1. On the other node, choose **Special → Node Sync…**. In the dialog
+   that opens, press **New Join Code**: the code works once, for ten
    minutes. **This node**, above the code, shows that node's address.
-2. On this node, choose **Special → Join…**. Under **Join another node**
+2. On this node, choose **Special → Node Sync…**. Under **Join another node**
    type the other node's address (its Tailscale IP, with `:port` after it if
    its desktop is not on 7777) and the code, and press **Join**.
 
