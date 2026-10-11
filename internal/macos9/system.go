@@ -91,11 +91,18 @@ var macOSX = &system{
 }
 
 func macOSXMachine(installer bool) []string {
-	// PMU, not Mac OS 9's CUDA: Mac OS X then has a USB keyboard and mouse
-	// and its own driver takes the USB tablet, with no loader in the ROM.
+	// The pointer must be where the browser's is, as Mac OS 9's is: that is
+	// the USB tablet, which Mac OS X's own driver takes with no loader in the
+	// ROM. It has to be the only USB pointer. The plain PMU board (via=pmu)
+	// builds a USB mouse of its own, and once the installed system had started
+	// that mouse, not the tablet, was the pointer QEMU's display fed: the
+	// arrow then followed the browser's by relative steps the Mac speeds up,
+	// and landed nowhere near it. via=pmu-adb gives the board an ADB keyboard
+	// and mouse instead, as Mac OS 9's CUDA board has, and keeps the PMU,
+	// under which Restart brings the Mac back.
 	// Mac OS X keeps universal time in the Mac's clock, where Mac OS 9 kept
 	// local time, and an install needs no date of its own.
-	args := []string{"-machine", "mac99,via=pmu", "-cpu", "G4", "-m", "1024", "-accel", "tcg,tb-size=256", "-prom-env", "vga-ndrv?=true", "-g", "1024x768x32", "-vga", "none", "-device", "VGA,edid=on,xres=1024,yres=768,xmax=1024,ymax=768", "-device", "usb-tablet", "-rtc", "base=utc,clock=vm"}
+	args := []string{"-machine", "mac99,via=pmu-adb", "-cpu", "G4", "-m", "1024", "-accel", "tcg,tb-size=256", "-prom-env", "vga-ndrv?=true", "-g", "1024x768x32", "-vga", "none", "-device", "VGA,edid=on,xres=1024,yres=768,xmax=1024,ymax=768", "-usb", "-device", "usb-tablet", "-rtc", "base=utc,clock=vm"}
 	if installer {
 		// The Installer ends by restarting the Mac, which would start the DVD
 		// again. The restart ends the emulator instead, and the app's

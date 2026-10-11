@@ -78,6 +78,18 @@ function error(e, source = 'action') {
   if (e.retryable) { reconnecting(); return; }
   errorSource = source; $('#error').textContent = e.message; $('#error').hidden = false;
 }
+// The bar's words give way to glyphs when they would not fit in one row. The
+// row is measured, not a width named in the stylesheet: the type is the
+// visitor's own, and the bar must never be taller in a wider window than in a
+// narrower one, because the window is fitted around this page's height
+// (fitWindow) and two such widths chase each other for as long as it stands.
+const bar = $('#bar');
+function fitBar() {
+  bar.classList.remove('glyphs');
+  const tops = [...bar.children].filter(el => el.getClientRects().length).map(el => el.offsetTop);
+  bar.classList.toggle('glyphs', Math.max(...tops) > Math.min(...tops) + 16);
+}
+new ResizeObserver(fitBar).observe(document.documentElement);
 // Whole device pixels keep the guest's bitmap text even at fractional OS
 // scaling. Give noVNC the matching CSS viewport so input uses the same scale.
 const screen = $('#screen'), display = $('#display');
@@ -97,10 +109,14 @@ function fitWindow(canvas) {
     const el = $(selector), css = getComputedStyle(el);
     return sum + (el.hidden ? 0 : el.getBoundingClientRect().height + parseFloat(css.marginTop || 0) + parseFloat(css.marginBottom || 0));
   }, parseFloat(getComputedStyle($('main')).borderTopWidth) || 0) - 1e-6);
-  const key = [canvas.width, canvas.height, chromeHeight, screen.clientWidth, screen.clientHeight, devicePixelRatio].join(':');
+  // With the setup guide open the window keeps a width the guide reads at.
+  // Fitted to a display that had to shrink, a narrower window made the guide
+  // longer, which shrank the display again: down to a Mac 200 pixels wide.
+  const guide = $('#guide'), minWidth = !guide.hidden && guide.open ? 640 : 0;
+  const key = [canvas.width, canvas.height, chromeHeight, minWidth, screen.clientWidth, screen.clientHeight, devicePixelRatio].join(':');
   if (key === lastWindowSize) return;
   lastWindowSize = key;
-  parent.postMessage({exe: 'display-size', width: canvas.width, height: canvas.height, chromeHeight}, location.origin);
+  parent.postMessage({exe: 'display-size', width: canvas.width, height: canvas.height, chromeHeight, minWidth}, location.origin);
 }
 function fitDisplay() {
   const canvas = display.querySelector('canvas');
@@ -224,6 +240,7 @@ function render(s) {
     'Open Setup details to review progress, or choose Continue setup to resume.';
   if (s.phase === 'error' || s.phase === 'interrupted') error(new Error(s.message), 'setup');
   else clearError('setup');
+  fitBar();
   if (s.running) connect();
   else if (rfb) { rfb.disconnect(); }
   else $('#connection').textContent = '';

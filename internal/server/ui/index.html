@@ -5537,7 +5537,9 @@ function fitMacOS9Window(w) {
   const scale = pixels >= 1 ? pixels / density : fit;
   // Round the containing window up so its integer client size never shaves a
   // fraction off the exact guest viewport and costs a whole device-pixel step.
-  w.style.width = Math.ceil(size.width * scale) + borderW + "px";
+  // The page may ask for a width to read its setup guide at (minWidth): a
+  // shrunk display then stands in the middle of a wider window.
+  w.style.width = Math.max(Math.ceil(size.width * scale), Math.min(size.minWidth, availableW)) + borderW + "px";
   fr.style.height = Math.ceil(size.height * scale) + size.chromeHeight + "px";
   w.style.left = Math.max(4, Math.min(w.offsetLeft, desktop.clientWidth - w.offsetWidth - 4)) + "px";
   w.style.top = Math.max(4, Math.min(w.offsetTop, desktop.clientHeight - w.offsetHeight - 4)) + "px";
@@ -5613,7 +5615,8 @@ window.addEventListener("message", e => {
     const {width, height, chromeHeight} = e.data;
     if (![[640, 480], [800, 600], [1024, 768]].some(([x, y]) => x === width && y === height) ||
         !Number.isFinite(chromeHeight) || chromeHeight < 0 || chromeHeight > 2000) return;
-    w._macDisplay = {width, height, chromeHeight};
+    const minWidth = Number.isFinite(e.data.minWidth) ? Math.max(0, Math.min(e.data.minWidth, width)) : 0;
+    w._macDisplay = {width, height, chromeHeight, minWidth};
     fitMacOS9Window(w);
   } else if (e.data.exe === "grow-start" && !IS_MOBILE) {
     appGrow = { win: w, frame: fr, w: w.offsetWidth, h: fr.offsetHeight };

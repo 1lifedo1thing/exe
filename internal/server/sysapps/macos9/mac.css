@@ -213,12 +213,16 @@ progress::-moz-progress-bar { background: var(--hl); }
 #message { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #connection, #hardware { flex: none; white-space: nowrap; }
 a { color: var(--hl); }
+/* The bar's words give way to glyphs when they would not fit in one row.
+   app.js measures the row and sets the class (fitBar): a width named here
+   left a band just above it where the words came back and wrapped, so that a
+   wider window had the taller bar, and the window, fitted around this page's
+   height, flipped between the two sizes a frame each. */
+#bar.glyphs #sound-label, #bar.glyphs #cd-label, #bar.glyphs #cd-name { display: none; }
+#bar.glyphs #cd-group { min-width: 28px; flex: none; }
+#bar.glyphs #cd { min-width: 28px; padding: 0; }
+#bar.glyphs #sound { min-width: 28px; padding: 0; }
 @media (max-width: 650px) {
   #bar-help, #hardware { display: none; }
-  #sound-label, #cd-label, #cd-name { display: none; }
-  #cd-group { min-width: 28px; flex: none; }
-  #bar #cd { min-width: 28px; padding: 0; }
-  #bar #sound { min-width: 28px; padding: 0; }
-  #bar { gap: 12px; }
   #screen { min-height: 220px; }
 }

@@ -1566,11 +1566,10 @@ machines and can run at the same time.
 4. Copying takes ten minutes to a quarter of an hour on a fast machine and
    longer on a slow one. At its end the Installer restarts the Mac, which
    closes the screen. Click **Installation finished — start my Mac**.
-5. The Mac starts from its hard disk and first asks you to identify the
-   keyboard: click **OK**, press **Z**, then **/**, and keep **ANSI**.
-   Tiger's Setup Assistant follows, with a country, a keyboard layout and
-   the name and password of your account. ⌘ Q on its registration page,
-   then **Skip**, goes straight to the account.
+5. The Mac starts from its hard disk into Tiger's Setup Assistant, which
+   asks for a country, a keyboard layout and the name and password of your
+   account. ⌘ Q on its registration page, then **Skip**, goes straight to
+   the account.
 
 Subsequent launches use the saved installation: opening the app starts the
 Mac from its disk. Pausing and resuming setup work as in the Mac OS 9 app.
@@ -1589,9 +1588,9 @@ describes them. What differs:
 - **Mac keys…** sends ⌘ Q to quit, ⌘ W to close, ⌘ Tab for the next
   application, ⌘ Space for Spotlight and ⌥ ⌘ Esc to force an application
   to quit: the keys your own computer keeps for itself.
-- **The pointer** is Mac OS X's own. It follows your browser cursor
-  directly, nothing is loaded into the Mac for it, and the mouse wheel
-  scrolls.
+- **The pointer** is where your browser's pointer is, to the pixel, as in
+  Mac OS 9, from the Installer's first screen on. Mac OS X drives it
+  itself, with nothing loaded into the Mac, and the mouse wheel scrolls.
 - **CD…** takes images up to 9 GiB, so a dual-layer DVD fits. The Mac
   starts with its drive empty: the install DVD stays in the list, to mount
   when you want Xcode from it.
@@ -1609,6 +1608,10 @@ turns black. **Mac keys… → Wake display**, or Shift with the Mac focused,
 wakes it. To keep it awake, set both sliders in **System Preferences →
 Energy Saver** to **Never**, or run
 `sudo pmset -a sleep 0 displaysleep 0 disksleep 0` in Terminal.
+
+Turn Tiger's screen saver off as well, under **System Preferences →
+Desktop & Screen Saver**: with no graphics card to draw it, it keeps a
+whole processor core of this machine busy for as long as it shows.
 
 ### Clock and network
 

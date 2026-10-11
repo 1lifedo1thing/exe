@@ -24,8 +24,10 @@ func argPairs(args []string) map[string][]string {
 }
 
 // The Mac OS X app's Mac is a PowerPC one of its own: a G4 on the PMU board
-// Mac OS X drives a USB tablet on, its own disk and sockets, and no part of
-// what the Mac OS 9 guest needs in its ROM.
+// with ADB input, where the USB tablet is the only USB pointer (beside the
+// plain PMU board's USB mouse the arrow did not follow the browser's), its
+// own disk and sockets, and no part of what the Mac OS 9 guest needs in its
+// ROM.
 func TestMacOSXLaunchIsAPowerPCMacOfItsOwn(t *testing.T) {
 	root, shared := t.TempDir(), t.TempDir()
 	m := NewMacOSX(root, shared)
@@ -33,7 +35,7 @@ func TestMacOSXLaunchIsAPowerPCMacOfItsOwn(t *testing.T) {
 		args := m.launchArgs(installer)
 		pairs := argPairs(args)
 		for flag, want := range map[string]string{
-			"-machine": "mac99,via=pmu", "-cpu": "G4", "-m": "1024", "-g": "1024x768x32",
+			"-machine": "mac99,via=pmu-adb", "-cpu": "G4", "-m": "1024", "-g": "1024x768x32",
 			"-name": "exe-mac-osx", "-rtc": "base=utc,clock=vm",
 			"-drive": "file=" + filepath.Join(root, "macosx.qcow2") + ",format=qcow2,media=disk",
 			"-vnc":   "unix:" + filepath.Join(root, "vnc.sock"),
@@ -45,6 +47,12 @@ func TestMacOSXLaunchIsAPowerPCMacOfItsOwn(t *testing.T) {
 		}
 		if got := strings.Join(pairs["-device"], " "); !strings.Contains(got, "usb-tablet") || !strings.Contains(got, "xres=1024,yres=768") {
 			t.Errorf("installer=%v: devices %q", installer, got)
+		}
+		// The tablet is the pointer, in the Installer and after: the arrow is
+		// then where the browser's is. It needs the USB bus, and a board
+		// that builds no USB mouse beside it (see macOSXMachine).
+		if !strings.Contains(" "+strings.Join(args, " ")+" ", " -usb -device usb-tablet ") || strings.Contains(strings.Join(args, " "), "usb-mouse") {
+			t.Errorf("installer=%v: the tablet is not the Mac's one USB pointer", installer)
 		}
 		if strings.Contains(strings.Join(args, " "), "nvramrc") {
 			t.Errorf("installer=%v: Mac OS X needs no tablet driver in the ROM", installer)
