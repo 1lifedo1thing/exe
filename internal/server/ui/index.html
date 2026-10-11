@@ -1062,6 +1062,11 @@ pre.out { background: #10120f; color: #cfe3cf; border: 1px solid var(--black); p
   border-top: 1px solid var(--black); background: var(--g300); user-select: none; }
 #docs-nav .fill { flex: 1; }
 #docs-prev, #docs-next { width: 72px; padding-left: 0; padding-right: 0; }
+/* a table wider than the paper (a phone's, with a long name in a cell)
+   scrolls in a box of its own, as the website's does (.tablebox), so the
+   page never loses its right edge */
+#docs-md .docs-tablebox { overflow-x: auto; margin: 6px 0; }
+#docs-md .docs-tablebox > table { margin: 0; }
 /* the manual's pictures: each a window, at its own size or the column's;
    its width and height keep its place while it loads */
 #docs-md img { display: block; max-width: 100%; height: auto; margin: 8px 0 12px; }
@@ -3885,6 +3890,8 @@ function docsShow(i, section, place) {
     }
     // an address the website would answer and this desktop would not
     box.querySelectorAll('a[href^="/docs/"]').forEach(a => a.setAttribute("href", DOCS_SITE + a.getAttribute("href")));
+    // a table gets the box it scrolls in when it is wider than the paper
+    box.querySelectorAll("table").forEach(t => { const w = el("div", { class: "docs-tablebox" }); t.replaceWith(w); w.append(t); });
     at = section && [...box.querySelectorAll("h2, h3, h4")].find(h => docSlug(h.textContent) === section);
     if (docsQ) docsBlocks(box).forEach((b, k) => {
       const first = docsMark(b.nodes, docsQ.res);
