@@ -3374,6 +3374,41 @@ async function shotDraw(ctx, doc, target, clip) {
   }
   return cv;
 }
+// A PNG says how dense it is in its pHYs chunk, and a Mac goes by it: its
+// own screenshot of a 2x screen says 144 to the inch, and Preview, Quick
+// Look and Keynote show the picture at the window's size, not twice it.
+// A canvas writes none, so one goes in behind the header, counted as Apple
+// counts: 72 to the inch for each pixel to the point.
+const SHOT_CRC = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let i = 0; i < 8; i++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c;
+  }
+  return t;
+})();
+function shotDensity(png, k) {
+  const b = new Uint8Array(png), at = new DataView(png);
+  // the signature's 8 bytes, then IHDR, always first and 25 long
+  if (b.length < 45 || at.getUint32(0) !== 0x89504e47 || at.getUint32(12) !== 0x49484452) return new Blob([b], { type: "image/png" });
+  const phys = new Uint8Array(21), v = new DataView(phys.buffer), perMetre = Math.round(72 * k / 0.0254);
+  v.setUint32(0, 9);
+  phys.set([0x70, 0x48, 0x59, 0x73], 4); // "pHYs"
+  v.setUint32(8, perMetre); v.setUint32(12, perMetre);
+  phys[16] = 1; // the unit is the metre
+  let crc = 0xffffffff;
+  for (let i = 4; i < 17; i++) crc = SHOT_CRC[(crc ^ phys[i]) & 255] ^ (crc >>> 8);
+  v.setUint32(17, (crc ^ 0xffffffff) >>> 0);
+  // every chunk after the header, but a pHYs the browser wrote itself
+  const parts = [b.subarray(0, 33), phys];
+  for (let i = 33; i + 12 <= b.length;) {
+    const end = i + 12 + at.getUint32(i);
+    if (at.getUint32(i + 4) !== 0x70485973) parts.push(b.subarray(i, end));
+    i = end;
+  }
+  return new Blob(parts, { type: "image/png" });
+}
 // a window as a PNG: its frame and the hard shadow it casts, on nothing
 async function shotWindow(w) {
   const dpr = window.devicePixelRatio || 1;
@@ -3391,7 +3426,8 @@ async function shotWindow(w) {
   clip.dx = into(x, clip.w, window.innerWidth); clip.dy = into(y, clip.h, window.innerHeight);
   clip.x += clip.dx; clip.y += clip.dy;
   const cv = await shotDraw(ctx, document, w, clip);
-  return new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error("the picture could not be made")), "image/png"));
+  const png = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error("the picture could not be made")), "image/png"));
+  return shotDensity(await png.arrayBuffer(), ctx.scale);
 }
 let shotBusy = false;
 async function shotSave(w) {

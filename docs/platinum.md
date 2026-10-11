@@ -411,7 +411,10 @@ restyling: `internal/server/ui/index.html` (the desktop),
   550ms on a touch screen (`winMenu`). Its one item, **Save a Screenshot**
   (`shotWindow`), draws the window a second time from a copy of its markup
   and the document's style sheets inside an SVG `foreignObject`, at a whole
-  number of pixels to the point. So a window comes out right when what it
+  number of pixels to the point, and writes that density into the PNG as
+  Apple does (`pHYs`, 72 to the inch a pixel: `shotDensity`), which is what
+  makes Preview show a 2x picture at the window's size. So a window comes
+  out right when what it
   shows is said in markup and style sheets. Carried over by the code:
   typed text, ticks, scroll positions, the focus ring, a canvas, a movie's
   frame, a same-origin frame. Not carried: `:hover`, a selection, a

@@ -150,7 +150,9 @@ for a post or a bug report, and where an agent can read it.
 - The window is saved as it stands: scrolled where you left it, the field
   you were typing in still ringed. Dialogs have the menu too.
 - On a sharp screen the picture is sharp too: two pixels to the point on
-  most, at Windows' 150 percent as well, and three on a phone.
+  most, at Windows' 150 percent as well, and three on a phone. The file
+  says so the way a Mac's own screenshots do (144 to the inch at two), so
+  Preview and Quick Look open it at the window's size, not twice it.
 - Three things come out empty or plain: a web page from the Workspace and a
   player from another site (the desktop cannot see into them), a 3D view
   that is not redrawn every frame, and selected text, which shows unselected.
