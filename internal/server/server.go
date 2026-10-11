@@ -44,6 +44,8 @@ import (
 type Server struct {
 	macOS9Once sync.Once
 	macOS9     *macos9.Manager
+	macOSXOnce sync.Once
+	macOSX     *macos9.Manager
 	VMs        vmm.Manager
 	Proxy      *proxy.Proxy
 	KeyPath    string
@@ -290,14 +292,18 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc(m+" /v1/svc/{name}", s.handleServiceRelay)
 		mux.HandleFunc(m+" /v1/svc/{name}/{path...}", s.handleServiceRelay)
 	}
-	mux.HandleFunc("GET /v1/macos9", s.handleMacOS9Status)
-	mux.HandleFunc("POST /v1/macos9/start", s.handleMacOS9Start)
-	mux.HandleFunc("POST /v1/macos9/cancel", s.handleMacOS9Cancel)
-	mux.HandleFunc("POST /v1/macos9/finish", s.handleMacOS9Finish)
-	mux.HandleFunc("GET /v1/macos9/console", s.handleMacOS9Console)
-	mux.HandleFunc("GET /v1/macos9/cd", s.handleMacOS9CD)
-	mux.HandleFunc("POST /v1/macos9/cd", s.handleMacOS9ChangeCD)
-	mux.HandleFunc("POST /v1/macos9/cd/upload", s.handleMacOS9UploadCD)
+	// The Mac OS 9 app's Mac and the Mac OS X app's: one API, a root each
+	// (s.mac picks the Mac by the path).
+	for _, mac := range []string{"/v1/macos9", "/v1/macosx"} {
+		mux.HandleFunc("GET "+mac, s.handleMacOS9Status)
+		mux.HandleFunc("POST "+mac+"/start", s.handleMacOS9Start)
+		mux.HandleFunc("POST "+mac+"/cancel", s.handleMacOS9Cancel)
+		mux.HandleFunc("POST "+mac+"/finish", s.handleMacOS9Finish)
+		mux.HandleFunc("GET "+mac+"/console", s.handleMacOS9Console)
+		mux.HandleFunc("GET "+mac+"/cd", s.handleMacOS9CD)
+		mux.HandleFunc("POST "+mac+"/cd", s.handleMacOS9ChangeCD)
+		mux.HandleFunc("POST "+mac+"/cd/upload", s.handleMacOS9UploadCD)
+	}
 	mux.HandleFunc("GET /v1/apps", s.handleApps)
 	mux.HandleFunc("GET /v1/apps/events", s.handleAppDataEvents)
 	mux.HandleFunc("GET /v1/apps/{app}/data", s.handleAppDataList)

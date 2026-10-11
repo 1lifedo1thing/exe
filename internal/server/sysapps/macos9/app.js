@@ -2,11 +2,14 @@ import RFB from './core/rfb.js';
 import MacAudio from './audio.js';
 import initCD from './cd.js';
 const $ = s => document.querySelector(s);
+// This script runs both Macs. The page says which one it shows: the API its
+// Mac answers on and the few words that differ (<body data-…>).
+const mac = document.body.dataset;
 const token = new URLSearchParams(location.search).get('token') || '';
 let status, rfb, pending = false, connected = false, nextConnect = 0;
 let errorSource = '', apiOffline = false, connectTimer;
 const audio = new MacAudio();
-const cd = initCD({token, modal:(open, restore) => dialog(open, '#cd-veil', '#cd', '#cd-close', restore)});
+const cd = initCD({api: mac.api + '/cd', maxGiB: +mac.cdGib, token, modal:(open, restore) => dialog(open, '#cd-veil', '#cd', '#cd-close', restore)});
 let soundWanted = false, soundError = '', soundAttempt = 0;
 function updateSound() {
   const available = connected && !!rfb?.capabilities.audio;
@@ -44,7 +47,7 @@ async function api(path = '', method = 'GET') {
   // A half-open connection must not prevent every later status poll.
   const timeout = setTimeout(() => controller.abort(), method === 'GET' ? 8000 : 30000);
   try {
-    const response = await fetch('/v1/macos9' + path, {method, signal: controller.signal,
+    const response = await fetch(mac.api + path, {method, signal: controller.signal,
       headers: token ? {Authorization: 'Bearer ' + token} : {}, cache: 'no-store'});
     if (!response.ok) {
       const e = new Error(response.status === 401 ? 'Set your API token in exe’s Special menu, then reopen this app.' : (await response.text()).trim() || `HTTP ${response.status}`);
@@ -86,10 +89,14 @@ let lastWindowSize = '';
 function fitWindow(canvas) {
   if (parent === window || expandedDisplay || fullscreenElement()) return;
   // Keep the toolbar, setup guide and status bar at their normal UI size.
-  const chromeHeight = 1 + ['#bar', '#status', '#guide', '#error'].reduce((sum, selector) => {
+  // Their heights are fractions of a CSS pixel at fractional display scaling
+  // (a 1px border is one device pixel), and a long guide wraps to any height:
+  // sum what is laid out, not each offsetHeight's rounding, and round the
+  // total up, or the screen comes out a fraction short of a whole pixel scale.
+  const chromeHeight = Math.ceil(['#bar', '#status', '#guide', '#error'].reduce((sum, selector) => {
     const el = $(selector), css = getComputedStyle(el);
-    return sum + (el.hidden ? 0 : el.offsetHeight + parseFloat(css.marginTop || 0) + parseFloat(css.marginBottom || 0));
-  }, 0);
+    return sum + (el.hidden ? 0 : el.getBoundingClientRect().height + parseFloat(css.marginTop || 0) + parseFloat(css.marginBottom || 0));
+  }, parseFloat(getComputedStyle($('main')).borderTopWidth) || 0) - 1e-6);
   const key = [canvas.width, canvas.height, chromeHeight, screen.clientWidth, screen.clientHeight, devicePixelRatio].join(':');
   if (key === lastWindowSize) return;
   lastWindowSize = key;
@@ -134,7 +141,7 @@ const framebufferResize = new MutationObserver(fitDisplay);
 framebufferResize.observe(display, {childList: true, subtree: true, attributes: true, attributeFilter: ['width', 'height']});
 function connect() {
   if (!viewActive || rfb || Date.now() < nextConnect) return;
-  const url = new URL('/v1/macos9/console', location.href);
+  const url = new URL(mac.api + '/console', location.href);
   url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   if (token) url.searchParams.set('token', token);
   const client = new RFB(display, url.href, {wsProtocols: ['binary']});
@@ -173,15 +180,19 @@ function connect() {
     if (rfb === client) error(new Error(e.detail.reason || 'The Mac display connection was refused.'), 'display');
   });
 }
+// A first setup begins as the app opens, unless the page says what it will
+// fetch and waits to be asked (data-before-setup): Mac OS X's begins with a
+// download of gigabytes, which a look at the app should not start.
+const asks = s => s?.phase === 'new' && !s.active && !!mac.beforeSetup;
 function render(s) {
-  const initialSetup = !status && !s.installed && !s.running && s.phase !== 'installing';
+  const initialSetup = !status && !s.installed && !s.running && s.phase !== 'installing' && !asks(s);
   status = s;
   if (!s.running && expandedDisplay) expandDisplay(false);
   $('#message').textContent = s.message;
   $('#message').title = s.message;
-  $('#hardware').textContent = 'PowerPC G4 · 512 MB · ' + (s.installed ? 'Ethernet NAT' : 'Ethernet after installation');
+  $('#hardware').textContent = mac.hardware + ' · ' + (s.installed ? 'Ethernet NAT' : 'Ethernet after installation');
   $('#start').hidden = s.active || s.running;
-  $('#start').textContent = s.installed ? 'Start Mac' : s.phase === 'installing' ? 'Resume installer' : 'Continue setup';
+  $('#start').textContent = s.installed ? 'Start Mac' : s.phase === 'installing' ? 'Resume installer' : asks(s) ? 'Set up Mac' : 'Continue setup';
   $('#start').disabled = pending;
   $('#cancel').hidden = !s.active; $('#cancel').disabled = pending;
   $('#setup-loading').hidden = true;
@@ -207,8 +218,9 @@ function render(s) {
   $('#cd-group').hidden = !s.running;
   $('#empty').hidden = s.running;
   $('#empty-text').textContent = s.active ? 'Your Mac is being set up. Open Setup details to follow its progress.' :
-    s.phase === 'installing' ? 'The Mac has stopped. If Apple Software Restore finished successfully, use the button above to start from your hard disk.' :
+    s.phase === 'installing' ? mac.afterInstall :
     s.installed ? 'Your Mac is shut down. Its files are saved. Click Start Mac to return to the desktop.' :
+    asks(s) ? mac.beforeSetup :
     'Open Setup details to review progress, or choose Continue setup to resume.';
   if (s.phase === 'error' || s.phase === 'interrupted') error(new Error(s.message), 'setup');
   else clearError('setup');
@@ -223,7 +235,11 @@ async function action(path) {
   try { render(await api(path, 'POST')); } catch (e) { error(e); }
   finally { pending = false; if (status) render(status); }
 }
-$('#start').onclick = () => action('/start');
+$('#start').onclick = async () => {
+  const first = asks(status);
+  await action('/start');
+  if (first && status?.active) setupDetails(true);
+};
 $('#cancel').onclick = () => action('/cancel');
 $('#finish').onclick = async () => {
   if (pending) return;
@@ -262,10 +278,12 @@ $('#mac-keys').onchange = async e => {
   const key = e.target.value; e.target.value = '';
   const client = rfb; if (!connected || !key || shortcutBusy) return;
   shortcutBusy = true; e.target.disabled = true;
-  // A Shift tap wakes Energy Saver without typing or running a command.
-  // USB tablet movement alone does not wake this guest.
-  const keys = key === 'wake' ? [[0xffe1, 'ShiftLeft']] :
-    [[0xffeb, 'MetaLeft'], [key.charCodeAt(0), 'Key' + key.toUpperCase()]];
+  // A shortcut is its keys by name, joined with "+": the modifiers below, or
+  // a letter. A Shift tap alone wakes Energy Saver without typing or running
+  // a command; USB tablet movement alone does not wake this guest.
+  const named = {cmd: [0xffeb, 'MetaLeft'], opt: [0xffe9, 'AltLeft'], shift: [0xffe1, 'ShiftLeft'],
+    esc: [0xff1b, 'Escape'], tab: [0xff09, 'Tab'], space: [0x20, 'Space']};
+  const keys = key.split('+').map(k => named[k] || [k.charCodeAt(0), 'Key' + k.toUpperCase()]);
   // Classic Mac OS polls keyboard state; keep each key down long enough.
   for (const [symbol, code] of keys) {
     client.sendKey(symbol, code, true);
@@ -331,7 +349,7 @@ async function poll() {
     if (connected) { $('#connection').textContent = 'Connected'; $('#lamp').classList.add('on'); }
     render(s);
     cd.refresh();
-    if (initial && !s.running && (s.phase === 'new' || s.phase === 'stopped')) { initial = false; await action('/start'); }
+    if (initial && !s.running && !asks(s) && (s.phase === 'new' || s.phase === 'stopped')) { initial = false; await action('/start'); }
     initial = false;
   } catch (e) { error(e, 'request'); }
   finally {

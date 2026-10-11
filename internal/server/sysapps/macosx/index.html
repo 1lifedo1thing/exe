@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>Mac OS X</title>
+<!-- The Mac OS 9 app's window around another Mac: its stylesheet and its
+     script, told by <body data-…> which Mac this page shows. -->
+<link rel="stylesheet" href="../macos9/mac.css">
+</head>
+<body data-api="/v1/macosx" data-hardware="PowerPC G4 · 1 GB" data-cd-gib="9"
+  data-before-setup="Mac OS X is not set up on this computer yet. Set up Mac downloads Apple’s Tiger install DVD, 2.6 GiB, from the Internet Archive and takes you through the installation."
+  data-after-install="The Mac has stopped. If the Installer finished and restarted it, use the button above to start from your hard disk.">
+<header id="bar">
+  <button class="ghost" id="start" hidden>Start Mac</button>
+  <button class="ghost" id="cancel" hidden>Pause setup</button>
+  <button class="ghost" id="details" aria-haspopup="dialog" aria-controls="dlg" aria-expanded="false">Setup details</button>
+  <span class="popup" id="mac-keys-popup" hidden>
+    <select id="mac-keys" aria-label="Send keys to Mac"><option value="">Mac keys…</option><option value="shift">Wake display</option><option value="cmd+q">⌘ Q — Quit</option><option value="cmd+w">⌘ W — Close</option><option value="cmd+tab">⌘ Tab — Next application</option><option value="cmd+space">⌘ Space — Spotlight</option><option value="cmd+opt+esc">⌥ ⌘ Esc — Force Quit</option></select>
+    <span class="well" aria-hidden="true"><i><b></b></i></span>
+  </span>
+  <button class="ghost" id="full" hidden>Full screen</button>
+  <button class="ghost" id="sound" aria-label="Enable sound" aria-pressed="false" disabled hidden><svg viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M0 4h3V3h1V2h1V1h1v10H5v-1H4V9H3V8H0zM8 3h1v1h1v4H9v1H8V8h1V4H8zM10 1h1v1h1v8h-1v1h-1v-1h1V2h-1z"/></svg><span id="sound-label">Sound off</span></button>
+  <span id="cd-group" hidden><button class="ghost" id="cd" aria-label="CD images" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M4 0h4v1h2v1h1v2h1v4h-1v2h-1v1H8v1H4v-1H2v-1H1V8H0V4h1V2h1V1h2zM4 1v1H2v2H1v4h1v2h2v1h4v-1h2V8h1V4h-1V2H8V1zM5 4h2v1h1v2H7v1H5V7H4V5h1zM5 5v2h2V5z"/></svg><span id="cd-label">CD…</span></button><span id="cd-name">Checking CD…</span></span>
+  <span id="bar-help">Click the Mac screen to type</span>
+</header>
+<div id="error" role="alert" hidden></div>
+<main>
+<details id="guide" open hidden><summary>Install Mac OS X — follow these steps in the Mac screen</summary><ol>
+<li>Choose your language and click the arrow. When <b>Install Mac OS X</b> appears, choose <b>Utilities → Disk Utility…</b> from the Mac’s own menu bar.</li>
+<li>In Disk Utility select <b>100.0 GB QEMU HARDDISK</b>, click the <b>Erase</b> tab, give the disk a name, click <b>Erase</b> and confirm. Then choose <b>Disk Utility → Quit Disk Utility</b>.</li>
+<li>In the Installer click <b>Continue</b>, agree to the license, select your new disk, click <b>Continue</b>, then <b>Install</b>. You may <b>Skip</b> the check of the DVD.</li>
+<li>Copying takes a quarter of an hour or more. At its end the Installer restarts the Mac and this screen closes: click <b>Installation finished — start my Mac</b> below. On its first start the Mac asks you to identify the keyboard: press <b>Z</b>, then <b>/</b>.</li>
+</ol><div id="finish-row"><button class="ghost" id="finish" disabled>Installation finished — start my Mac</button></div><p>Disk Utility’s Erase applies to this Mac’s virtual hard disk. Use it only during this first installation.</p></details>
+<div id="screen" hidden aria-label="Mac OS X remote display"><div id="display"></div></div>
+<div id="empty" hidden><img src="icon.svg" alt=""><p id="empty-text">Your Mac is shut down. Its files are saved. Click Start Mac to return to the desktop.</p></div>
+</main>
+<footer id="status" role="status" aria-live="polite"><span id="lamp" aria-hidden="true"></span><span id="message">Checking your Mac…</span><span id="hardware">PowerPC G4 · 1 GB</span><span id="connection"></span></footer>
+
+<div id="veil">
+  <section id="dlg" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+    <h2 id="setup-title">Setup details</h2>
+    <div id="download-progress" hidden><progress id="progress" aria-label="Installer download"></progress><div id="transfer"></div></div>
+    <div id="setup" tabindex="0">
+      <p id="intro">Setup runs on this computer and continues if you close this dialog. Your Mac’s hard disk is kept for your next visit. <a href="https://archive.org/details/691-5305-A2ZMac_OS_X_v10.4_Tiger._Includes_Xcode_2._Install_Disc_2005_DVD" target="_blank" rel="noreferrer">Installer source</a>.</p>
+      <p id="setup-loading">Checking setup progress…</p>
+      <ol id="steps"></ol>
+    </div>
+    <div class="btns"><button class="ghost default" id="setup-close">OK</button></div>
+  </section>
+</div>
+
+<div id="cd-veil">
+  <section id="cd-dlg" role="dialog" aria-modal="true" aria-labelledby="cd-title">
+    <h2 id="cd-title">CD image</h2>
+    <div>Mounted CD</div><p id="cd-current">Checking the CD drive…</p>
+    <label for="cd-images">Available images</label>
+    <span class="popup"><select id="cd-images" disabled><option value="">Loading images…</option></select><span class="well" aria-hidden="true"><i><b></b></i></span></span>
+    <div class="btns"><button class="ghost" id="cd-upload">Upload image…</button><button class="ghost" id="cd-eject" disabled>Eject</button><button class="ghost" id="cd-mount" disabled>Mount</button></div>
+    <input type="file" id="cd-file" accept=".iso,.cdr,.img,.toast" hidden>
+    <p id="cd-note">Images stay on this computer for your next visit.</p>
+    <div id="cd-feedback" aria-live="polite"><div id="cd-progress" hidden><progress id="cd-upload-progress" max="1" value="0" aria-label="CD image upload"></progress><div id="cd-upload-status"></div></div><p id="cd-error"></p><button class="ghost" id="cd-force" hidden>Force eject</button></div>
+    <div class="btns"><button class="ghost default" id="cd-close">OK</button></div>
+  </section>
+</div>
+<script type="module" src="../macos9/app.js"></script>
+</body></html>

@@ -1,0 +1,182 @@
+package macos9
+
+import (
+	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func argPairs(args []string) map[string][]string {
+	pairs := map[string][]string{}
+	for i := 0; i < len(args)-1; i++ {
+		if strings.HasPrefix(args[i], "-") {
+			pairs[args[i]] = append(pairs[args[i]], args[i+1])
+		}
+	}
+	return pairs
+}
+
+// The Mac OS X app's Mac is a PowerPC one of its own: a G4 on the PMU board
+// Mac OS X drives a USB tablet on, its own disk and sockets, and no part of
+// what the Mac OS 9 guest needs in its ROM.
+func TestMacOSXLaunchIsAPowerPCMacOfItsOwn(t *testing.T) {
+	root, shared := t.TempDir(), t.TempDir()
+	m := NewMacOSX(root, shared)
+	for _, installer := range []bool{false, true} {
+		args := m.launchArgs(installer)
+		pairs := argPairs(args)
+		for flag, want := range map[string]string{
+			"-machine": "mac99,via=pmu", "-cpu": "G4", "-m": "1024", "-g": "1024x768x32",
+			"-name": "exe-mac-osx", "-rtc": "base=utc,clock=vm",
+			"-drive": "file=" + filepath.Join(root, "macosx.qcow2") + ",format=qcow2,media=disk",
+			"-vnc":   "unix:" + filepath.Join(root, "vnc.sock"),
+			"-qmp":   "unix:" + filepath.Join(root, "qmp.sock") + ",server=on,wait=off",
+		} {
+			if len(pairs[flag]) != 1 || pairs[flag][0] != want {
+				t.Errorf("installer=%v: %s is %q, want %q", installer, flag, pairs[flag], want)
+			}
+		}
+		if got := strings.Join(pairs["-device"], " "); !strings.Contains(got, "usb-tablet") || !strings.Contains(got, "xres=1024,yres=768") {
+			t.Errorf("installer=%v: devices %q", installer, got)
+		}
+		if strings.Contains(strings.Join(args, " "), "nvramrc") {
+			t.Errorf("installer=%v: Mac OS X needs no tablet driver in the ROM", installer)
+		}
+		joined := " " + strings.Join(args, " ") + " "
+		if installer {
+			for _, want := range []string{" -no-reboot ", " -boot d ", " -nic none ", " -cdrom " + filepath.Join(root, "media/MacOSX10.4-Tiger-Install.toast") + " "} {
+				if !strings.Contains(joined, want) {
+					t.Errorf("the install boot lacks %q", want)
+				}
+			}
+		} else {
+			if strings.Contains(joined, " -no-reboot ") || !strings.Contains(joined, " -boot c ") || !strings.Contains(joined, " -netdev user,id=net0,ipv6=off ") || !strings.Contains(joined, "sungem,netdev=net0,mac=52:54:00:10:04:00") {
+				t.Errorf("a normal boot is %q", joined)
+			}
+		}
+	}
+	if got := NewMacOSX(root, shared).Status().Steps; got[1].Title != "Download Mac OS X" || got[5].Title != "Install Mac OS X" {
+		t.Fatalf("steps name the wrong system: %+v", got)
+	}
+	nine := New(root)
+	if nine.launchArgs(false)[3] != "exe-mac-os9" || !strings.Contains(strings.Join(nine.launchArgs(false), " "), " -netdev user,id=net0 -device") || m.MaxCDSize() <= nine.MaxCDSize() {
+		t.Fatal("the Mac OS 9 Mac changed, or a DVD does not fit Mac OS X's library")
+	}
+}
+
+// One emulator runtime serves both Macs: the Mac OS X Mac finds QEMU, its
+// firmware and the optional sound build in the root it was told, and keeps
+// everything else in its own.
+func TestMacOSXRunsTheSharedRuntime(t *testing.T) {
+	root, shared := t.TempDir(), t.TempDir()
+	m := NewMacOSX(root, shared)
+	if m.binary("qemu-system-ppc") != "qemu-system-ppc" {
+		t.Fatal("found an emulator where none is unpacked")
+	}
+	writeFixture(t, filepath.Join(shared, "runtime/usr/bin/qemu-system-ppc"), "emulator", 0700)
+	writeFixture(t, filepath.Join(shared, "runtime/usr/share/qemu/openbios-ppc"), "firmware", 0600)
+	if got := m.binary("qemu-system-ppc"); got != filepath.Join(shared, "runtime/usr/bin/qemu-system-ppc") {
+		t.Fatalf("emulator is %q", got)
+	}
+	firmware := argPairs(m.launchArgs(false))["-L"]
+	if len(firmware) != 2 || firmware[0] != filepath.Join(root, "firmware") || firmware[1] != filepath.Join(shared, "runtime/usr/share/qemu") {
+		t.Fatalf("firmware search path is %q", firmware)
+	}
+	if strings.Contains(strings.Join(m.launchArgs(false), " "), "audiodev") {
+		t.Fatal("sound without a sound build")
+	}
+	if !strings.Contains(strings.Join(m.env(), "\n"), "LD_LIBRARY_PATH="+filepath.Join(shared, "runtime/usr/lib")) {
+		t.Fatal("the emulator's libraries are not the shared runtime's")
+	}
+	// Tiger plays through the Screamer build as Mac OS 9 does (its speech
+	// was recorded from that device on 2026-10-11), so a node that has the
+	// build gives both Macs sound.
+	writeFixture(t, filepath.Join(shared, "audio/qemu-system-ppc"), "emulator", 0700)
+	writeFixture(t, filepath.Join(shared, "audio/openbios-ppc"), "firmware", 0600)
+	if got := m.binary("qemu-system-ppc"); got != filepath.Join(shared, "audio/qemu-system-ppc") {
+		t.Fatalf("with a sound build the emulator is %q", got)
+	}
+	sound := strings.Join(m.launchArgs(false), " ")
+	for _, want := range []string{"-bios " + filepath.Join(shared, "audio/openbios-ppc"), "-audiodev none,id=mac-audio", "-global screamer.audiodev=mac-audio", filepath.Join(root, "vnc.sock") + ",audiodev=mac-audio"} {
+		if !strings.Contains(sound, want) {
+			t.Errorf("sound launch lacks %q", want)
+		}
+	}
+}
+
+// An install DVD is gigabytes: a download that stopped goes on from the
+// bytes it has, and only a file that fails its checksum is thrown away.
+func TestInstallerDownloadResumes(t *testing.T) {
+	data := []byte(strings.Repeat("Mac OS X Install DVD ", 4096))
+	sum := sha1.Sum(data)
+	var ranges []string
+	failAt := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ranges = append(ranges, r.Header.Get("Range"))
+		if failAt > 0 {
+			// Promise the whole file, send part of it, and hang up.
+			n := failAt
+			failAt = 0
+			w.Header().Set("Content-Length", "999999")
+			w.Write(data[:n])
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			panic(http.ErrAbortHandler)
+		}
+		http.ServeContent(w, r, "dvd.toast", time.Time{}, strings.NewReader(string(data)))
+	}))
+	defer srv.Close()
+	sys := *macOSX
+	sys.mediaURL, sys.mediaSHA1, sys.mediaSize, sys.media = srv.URL, hex.EncodeToString(sum[:]), int64(len(data)), "dvd.toast"
+	root := t.TempDir()
+	m := newManager(&sys, root, root)
+	media, part := m.path("media/dvd.toast"), m.path("media/dvd.toast.part")
+
+	failAt = 30000
+	if err := m.download(context.Background()); err == nil {
+		t.Fatal("a cut download passed for a whole one")
+	}
+	info, err := os.Stat(part)
+	if err != nil || info.Size() != 30000 {
+		t.Fatalf("the part was not kept: %v %v", info, err)
+	}
+	if err = m.download(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(media); string(got) != string(data) {
+		t.Fatal("the resumed file is not the installer")
+	}
+	if len(ranges) != 2 || ranges[0] != "" || ranges[1] != "bytes=30000-" {
+		t.Fatalf("requests asked for %q", ranges)
+	}
+	if _, err = os.Stat(part); !os.IsNotExist(err) {
+		t.Fatal("the part outlived the download")
+	}
+
+	// A saved installer is verified, not fetched again.
+	ranges = nil
+	if err = m.download(context.Background()); err != nil || len(ranges) != 0 {
+		t.Fatalf("fetched a verified installer again: %v %q", err, ranges)
+	}
+
+	// A part that is not this file's beginning fails the checksum and goes.
+	os.Remove(media)
+	writeFixture(t, part, strings.Repeat("x", 30000), 0600)
+	if err = m.download(context.Background()); err == nil {
+		t.Fatal("accepted a file that begins with something else")
+	}
+	if _, err = os.Stat(part); !os.IsNotExist(err) {
+		t.Fatal("kept a part that failed its checksum")
+	}
+	if err = m.download(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -422,18 +422,18 @@ body.mobile #cstrip { z-index: 5; }
 /* Full screen inside a Home Screen web app: preserve inline window geometry
    so leaving this view returns to the same desktop window. */
 #desktop.mac-fullscreen { z-index: 6000; }
-#desktop #win-app-macos9.display-fullscreen {
+#desktop :is(#win-app-macos9, #win-app-macosx).display-fullscreen {
   position: fixed; inset: 0 !important; width: auto !important; height: auto !important;
   min-width: 0; margin: 0; padding: var(--sat) var(--sar) var(--sab) var(--sal) !important;
   border: 0; box-shadow: none; background: #333; z-index: 6000 !important;
   display: flex; flex-direction: column;
 }
-#desktop #win-app-macos9.display-fullscreen::before { display: none; }
-#desktop #win-app-macos9.display-fullscreen > .titlebar { display: none; }
-#desktop #win-app-macos9.display-fullscreen > .win-frame {
+#desktop :is(#win-app-macos9, #win-app-macosx).display-fullscreen::before { display: none; }
+#desktop :is(#win-app-macos9, #win-app-macosx).display-fullscreen > .titlebar { display: none; }
+#desktop :is(#win-app-macos9, #win-app-macosx).display-fullscreen > .win-frame {
   display: flex; flex: 1; min-height: 0; margin: 0; padding: 0; border: 0; box-shadow: none;
 }
-#desktop #win-app-macos9.display-fullscreen .app-frame { flex: 1; min-height: 0; height: 100% !important; }
+#desktop :is(#win-app-macos9, #win-app-macosx).display-fullscreen .app-frame { flex: 1; min-height: 0; height: 100% !important; }
 /* ---- OS 9 grow box corner, a small framework any window can reuse ----
    Add class "grow" to a .window and put a 15×15 grow tile at the frame's
    bottom-right: desktop windows drop in a class="grow-box" SVG (see the
@@ -1558,6 +1558,7 @@ body.mobile th.sorted {
 </div>
 <div class="dropdown" id="dd-special" hidden>
   <div class="dd-item" data-act="macos9">Mac OS 9</div>
+  <div class="dd-item" data-act="macosx">Mac OS X</div>
   <div class="dd-sep"></div>
   <div class="dd-item" data-act="join">Node Sync…</div>
   <div class="dd-item" data-act="hubjoin">Join a Hub…</div>
@@ -3998,6 +3999,7 @@ const ACTIONS = {
   winconfig: openConfigWin,
   winlog: openLogWin,
   macos9: () => openAppWin("macos9"),
+  macosx: () => openAppWin("macosx"),
   cfstatus: () => sumOpen(),
   cfwizard: () => wizOpen(false),
   join: () => joinOpen(),
@@ -4463,6 +4465,7 @@ const DOCS_ICONS = {
   "claude-code-codex-and-terminal": () => TERMINAL_ICON,
   "desktop-context-menu": () => MENU_ICON,
   "mac-os-9": DOCS_APP("macos9"),
+  "mac-os-x": DOCS_APP("macosx"),
   "virtual-machines": () => macIcon("running", 16),
   "ssh-from-your-own-terminal": () => KEY_ICON,
   "the-coding-agent": () => $("#chat-icon svg").outerHTML,
@@ -5461,9 +5464,11 @@ function appFrameSrc(name, args) {
 // its app.json names — a size in the saved layout is not applied to it
 // (winResizable), and its zoom box puts it back (w._std, the window's
 // standard state). An app not listed yet (a window the layout opened
-// before the list came) is not known to be one, and the emulated Mac is
+// before the list came) is not known to be one, and an emulated Mac is
 // not: its window is fitted to the guest's display (fitMacOS9Window).
-const appOneSize = a => !!a.name && a.name !== "macos9" && !(a.window && a.window.grow);
+const MAC_APPS = ["macos9", "macosx"]; // the Mac OS 9 app and the Mac OS X app
+const isMacWin = w => MAC_APPS.some(name => w.id === "win-app-" + name);
+const appOneSize = a => !!a.name && !MAC_APPS.includes(a.name) && !(a.window && a.window.grow);
 // the size an app's window opens at: its app.json's, inside this viewport
 function appWinSize(w, app) {
   w.style.width = Math.min((app.window && app.window.width) || 420, Math.max(240, window.innerWidth - 160)) + "px";
@@ -5504,7 +5509,7 @@ function openAppWin(name, args) {
     initWindow(w);
     // the app's grow box lives inside its iframe (postMessage bridge), so
     // the edge grips are wired here, with the bridge's own clamps
-    if (name !== "macos9") wireEdges(w, fr, 240, { minH: 120, hPad: 120 });
+    if (!MAC_APPS.includes(name)) wireEdges(w, fr, 240, { minH: 120, hPad: 120 });
   }
   openWin(w);
 }
@@ -5516,7 +5521,7 @@ function openHubJoin() {
   const fr = document.querySelector("#win-app-hub .app-frame");
   if (fr) fr._args = undefined;
 }
-// The emulated Mac chooses a guest resolution; fit its window to whole device
+// An emulated Mac chooses a guest resolution; fit its window to whole device
 // pixels, including fractional OS scaling, without a separate resize control.
 function fitMacOS9Window(w) {
   const size = w._macDisplay, fr = w.querySelector(".app-frame");
@@ -5539,8 +5544,10 @@ function fitMacOS9Window(w) {
   w._zoom = null;
 }
 window.addEventListener("resize", () => {
-  const w = document.getElementById("win-app-macos9");
-  if (w) fitMacOS9Window(w);
+  for (const name of MAC_APPS) {
+    const w = document.getElementById("win-app-" + name);
+    if (w) fitMacOS9Window(w);
+  }
 });
 // app windows: an OS 9 grow box inside the app's iframe streams pointer
 // deltas up via postMessage (the app can't reach its own window chrome);
@@ -5597,12 +5604,12 @@ window.addEventListener("message", e => {
     // a page (an admin's HTML embed on the hub) opens the same way, in a
     // desktop page window, sandboxed like a Workspace page
     openPageWin(webPagePath(e.data.url, typeof e.data.name === "string" ? e.data.name : ""), w);
-  } else if (e.data.exe === "display-fullscreen" && w.id === "win-app-macos9" && typeof e.data.active === "boolean") {
+  } else if (e.data.exe === "display-fullscreen" && isMacWin(w) && typeof e.data.active === "boolean") {
     const active = e.data.active && !w.hidden;
     w.classList.toggle("display-fullscreen", active);
     $("#desktop").classList.toggle("mac-fullscreen", active);
     if (!e.data.active) fitMacOS9Window(w);
-  } else if (e.data.exe === "display-size" && w.id === "win-app-macos9") {
+  } else if (e.data.exe === "display-size" && isMacWin(w)) {
     const {width, height, chromeHeight} = e.data;
     if (![[640, 480], [800, 600], [1024, 768]].some(([x, y]) => x === width && y === height) ||
         !Number.isFinite(chromeHeight) || chromeHeight < 0 || chromeHeight > 2000) return;

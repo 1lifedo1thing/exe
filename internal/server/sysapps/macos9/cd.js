@@ -1,13 +1,13 @@
 // Disc images are node-local. Always display the drive's reported state so
 // ejecting in Finder or changing media from another viewer stays visible.
-export default function initCD({token, modal}) {
+export default function initCD({api, maxGiB, token, modal}) {
  const $ = s => document.querySelector(s);
  let state = null, busy = false, loading = false, upload = null, generation = 0;
  let nextCheck = 0, macRunning = false, failure = '', library = '';
  async function request(method = 'GET', body) {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 12000);
   try {
-   const r = await fetch('/v1/macos9/cd', {method, cache:'no-store', signal:controller.signal,
+   const r = await fetch(api, {method, cache:'no-store', signal:controller.signal,
     headers:{...(token ? {Authorization:'Bearer '+token} : {}), ...(body ? {'Content-Type':'application/json'} : {})},
     body:body ? JSON.stringify(body) : undefined});
    const text = await r.text();
@@ -76,13 +76,13 @@ export default function initCD({token, modal}) {
   const file = $('#cd-file').files[0]; $('#cd-file').value = '';
   if (!file || busy) return;
   $('#cd-error').textContent = ''; $('#cd-force').hidden = true;
-  if (!/\.(iso|cdr|img|toast)$/i.test(file.name) || !file.size || file.size > 2*1024**3) {
-   showError(new Error('Choose an ISO, CDR, IMG, or Toast image up to 2 GiB.')); return;
+  if (!/\.(iso|cdr|img|toast)$/i.test(file.name) || !file.size || file.size > maxGiB*1024**3) {
+   showError(new Error(`Choose an ISO, CDR, IMG, or Toast image up to ${maxGiB} GiB.`)); return;
   }
   busy = true; ++generation;
   const xhr = new XMLHttpRequest(); upload = xhr;
   $('#cd-progress').hidden = false; $('#cd-upload-progress').value = 0; $('#cd-upload-status').textContent = 'Uploading '+file.name+'…'; render();
-  xhr.open('POST', '/v1/macos9/cd/upload?filename='+encodeURIComponent(file.name));
+  xhr.open('POST', api+'/upload?filename='+encodeURIComponent(file.name));
   if (token) xhr.setRequestHeader('Authorization', 'Bearer '+token);
   xhr.setRequestHeader('Content-Type', 'application/octet-stream');
   xhr.upload.onprogress = e => { if (e.lengthComputable) { $('#cd-upload-progress').value = e.loaded/e.total; $('#cd-upload-status').textContent = `${file.name} — ${Math.round(e.loaded/e.total*100)}%`; } };

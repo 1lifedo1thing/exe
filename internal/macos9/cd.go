@@ -14,8 +14,6 @@ import (
 	"unicode"
 )
 
-const MaxCDSize int64 = 2 << 30
-
 var ErrCDLocked = errors.New("The Mac has locked this CD. Eject it in Finder first. Close programs using it before Force eject; a Mac restart may be needed.")
 
 type CDImage struct {
@@ -82,6 +80,10 @@ func (m *Manager) cdImages() ([]CDImage, error) {
 	return images, nil
 }
 
+// MaxCDSize is the largest disc image this Mac's library takes: a CD for
+// Mac OS 9, a dual-layer DVD for Mac OS X.
+func (m *Manager) MaxCDSize() int64 { return m.sys.maxCD }
+
 // Uploaded images are streamed to a private temporary file. A hard link publishes
 // the complete image without ever replacing an existing or mounted file.
 func (m *Manager) ImportCD(name string, reader io.Reader) (CDImage, error) {
@@ -98,12 +100,12 @@ func (m *Manager) ImportCD(name string, reader io.Reader) (CDImage, error) {
 	}
 	defer os.Remove(f.Name())
 	defer f.Close()
-	size, err := io.Copy(f, io.LimitReader(reader, MaxCDSize+1))
+	size, err := io.Copy(f, io.LimitReader(reader, m.sys.maxCD+1))
 	if err != nil {
 		return CDImage{}, err
 	}
-	if size == 0 || size > MaxCDSize {
-		return CDImage{}, errors.New("Choose a nonempty disc image no larger than 2 GiB.")
+	if size == 0 || size > m.sys.maxCD {
+		return CDImage{}, fmt.Errorf("Choose a nonempty disc image no larger than %d GiB.", m.sys.maxCD>>30)
 	}
 	if err = f.Close(); err != nil {
 		return CDImage{}, err

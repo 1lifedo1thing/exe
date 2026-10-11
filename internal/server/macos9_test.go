@@ -38,6 +38,14 @@ func TestMacOS9APIAuthAndOrigin(t *testing.T) {
 		{"POST", "/v1/macos9/finish", "test-secret", "", 409},
 		{"GET", "/v1/macos9/console", "test-secret", "", 503},
 		{"GET", "/v1/macos9/console", "test-secret", "https://unrelated.example", 403},
+		// The Mac OS X app's Mac answers the same API under its own name.
+		{"GET", "/v1/macosx", "", "", 401},
+		{"GET", "/v1/macosx", "test-secret", "", 200},
+		{"GET", "/v1/macosx/cd", "test-secret", "", 200},
+		{"POST", "/v1/macosx/start", "test-secret", "https://unrelated.example", 403},
+		{"POST", "/v1/macosx/cd/upload", "test-secret", "https://unrelated.example", 403},
+		{"POST", "/v1/macosx/finish", "test-secret", "", 409},
+		{"GET", "/v1/macosx/console", "test-secret", "", 503},
 	} {
 		r := httptest.NewRequest(tt.method, "http://exe.test"+tt.path, nil)
 		if tt.token != "" {
@@ -106,6 +114,58 @@ func TestMacOS9BuiltInAssets(t *testing.T) {
 		if _, err := sysAppsFS.ReadFile(p); err != nil {
 			t.Error(err)
 		}
+	}
+}
+
+// The Mac OS X app is a page of its own around the Mac OS 9 app's viewer:
+// what it links must be in the binary, and its Mac must be another Mac.
+func TestMacOSXBuiltInAppAndItsOwnMac(t *testing.T) {
+	meta, err := loadSysAppMeta("macosx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Title != "Mac OS X" || meta.Window == nil || meta.Window.Grow || !strings.Contains(meta.SystemIcon, `viewBox="0 0 32 32"`) {
+		t.Fatalf("bad app metadata: %+v", meta)
+	}
+	page, err := sysAppsFS.ReadFile("sysapps/macosx/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`data-api="/v1/macosx"`, `href="../macos9/mac.css"`, `src="../macos9/app.js"`} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("page lacks %s", want)
+		}
+	}
+	root := t.TempDir()
+	s := New(&config.Config{}, nil, nil, "", root)
+	h := s.Handler()
+	for _, p := range []string{"/apps/macosx/", "/apps/macos9/mac.css", "/apps/macos9/app.js", "/apps/macosx/icon.svg"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", "http://exe.test"+p, nil))
+		if w.Code != 200 {
+			t.Errorf("%s: %d", p, w.Code)
+		}
+	}
+	// An installed Mac OS 9 says nothing about Mac OS X: each has its root.
+	if err := os.MkdirAll(filepath.Join(root, "mac-os9"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "mac-os9", "installed.json"), []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	status := func(path string) (st struct {
+		Installed bool
+		Steps     []struct{ Title string }
+	}) {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", "http://exe.test"+path, nil))
+		if err := json.Unmarshal(w.Body.Bytes(), &st); err != nil {
+			t.Fatal(err)
+		}
+		return st
+	}
+	if nine, ten := status("/v1/macos9"), status("/v1/macosx"); !nine.Installed || ten.Installed || ten.Steps[5].Title != "Install Mac OS X" || nine.Steps[5].Title != "Install Mac OS 9" {
+		t.Fatalf("the two Macs are not apart: %+v %+v", nine, ten)
 	}
 }
 

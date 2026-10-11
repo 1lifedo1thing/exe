@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strings"
 
 	"exe/internal/macos9"
 	"github.com/coder/websocket"
@@ -16,6 +17,24 @@ import (
 func (s *Server) macOS9Manager() *macos9.Manager {
 	s.macOS9Once.Do(func() { s.macOS9 = macos9.New(filepath.Join(s.StateDir, "mac-os9")) })
 	return s.macOS9
+}
+
+// The Mac OS X app's Mac keeps its disk in a root of its own and runs the
+// emulator the Mac OS 9 root holds.
+func (s *Server) macOSXManager() *macos9.Manager {
+	s.macOSXOnce.Do(func() {
+		s.macOSX = macos9.NewMacOSX(filepath.Join(s.StateDir, "mac-osx"), filepath.Join(s.StateDir, "mac-os9"))
+	})
+	return s.macOSX
+}
+
+// mac is the Mac a request names: the two apps have the same API, one
+// under /v1/macos9 and one under /v1/macosx.
+func (s *Server) mac(r *http.Request) *macos9.Manager {
+	if r.URL.Path == "/v1/macosx" || strings.HasPrefix(r.URL.Path, "/v1/macosx/") {
+		return s.macOSXManager()
+	}
+	return s.macOS9Manager()
 }
 func macOS9SameOrigin(w http.ResponseWriter, r *http.Request) bool {
 	if origin := r.Header.Get("Origin"); origin != "" {
@@ -30,13 +49,13 @@ func macOS9SameOrigin(w http.ResponseWriter, r *http.Request) bool {
 func (s *Server) handleMacOS9Status(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s.macOS9Manager().Status())
+	_ = json.NewEncoder(w).Encode(s.mac(r).Status())
 }
 func (s *Server) handleMacOS9Start(w http.ResponseWriter, r *http.Request) {
 	if !macOS9SameOrigin(w, r) {
 		return
 	}
-	if err := s.macOS9Manager().Start(); err != nil {
+	if err := s.mac(r).Start(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -46,14 +65,14 @@ func (s *Server) handleMacOS9Cancel(w http.ResponseWriter, r *http.Request) {
 	if !macOS9SameOrigin(w, r) {
 		return
 	}
-	s.macOS9Manager().Cancel()
+	s.mac(r).Cancel()
 	s.handleMacOS9Status(w, r)
 }
 func (s *Server) handleMacOS9Finish(w http.ResponseWriter, r *http.Request) {
 	if !macOS9SameOrigin(w, r) {
 		return
 	}
-	if err := s.macOS9Manager().Finish(); err != nil {
+	if err := s.mac(r).Finish(); err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
@@ -63,7 +82,7 @@ func (s *Server) handleMacOS9Console(w http.ResponseWriter, r *http.Request) {
 	if !macOS9SameOrigin(w, r) {
 		return
 	}
-	tcp, err := s.macOS9Manager().Console(r.Context())
+	tcp, err := s.mac(r).Console(r.Context())
 	if err != nil {
 		http.Error(w, "The Mac display is not running.", http.StatusServiceUnavailable)
 		return
@@ -89,7 +108,7 @@ func (s *Server) handleMacOS9Console(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMacOS9CD(w http.ResponseWriter, r *http.Request) {
-	cd, err := s.macOS9Manager().CD(r.Context())
+	cd, err := s.mac(r).CD(r.Context())
 	macOS9CDResponse(w, cd, err)
 }
 func macOS9CDResponse(w http.ResponseWriter, cd macos9.CDStatus, err error) {
@@ -117,17 +136,18 @@ func (s *Server) handleMacOS9ChangeCD(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid CD request.", http.StatusBadRequest)
 		return
 	}
-	cd, err := s.macOS9Manager().ChangeCD(r.Context(), body.Filename, body.Force)
+	cd, err := s.mac(r).ChangeCD(r.Context(), body.Filename, body.Force)
 	macOS9CDResponse(w, cd, err)
 }
 func (s *Server) handleMacOS9UploadCD(w http.ResponseWriter, r *http.Request) {
 	if !macOS9SameOrigin(w, r) {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, macos9.MaxCDSize)
+	mac := s.mac(r)
+	r.Body = http.MaxBytesReader(w, r.Body, mac.MaxCDSize())
 	// A raw request body streams directly to disk; the browser supplies the
 	// filename separately, never a host filesystem path.
-	image, err := s.macOS9Manager().ImportCD(r.URL.Query().Get("filename"), r.Body)
+	image, err := mac.ImportCD(r.URL.Query().Get("filename"), r.Body)
 	if err != nil {
 		var large *http.MaxBytesError
 		code := http.StatusBadRequest

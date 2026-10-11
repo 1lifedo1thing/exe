@@ -217,7 +217,7 @@ restyling: `internal/server/ui/index.html` (the desktop),
   their source, not the app frame (the trackpad grow moved nothing there
   until 2026-09-26, `exe-app-grow-source-test.js`). A fixed-size window needs no grow box: if the window cannot be resized
   (a dialog, an About box, a guest display shown at whole-number scales
-  like the Mac OS 9 app) it has no tile, and an app says `"grow": false`
+  like the Mac OS 9 and Mac OS X apps) it has no tile, and an app says `"grow": false`
   in app.json so the desktop adds no edge grips either. Such a window has
   one size, the one its app.json names: the desktop applies no size the
   saved layout holds for it, and its zoom box, which switches a resizable

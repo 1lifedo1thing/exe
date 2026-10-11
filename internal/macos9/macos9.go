@@ -1,5 +1,7 @@
-// Package macos9 manages a persistent, software-emulated Power Mac for the web app.
-// Its disk and runtime are node-local and deliberately outside synced app data.
+// Package macos9 manages the persistent, software-emulated Power Macs of the
+// web apps: one that runs Mac OS 9 and one that runs Mac OS X (system.go
+// says what tells them apart). Their disks and the emulator runtime they
+// share are node-local and deliberately outside synced app data.
 package macos9
 
 import (
@@ -23,10 +25,6 @@ import (
 	"time"
 )
 
-const MediaURL = "https://archive.org/download/mac-os-9.2.2-universal-inst/Mac%20OS%209.2.2%20Universal%20Inst.iso"
-const mediaSHA1 = "b7390d0444b9ea637c5081c1655c1bf0ca864a3b"
-const mediaSize int64 = 521435136
-
 // MIT-licensed OS 9 tablet driver loaded into the guest ROM at boot.
 // See tablet/README.md for the pinned source and compatibility requirements.
 //
@@ -49,23 +47,35 @@ type Status struct {
 	Total     int64  `json:"total"`
 }
 type Manager struct {
-	root   string
-	mu     sync.Mutex
-	cdMu   sync.Mutex
-	state  Status
-	cancel context.CancelFunc
+	sys         *system
+	root        string
+	runtimeRoot string // where the emulator runtime is unpacked
+	mu          sync.Mutex
+	cdMu        sync.Mutex
+	state       Status
+	cancel      context.CancelFunc
 }
 
-func newSteps() []Step {
-	titles := []string{"Prepare the emulator", "Download Mac OS 9", "Verify the download", "Prepare your hard disk", "Start the Mac", "Install Mac OS 9"}
+func (m *Manager) newSteps() []Step {
+	titles := []string{"Prepare the emulator", "Download " + m.sys.name, "Verify the download", "Prepare your hard disk", "Start the Mac", "Install " + m.sys.name}
 	steps := make([]Step, len(titles))
 	for i, t := range titles {
 		steps[i] = Step{Title: t, State: "pending"}
 	}
 	return steps
 }
-func New(root string) *Manager {
-	m := &Manager{root: root, state: Status{Phase: "new", Message: "Your Mac will be set up on this computer.", Steps: newSteps()}}
+
+// New is the Mac that runs Mac OS 9. The emulator runtime is unpacked in
+// its root.
+func New(root string) *Manager { return newManager(macOS9, root, root) }
+
+// NewMacOSX is the Mac that runs Mac OS X. It has a root of its own and
+// runs the emulator in the Mac OS 9 root, so a node unpacks one runtime.
+func NewMacOSX(root, runtimeRoot string) *Manager { return newManager(macOSX, root, runtimeRoot) }
+
+func newManager(sys *system, root, runtimeRoot string) *Manager {
+	m := &Manager{sys: sys, root: root, runtimeRoot: runtimeRoot}
+	m.state = Status{Phase: "new", Message: "Your Mac will be set up on this computer.", Steps: m.newSteps()}
 	if b, err := os.ReadFile(filepath.Join(root, "setup.json")); err == nil {
 		var saved Status
 		if json.Unmarshal(b, &saved) == nil && len(saved.Steps) == len(m.state.Steps) {
@@ -89,7 +99,10 @@ func New(root string) *Manager {
 	return m
 }
 func (m *Manager) path(name string) string { return filepath.Join(m.root, name) }
-func (m *Manager) installed() bool         { _, err := os.Stat(m.path("installed.json")); return err == nil }
+
+// runtimePath names a file of the emulator runtime, which both Macs use.
+func (m *Manager) runtimePath(name string) string { return filepath.Join(m.runtimeRoot, name) }
+func (m *Manager) installed() bool                { _, err := os.Stat(m.path("installed.json")); return err == nil }
 func (m *Manager) running() bool {
 	// QEMU holds a POSIX lock on its PID file for its entire lifetime. Query
 	// that lock instead of treating an occupied QMP listener as a dead guest.
@@ -161,7 +174,7 @@ func (m *Manager) Start() error {
 	if m.running() {
 		return nil
 	}
-	m.state = Status{Phase: "setup", Message: "Preparing your Mac…", Steps: newSteps(), Active: true}
+	m.state = Status{Phase: "setup", Message: "Preparing your Mac…", Steps: m.newSteps(), Active: true}
 	if err := m.saveLocked(); err != nil {
 		// Saving can fail before the setup worker starts. Keep the failure in
 		// memory so later status polls and a reopened app still explain it.
@@ -173,7 +186,7 @@ func (m *Manager) Start() error {
 		m.state.Steps[0].Detail = err.Error()
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), m.sys.setup)
 	m.cancel = cancel
 	go func() {
 		defer cancel()
@@ -214,26 +227,26 @@ func (m *Manager) Cancel() {
 	}
 }
 
-// Finish is a user acknowledgement of Apple Software Restore's success. It is
+// Finish is a user acknowledgement of the installer's success. It is
 // allowed only after a clean guest shutdown, never while the disk is in use.
 func (m *Manager) Finish() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.state.Active || m.running() {
-		return errors.New("Shut down the Mac from its Special menu first, then try again.")
+		return errors.New(m.sys.shutDown)
 	}
 	if m.state.Phase != "installing" {
 		return errors.New("Complete the installation guide first.")
 	}
-	if _, err := os.Stat(m.path("macos9.qcow2")); err != nil {
+	if _, err := os.Stat(m.path(m.sys.disk)); err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	if err := m.command(ctx, m.binary("qemu-img"), "check", "-f", "qcow2", m.path("macos9.qcow2")); err != nil {
+	if err := m.command(ctx, m.binary("qemu-img"), "check", "-f", "qcow2", m.path(m.sys.disk)); err != nil {
 		return err
 	}
-	if err := os.WriteFile(m.path("installed.json"), []byte("{\"version\":\"9.2.2\"}\n"), 0600); err != nil {
+	if err := os.WriteFile(m.path("installed.json"), []byte("{\"version\":\""+m.sys.version+"\"}\n"), 0600); err != nil {
 		return err
 	}
 	m.state.Steps[5].State = "done"
@@ -253,7 +266,7 @@ func (m *Manager) prepare(ctx context.Context) error {
 	m.step(0, "done", "PowerPC emulator ready.")
 	installed := m.installed()
 	if !installed {
-		m.step(1, "working", "Downloading the 497 MiB Universal installer from Internet Archive…")
+		m.step(1, "working", m.sys.downloading)
 		if err := m.download(ctx); err != nil {
 			return err
 		}
@@ -264,13 +277,13 @@ func (m *Manager) prepare(ctx context.Context) error {
 		m.step(2, "done", "No download needed.")
 	}
 	m.step(3, "working", "Checking your persistent hard disk…")
-	disk := m.path("macos9.qcow2")
+	disk := m.path(m.sys.disk)
 	if _, err := os.Stat(disk); os.IsNotExist(err) {
 		if installed {
-			return errors.New("The installed Mac's disk is missing. Restore macos9.qcow2 from a backup.")
+			return errors.New("The installed Mac's disk is missing. Restore " + m.sys.disk + " from a backup.")
 		}
 		tmp := disk + ".tmp"
-		if err = m.command(ctx, m.binary("qemu-img"), "create", "-f", "qcow2", tmp, "2G"); err != nil {
+		if err = m.command(ctx, m.binary("qemu-img"), "create", "-f", "qcow2", tmp, m.sys.diskSize); err != nil {
 			return err
 		}
 		if err = os.Rename(tmp, disk); err != nil {
@@ -279,7 +292,7 @@ func (m *Manager) prepare(ctx context.Context) error {
 	} else if err != nil {
 		return err
 	}
-	m.step(3, "done", "Your 2 GB hard disk is saved on this computer.")
+	m.step(3, "done", m.sys.diskReady)
 	m.step(4, "working", "Starting your Power Mac G4…")
 	if err := ctx.Err(); err != nil {
 		return err
@@ -289,17 +302,17 @@ func (m *Manager) prepare(ctx context.Context) error {
 	}
 	m.step(4, "done", "Mac display connected. Startup may take a minute.")
 	if installed {
-		m.step(5, "done", "Mac OS 9 is already installed.")
+		m.step(5, "done", m.sys.name+" is already installed.")
 	} else {
-		m.step(5, "waiting", "Use Drive Setup and Apple Software Restore in the Mac screen below.")
+		m.step(5, "waiting", m.sys.install)
 	}
 	return nil
 }
 func (m *Manager) binary(name string) string {
 	if name == "qemu-system-ppc" && m.hasAudioRuntime() {
-		return m.path("audio/qemu-system-ppc")
+		return m.runtimePath("audio/qemu-system-ppc")
 	}
-	local := m.path(filepath.Join("runtime", "usr", "bin", name))
+	local := m.runtimePath(filepath.Join("runtime", "usr", "bin", name))
 	if _, err := os.Stat(local); err == nil {
 		return local
 	}
@@ -307,17 +320,19 @@ func (m *Manager) binary(name string) string {
 }
 
 // Screamer is not in upstream QEMU. An optional locally installed build and
-// its matching OpenBIOS must be present together before selecting it.
+// its matching OpenBIOS must be present together before selecting it. It is
+// part of the runtime both Macs run: Mac OS X plays through it as Mac OS 9
+// does.
 func (m *Manager) hasAudioRuntime() bool {
 	for _, name := range []string{"audio/qemu-system-ppc", "audio/openbios-ppc"} {
-		info, err := os.Stat(m.path(name))
+		info, err := os.Stat(m.runtimePath(name))
 		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
 			return false
 		}
 	}
 	return true
 }
-func (m *Manager) env() []string { return runtimeEnv(m.path("runtime")) }
+func (m *Manager) env() []string { return runtimeEnv(m.runtimePath("runtime")) }
 func runtimeEnv(dir string) []string {
 	env := os.Environ()
 	lib := filepath.Join(dir, "usr", "lib")
@@ -398,37 +413,42 @@ func validateRuntime(ctx context.Context, dir string) error {
 }
 
 func (m *Manager) recoverRuntime() error {
-	if _, err := os.Stat(m.path("runtime")); !os.IsNotExist(err) {
+	if _, err := os.Stat(m.runtimePath("runtime")); !os.IsNotExist(err) {
 		return err
 	}
-	if _, err := os.Stat(m.path("runtime.previous")); os.IsNotExist(err) {
+	if _, err := os.Stat(m.runtimePath("runtime.previous")); os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
 		return err
 	}
-	return os.Rename(m.path("runtime.previous"), m.path("runtime"))
+	return os.Rename(m.runtimePath("runtime.previous"), m.runtimePath("runtime"))
 }
 
 func (m *Manager) activateRuntime(staging string) error {
-	previous := m.path("runtime.previous")
+	previous := m.runtimePath("runtime.previous")
 	if err := os.RemoveAll(previous); err != nil {
 		return err
 	}
-	if err := os.Rename(m.path("runtime"), previous); err != nil && !os.IsNotExist(err) {
+	if err := os.Rename(m.runtimePath("runtime"), previous); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := os.Rename(staging, m.path("runtime")); err != nil {
+	if err := os.Rename(staging, m.runtimePath("runtime")); err != nil {
 		_ = m.recoverRuntime()
 		return err
 	}
 	return os.RemoveAll(previous)
 }
 
+// Both Macs run one runtime: only one of them checks or unpacks it at a time.
+var runtimeMu sync.Mutex
+
 func (m *Manager) ensureRuntime(ctx context.Context) error {
+	runtimeMu.Lock()
+	defer runtimeMu.Unlock()
 	if err := m.recoverRuntime(); err != nil {
 		return err
 	}
-	dir := m.path("runtime")
+	dir := m.runtimePath("runtime")
 	if _, err := os.Stat(dir); err == nil {
 		if repairRuntimeFirmware(dir) == nil && validateRuntime(ctx, dir) == nil {
 			return nil
@@ -450,7 +470,10 @@ func (m *Manager) ensureRuntime(ctx context.Context) error {
 		return err
 	}
 	// A fresh package set prevents mixing cached versions from older attempts.
-	pkgDir, err := os.MkdirTemp(m.root, "packages-")
+	if err := os.MkdirAll(m.runtimeRoot, 0700); err != nil {
+		return err
+	}
+	pkgDir, err := os.MkdirTemp(m.runtimeRoot, "packages-")
 	if err != nil {
 		return err
 	}
@@ -465,7 +488,7 @@ func (m *Manager) ensureRuntime(ctx context.Context) error {
 			return fmt.Errorf("Cannot download %s: %w: %.2000s", pkg, err, out)
 		}
 	}
-	staging := m.path("runtime.staging")
+	staging := m.runtimePath("runtime.staging")
 	if err = os.RemoveAll(staging); err != nil {
 		return err
 	}
@@ -495,46 +518,79 @@ func (m *Manager) ensureRuntime(ctx context.Context) error {
 	return m.activateRuntime(staging)
 }
 func (m *Manager) download(ctx context.Context) error {
-	media := m.path("media/MacOS9.2.2-Universal.iso")
+	media := m.path("media/" + m.sys.media)
 	if err := os.MkdirAll(filepath.Dir(media), 0700); err != nil {
 		return err
 	}
 	if _, err := os.Stat(media); err == nil {
 		m.step(2, "working", "Verifying the saved installer…")
-		if err = verifyFile(ctx, media, mediaSHA1, mediaSize); err == nil {
+		if err = verifyFile(ctx, media, m.sys.mediaSHA1, m.sys.mediaSize); err == nil {
 			return nil
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 	}
+	// A download that stopped part way goes on from where it stopped: an
+	// install DVD is gigabytes, and the checksum judges the whole file.
 	tmp := media + ".part"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, MediaURL, nil)
+	var have int64
+	if info, err := os.Stat(tmp); err == nil && info.Size() <= m.sys.mediaSize {
+		have = info.Size()
+	}
+	if have < m.sys.mediaSize {
+		if err := m.fetch(ctx, tmp, have); err != nil {
+			return err
+		}
+	}
+	m.step(1, "done", "Installer downloaded.")
+	m.step(2, "working", "Checking the installer against its published checksum…")
+	if err := verifyFile(ctx, tmp, m.sys.mediaSHA1, m.sys.mediaSize); err != nil {
+		if ctx.Err() == nil {
+			os.Remove(tmp) // a wrong file is not what the next try goes on from
+		}
+		return err
+	}
+	return os.Rename(tmp, media)
+}
+
+// fetch writes the installer to tmp, after the have bytes already there.
+func (m *Manager) fetch(ctx context.Context, tmp string, have int64) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.sys.mediaURL, nil)
 	if err != nil {
 		return err
+	}
+	if have > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", have))
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("Installer download failed: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND
+	switch {
+	case have > 0 && resp.StatusCode == http.StatusPartialContent:
+	case resp.StatusCode == http.StatusOK:
+		// The whole file, also from a server that does not answer ranges.
+		have, flags = 0, os.O_CREATE|os.O_WRONLY|os.O_TRUNC
+	default:
 		return fmt.Errorf("Installer download returned HTTP %d. Continue to retry.", resp.StatusCode)
 	}
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(tmp, flags, 0600)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp)
-	var count int64
+	count := have
 	last := time.Now()
 	buf := make([]byte, 256*1024)
 	for {
 		n, e := resp.Body.Read(buf)
 		if n > 0 {
 			count += int64(n)
-			if count > mediaSize {
+			if count > m.sys.mediaSize {
 				f.Close()
+				os.Remove(tmp)
 				return errors.New("Installer exceeds its expected size.")
 			}
 			if _, err = f.Write(buf[:n]); err != nil {
@@ -544,7 +600,7 @@ func (m *Manager) download(ctx context.Context) error {
 			if time.Since(last) > 500*time.Millisecond {
 				m.mu.Lock()
 				m.state.Bytes = count
-				m.state.Total = mediaSize
+				m.state.Total = m.sys.mediaSize
 				m.mu.Unlock()
 				last = time.Now()
 			}
@@ -557,15 +613,7 @@ func (m *Manager) download(ctx context.Context) error {
 			return e
 		}
 	}
-	if err = f.Close(); err != nil {
-		return err
-	}
-	m.step(1, "done", "Installer downloaded.")
-	m.step(2, "working", "Checking the installer against its published checksum…")
-	if err = verifyFile(ctx, tmp, mediaSHA1, mediaSize); err != nil {
-		return err
-	}
-	return os.Rename(tmp, media)
+	return f.Close()
 }
 func verifyFile(ctx context.Context, path, digest string, size int64) error {
 	f, err := os.Open(path)
@@ -598,25 +646,15 @@ func verifyFile(ctx context.Context, path, digest string, size int64) error {
 	return nil
 }
 func (m *Manager) launchArgs(installer bool) []string {
-	// The Mac's time of day is seeded once, when the machine is created: the
-	// CUDA clock this board carries never consults -rtc again, so whatever
-	// base= says at boot is what OS 9 believes until someone opens Date &
-	// Time. An install is pinned to 2003, where the Universal installer and
-	// the era's software expect to be; a normal boot starts today, so that
-	// current certificates are judged against a date that is in their window.
-	// base=localtime, not utc, because OS 9 keeps local time in its clock.
-	rtc := "base=localtime,clock=vm"
-	if installer {
-		rtc = "base=2003-06-01T12:00:00,clock=vm"
-	}
-	args := []string{"-L", m.path("firmware"), "-name", "exe-mac-os9", "-machine", "mac99", "-cpu", "G4", "-m", "512", "-accel", "tcg,tb-size=128", "-prom-env", "vga-ndrv?=true", "-g", "800x600x32", "-vga", "none", "-device", "VGA,edid=on,xres=800,yres=600,xmax=1024,ymax=768", "-usb", "-device", "usb-tablet", "-prom-env", "use-nvramrc?=true", "-prom-env", "nvramrc=" + strings.TrimSpace(tabletNVRAMRC), "-drive", "file=" + strings.ReplaceAll(m.path("macos9.qcow2"), ",", ",,") + ",format=qcow2,media=disk", "-rtc", rtc, "-display", "none", "-vnc", "unix:" + m.path("vnc.sock"), "-qmp", "unix:" + m.path("qmp.sock") + ",server=on,wait=off", "-monitor", "none", "-serial", "file:" + m.path("serial.log"), "-pidfile", m.path("qemu.pid"), "-daemonize"}
-	if _, err := os.Stat(m.path("runtime/usr/share/qemu/openbios-ppc")); err == nil {
-		args = append(args, "-L", m.path("runtime/usr/share/qemu"))
+	args := append([]string{"-L", m.path("firmware"), "-name", m.sys.process}, m.sys.machine(installer)...)
+	args = append(args, "-drive", "file="+strings.ReplaceAll(m.path(m.sys.disk), ",", ",,")+",format=qcow2,media=disk", "-display", "none", "-vnc", "unix:"+m.path("vnc.sock"), "-qmp", "unix:"+m.path("qmp.sock")+",server=on,wait=off", "-monitor", "none", "-serial", "file:"+m.path("serial.log"), "-pidfile", m.path("qemu.pid"), "-daemonize")
+	if _, err := os.Stat(m.runtimePath("runtime/usr/share/qemu/openbios-ppc")); err == nil {
+		args = append(args, "-L", m.runtimePath("runtime/usr/share/qemu"))
 	}
 	if m.hasAudioRuntime() {
 		// The dummy host backend still supplies PCM to VNC's capture channel.
 		// Playback stays in the authenticated browser, never on host speakers.
-		args = append(args, "-bios", m.path("audio/openbios-ppc"), "-audiodev", "none,id=mac-audio", "-global", "screamer.audiodev=mac-audio")
+		args = append(args, "-bios", m.runtimePath("audio/openbios-ppc"), "-audiodev", "none,id=mac-audio", "-global", "screamer.audiodev=mac-audio")
 		for i := range args {
 			if args[i] == "-vnc" {
 				args[i+1] += ",audiodev=mac-audio"
@@ -626,9 +664,9 @@ func (m *Manager) launchArgs(installer bool) []string {
 	}
 	if installer {
 		args = append(args, "-nic", "none")
-		args = append(args, "-cdrom", m.path("media/MacOS9.2.2-Universal.iso"), "-boot", "d")
+		args = append(args, "-cdrom", m.path("media/"+m.sys.media), "-boot", "d")
 	} else {
-		args = append(args, "-boot", "c", "-netdev", "user,id=net0", "-device", "sungem,netdev=net0,mac=52:54:00:09:02:22")
+		args = append(args, "-boot", "c", "-netdev", m.sys.network, "-device", "sungem,netdev=net0,mac="+m.sys.ethernet)
 	}
 	return args
 }

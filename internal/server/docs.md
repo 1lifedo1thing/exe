@@ -76,6 +76,7 @@ The small Mac at its left end is the **Apple menu**.
 | Windows | **Configuration** | Edits exe's settings. See [Configuration](https://exe.v2core.com/docs/using/configuration). |
 | Windows | **Log Viewer** | The daemon's log and the log of requests to the API. |
 | Special | **Mac OS 9** | Opens a Mac running Mac OS 9. See [Mac OS 9](https://exe.v2core.com/docs/using/mac-os-9). |
+| Special | **Mac OS X** | Opens a Mac running Mac OS X 10.4 Tiger. See [Mac OS X](https://exe.v2core.com/docs/using/mac-os-x). |
 | Special | **Node Sync…** | Pairs this exe with another one. See [Joining desks together](https://exe.v2core.com/docs/using/joining-desks-together). |
 | Special | **Join a Hub…** | Joins a hub, a step at a time. See [The Hub](https://exe.v2core.com/docs/using/the-hub). |
 | Special | **Cloudflare Status…** | The tunnel's state and its live counters. |
@@ -1174,8 +1175,8 @@ needs a label before it, as in `My terminal<TAB>terminal`.
 | `welcome` | Open the Welcome window. |
 | `customize` | Open this menu's editor. |
 
-There is no separate `macos9` action in the customization format; use
-`app macos9`.
+There is no separate `macos9` or `macosx` action in the customization
+format; use `app macos9` and `app macosx`.
 
 ### Arguments, paths and app names
 
@@ -1189,8 +1190,8 @@ For `workspace` and `edit`, use relative paths such as `Projects/demo` or
 `Projects/demo/README.md`. Absolute paths and paths that escape the
 Workspace are rejected.
 
-For built-in apps, use their lowercase IDs: `app macos9`, `app hub`,
-`app bluepencil`, `app dict` or `app analytics`. Other apps use their
+For built-in apps, use their lowercase IDs: `app macos9`, `app macosx`,
+`app hub`, `app bluepencil`, `app dict` or `app analytics`. Other apps use their
 installed folder name; see [Apps](https://exe.v2core.com/docs/using/apps).
 
 ### Run a command in a window
@@ -1373,8 +1374,8 @@ a running Mac alive.
   connection returns.
 - Use **Resume installer** if the Mac was shut down before Restore
   completed.
-- Completed installer downloads are reused after checksum verification;
-  partial downloads restart.
+- Completed installer downloads are reused after checksum verification,
+  and a download that stopped part way goes on from where it stopped.
 - A failed Start keeps its error visible so you can address the cause and
   retry.
 
@@ -1514,6 +1515,122 @@ public VNC port is opened.
 The API is `GET /v1/macos9`, `POST /v1/macos9/start`, `/cancel` and
 `/finish`, the binary WebSocket at `/v1/macos9/console`, and for the CD
 drive `GET` and `POST /v1/macos9/cd` and `POST /v1/macos9/cd/upload`.
+
+## Mac OS X
+
+The **Mac OS X** app is a second Mac in a window: an emulated Power Mac G4
+running Mac OS X 10.4 Tiger, with a 100 GB hard disk of its own. The Mac OS 9
+app keeps the classic system. This one is the system that came after it:
+Aqua and the Dock, Spotlight and Dashboard, a Unix underneath, and Xcode 2
+on the disc it installs from.
+
+### What it is for
+
+- **Run PowerPC Mac OS X software.** Mount a CD or DVD image and install
+  what is on it in the system it was written for.
+- **Build for it.** The install DVD carries Xcode 2, and Tiger has a
+  Terminal and, if you choose it at installation, X11.
+- **A Mac that stays as you left it.** What you install and save is kept on
+  its hard disk, on this node. Closing the window leaves the Mac running,
+  and opening it again returns to the same Mac.
+- **A Mac on the network.** Once installed it reaches the internet through
+  this machine.
+
+It is a PowerPC Mac, emulated in software by the same emulator as the
+Mac OS 9 app's, and it needs no hypervisor. The two Macs are separate
+machines and can run at the same time.
+
+### What it needs
+
+- **An emulator.** The same one as [Mac OS 9](https://exe.v2core.com/docs/using/mac-os-9)
+  uses: the two apps share it, and whichever is set up first fetches it.
+- **Room on this node.** The install DVD is a 2.6 GiB download. The hard
+  disk says 100 GB to the Mac and takes only what the Mac has written: 3 to
+  5 GB after installation.
+- **Memory.** The Mac has 1 GB, taken from this machine while it runs.
+
+### Set it up the first time
+
+1. Choose **Special → Mac OS X**; it is also among the built-in apps. The
+   first launch shows each setup step: preparing the emulator, downloading
+   Apple's Tiger install DVD from the Internet Archive, checking its
+   checksum, creating the hard disk, and starting the Mac from the DVD.
+2. When the Mac's screen appears, follow the guide the app shows above it.
+   Choose a language, then **Utilities → Disk Utility…** in the Mac's own
+   menu bar. Select **100.0 GB QEMU HARDDISK**, open the **Erase** tab, name
+   the disk, click **Erase** and confirm. Quit Disk Utility.
+3. In the Installer click **Continue**, agree to the license, select the new
+   disk, click **Continue**, then **Install**. **Customize** on that last
+   page leaves out what you do not want (the printer drivers are a third of
+   it) and adds X11.
+4. Copying takes ten minutes to a quarter of an hour on a fast machine and
+   longer on a slow one. At its end the Installer restarts the Mac, which
+   closes the screen. Click **Installation finished — start my Mac**.
+5. The Mac starts from its hard disk and first asks you to identify the
+   keyboard: click **OK**, press **Z**, then **/**, and keep **ANSI**.
+   Tiger's Setup Assistant follows, with a country, a keyboard layout and
+   the name and password of your account. ⌘ Q on its registration page,
+   then **Skip**, goes straight to the account.
+
+Subsequent launches use the saved installation: opening the app starts the
+Mac from its disk. Pausing and resuming setup work as in the Mac OS 9 app.
+
+### The window
+
+<img src="https://hub.v2core.com/v1/embed/bafybeia4iud54npwjksgta42tyzdn3hlpi5todl2emrg3swiciigf6sb7q" alt="The Mac OS X window: Tiger's desktop with About This Mac open and the install DVD mounted, and the app's own buttons above it" width="1036" height="853">
+
+The window is the Mac OS 9 app's, around another Mac: the same row of
+buttons, the same status line, the same CD dialog and the same
+**Full screen**. [Mac OS 9](https://exe.v2core.com/docs/using/mac-os-9)
+describes them. What differs:
+
+- **The display** is 1024×768. The window fits it to whole screen pixels,
+  as it does for Mac OS 9.
+- **Mac keys…** sends ⌘ Q to quit, ⌘ W to close, ⌘ Tab for the next
+  application, ⌘ Space for Spotlight and ⌥ ⌘ Esc to force an application
+  to quit: the keys your own computer keeps for itself.
+- **The pointer** is Mac OS X's own. It follows your browser cursor
+  directly, nothing is loaded into the Mac for it, and the mouse wheel
+  scrolls.
+- **CD…** takes images up to 9 GiB, so a dual-layer DVD fits. The Mac
+  starts with its drive empty: the install DVD stays in the list, to mount
+  when you want Xcode from it.
+- **Sound** needs the same optional audio runtime as Mac OS 9's, and the
+  one installation serves both Macs. With it, **Sound off** turns Tiger's
+  sound on in your browser.
+
+### Restart, shut down and sleep
+
+**Restart** in the Mac's Apple menu brings it back by itself. **Shut Down**
+there saves its files and ends the Mac; **Start Mac** starts it again.
+
+A fresh Tiger puts the Mac to sleep after ten idle minutes, and its screen
+turns black. **Mac keys… → Wake display**, or Shift with the Mac focused,
+wakes it. To keep it awake, set both sliders in **System Preferences →
+Energy Saver** to **Never**, or run
+`sudo pmset -a sleep 0 displaysleep 0 disksleep 0` in Terminal.
+
+### Clock and network
+
+The Mac's clock starts at today's date and time, and Tiger shows it in the
+time zone you choose in the Setup Assistant.
+
+The installed Mac has an Ethernet adapter with outbound NAT and DHCP, over
+IPv4 only; networking is off while the Installer runs. Tiger's Safari is
+too old for most of today's HTTPS sites, though the network itself works:
+plain HTTP does.
+
+### Where it is kept
+
+The installer, setup progress and disk live in `~/.exe/mac-osx/` (or
+`$EXE_HOME/mac-osx/`), outside app-data sync: the Mac belongs to this node
+and is not copied to joined ones. The emulator is the one in
+`~/.exe/mac-os9/runtime`.
+
+The API is the Mac OS 9 app's under another name: `GET /v1/macosx`,
+`POST /v1/macosx/start`, `/cancel` and `/finish`, the binary WebSocket at
+`/v1/macosx/console`, and for the drive `GET` and `POST /v1/macosx/cd` and
+`POST /v1/macosx/cd/upload`.
 
 ## Virtual machines
 
@@ -2639,6 +2756,7 @@ These are part of exe itself, and each has a chapter of its own.
 | App | ID | What it is | Chapter |
 |---|---|---|---|
 | **Mac OS 9** | `macos9` | A Power Mac G4 running Mac OS 9.2.2. | [Mac OS 9](https://exe.v2core.com/docs/using/mac-os-9) |
+| **Mac OS X** | `macosx` | A Power Mac G4 running Mac OS X 10.4 Tiger. | [Mac OS X](https://exe.v2core.com/docs/using/mac-os-x) |
 | **Hub** | `hub` | A small public feed shared between exe nodes. | [The Hub](https://exe.v2core.com/docs/using/the-hub) |
 | **Blue Pencil** | `bluepencil` | A proofreader that runs on your own model. | [Blue Pencil](https://exe.v2core.com/docs/using/blue-pencil) |
 | **Dict** | `dict` | A dictionary from English and five other languages into Chinese, Japanese or Korean. | [Dict](https://exe.v2core.com/docs/using/dict) |
@@ -2880,8 +2998,8 @@ Joined nodes sync continuously, both ways:
   Workspace on one node reaches the others too.
 - **The Newsfeed.** One timeline of what happened on every node.
 
-VMs, the configuration and the Mac OS 9 disk are not synced: each stays on
-its own node. Joining gives the other node the sync and nothing more: not
+VMs, the configuration and the disks of the Mac OS 9 and Mac OS X apps
+are not synced: each stays on its own node. Joining gives the other node the sync and nothing more: not
 your VMs, your configuration or a shell.
 
 ### Join two nodes
