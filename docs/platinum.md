@@ -641,10 +641,15 @@ restyling: `internal/server/ui/index.html` (the desktop),
   is not animated. A drag from the window's first 24px pops: told from a
   scroll after 8px (more sideways than up or down, and rightward; the
   scrollers carry `touch-action: pan-y pinch-zoom`), the screen is then
-  under the finger with the one before it beside it; past half the
-  width, or flicked (40px inside 300ms), it pops over what is left of
-  the 250ms, and short of that, or when the browser takes the touch away
-  or a second finger lands, it goes back over 160ms. With
+  under the finger with the one before it beside it. What it does when
+  the finger lifts goes by how the finger was moving at that moment, over
+  its last 100ms: going right faster than 0.3px a millisecond it pops (a
+  flick, however long the finger rested first), going left it stays (a
+  drag taken back, however far it went), and a finger that was still or
+  slow leaves it to where the screen stands, popping past half the
+  width, over what is left of the 250ms. When it stays, or when the
+  browser takes the touch away or a second finger lands, it goes back
+  over 160ms. With
   `prefers-reduced-motion` the other screen is simply there; the drag
   still follows the finger and lands at once. The window opens again on
   the screen it was left on (per browser), with no slide. This is the
