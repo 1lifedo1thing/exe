@@ -488,7 +488,17 @@ there carries a permission for `CodexSandboxUsers`, the group of Codex's
 Windows sandbox, to read it; the key inherits that, and Windows' OpenSSH
 will not use a private key anyone else can read ("UNPROTECTED PRIVATE KEY
 FILE"). The daemon reaches its VMs all the same; it is the command that
-fails, and exe does not yet keep the key to its user. Until it does, a test looks inside a
+fails, and exe does not yet keep the key to its user.
+
+It is not that PC's alone. Codex gives its group the right to read most
+folders at the top of the home folder (39 of 51 on `world`; `.ssh` is not
+one), and to ones made after its sandbox was set up: `.exe` got it at the
+first Codex run after exe was installed. So `exe ssh` works on a new
+install, which is why the test of 2026-10-10 passed, and stops on any PC
+once Codex has run there. The mode exe writes the key with (0600) says
+nothing on Windows, where a new file takes its folder's permissions: the
+key needs a permission list of its own, with inheritance off, and one that
+is already there needs it put right. Until it does, a test looks inside a
 guest through the gate, with a copy of the key that only the user may
 read: `icacls <copy> /inheritance:r /grant:r <user>:F`, then
 `ssh -i <copy> -p 2222 <vm>@127.0.0.1`.
