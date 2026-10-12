@@ -604,6 +604,91 @@ restyling: `internal/server/ui/index.html` (the desktop),
   its close box, the wizard starts over the next time. Its icon is a
   jigsaw piece, as Mac OS drew its extensions.
   `~/tools/playwright/exe-extras-test.js` walks it.
+- A stack of screens on a phone (Projects, `/www/exe-projects`): an app
+  of columns shows them one at a time, each filling the window over the
+  status bar, which stays. The screens lie over one another in one box
+  (`overflow: clip`, so no `scrollIntoView` can shift it) and the ones
+  that do not show are `visibility: hidden`, so each keeps its scroll and
+  its selection: coming back, a screen is where it was left. Each screen
+  has a bar of its own at the top, so a screen is whole wherever it
+  stands while two of them move. The bar is the held row turned over:
+  44px of `#ddd` over a 1px black line, 12px all round a 20px row. At
+  the left Back, under Welcome's chevron (the glyph 9px in, 5px to the
+  word), named for the screen it leads to and never wider than a third
+  of the bar (an ellipsis); in the middle the screen's name in bold,
+  centred on the window while the sides leave it the room (a grid of
+  `minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr)`,
+  8px between) and cut with an ellipsis before any button gives way; at
+  the right the screen's one main action, a push button in words. A
+  button that makes something wears an 8px plus alone (2px strokes, the
+  chevron's weight, in a 30px button) under 360px. What else a screen
+  can do has a row at its foot, where a thumb is: the held row itself (a
+  1px black top line, 12px all round), a pop-up at the left at the
+  button's 20px, buttons at the right, the status bar under it keeping
+  its own line. A field that is written in from that screen (a comment)
+  is such a row too: one line deep until it is written in, growing as
+  the Hub's composer does.
+- It moves like this. Going deeper pushes: the new screen comes in from
+  the right as the old one leaves by the left, and Back pops the other
+  way; 250ms, Welcome's `cubic-bezier(.3, .7, .2, 1)`, two Web Animations
+  of `transform` with no fill, so nothing stays transformed, and a newer
+  move ends a running one where it was going. The seam between two
+  moving screens is one black line: a `box-shadow: -1px 0 0` outside
+  each screen's left edge, off the window at rest, the deeper screen
+  lying over the other. A tapped row is picked at once and the screen is
+  pushed when what it will show has been read, so the screen that comes
+  in is whole and nothing on it jumps. A change of screen under a sheet
+  is not animated. A drag from the window's first 24px pops: told from a
+  scroll after 8px (more sideways than up or down, and rightward; the
+  scrollers carry `touch-action: pan-y pinch-zoom`), the screen is then
+  under the finger with the one before it beside it; past half the
+  width, or flicked (40px inside 300ms), it pops over what is left of
+  the 250ms, and short of that, or when the browser takes the touch away
+  or a second finger lands, it goes back over 160ms. With
+  `prefers-reduced-motion` the other screen is simply there; the drag
+  still follows the finger and lands at once. The window opens again on
+  the screen it was left on (per browser), with no slide. This is the
+  fourth motion in an app, after Notes' zoom and Welcome's two.
+- A finger on such a stack: a button stays 20px and answers over more,
+  an undrawn `::after` pad out to the bar's edges in a button row and
+  8px elsewhere, never past half the 12px between two buttons; a row
+  with a 32px icon is 44px, a menu's line 32px. No scroller draws a bar.
+  What a right-click gives on the desk, a press held 550ms within 8px
+  gives: the same `contextmenu` event is dispatched at the finger (to
+  whatever is under it by then, since a list may be drawn again under a
+  resting finger), so the menu is the desk's own; a browser's own event
+  makes ours stand down, and the click that follows the lifted finger is
+  swallowed wherever it lands, since the menu came up under it. Where a
+  hold must give a menu, the text is not selectable (the menu copies it).
+- A sheet on a phone fills the window and comes up from its foot (the
+  same 250ms; back down the same way; neither with less motion): its
+  name centred in a bar of its own, the form scrolling between two lines
+  with its names over its fields, and at the foot the button row with
+  Cancel and the default alone, 12px in and 12px apart. What else the
+  row held on the desk (Delete…, Archive, Discard Draft) is the form's
+  last group, under a separator. No field takes the keyboard by itself.
+  The keyboard lifts the row with the window: as a window of the desk
+  the frame is already the visual viewport's height; as the page itself
+  the body takes `visualViewport.height` (`--vvh`) and the pan is
+  undone; either way the field being written in is kept in view. Type
+  stays 12px: an iPhone is kept from zooming by the desk's
+  `maximum-scale=1`, said again by an app opened bare. Safe areas are
+  the desk's; only a bare page pads itself (Dict's rule). A line that
+  says how an upload goes puts the figure first ("40% of name"), and one
+  that says what went wrong takes a line of its own over the buttons
+  while it is there. `tests/phone-test.js` in exe-projects walks all of
+  it in Chromium and WebKit. None of it has been held in a hand yet: the
+  drag's feel, iOS's own long press and the real keyboard are still to
+  be tried on an iPhone.
+- A question asked in place (Projects' drafts): when the daemon refuses
+  a save because the same draft was changed on another desk, the sheet
+  keeps its words in its fields, saves nothing, and asks which to keep in
+  the line over its buttons, in the text's colour and not the error's,
+  with the two answers (Use the Other, Keep Mine) standing where the
+  button they displace stood (Discard Draft in the sheet, Attach… in the
+  comment row). Nothing is a modal alert, so no Return or Escape pressed
+  out of habit can throw words away. On a row too narrow for the words
+  the question takes a line of its own over the buttons.
 - A picture window on a phone is put away by swiping it down: the window
   follows the finger from 6px of vertical travel (a sideways drag and a
   second finger stay the browser's), springs back over 160ms under 90px,
