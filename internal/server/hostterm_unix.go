@@ -3,11 +3,13 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -130,11 +132,27 @@ func (s *Server) startAgent(a hostAgent, cols, rows int) (agentShell, string, er
 // the node beside it.
 func agentCommand(a hostAgent, bin, file string) (args []string, line string) {
 	args = agentStatusArgs(a, file, agentSettingsPath(a))
+	if a.notify && codexHasNoDaemon(bin) {
+		args = append([]string{"--no-daemon"}, args...)
+	}
 	line = "env " + shQuote("PATH="+cliPATH(bin)) + " " + shQuote(bin)
 	for _, arg := range args {
 		line += " " + shQuote(arg)
 	}
 	return args, line
+}
+
+// Codex's per-session config overrides require its embedded server.
+// Choose that mode explicitly to avoid the shared-server warning, but
+// leave older CLIs that do not know --no-daemon on their existing path.
+func codexHasNoDaemon(bin string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, "--help")
+	cmd.Env = cliEnv(bin)
+	cmd.WaitDelay = 100 * time.Millisecond
+	out, err := cmd.Output()
+	return err == nil && slices.Contains(strings.Fields(string(out)), "--no-daemon")
 }
 
 // newAgentSession starts a detached tmux session of the agent's under

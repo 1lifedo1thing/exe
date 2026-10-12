@@ -5,6 +5,7 @@ docs/release.md, "The notes", says how it is written. What every release
 before it said is kept in CHANGELOG.md.
 -->
 
+- **Codex** opens without the shared background server warning, keeping notifications and session status.
 - On Windows, `exe ssh` reaches a VM again on a PC where Codex has run: the VM key is kept to its user.
 - Every release's notes are one page now: [What Changed](https://exe.v2core.com/docs/changelog).
-- The Mac OS X window has an **Agent** button: a Chat that works inside the Tiger Mac over its shell, with `upload` for a Workspace file. Setup details shows the line that lets it in.
+- **Mac OS X** has an **Agent** button: a Chat that works inside Tiger and uploads Workspace files.

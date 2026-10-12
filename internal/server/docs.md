@@ -691,6 +691,11 @@ terminal window of its own.
 [Desktop context menu](https://exe.v2core.com/docs/using/desktop-context-menu)
 lists its actions.
 
+Codex sessions use standalone mode when the installed CLI supports it.
+This keeps their notifications and session status without the shared
+background server warning. With tmux, they still keep running when the
+window closes.
+
 ### The agent window
 
 <img src="https://hub.v2core.com/v1/embed/bafybeiedurlk54ghfmghdxnscdn6xejkss37uekbun2xrrrxbukqwamwkq" alt="The Claude Code window: its sessions down the left, the chosen one's conversation in the terminal, and the model, context, tokens, cost and weekly usage on the status line" width="896" height="487">
