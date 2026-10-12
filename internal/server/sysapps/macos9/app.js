@@ -323,7 +323,11 @@ function renderAgent(s) {
   if (!s.agent) return;
   const user = $('#agent-user');
   if (document.activeElement !== user && !agentSaving) user.value = s.agent.user || '';
-  $('#agent-line').value = authorizeLine(s.agent.key);
+  const line = $('#agent-line');
+  line.value = authorizeLine(s.agent.key);
+  // as tall as its line, whole: no line cut at the box's foot
+  line.style.height = 'auto';
+  line.style.height = line.scrollHeight + 'px';
 }
 const authorizeLine = key => key ? `mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '${key}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys` : '';
 let agentSaving = false;
