@@ -32,8 +32,8 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   is, not the commit subject. At most eight short items — when a ninth
   turns up, the one a user would miss least goes. `deploy/release.sh
   notes` checks it; the rules are in `docs/release.md`, "The notes".
-  `CHANGELOG.md` keeps what every release said, and only `publish` writes
-  it.
+  `CHANGELOG.md` keeps what every release said, the site shows it at
+  /docs/changelog, and only `publish` adds a release to it.
 - Releases (Linux and macOS, x86-64 and ARM64 each, and Windows x86-64;
   `docs/release.md`): build with `deploy/release.sh build` — the macOS
   binaries are built and signed on the Mac named in `deploy/release.env` —

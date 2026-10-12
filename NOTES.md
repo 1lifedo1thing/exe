@@ -6,3 +6,4 @@ before it said is kept in CHANGELOG.md.
 -->
 
 - On Windows, `exe ssh` reaches a VM again on a PC where Codex has run: the VM key is kept to its user.
+- Every release's notes are one page now: [What Changed](https://exe.v2core.com/docs/changelog).

@@ -4247,6 +4247,10 @@ browser: the update goes on. A second **Update Now** from another device
 joins the same update, and the window says where it stands whenever it is
 opened again.
 
+The window shows what the newest release changed. Every release's notes,
+back to the first, are on one page:
+[What Changed](https://exe.v2core.com/docs/changelog).
+
 ### After the restart
 
 When exe is back the window names the version that runs now and, for a

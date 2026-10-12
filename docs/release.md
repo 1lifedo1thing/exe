@@ -85,8 +85,19 @@ under test (below), before `publish`. To change them then: edit
 After publishing, `publish` adds the notes to `CHANGELOG.md`, where every
 release's are kept, newest first, under the release's name. Then it empties
 `NOTES.md` to its comment and commits the two, so that what is written in
-it from then on is the next release's. `CHANGELOG.md` is written by
-`publish` alone: a line for the next release goes in `NOTES.md`.
+it from then on is the next release's. A release's section of
+`CHANGELOG.md` is written by `publish` alone: a line for the next release
+goes in `NOTES.md`.
+
+`CHANGELOG.md` is in the binary too (`changelog.go`, at the top of the
+repository because `go:embed` reaches no higher than its own folder), and
+the site shows it as a page, https://exe.v2core.com/docs/changelog, without
+the comment that speaks to its editors. The file is therefore written in
+what both GitHub and the site's renderer read: headings, paragraphs, lists,
+`code`, **bold**, and links whose address is whole. `build` adds the
+release it is building to the copy of the file it compiles, the way
+`publish` then adds it to the checkout's, so that a release's own page
+begins with that release and not with the one before it.
 
 ## Build
 

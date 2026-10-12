@@ -132,8 +132,13 @@ $stale"
 # starts again after a release, and its words would otherwise be only on
 # GitHub and behind the tag. A release that is already there is left as it
 # is, so a publish that is run again after a failure adds nothing twice.
-keep_notes() { # keep_notes <version> <the release's NOTES.md>
-	local version=$1 notes=$2 log=$root/CHANGELOG.md
+#
+# The file is in the binary too (changelog.go), and the site shows it at
+# /docs/changelog. So `build` adds the release to the copy it compiles,
+# before `publish` adds it to the checkout's: a release's own page of
+# changes begins with that release, not with the one before it.
+keep_notes() { # keep_notes <version> <the release's NOTES.md> [CHANGELOG.md]
+	local version=$1 notes=$2 log=${3:-$root/CHANGELOG.md}
 	[ -f "$log" ] || printf '%s\n' "# What changed in each release" "" \
 		"Every release of exe and what it told its users had changed, newest first." >"$log"
 	! grep -qFx "## $version" "$log" || return 0
@@ -260,6 +265,7 @@ build() {
 	else
 		echo "note: no NOTES.md in this build: Software Update will say the release came without notes"
 	fi
+	[ ! -f "$work/out/NOTES.md" ] || keep_notes "$version" "$work/out/NOTES.md" "$work/src/CHANGELOG.md"
 
 	local arch
 	for arch in amd64 arm64; do

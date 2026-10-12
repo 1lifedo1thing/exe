@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"exe"
 )
 
 // The subset of Markdown the pages are written in, each construct as the
@@ -18,6 +20,8 @@ func TestMarkdownRender(t *testing.T) {
 		{"one line\nand its second", "<p>one line and its second</p>"},
 		{"a `flag` in text", "<p>a <code>flag</code> in text</p>"},
 		{"**bold** and *soft*", "<p><b>bold</b> and <i>soft</i></p>"},
+		{"**`exe update`** moves it, **`exe uninstall`** removes it", "<p><b><code>exe update</code></b> moves it, <b><code>exe uninstall</code></b> removes it</p>"},
+		{"`a ** b` and `c ** d`", "<p><code>a ** b</code> and <code>c ** d</code></p>"},
 		{"[the source](https://github.com/livid/exe)", `<a href="https://github.com/livid/exe" target="_blank" rel="noopener">the source</a>`},
 		{"[the page](/docs/ssh)", `<a href="/docs/ssh">the page</a>`},
 		{"- one\n- two", "<ul>\n<li>one</li>\n<li>two</li>\n</ul>"},
@@ -273,7 +277,8 @@ func TestDocsBreadcrumb(t *testing.T) {
 // count, and carries the way on as a push button.
 func TestDocsFoot(t *testing.T) {
 	h := SiteHandler(nil)
-	_, body := getDoc(t, h, "/docs/config")
+	// the page before the manual leads to it
+	_, body := getDoc(t, h, "/docs/changelog")
 	for _, want := range []string{
 		`<div class="strip foot">`,
 		`<a class="btn" href="/docs/using">Next<span class="t">: Using exe</span></a>`,
@@ -404,5 +409,58 @@ func TestManualChaptersHaveIcons(t *testing.T) {
 	}
 	for slug := range has {
 		t.Errorf("DOCS_ICONS names %q, which is no chapter", slug)
+	}
+}
+
+// What Changed is CHANGELOG.md, the file publishing a release adds to:
+// every release in the file is a heading on the page with an address of
+// its own, newest first, and what the file says to its editors stays out.
+func TestSiteChangelog(t *testing.T) {
+	code, page := getDoc(t, SiteHandler(nil), "/docs/changelog")
+	if code != http.StatusOK {
+		t.Fatalf("/docs/changelog answered %d", code)
+	}
+	releases := regexp.MustCompile(`(?m)^## (\S+)$`).FindAllStringSubmatch(exe.Changelog, -1)
+	if len(releases) < 3 {
+		t.Fatalf("CHANGELOG.md names %d releases", len(releases))
+	}
+	at := -1
+	for _, r := range releases {
+		h := `<h2 id="` + strings.ReplaceAll(r[1], ".", "-") + `">` + r[1] + `</h2>`
+		i := strings.Index(page, h)
+		if i < 0 {
+			t.Errorf("the page has no heading for %s (%s)", r[1], h)
+			continue
+		}
+		if i < at {
+			t.Errorf("%s is not where the file has it", r[1])
+		}
+		at = i
+	}
+	for i := 1; i < len(releases); i++ {
+		if releases[i-1][1] <= releases[i][1] && len(releases[i-1][1]) <= len(releases[i][1]) {
+			t.Errorf("CHANGELOG.md has %s over %s: the newest goes first", releases[i-1][1], releases[i][1])
+		}
+	}
+	if !strings.Contains(exe.Changelog, "<!--") {
+		t.Fatal("CHANGELOG.md has lost the comment this test is about")
+	}
+	if strings.Contains(page, "&lt;!--") || strings.Contains(page, "--&gt;") || strings.Contains(page, "NOTES.md") {
+		t.Error("the file's note to its editors is on the page")
+	}
+	if strings.Contains(page, "\n### ") || strings.Contains(page, "**") {
+		t.Error("the page went out with unrendered markdown in it")
+	}
+	// the file is read on GitHub too, where an address that is not whole
+	// leads into the repository: here it would lead nowhere
+	for _, m := range regexp.MustCompile(`href="([^"]*)"`).FindAllStringSubmatch(page, -1) {
+		if a := m[1]; !strings.HasPrefix(a, "https://") && !strings.HasPrefix(a, "/") {
+			t.Errorf("a link on the page leads to %q", a)
+		}
+	}
+	// it is offered between the reference pages and the manual, whose
+	// chapters the contents list hangs under the last entry
+	if siteDocs[len(siteDocs)-1].Slug != "using" {
+		t.Error("the manual is no longer the last page of the documentation")
 	}
 }

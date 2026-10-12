@@ -8,6 +8,8 @@ package server
 //
 // "Using exe" is not a copy of anything: it renders internal/server/docs.md,
 // the manual the desktop's Help menu opens, so the two can never drift.
+// "What Changed" is CHANGELOG.md, the file at the top of the repository
+// that publishing a release adds to, for the same reason.
 
 import (
 	"embed"
@@ -16,6 +18,8 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+
+	"exe"
 
 	stats "github.com/livid/exe-stats"
 )
@@ -49,7 +53,19 @@ var siteDocs = []siteDoc{
 	{Slug: "config", Title: "Configuration",
 		Blurb: "Every key of ~/.exe/config.json, and the Cloudflare setup.",
 		src:   docFile("config")},
+	{Slug: "changelog", Title: "What Changed",
+		Blurb: "Every release of exe, newest first, and what each one changed.",
+		src:   changelogDoc},
+	// the manual stays last: the contents list hangs its chapters under it
 	manualDoc,
+}
+
+// changelogDoc is CHANGELOG.md as a page. The file speaks to two readers:
+// its comment to whoever edits it, the rest to whoever wants to know what
+// a release changed, and only that part is the page. A heading there is a
+// release, so /docs/changelog#2026-10-12 is that release's notes.
+func changelogDoc() string {
+	return mdComment.ReplaceAllString(exe.Changelog, "")
 }
 
 // The manual (internal/server/docs.md) is one file, too long for one
@@ -379,6 +395,8 @@ var (
 	mdBold    = regexp.MustCompile(`\*\*([^*]+)\*\*`)
 	mdItalic  = regexp.MustCompile(`\*([^*\s][^*]*)\*`)
 	mdSlugBad = regexp.MustCompile(`[^a-z0-9]+`)
+	// a comment and the blank lines after it: not part of a page
+	mdComment = regexp.MustCompile(`(?s)<!--.*?-->\n*`)
 )
 
 func mdRender(src string) template.HTML {
@@ -564,7 +582,10 @@ func mdTable(rows []string) string {
 }
 
 // mdInline renders one run of text: code spans first, so nothing inside
-// a span is read as markup, then links, then bold, then italic.
+// a span is read as markup, then links, then bold, then italic. A code
+// span that is the whole of a bold run, a command's name in a release's
+// notes, is bold code: its marks sit on either side of the span, and are
+// taken with it, or the text between two such spans would pair them.
 func mdInline(s string) string {
 	var b strings.Builder
 	for {
@@ -576,9 +597,14 @@ func mdInline(s string) string {
 		if j < 0 {
 			break
 		}
-		b.WriteString(mdText(s[:i]))
-		b.WriteString("<code>" + html.EscapeString(s[i+1:i+1+j]) + "</code>")
-		s = s[i+j+2:]
+		code := "<code>" + html.EscapeString(s[i+1:i+1+j]) + "</code>"
+		before, after := s[:i], s[i+j+2:]
+		if strings.HasSuffix(before, "**") && strings.HasPrefix(after, "**") {
+			before, after, code = before[:len(before)-2], after[2:], "<b>"+code+"</b>"
+		}
+		b.WriteString(mdText(before))
+		b.WriteString(code)
+		s = after
 	}
 	b.WriteString(mdText(s))
 	return b.String()

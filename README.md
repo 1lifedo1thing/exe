@@ -90,6 +90,8 @@ The detail lives on the site, in pages rather than in this file:
   on each platform, and where the sandbox boundary is.
 - [Configuration](https://exe.v2core.com/docs/config) — every key of
   `~/.exe/config.json`, and the one-time Cloudflare setup.
+- [What Changed](https://exe.v2core.com/docs/changelog) — every release,
+  newest first, and what each one changed: [CHANGELOG.md](CHANGELOG.md).
 - [Using exe](https://exe.v2core.com/docs/using) — the desktop's own
   manual, the same text its Help menu opens.
 
