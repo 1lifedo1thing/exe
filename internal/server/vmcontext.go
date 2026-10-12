@@ -25,6 +25,9 @@ import (
 const memoryMax = 8 << 10
 
 func (s *Server) memoryPath(vm string) string {
+	if vm == macChatPin {
+		return s.macMemoryPath()
+	}
 	return filepath.Join(s.vmRoot(), "vms", vm, "memory.md")
 }
 

@@ -301,7 +301,12 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	var sess *chat.Session
 	var err error
 	if req.Session == "" {
-		if req.VM != "" {
+		if req.VM == macChatPin {
+			if !s.macOSXManager().Status().Installed {
+				writeErr(w, http.StatusNotFound, errors.New("Mac OS X is not set up on this computer yet"))
+				return
+			}
+		} else if req.VM != "" {
 			if _, err := s.VMs.Get(r.Context(), req.VM); err != nil {
 				writeErr(w, http.StatusNotFound, err)
 				return
@@ -329,7 +334,11 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 
 // ---- tools ----
 
-func chatTools(pinned bool) []agent.Tool {
+// chatTools is the tool list of a session: the fleet's, or pinned to one VM
+// by its name, or to the Mac (pin macChatPin), whose shell is reached but
+// whose network and record are not a VM's.
+func chatTools(pin string) []agent.Tool {
+	pinned := pin != ""
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 	num := func(desc string) map[string]any { return map[string]any{"type": "integer", "description": desc} }
 	vm := str("VM name")
@@ -359,6 +368,7 @@ func chatTools(pinned bool) []agent.Tool {
 			"offset": num("1-based line to start from (default 1)"),
 			"limit":  num("max lines to read (default: to the end)"),
 		}, []string{"vm", "path"}),
+		uploadTool(vm),
 		agent.MkTool("list_ports", "List TCP services listening inside a running VM (SSH excluded).", map[string]any{"vm": vm}, []string{"vm"}),
 		agent.MkTool("list_routes", "List published routes: hostname -> VM backend.", map[string]any{}, nil),
 		agent.MkTool("expose", "Publish a VM port on the internet as https://<subdomain>.<configured domain>.", map[string]any{
@@ -394,6 +404,9 @@ func chatTools(pinned bool) []agent.Tool {
 		case "list_vms", "create_vm", "delete_vm":
 			continue
 		}
+		if pin == macChatPin && macUnavailable[t.Function.Name] {
+			continue
+		}
 		props := t.Function.Parameters["properties"].(map[string]any)
 		delete(props, "vm")
 		delete(props, "name")
@@ -416,7 +429,7 @@ func chatTools(pinned bool) []agent.Tool {
 // hallucinated value must not win either — overwriting beats validating.
 func pinChatArgs(name string, args map[string]any, vm string) {
 	switch name {
-	case "bash", "write_file", "edit_file", "read_file", "list_ports", "expose", "github_push", "remember", "recall":
+	case "bash", "write_file", "edit_file", "read_file", "upload", "list_ports", "expose", "github_push", "remember", "recall":
 		args["vm"] = vm
 	case "start_vm", "stop_vm":
 		args["name"] = vm
@@ -493,6 +506,8 @@ func chatToolSummary(name string, args map[string]any) string {
 		return fmt.Sprintf("edit %s:%s", str("vm"), str("path"))
 	case "read_file":
 		return fmt.Sprintf("read %s:%s", str("vm"), str("path"))
+	case "upload":
+		return fmt.Sprintf("upload %s to %s:%s", str("source"), str("vm"), str("path"))
 	case "expose":
 		p, _ := args["port"].(float64)
 		return fmt.Sprintf("expose %s:%d as %q", str("vm"), int(p), str("subdomain"))
@@ -523,6 +538,7 @@ var chatRequiredArgs = map[string][]string{
 	"write_file":  {"vm", "path"},
 	"edit_file":   {"vm", "path"},
 	"read_file":   {"vm", "path"},
+	"upload":      {"vm", "source", "path"},
 	"list_ports":  {"vm"},
 	"expose":      {"vm"},
 	"unexpose":    {"host"},
@@ -544,11 +560,22 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 		return string(b)
 	}
 	target := func(ctx context.Context) (sshexec.Target, error) {
+		if str("vm") == macChatPin {
+			return s.macTarget()
+		}
 		info, err := s.runningVM(ctx, str("vm"))
 		if err != nil {
 			return sshexec.Target{}, err
 		}
 		return s.vmTarget(info), nil
+	}
+	// The Mac is a shell and nothing a VM's record or network gives.
+	isVM := func(ctx context.Context) error {
+		if str("vm") == macChatPin {
+			return nil
+		}
+		_, err := s.VMs.Get(ctx, str("vm"))
+		return err
 	}
 	// A call missing a required argument errors back to the model instead of
 	// running on zero values (bash with an empty command, VM name "").
@@ -569,6 +596,11 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 		switch name {
 		case "list_vms", "create_vm", "delete_vm":
 			return fmt.Sprintf("error: this chat is pinned to VM %s; %s is not available here", pin, name)
+		}
+		if pin == macChatPin && (macUnavailable[name] || name == "start_vm" || name == "stop_vm") {
+			return fmt.Sprintf("error: this chat is pinned to the Mac; %s is not available here", name)
+		}
+		switch name {
 		case "unexpose":
 			if err := s.routeBelongsTo(tctx, pin, str("host")); err != nil {
 				return "error: " + err.Error()
@@ -649,8 +681,21 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 			return "error: " + err.Error()
 		}
 		return out
+	case "upload":
+		t, err := target(tctx)
+		if err != nil {
+			return "error: " + err.Error()
+		}
+		data, err := s.workspaceFile(str("source"))
+		if err != nil {
+			return "error: " + err.Error()
+		}
+		if err := t.WriteFile(tctx, str("path"), data); err != nil {
+			return "error: " + err.Error()
+		}
+		return fmt.Sprintf("ok, %d bytes written to %s", len(data), str("path"))
 	case "remember":
-		if _, err := s.VMs.Get(tctx, str("vm")); err != nil {
+		if err := isVM(tctx); err != nil {
 			return "error: " + err.Error()
 		}
 		if err := s.writeVMMemory(str("vm"), str("content")); err != nil {
@@ -658,7 +703,7 @@ func (s *Server) execChatTool(ctx context.Context, name string, args map[string]
 		}
 		return "ok, memory saved"
 	case "recall":
-		if _, err := s.VMs.Get(tctx, str("vm")); err != nil {
+		if err := isVM(tctx); err != nil {
 			return "error: " + err.Error()
 		}
 		mem := s.readVMMemory(str("vm"))

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -49,7 +50,16 @@ func macOS9SameOrigin(w http.ResponseWriter, r *http.Request) bool {
 func (s *Server) handleMacOS9Status(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s.mac(r).Status())
+	m := s.mac(r)
+	st := m.Status()
+	// The agent's way in, for a Mac with a shell (nil for Mac OS 9's); its
+	// key is minted the first time the window asks.
+	if a, err := m.Agent(); err == nil {
+		st.Agent = a
+	} else {
+		log.Printf("mac agent: %v", err)
+	}
+	_ = json.NewEncoder(w).Encode(st)
 }
 func (s *Server) handleMacOS9Start(w http.ResponseWriter, r *http.Request) {
 	if !macOS9SameOrigin(w, r) {

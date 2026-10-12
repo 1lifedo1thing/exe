@@ -172,8 +172,15 @@ main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: co
 #setup { min-height: 0; overflow: auto; flex: 1; }
 #setup:focus-visible { outline: 1px solid #9999fe; outline-offset: -1px; }
 h2 { font-size: 12px; margin: 0 0 12px; }
-#intro, #ports { margin: 0 0 12px; }
+#intro, #ports, #agent-intro, #agent-note { margin: 0 0 12px; }
 #ports b { user-select: text; }
+#agent-user { width: 92px; vertical-align: baseline; margin: 0 2px; }
+#agent-line { display: block; width: 100%; height: 78px; margin: 0 0 12px; padding: 3px 5px; resize: none; overflow: auto;
+  background: #fff; color: var(--black); border: 1px solid var(--black); border-radius: 0;
+  font: 11px/14px Monaco, Menlo, Consolas, monospace; user-select: text; cursor: text; overflow-wrap: anywhere;
+  box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
+    1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
+#agent-line:focus { outline: 2px solid #9999fe; outline-offset: 0; }
 #steps { list-style: none; padding: 0; margin: 0; }
 #steps li { padding: 4px 0; border-bottom: 1px solid var(--g400); display: flex; gap: 12px; align-items: flex-start; }
 #steps .badge { width: 16px; flex: none; text-align: center; }

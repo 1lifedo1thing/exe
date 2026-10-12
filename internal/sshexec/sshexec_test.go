@@ -1,9 +1,16 @@
 package sshexec
 
 import (
+	"bytes"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"golang.org/x/crypto/ssh"
 )
 
 func TestReplaceEdit(t *testing.T) {
@@ -130,5 +137,94 @@ func TestNotFoundErrLargeFile(t *testing.T) {
 	_, _, err = ReplaceEdit("small\n", "no such text", "x", false)
 	if err == nil || !strings.Contains(err.Error(), "read_file to check") {
 		t.Errorf("small-file miss should point at read_file, got: %v", err)
+	}
+}
+
+// A Mac OS X Tiger guest's sshd (OpenSSH 3.8 to 4.5) may offer nothing in
+// the library's default lists: the legacy lists carry everything the
+// library implements, current algorithms first.
+func TestLegacyAlgorithmsOfferTigerSomethingAndTheCurrentOnesFirst(t *testing.T) {
+	cfg := &ssh.ClientConfig{}
+	legacyAlgorithms(cfg)
+	has := func(list []string, want string) bool {
+		for _, s := range list {
+			if s == want {
+				return true
+			}
+		}
+		return false
+	}
+	for list, want := range map[*[]string]string{
+		&cfg.KeyExchanges:      "diffie-hellman-group1-sha1",
+		&cfg.HostKeyAlgorithms: "ssh-rsa",
+		&cfg.Ciphers:           "aes128-cbc",
+		&cfg.MACs:              "hmac-sha1",
+	} {
+		if !has(*list, want) {
+			t.Errorf("legacy lists lack %s: %v", want, *list)
+		}
+	}
+	cur := ssh.SupportedAlgorithms()
+	if cfg.KeyExchanges[0] != cur.KeyExchanges[0] || cfg.Ciphers[0] != cur.Ciphers[0] {
+		t.Errorf("a current algorithm should lead each list: %v / %v", cfg.KeyExchanges[:2], cfg.Ciphers[:2])
+	}
+}
+
+// Tiger's userland is BSD's of 2005: a bare mktemp exits 1, head has no -c,
+// and dd prints statistics into the merged output. The file commands stay
+// clear of all three.
+func TestFileCommandsRunOnTigerAsOnLinux(t *testing.T) {
+	w := writeCmd("/Users/exe/Desktop/a b.txt")
+	if !strings.Contains(w, `mktemp "${TMPDIR:-/tmp}/exe.XXXXXX"`) || strings.Contains(w, "mktemp)") {
+		t.Errorf("write: mktemp needs its template: %s", w)
+	}
+	if !strings.Contains(w, `'/Users/exe/Desktop/a b.txt'`) {
+		t.Errorf("write: the path is not quoted: %s", w)
+	}
+	r := editReadCmd("/etc/hosts")
+	for _, bad := range []string{"head -c", "dd "} {
+		if strings.Contains(r, bad) {
+			t.Errorf("edit read uses %q: %s", bad, r)
+		}
+	}
+	if !strings.Contains(r, "wc -c <") || !strings.Contains(r, fmt.Sprintf("-gt %d", editMax)) || !strings.Contains(r, fmt.Sprintf("exit %d", editTooLarge)) {
+		t.Errorf("edit read should measure with wc and answer a large file with exit %d: %s", editTooLarge, r)
+	}
+}
+
+// The commands run through a local sh the way they run on the far side:
+// a file of exactly editMax bytes is read whole, one byte more is refused
+// with editTooLarge and left as it was, and a missing file keeps the
+// shell's own words about it in the output.
+func TestEditReadCmdBoundaryInLocalShell(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no sh")
+	}
+	dir := t.TempDir()
+	run := func(cmd string) (string, int) {
+		out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+		code := 0
+		if ee, ok := err.(*exec.ExitError); ok {
+			code = ee.ExitCode()
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		return string(out), code
+	}
+	exact := filepath.Join(dir, "exact")
+	os.WriteFile(exact, bytes.Repeat([]byte{'x'}, editMax), 0o644)
+	if out, code := run(editReadCmd(exact)); code != 0 || len(out) != editMax {
+		t.Errorf("exactly editMax bytes: exit %d, %d bytes read", code, len(out))
+	}
+	over := filepath.Join(dir, "over")
+	os.WriteFile(over, bytes.Repeat([]byte{'x'}, editMax+1), 0o644)
+	if out, code := run(editReadCmd(over)); code != editTooLarge || out != "" {
+		t.Errorf("editMax+1 bytes: exit %d (want %d), %d bytes read (want 0)", code, editTooLarge, len(out))
+	}
+	if st, err := os.Stat(over); err != nil || st.Size() != editMax+1 {
+		t.Errorf("the oversized file changed: %v %v", st, err)
+	}
+	if out, code := run(editReadCmd(filepath.Join(dir, "missing"))); code != 1 || !strings.Contains(out, "missing") {
+		t.Errorf("missing file: exit %d, output %q: the shell's words about it should be kept", code, out)
 	}
 }

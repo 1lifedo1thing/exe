@@ -42,13 +42,15 @@ $('#sound').onclick = () => {
   if (audio.enabled) { soundWanted = false; stopSound(); }
   else { soundWanted = true; startSound(); }
 };
-async function api(path = '', method = 'GET') {
+async function api(path = '', method = 'GET', body) {
   const controller = new AbortController();
   // A half-open connection must not prevent every later status poll.
   const timeout = setTimeout(() => controller.abort(), method === 'GET' ? 8000 : 30000);
   try {
-    const response = await fetch(mac.api + path, {method, signal: controller.signal,
-      headers: token ? {Authorization: 'Bearer ' + token} : {}, cache: 'no-store'});
+    const headers = token ? {Authorization: 'Bearer ' + token} : {};
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    const response = await fetch(mac.api + path, {method, signal: controller.signal, headers, cache: 'no-store',
+      body: body === undefined ? undefined : JSON.stringify(body)});
     if (!response.ok) {
       const e = new Error(response.status === 401 ? 'Set your API token in exe’s Special menu, then reopen this app.' : (await response.text()).trim() || `HTTP ${response.status}`);
       // A failed action (including HTTP 500) needs attention. Status polling
@@ -267,6 +269,7 @@ function render(s) {
   $('#hardware').textContent = mac.hardware + ' · ' + (s.installed ? 'Ethernet NAT' : 'Ethernet after installation');
   // Where this computer reaches the Mac's own Sharing services, on a page that says so (Mac OS X's).
   for (const el of document.querySelectorAll('[id^="port-"]')) el.textContent = s.ports?.[el.id.slice(5)] || '—';
+  renderAgent(s);
   $('#start').hidden = s.active || s.running;
   $('#start').textContent = s.installed ? 'Start Mac' : s.phase === 'installing' ? 'Resume installer' : asks(s) ? 'Set up Mac' : 'Continue setup';
   $('#start').disabled = pending;
@@ -307,6 +310,34 @@ function render(s) {
   else $('#connection').textContent = '';
   if (initialSetup) setupDetails(true);
 }
+// The agent's way in (a Mac with a shell: Mac OS X's page has the controls,
+// Mac OS 9's has none): the Agent button opens a Chat pinned to the Mac
+// through the desk, and Setup details takes the Mac account to work as and
+// shows the line that authorizes exe's key there. The account field keeps
+// what is being typed through the polls.
+function renderAgent(s) {
+  const btn = $('#agent'), box = $('#agent-setup');
+  if (!btn || !box) return;
+  btn.hidden = !(s.running && s.installed && s.agent);
+  box.hidden = !s.agent;
+  if (!s.agent) return;
+  const user = $('#agent-user');
+  if (document.activeElement !== user && !agentSaving) user.value = s.agent.user || '';
+  $('#agent-line').value = authorizeLine(s.agent.key);
+}
+const authorizeLine = key => key ? `mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '${key}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys` : '';
+let agentSaving = false;
+async function saveAgentUser() {
+  const user = $('#agent-user').value.trim();
+  if (!status?.agent || user === (status.agent.user || '')) return;
+  agentSaving = true; clearError();
+  try { render(await api('/agent', 'PUT', {user})); } catch (e) { error(e); }
+  finally { agentSaving = false; }
+}
+$('#agent')?.addEventListener('click', () => parent.postMessage({exe: 'chat'}, location.origin));
+$('#agent-user')?.addEventListener('change', saveAgentUser);
+$('#agent-user')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); saveAgentUser(); } });
+$('#agent-line')?.addEventListener('focus', e => e.target.select());
 async function action(path) {
   if (pending) return;
   pending = true; clearError();

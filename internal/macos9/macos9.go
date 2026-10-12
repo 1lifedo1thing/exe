@@ -51,6 +51,9 @@ type Status struct {
 	// The share of an absolute pointer's range this Mac's system leaves
 	// unused (system.trims), as a viewer last found it.
 	Trim float64 `json:"trim,omitempty"`
+	// Agent is an agent's way in (agent.go), for a Mac with a shell; the
+	// server fills it.
+	Agent *Agent `json:"agent,omitempty"`
 }
 type Manager struct {
 	sys         *system
@@ -58,6 +61,7 @@ type Manager struct {
 	runtimeRoot string         // where the emulator runtime is unpacked
 	ports       map[string]int // host ports of the running Mac's forwards
 	mu          sync.Mutex
+	agentMu     sync.Mutex // the agent key's minting
 	cdMu        sync.Mutex
 	state       Status
 	cancel      context.CancelFunc

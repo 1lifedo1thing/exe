@@ -304,6 +304,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET "+mac+"/cd", s.handleMacOS9CD)
 		mux.HandleFunc("POST "+mac+"/cd", s.handleMacOS9ChangeCD)
 		mux.HandleFunc("POST "+mac+"/cd/upload", s.handleMacOS9UploadCD)
+		mux.HandleFunc("PUT "+mac+"/agent", s.handleMacAgentPut)
 	}
 	mux.HandleFunc("GET /v1/apps", s.handleApps)
 	mux.HandleFunc("GET /v1/apps/events", s.handleAppDataEvents)

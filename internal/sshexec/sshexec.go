@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -20,10 +21,17 @@ import (
 type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
 type Target struct {
-	Host    string
+	Host string
+	// Port is the SSH port; 0 is 22.
+	Port    int
 	User    string
 	KeyPath string
-	// Dialer, when set, replaces the default TCP dial to Host:22.
+	// Legacy offers a server the algorithms the library still implements
+	// but leaves out of its defaults, behind the current ones: a Mac OS X
+	// Tiger guest's sshd is OpenSSH 3.8 to 4.5 (2004), whose offer may not
+	// overlap today's defaults at all. Never for a VM: its sshd is current.
+	Legacy bool
+	// Dialer, when set, replaces the default TCP dial to Host:Port.
 	Dialer DialFunc
 }
 
@@ -42,12 +50,19 @@ func (t Target) dial(ctx context.Context) (*ssh.Client, error) {
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
 	}
+	if t.Legacy {
+		legacyAlgorithms(cfg)
+	}
 	dialTCP := t.Dialer
 	if dialTCP == nil {
 		d := net.Dialer{Timeout: 10 * time.Second}
 		dialTCP = d.DialContext
 	}
-	conn, err := dialTCP(ctx, "tcp", net.JoinHostPort(t.Host, "22"))
+	port := t.Port
+	if port == 0 {
+		port = 22
+	}
+	conn, err := dialTCP(ctx, "tcp", net.JoinHostPort(t.Host, strconv.Itoa(port)))
 	if err != nil {
 		return nil, err
 	}
@@ -57,6 +72,20 @@ func (t Target) dial(ctx context.Context) (*ssh.Client, error) {
 		return nil, err
 	}
 	return ssh.NewClient(c, chans, reqs), nil
+}
+
+// legacyAlgorithms lets the client agree with a server from the 2000s:
+// every algorithm the library implements, the current ones first and the
+// ones it calls insecure after them, so a current server still gets its
+// best and Tiger's sshd (diffie-hellman-group1-sha1, an ssh-rsa host key,
+// aes128-cbc, hmac-sha1) finds something it speaks.
+func legacyAlgorithms(cfg *ssh.ClientConfig) {
+	cur, old := ssh.SupportedAlgorithms(), ssh.InsecureAlgorithms()
+	join := func(a, b []string) []string { return append(append([]string{}, a...), b...) }
+	cfg.KeyExchanges = join(cur.KeyExchanges, old.KeyExchanges)
+	cfg.Ciphers = join(cur.Ciphers, old.Ciphers)
+	cfg.MACs = join(cur.MACs, old.MACs)
+	cfg.HostKeyAlgorithms = join(cur.HostKeys, old.HostKeys)
 }
 
 // Dial opens an SSH client connection to the target; the caller closes it.
@@ -117,13 +146,19 @@ func (t Target) WriteFile(ctx context.Context, p string, data []byte) error {
 	// never the target, and the in-place copy keeps every cat-> semantic
 	// a rename would break — permission checks, inode/owner/hard links,
 	// symlink write-through, umask, loud failure on directories.
-	cmd := fmt.Sprintf(
-		`t=$(mktemp) || exit 1; cat > "$t" && mkdir -p %s && cat "$t" > %s; s=$?; rm -f "$t"; exit $s`,
-		shq(path.Dir(p)), shq(p))
-	if out, err := sess.CombinedOutput(cmd); err != nil {
+	if out, err := sess.CombinedOutput(writeCmd(p)); err != nil {
 		return fmt.Errorf("write %s: %v: %s", p, err, out)
 	}
 	return nil
+}
+
+// writeCmd is the shell of WriteFile. Every command in it is in the BSD
+// userland of a 2005 Mac as well as in a Linux VM's: mktemp is given its
+// template, which Tiger's requires and GNU's accepts.
+func writeCmd(p string) string {
+	return fmt.Sprintf(
+		`t=$(mktemp "${TMPDIR:-/tmp}/exe.XXXXXX") || exit 1; cat > "$t" && mkdir -p %s && cat "$t" > %s; s=$?; rm -f "$t"; exit $s`,
+		shq(path.Dir(p)), shq(p))
 }
 
 // ReadFile returns the file's content, truncated to maxOut bytes. A
@@ -157,23 +192,35 @@ func (t Target) ReadFile(ctx context.Context, p string, offset, limit, maxOut in
 	return out, nil
 }
 
-// editMax caps the file size EditFile will pull into memory; the read runs
-// through head -c so a giant file never crosses the wire at all.
+// editMax caps the file size EditFile will pull into memory; the read
+// measures the file first so a giant one never crosses the wire at all.
 const editMax = 5 << 20
+
+// editTooLarge is the exit code editReadCmd answers a file past editMax with.
+const editTooLarge = 3
+
+// editReadCmd is the shell of EditFile's read: the file's size by wc,
+// then the whole file by cat, or exit editTooLarge. Output is merged with
+// errors (Run), so nothing in it may print to stderr on success: head -c
+// is not in Tiger's head, and dd reports its statistics there.
+func editReadCmd(p string) string {
+	return fmt.Sprintf(`f=%s; n=$(wc -c < "$f") || exit 1; n=$(echo $n); if [ "$n" -gt %d ]; then exit %d; fi; cat "$f"`,
+		shq(p), editMax, editTooLarge)
+}
 
 // EditFile applies a string-replace edit to a remote text file: read it in
 // full (never truncated — an edit written back from an elided read would
 // destroy the file), replace, write back. Returns the replacement count.
 func (t Target) EditFile(ctx context.Context, p, oldStr, newStr string, replaceAll bool) (int, error) {
-	out, code, err := t.Run(ctx, fmt.Sprintf("head -c %d %s", editMax+1, shq(p)), 0)
+	out, code, err := t.Run(ctx, editReadCmd(p), 0)
 	if err != nil {
 		return 0, err
 	}
+	if code == editTooLarge {
+		return 0, fmt.Errorf("%s exceeds %d bytes — too large for edit_file; use bash (sed, patch) instead", p, editMax)
+	}
 	if code != 0 {
 		return 0, fmt.Errorf("read %s: exit %d: %s", p, code, strings.TrimSpace(out))
-	}
-	if len(out) > editMax {
-		return 0, fmt.Errorf("%s exceeds %d bytes — too large for edit_file; use bash (sed, patch) instead", p, editMax)
 	}
 	edited, n, err := ReplaceEdit(out, oldStr, newStr, replaceAll)
 	if err != nil {

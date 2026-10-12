@@ -5793,6 +5793,11 @@ window.addEventListener("message", e => {
     // a page (an admin's HTML embed on the hub) opens the same way, in a
     // desktop page window, sandboxed like a Workspace page
     openPageWin(webPagePath(e.data.url, typeof e.data.name === "string" ? e.data.name : ""), w);
+  } else if (e.data.exe === "chat" && isMacWin(w)) {
+    // the Mac OS X window's Agent button: a chat pinned to the Mac, as a
+    // VM window's Run Agent pins one to its VM (the daemon's macChatPin)
+    if (!chatDetected) { toast("No chat backend configured (Configuration → Ollama / OpenAI)."); return; }
+    openChatWin(MAC_CHAT_PIN);
   } else if (e.data.exe === "display-fullscreen" && isMacWin(w) && typeof e.data.active === "boolean") {
     const active = e.data.active && !w.hidden;
     w.classList.toggle("display-fullscreen", active);
@@ -9902,6 +9907,9 @@ let chatCur = null, chatBusy = false;
 // to it); chatCurVM is the ACTIVE session's pin — a property of the
 // session itself, shown in the titlebar however the session was reached.
 let chatScope = null, chatCurVM = null, chatDetected = false, chatProv = "";
+// the pin of a chat with the Mac OS X app's Mac, as the daemon names it;
+// no VM can carry this name
+const MAC_CHAT_PIN = "Mac OS X";
 const chatMsgs = $("#chat-msgs"), chatInput = $("#chat-input");
 
 // ---- newsfeed ----
@@ -10102,11 +10110,13 @@ function chatTitle() {
   $("#win-chat .title").textContent = chatCurVM ? "Chat — " + chatCurVM : "Chat";
 }
 function chatHint() {
+  const mac = chatScope === MAC_CHAT_PIN;
   chatMsgs.replaceChildren(el("div", { class: "chat-hint" },
-    chatScope
+    mac ? "This chat operates the Mac in the Mac OS X window — run commands inside it over its shell, put files from the Workspace on it, and watch its screen there."
+      : chatScope
       ? "This chat operates the VM “" + chatScope + "” — run commands inside it, build things, and publish its ports to the web."
       : "This chat can operate exe for you: create and manage VMs, run commands inside them, build things, and publish ports to the web.",
-    el("br"), el("br"), chatScope ? "Try: “what's listening in here?”" : "Try: “what's running right now?”"));
+    el("br"), el("br"), mac ? "Try: “what version of Tiger is this, and what is in /Applications?”" : chatScope ? "Try: “what's listening in here?”" : "Try: “what's running right now?”"));
 }
 // chatFollow remembers whether the view is glued to the newest content:
 // true at (or near) the bottom, cleared when the user scrolls up. Content

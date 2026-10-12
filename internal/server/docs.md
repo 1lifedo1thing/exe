@@ -1683,6 +1683,26 @@ free. Nothing answers on them until the service is on in the Mac. Every
 program on this machine can reach them, so there it is the account's
 password that guards the Mac.
 
+### An agent on the Mac
+
+Press **Agent** in the Mac OS X window and a Chat opens pinned to the Mac,
+the way a VM window's Run Agent pins one to its VM: ask it for things in
+words — "what is in /Applications?", "build Hello in Xcode and run it",
+"put the picture I painted on the desktop" — and it works inside the Mac
+over Remote Login while you watch the screen in the window beside it. Its
+tools are the shell, reading, writing and editing files, and **upload**,
+which copies a file of the Workspace into the Mac, a picture included. It
+knows what Tiger's 2005 tools lack, keeps a memory of the Mac between
+chats, and never restarts or shuts the Mac down unasked.
+
+It needs a way in, once: in **Setup details**, enter the Mac account to
+work as (the short name in Tiger's Accounts pane), and paste the line shown
+there into Terminal on the Mac, signed in as that account. The line
+authorizes a key exe made for this Mac — an RSA key, since Tiger's SSH
+server knows no newer kind — and Remote Login has to be on in the Mac's
+Sharing pane. A chat with the Mac fails with the reason while any of this
+is missing.
+
 ### Clock and network
 
 The Mac's clock starts at today's date and time, and Tiger shows it in the
