@@ -153,13 +153,17 @@ through the installer and is what tests use; `publish` refuses it.
 `EXE_RELEASE_URL` points the installer and `exe update` at it:
 
 ```sh
-deploy/release-mirror.py --bind 0.0.0.0 --port 7796   # on this machine
+deploy/release-mirror.py --bind <this machine's tailnet address> --port 7796
 
 # on the machine under test
 export EXE_RELEASE_URL=http://<this machine>:7796/releases
 curl -fsSL http://<this machine>:7796/install.sh | sh
 exe update
 ```
+
+The tailnet address is enough: every machine under test is on the tailnet,
+a VM on this machine reaches it through its gateway, and the LAN is not
+served an unpublished release.
 
 On a Mac reached over SSH, give the installer's shell a locale the Mac
 knows — `… | LC_ALL=en_US.UTF-8 sh`. SSH carries this machine's
@@ -216,6 +220,23 @@ shell's `exe update` without `-y` and without a terminal installs and
 leaves the daemon alone, and the window offers Restart Now. Remove the
 drop-in afterwards, and `~/.exe/update.json`.
 
+To have the window install the very files that will be published, give
+the machine a second build of the same commit under a lower number first:
+`EXE_MAC_BUILDER=none deploy/release.sh build --worktree 2026.10.11.90`
+before a 2026.10.12, that name in `LATEST`, a shell's `exe update -y` on
+the machine, and `LATEST` removed again. The window then offers the
+release itself, and the machine ends on what GitHub will serve. A release
+before 2026.10.12 has no Software Update, so this is also how a machine on
+one gets a window to press.
+
+On Windows the daemon has the environment of the sign-in that started it,
+and a restart hands it on. `setx EXE_RELEASE_URL …` makes it a variable of
+the user; then stop the daemon the way a sign-out does (a task in the
+desktop session that runs `taskkill /PID <daemon>` without `/F`) and run
+`exe daemon start`, whose task starts it with the user's environment as it
+now is. Afterwards `reg delete HKCU\Environment /v EXE_RELEASE_URL /f` and
+the same stop and start.
+
 With a VM, look inside it as well as at the window. "Running again" is
 the daemon's word for a VM it has started; whether the guest was shut
 down or had its power cut shows in the guest: `sudo journalctl -b -1 | tail -1`
@@ -238,7 +259,10 @@ macOS — the launchd agent, the menu-bar item and a VM. The Intel Mac build
 runs on `birdie` under Rosetta, which shows its installer and desk but not
 its VMs: those need a real Intel Mac, and none has tried them. `world`
 (Windows 11 Pro, x86-64, someone signed in at its screen) for Windows;
-how to drive it is under "Windows" below. Never run a released build's
+how to drive it is under "Windows" below. Since 2026.10.10.2 `world` runs
+exe for real, as a node with its own data: it is updated like `precision`,
+never uninstalled, and a new install on Windows needs Livid's say-so or
+another PC. Never run a released build's
 `exe setup` on spark: it would install beside the checkout's own daemon.
 
 ## Publish
@@ -267,9 +291,11 @@ this, 2026.10.10 and 2026.10.10.2, have no `NOTES.md`, and Software Update
 says of them that they came without notes.
 
 Afterwards: rebuild and restart the daemon on spark (it serves
-`/install.sh`, `/install.ps1` and the homepage), run the real one-liners
-once on `lab` and on `world`, move the machines that run a release to it
-with `exe update`, and post the release on the hub.
+`/install.sh`, `/install.ps1` and the homepage), run the real one-liner
+once on `lab`, check that `/install.ps1` is served as the release has it
+(`world` runs exe for real, and is not installed over), move the machines
+that run a release to it with `exe update`, and post the release on the
+hub.
 
 The first release, 2026.10.10, went out this way: built from a commit,
 installed from the mirror on `lab` and by `exe update` on `precision`, its
@@ -284,6 +310,19 @@ binaries passed `spctl`, `birdie` installed it and was left clean, and
 `world` installed it with the VM step and ran a VM. Once it was published,
 the real lines ran on `lab` and on `world`, and `exe update` moved the Mac
 node from GitHub.
+
+The third, 2026.10.12, was the first with Software Update and with notes.
+`exe update` took `lab` and the Mac node from 2026.10.10.2 to it through
+the mirror, and `precision` and `world` to a lower-numbered build of the
+same commit, from which the window's Update Now installed the release
+itself, a VM running on each and the tab closed during the download: one
+`update: exe 2026.10.12 is installed` line in each log, and each guest's
+journal ending in "Journal stopped". That was the window's first run on
+Windows. The Mac node restarted with a VM running and its guest was shut
+down too, which 2026.10.10.2 did not do. `birdie` and a new VM on this
+machine installed it with the questions answered at a terminal; the Intel
+build said its version under Rosetta. Not repeated: a new install on
+Windows.
 
 Rolling back is moving GitHub's "latest" mark to the release before
 (`gh release edit <older> --latest`); whether that is allowed with
@@ -443,6 +482,16 @@ things on a Windows of its own behave unlike a terminal: `exe ssh <vm>`
 inherits standard input, so a script gives it `< NUL`, and the Windows
 `ssh.exe` stalls when its output is captured into a PowerShell variable
 with no console around — send it to a file.
+
+`exe ssh <vm>` is refused its key on `world` (found 2026-10-12): `.exe`
+there carries a permission for `CodexSandboxUsers`, the group of Codex's
+Windows sandbox, to read it; the key inherits that, and Windows' OpenSSH
+will not use a private key anyone else can read ("UNPROTECTED PRIVATE KEY
+FILE"). The daemon reaches its VMs all the same; it is the command that
+fails, and exe does not yet keep the key to its user. Until it does, a test looks inside a
+guest through the gate, with a copy of the key that only the user may
+read: `icacls <copy> /inheritance:r /grant:r <user>:F`, then
+`ssh -i <copy> -p 2222 <vm>@127.0.0.1`.
 
 Not tried: a real sign-out and sign-in (that needs the person at the PC);
 the VM step turning the hypervisor features on, and its UAC prompt, since
