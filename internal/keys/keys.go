@@ -20,6 +20,9 @@ func Ensure(stateDir string) (privPath, authorizedKey string, err error) {
 	pubPath := privPath + ".pub"
 	if b, rerr := os.ReadFile(pubPath); rerr == nil {
 		if _, serr := os.Stat(privPath); serr == nil {
+			// a key from before it was protected, or one whose folder has
+			// been opened to somebody since, is put right at every start
+			Protect(privPath)
 			return privPath, strings.TrimSpace(string(b)), nil
 		}
 	}
@@ -35,6 +38,9 @@ func Ensure(stateDir string) (privPath, authorizedKey string, err error) {
 		return "", "", err
 	}
 	if err = os.WriteFile(privPath, pem.EncodeToMemory(block), 0o600); err != nil {
+		return "", "", err
+	}
+	if err = Protect(privPath); err != nil {
 		return "", "", err
 	}
 	sshPub, err := ssh.NewPublicKey(pub)
@@ -54,6 +60,7 @@ func EnsureHostKey(stateDir string) (ssh.Signer, error) {
 	dir := filepath.Join(stateDir, "ssh")
 	p := filepath.Join(dir, "host_ed25519")
 	if b, err := os.ReadFile(p); err == nil {
+		Protect(p)
 		return ssh.ParsePrivateKey(b)
 	} else if !os.IsNotExist(err) {
 		return nil, err
@@ -70,6 +77,9 @@ func EnsureHostKey(stateDir string) (ssh.Signer, error) {
 		return nil, err
 	}
 	if err := os.WriteFile(p, pem.EncodeToMemory(block), 0o600); err != nil {
+		return nil, err
+	}
+	if err := Protect(p); err != nil {
 		return nil, err
 	}
 	return ssh.NewSignerFromKey(priv)

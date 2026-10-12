@@ -814,6 +814,12 @@ func cmdSSH(args []string) error {
 		if !config.SSHEnabled(cfg.SSHListen) {
 			return fmt.Errorf("VM IPs are only reachable inside the daemon on Windows; enable ssh_listen to use `exe ssh`")
 		}
+		// Windows' ssh refuses a key that anyone else may read, and a
+		// permission given on the folder since the daemon last started
+		// reaches the key: put it right before ssh looks (keys.Protect)
+		if err := keys.Protect(keyPath); err != nil && !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "exe: could not keep %s to you alone (%v); ssh may refuse it\n", keyPath, err)
+		}
 		sshArgs = append(sshArgs, "-p", portOf(cfg.SSHListen), name+"@127.0.0.1")
 	} else {
 		if info.IP == "" {
