@@ -33,6 +33,8 @@
 # is pressed. `build` puts it in the release and refuses a commit whose
 # notes are missing, long, or the last release's; `publish` cannot change
 # it, so the test before publishing is where it is read in the window.
+# Once the release is out `publish` keeps its notes in CHANGELOG.md, where
+# every release's are, and NOTES.md starts again.
 #
 # The macOS binaries are built and signed on a Mac, reached over ssh:
 # EXE_MAC_BUILDER=user@host, set in deploy/release.env (which is not in the
@@ -124,6 +126,23 @@ notes_checked() { # notes_checked <NOTES.md> <commit>
 	[ -z "$stale" ] || die "NOTES.md still holds what $prev said: take these out, they are released
 $stale"
 	printf '%s\n' "$text"
+}
+
+# What each release said is kept in CHANGELOG.md, newest first: NOTES.md
+# starts again after a release, and its words would otherwise be only on
+# GitHub and behind the tag. A release that is already there is left as it
+# is, so a publish that is run again after a failure adds nothing twice.
+keep_notes() { # keep_notes <version> <the release's NOTES.md>
+	local version=$1 notes=$2 log=$root/CHANGELOG.md
+	[ -f "$log" ] || printf '%s\n' "# What changed in each release" "" \
+		"Every release of exe and what it told its users had changed, newest first." >"$log"
+	! grep -qFx "## $version" "$log" || return 0
+	awk -v v="$version" -v f="$notes" '
+		function section(   l) { print "## " v; print ""; while ((getline l < f) > 0) print l; close(f) }
+		!done && /^## / { section(); print ""; done = 1 }
+		{ print }
+		END { if (!done) { print ""; section() } }
+	' "$log" >"$log.new" && mv "$log.new" "$log"
 }
 
 # The macOS binaries: built on the Mac (they link Apple's frameworks
@@ -388,18 +407,25 @@ publish() {
 	[ "$got" = "$(cat "$out/SHA256SUMS")" ] || die "GitHub's latest release does not serve the checksums that were built — look at https://github.com/$repo/releases"
 	echo "exe $version is published: https://github.com/$repo/releases/tag/$version"
 
-	# The notes are out, so the file starts again: what is written in it
-	# from here on is the next release's. Only when nobody has touched it
-	# since the build; lines somebody has added since stay, and the next
-	# build names the released ones among them.
+	# The notes are out. They are kept in CHANGELOG.md, and NOTES.md starts
+	# again: what is written in it from here on is the next release's. It
+	# is emptied only when nobody has touched it since the build; lines
+	# somebody has added since stay, and the next build names the released
+	# ones among them.
+	keep_notes "$version" "$out/NOTES.md"
+	git -C "$root" add CHANGELOG.md
 	if git -C "$root" diff --quiet "$commit" -- NOTES.md 2>/dev/null; then
 		awk '/<!--/ { c = 1 } c { print } /-->/ { c = 0 }' "$root/NOTES.md" >"$root/NOTES.md.new"
 		mv "$root/NOTES.md.new" "$root/NOTES.md"
-		git -C "$root" commit -q --only NOTES.md -m "Docs: the notes start again after $version" \
-			-m "What NOTES.md said is in $version; what a user will notice from here on is written there for the release after it." &&
-			echo "NOTES.md starts again, committed and not pushed" ||
-			echo "note: NOTES.md was emptied and not committed — commit it"
+		git -C "$root" commit -q --only NOTES.md CHANGELOG.md -m "Docs: the notes start again after $version" \
+			-m "What NOTES.md said is in $version and kept in CHANGELOG.md; what a user will notice from here on is written in NOTES.md for the release after it." &&
+			echo "CHANGELOG.md has what $version said and NOTES.md starts again, committed and not pushed" ||
+			echo "note: CHANGELOG.md has what $version said and NOTES.md was emptied, but neither is committed — commit them"
 	else
+		git -C "$root" commit -q --only CHANGELOG.md -m "Docs: what $version said is kept in CHANGELOG.md" \
+			-m "NOTES.md has changed since $version was built, so it is left as it is: what the release said is taken out of it by hand." &&
+			echo "CHANGELOG.md has what $version said, committed and not pushed" ||
+			echo "note: CHANGELOG.md has what $version said and is not committed — commit it"
 		echo "note: NOTES.md has changed since the build: take out by hand what $version said"
 	fi
 }

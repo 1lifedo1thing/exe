@@ -82,8 +82,11 @@ read where they will be shown, in the Software Update window of a machine
 under test (below), before `publish`. To change them then: edit
 `NOTES.md`, commit, build again.
 
-After publishing, `publish` empties the file to its comment and commits
-that, so that what is written in it from then on is the next release's.
+After publishing, `publish` adds the notes to `CHANGELOG.md`, where every
+release's are kept, newest first, under the release's name. Then it empties
+`NOTES.md` to its comment and commits the two, so that what is written in
+it from then on is the next release's. `CHANGELOG.md` is written by
+`publish` alone: a line for the next release goes in `NOTES.md`.
 
 ## Build
 
@@ -276,8 +279,9 @@ commit is not on `main`, if the tag exists, or if the macOS binaries are
 not Developer ID signed and notarized. It tags the commit, pushes
 `main` and the tag, uploads the nine files to a draft, publishes the draft
 as the latest release, and checks that GitHub's `latest` now serves the
-checksums that were built. Then it empties `NOTES.md` in the checkout and
-commits that, without pushing it.
+checksums that were built. Then it adds the release's notes to
+`CHANGELOG.md`, empties `NOTES.md` in the checkout and commits both,
+without pushing them.
 
 The notes go up twice. As a tenth file, `NOTES.md`, the one `build` made:
 the desktop's Software Update reads it the way every other file of a
@@ -288,7 +292,8 @@ have exe installed. A release with more to say there — what was not tried,
 what to know before installing — gives `publish` a file to use as that
 text instead; `NOTES.md` stays as it was built. The two releases before
 this, 2026.10.10 and 2026.10.10.2, have no `NOTES.md`, and Software Update
-says of them that they came without notes.
+says of them that they came without notes; `CHANGELOG.md` has a few lines
+for each, written afterwards from their pages.
 
 Afterwards: rebuild and restart the daemon on spark (it serves
 `/install.sh`, `/install.ps1` and the homepage), run the real one-liner

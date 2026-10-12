@@ -36,8 +36,9 @@ On Windows (x86-64), the same from PowerShell:
 irm https://exe.v2core.com/install.ps1 | iex
 ```
 
-`exe update` moves it to the next release. To work on exe itself, build it
-instead. That needs Go 1.25 or newer:
+`exe update` moves it to the next release, and [CHANGELOG.md](CHANGELOG.md)
+says what each release changed. To work on exe itself, build it instead.
+That needs Go 1.25 or newer:
 
 ```sh
 git clone https://github.com/livid/exe.git
