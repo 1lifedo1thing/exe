@@ -759,6 +759,11 @@ sessions, one row for each tmux session. Each is a conversation of its own.
 - **Switch.** Click a row and the window moves to that session.
 - **Start another.** **New**, under the list, starts another conversation in
   a session of its own, at the top of the list.
+- **Start one in a project's folder.** In Projects, right-click a project
+  and choose **Open in Claude Code**: the Claude Code window opens, or comes
+  forward, and a new session starts in the project's working directory, at
+  the top of the list. The item is greyed for a project without a working
+  directory, or whose folder is not on this machine.
 - **Resize the column.** Drag the line between the list and the terminal.
   The width is kept with the window's layout.
 
@@ -1072,6 +1077,7 @@ A new session takes these fields, all optional. Codex takes `prompt` and
 | `permission_mode` | One of `default`, `acceptEdits`, `plan` and `auto`. |
 | `model` | The model, by alias or full name. |
 | `name` | The session's title in the column: one line of up to 80 characters. |
+| `dir` | The folder the session opens in, as a whole path to a folder on this machine; without it, exe's project folder. |
 
 A Codex thread resumed this way opens in the folder it was started in, as a
 click on its row does.

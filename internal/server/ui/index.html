@@ -5915,6 +5915,18 @@ window.addEventListener("message", e => {
     const act = app && app.system_icon && BRIDGE_ACTS.has(e.data.act) && DESK_ACTS[e.data.act];
     const args = Array.isArray(e.data.args) ? e.data.args.filter(a => typeof a === "string").slice(0, 2) : [];
     if (act && !(act.dis && act.dis(...args))) act.run(...args);
+  } else if (e.data.exe === "agent" && AGENT_APPS[e.data.app] && typeof e.data.dir === "string") {
+    // an app asks for an agent session in a folder: Projects' Open in
+    // Claude Code, with the project's working directory. The agent's
+    // window opens, or comes forward, and its session column starts a
+    // session there (sendNewIn); the daemon refuses a folder that is not
+    // on this machine, and the window says so. A host without the CLI
+    // says so too, where the desk menu's item would be greyed
+    const app = e.data.app, dir = e.data.dir.trim().slice(0, 1024);
+    if (!dir.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(dir)) return; // a whole path, as the daemon wants it
+    if (!hostAgents[app]) { toast(AGENT_APPS[app].title + " is not installed on this host"); return; }
+    const aw = openHostTermWin(app);
+    if (aw && aw._openIn) aw._openIn(dir);
   } else if (e.data.exe === "view-page" && isWebURL(e.data.url || "")) {
     // a page (an admin's HTML embed on the hub) opens the same way, in a
     // desktop page window, sandboxed like a Workspace page
@@ -9077,6 +9089,26 @@ function openHostTermWin(app, cmd, vm, termSess) {
   }
   const sendNew = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ new: true })); term.focus(); };
   if (newBtn) newBtn.onclick = sendNew;
+  // a session in a folder of the asker's — an app over the bridge
+  // ({exe:"agent"}: Projects' Open in Claude Code, with the project's
+  // working directory). It goes on the window's own link, and the daemon
+  // starts the session and moves the window to it in one step
+  // (agentColumn.openIn), so the window never stays on the old session
+  // (a session made over the HTTP API and then asked for by name could:
+  // _showSession drops a name the list does not hold yet). A window that
+  // has only just been opened sends it once its link is up — every
+  // folder asked for meanwhile, in order, so two projects opened before
+  // the link is up give two sessions. The daemon refuses a folder that
+  // is not on this machine, and its {"error":…} is toasted like a
+  // failed New
+  const openDirs = [];
+  const sendNewIn = dir => {
+    openDirs.push(dir);
+    if (!(ws && ws.readyState === 1)) return;
+    while (openDirs.length) ws.send(JSON.stringify({ new: true, dir: openDirs.shift() }));
+    term.focus();
+  };
+  w._openIn = dir => { if (list) sendNewIn(dir); else toast("A session in a folder needs tmux on this host"); };
   // a row's contextual menu: when the session started, then what it can
   // have done to it beyond a click (a click switches, so no Switch To) —
   // and the list's own, off any row, just starts one. Archive ends the session and the CLI in it,
@@ -9481,6 +9513,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
       status.textContent = vm ? "connected to " + vm : "connected";
       if (heldPaths.length) syncHeld(); // Insert wakes with the link
       ws.send(JSON.stringify({ resize: [term.cols, term.rows] }));
+      if (openDirs.length) sendNewIn(openDirs.pop()); // the folders an app asked for before the link was up
       // never steal focus on a background reconnect, nor on a restore
       if (initial && !restore) term.focus();
       requestAnimationFrame(() => termSpacerFix(box, term));

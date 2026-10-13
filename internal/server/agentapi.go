@@ -65,7 +65,9 @@ func (s *Server) handleAgentSessionsList(w http.ResponseWriter, r *http.Request)
 // limit), a display name (the column's title: Claude Code titles a session
 // from its first prompt only, so a fork keeps its parent's title, or has
 // none), and the first message. Codex takes a thread to resume — one started in
-// the ChatGPT app, say (codexthreads.go) — and the message.
+// the ChatGPT app, say (codexthreads.go) — and the message. Either takes
+// dir, the folder the session opens in (agentSessionDir): a project's
+// working directory, say, in place of exe's own project folder.
 type agentLaunchRequest struct {
 	Prompt         string `json:"prompt"`
 	Resume         string `json:"resume"`
@@ -74,6 +76,7 @@ type agentLaunchRequest struct {
 	PermissionMode string `json:"permission_mode"`
 	Model          string `json:"model"`
 	Name           string `json:"name"`
+	Dir            string `json:"dir"`
 }
 
 // agentModelPattern is an alias or a full name, with a context suffix:
@@ -173,8 +176,12 @@ func (s *Server) handleAgentSessionCreate(w http.ResponseWriter, r *http.Request
 		}
 	}
 	name := agentSessionName(a, n)
-	dir := ""
-	if a.notify && req.Resume != "" {
+	dir, err := agentSessionDir(req.Dir)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if dir == "" && a.notify && req.Resume != "" {
 		dir = codexThreadDir(req.Resume)
 	}
 	if err := s.newAgentSessionIn(a, name, dir, extra...); err != nil {

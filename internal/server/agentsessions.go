@@ -382,11 +382,40 @@ func (c *agentColumn) archive(name string) error {
 // open starts a new session of the agent's, numbered after the highest
 // live one, and moves the window to it.
 func (c *agentColumn) open() error {
+	return c.openIn("")
+}
+
+// openIn is open in a folder of the caller's — the one an app named over
+// the desk's bridge (Projects' Open in Claude Code, with the project's
+// working directory) — and the project folder when dir is "". A folder
+// that is not on this machine is refused rather than quietly swapped for
+// the project folder: the caller asked for that one.
+func (c *agentColumn) openIn(dir string) error {
+	dir, err := agentSessionDir(dir)
+	if err != nil {
+		return err
+	}
 	name := c.s.nextAgentSession(c.a)
-	if err := c.s.newAgentSession(c.a, name); err != nil {
+	if err := c.s.newAgentSessionIn(c.a, name, dir); err != nil {
 		return err
 	}
 	return c.switchTo(name)
+}
+
+// agentSessionDir checks a folder a session was asked to open in: "" is
+// no wish (the project folder), anything else is a whole path to a folder
+// that exists. The message names the path the way a person would read it.
+func agentSessionDir(dir string) (string, error) {
+	if dir == "" {
+		return "", nil
+	}
+	if !filepath.IsAbs(dir) {
+		return "", fmt.Errorf("dir: %q is not a whole path", dir)
+	}
+	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		return "", fmt.Errorf("%s is not a folder on this machine", dir)
+	}
+	return filepath.Clean(dir), nil
 }
 
 // nextAgentSession names the agent's next numbered session: one past

@@ -337,6 +337,32 @@ func TestAgentSessionsLive(t *testing.T) {
 	if err := col.archive("other"); err == nil {
 		t.Fatal("archiving a stranger's session should fail")
 	}
+	// a session opened in a folder of the caller's (Projects' Open in
+	// Claude Code) runs there; a folder that is not here is refused, and
+	// no session is made for it
+	folder := t.TempDir()
+	if err := col.openIn(folder); err != nil {
+		t.Fatal(err)
+	}
+	waitFor("the client on the session in the folder", func() bool { return sh.Current() == "exe-test-sh-3" })
+	paneDir := func() string {
+		out, _ := tmuxCmd("display-message", "-p", "-t", "=exe-test-sh-3:", "#{pane_current_path}").Output()
+		return strings.TrimSpace(string(out))
+	}
+	waitFor("the session's pane to be in the folder", func() bool { return paneDir() == folder })
+	if err := col.openIn(filepath.Join(folder, "gone")); err == nil || !strings.Contains(err.Error(), "not a folder on this machine") {
+		t.Fatalf("openIn a missing folder: %v", err)
+	}
+	if err := col.openIn("relative/path"); err == nil || !strings.Contains(err.Error(), "whole path") {
+		t.Fatalf("openIn a relative path: %v", err)
+	}
+	if list = s.agentSessions(a); len(list) != 2 || sh.Current() != "exe-test-sh-3" {
+		t.Fatalf("after the refused folders: %+v, current %q", list, sh.Current())
+	}
+	if err := col.archive("exe-test-sh-3"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor("the client back on session 2", func() bool { return sh.Current() == "exe-test-sh-2" })
 	// the last session goes without a neighbour: the client detaches
 	if err := col.archive("exe-test-sh-2"); err != nil {
 		t.Fatal(err)

@@ -361,6 +361,7 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 				Resize  []int           `json:"resize"`
 				Switch  string          `json:"switch"`
 				New     bool            `json:"new"`
+				Dir     string          `json:"dir"` // with new: the folder the session opens in (agentColumn.openIn)
 				Archive string          `json:"archive"`
 				Resume  string          `json:"resume"`
 				Scroll  *int            `json:"scroll"` // 0 means back to the live screen, so nil tells absent
@@ -394,7 +395,7 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 			case msg.Resume != "":
 				err = col.resume(msg.Resume)
 			default:
-				err = col.open()
+				err = col.openIn(msg.Dir)
 			}
 			if err != nil {
 				b, _ := json.Marshal(map[string]string{"error": err.Error()})
