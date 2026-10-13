@@ -95,6 +95,7 @@ says a newer release is waiting.
 
 At the right end of the bar:
 
+- **Show Desktop** — the button with a bare desk on it.
 - **Show All Windows** — the button with four small windows on it.
 - **Search** — the magnifier.
 - The clock. Rest the pointer on it for the date. A click opens the World
@@ -166,6 +167,18 @@ shortcuts to VMs, apps, windows and tools. Choose **Customize…** to edit it.
 
 The format, every supported action and examples are in the chapter
 [Desktop context menu](https://exe.v2core.com/docs/using/desktop-context-menu).
+
+### Show Desktop
+
+The button with the bare desk on it slides every open window off to the
+nearest edge of the screen, a sliver of each left showing, so the desktop
+and its icons are clear to use.
+
+- Click a window's sliver to bring them all back, that one in front.
+- The button again, or Escape, brings them back too; so does opening a
+  window from the desk.
+
+The desktop menu reaches it as `showdesk`. A phone has no such button.
 
 ### Show All Windows
 
@@ -1122,7 +1135,7 @@ beside it.
 <img src="https://hub.v2core.com/v1/embed/bafkreicioeb4dotyt2cxdkhzjsgolzxxtnl53etfnqvgpzpxnctlja4emy" alt="A customized desktop menu open on the desk, its Virtual Machines list showing two VMs" width="340" height="369">
 
 The factory menu offers New VM, Terminal, Workspace, lists of VMs, apps
-and windows, Show All Windows, tools, Cloudflare and Help. Its last item
+and windows, Show All Windows, Show Desktop, tools, Cloudflare and Help. Its last item
 is **Customize…**, which opens the menu editor.
 
 ### Edit and save
@@ -1223,6 +1236,7 @@ needs a label before it, as in `My terminal<TAB>terminal`.
 | `upload` | Open Upload to Workspace. |
 | `closewin` | Close the front window. |
 | `showall` | Show All Windows: toggle the overview of all open windows. |
+| `showdesk` | Show Desktop: slide every open window off to the edge of the screen, and back. |
 | `refresh` | Refresh the VM and app lists, including My Apps when it is open. |
 | `terminal [command]` | Open a new terminal on the host. With a command, run that command instead of an interactive shell. |
 | `claude` | Open the host's Claude Code window. Disabled when its CLI is unavailable. |
@@ -1359,6 +1373,7 @@ Virtual Machines  @vms
 Applications  @apps
 Windows  @windows
 Show All Windows  showall
+Show Desktop  showdesk
 -
 Help
   Using exe  docs

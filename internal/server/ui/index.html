@@ -69,14 +69,14 @@ a { color: #202a87; text-decoration: underline; }
 .menu.appl { padding: 0 12px; }
 .menu.open { background: var(--hl); color: #fff; }
 .mb-right { margin-left: auto; display: flex; align-items: stretch; }
-/* the two glyph buttons at the right: Show All Windows, then the magnifier */
-#showall-btn, #search-btn { display: flex; align-items: center; gap: 5px; padding: 0 10px; border: none;
+/* the three glyph buttons at the right: Show Desktop, Show All Windows, then the magnifier */
+#showdesk-btn, #showall-btn, #search-btn { display: flex; align-items: center; gap: 5px; padding: 0 10px; border: none;
   background: none; font: inherit; color: inherit; }
-#showall-btn:active, #search-btn:active { background: var(--hl); color: #fff; }
-/* while the windows are laid out the button stays inverted, like an open menu title */
-#showall-btn.on { background: var(--hl); color: #fff; }
+#showdesk-btn:active, #showall-btn:active, #search-btn:active { background: var(--hl); color: #fff; }
+/* while the windows are parked or laid out the button stays inverted, like an open menu title */
+#showdesk-btn.on, #showall-btn.on { background: var(--hl); color: #fff; }
 /* a phone shows one window at a time; there the Apple menu is the switcher */
-body.mobile #showall-btn { display: none; }
+body.mobile #showdesk-btn, body.mobile #showall-btn { display: none; }
 #clock { display: flex; align-items: center; padding: 0 12px; font-weight: bold;
   border-left: 1px solid var(--g600); box-shadow: inset 1px 0 0 #fff; }
 #clock:active { background: var(--hl); color: #fff; }
@@ -229,11 +229,20 @@ body.mobile #clock { padding: 0 10px; }
    and back takes 200ms. A shield over the desktop takes the pointer for
    the duration — a click on a tile picks that window, anywhere else puts
    them all back — and carries the hover wash */
-body.showall #desktop .window, body.showall-out #desktop .window {
+body.showall #desktop .window, body.showall-out #desktop .window,
+body.showdesk #desktop .window, body.showdesk-out #desktop .window {
   transform-origin: 0 0; transition: transform .2s ease-out; }
 @media (prefers-reduced-motion: reduce) {
-  body.showall #desktop .window, body.showall-out #desktop .window { transition: none; }
+  body.showall #desktop .window, body.showall-out #desktop .window,
+  body.showdesk #desktop .window, body.showdesk-out #desktop .window { transition: none; }
 }
+/* ---------- Show Desktop ---------- */
+/* the windows slide off to the edges by the same transform and flight (above);
+   a parked window is one thing to the pointer — its title bar, close box
+   and app frame take nothing — so a press on its edge is the press that
+   brings them all back (showDeskExit) and never a drag, a close or a click
+   into the app */
+body.showdesk #desktop .window > * { pointer-events: none; }
 #sa-shield { position: fixed; inset: calc(20px + var(--sat)) 0 0 0; z-index: 2999; }
 /* the desktop icons step aside for the grid, the way Mission Control clears the desk */
 body.showall #rail { visibility: hidden; }
@@ -1662,6 +1671,11 @@ body.mobile th.sorted {
   <div class="menu" data-m="special">Special</div>
   <div class="menu" data-m="help">Help</div>
   <div class="mb-right">
+    <!-- Show Desktop: a bare desk, its disk at the top right and the Trash
+         at the bottom; fill follows the text color so :active and .on invert it -->
+    <button id="showdesk-btn" title="Show the desktop">
+      <svg width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges" fill="currentColor"><path d="M1 2h13v1H1zM1 3h1v9H1zM13 3h1v9h-1zM1 12h13v1H1zM8 4h4v2H8zM9 8h3v1H9zM9 9h1v2H9zM11 9h1v2h-1zM10 10h1v1h-1z"/></svg>
+    </button>
     <!-- Show All Windows: four small windows in a grid; fill follows the
          text color so :active and .on invert it -->
     <button id="showall-btn" title="Show all windows">
@@ -2879,6 +2893,7 @@ function zCompact() {
   for (const x of wins) x.style.zIndex = ++zTop;
 }
 let showAllOn = false; // Show All Windows is up: the windows sit in the grid
+let showDeskOn = false; // Show Desktop is up: the windows are parked at the edges
 function focusWin(w) {
   if (zTop >= Z_CEIL) zCompact();
   zTop++;
@@ -2988,6 +3003,7 @@ function tellApp(w, exe) {
 function openWin(sel) {
   const w = typeof sel === "string" ? $(sel) : sel;
   if (showAllOn) showAllExit();
+  if (showDeskOn) showDeskExit();
   if (IS_MOBILE && !MOB_DIALOG.has(w.id)) mobileSwapIn(w);
   const wasHidden = w.hidden;
   w.hidden = false;
@@ -3000,6 +3016,7 @@ function openWin(sel) {
 }
 function closeWin(w) {
   if (showAllOn) showAllExit();
+  if (showDeskOn) showDeskExit();
   const wasFront = w.classList.contains("front"), wasHidden = w.hidden;
   w.hidden = true;
   tellApp(w, "hide");
@@ -3854,6 +3871,7 @@ function winSnapshot() {
 function applyWinState(st) {
   if (!st || IS_MOBILE) return; // snapshots describe the spatial desktop, not the phone view
   if (showAllOn) showAllExit();
+  if (showDeskOn) showDeskExit();
   st = canonicalAppKeys(st, canonicalWindowID);
   // remember each agent window's geometry for its next open — a snapshot
   // never opens one: that is the note's to say (agentShown), a browser at a time
@@ -4129,6 +4147,7 @@ const ACTIONS = {
   newvm: () => { openWin("#win-newvm"); $("#c-name").focus(); },
   upload: () => openWin("#win-upload"),
   closewin: closeFrontWindow,
+  showdesk: showDeskToggle,
   showall: showAllToggle,
   refresh: () => {
     const jobs = [loadVMs(), loadApps()];
@@ -5220,6 +5239,7 @@ function showAllLayout() {
 }
 function showAllEnter() {
   if (showAllOn || IS_MOBILE) return;
+  if (showDeskOn) showDeskExit(); // the grid gathers from the edges
   menuClose();
   // the transition rule goes on before the transforms change, so the windows fly
   document.body.classList.remove("showall-out");
@@ -5270,9 +5290,76 @@ $("#sa-shield").addEventListener("click", e => {
 });
 $("#sa-shield").addEventListener("contextmenu", e => e.preventDefault());
 document.addEventListener("keydown", e => {
-  if (showAllOn && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); showAllExit(); }
+  if ((showAllOn || showDeskOn) && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); showAllExit(); showDeskExit(); }
 }, true);
-window.addEventListener("resize", () => { if (showAllOn) showAllLayout(); });
+window.addEventListener("resize", () => { if (showAllOn) showAllLayout(); if (showDeskOn) showDeskLayout(); });
+
+// ---- Show Desktop: the button left of Show All Windows ----
+// Every open window slides off the desk to its nearest edge, 8px of it
+// left in view, the way Exposé's Show Desktop parks them: the desk, its
+// icons and the Control Strip are yours meanwhile. The windows travel by
+// the same transform as Show All Windows, so the saved layout never
+// changes. A press on a parked window's edge brings them all back with
+// that one in front; so do the button, Escape, and anything that opens,
+// closes or re-lays a window (openWin, closeWin, applyWinState).
+const SD_PEEK = 8; // what a parked window keeps in view
+let sdParked = []; // the windows at the edges, for the way back
+function showDeskLayout() {
+  const wins = [...document.querySelectorAll("#desktop .window")].filter(w => !w.hidden);
+  if (!wins.length) return false;
+  const desk = $("#desktop"), DW = desk.clientWidth, DH = desk.clientHeight;
+  sdParked = [];
+  for (const w of wins) {
+    const l = w.offsetLeft, t = w.offsetTop, W = w.offsetWidth, H = w.offsetHeight;
+    // the push past each edge that leaves SD_PEEK showing; the shortest
+    // wins, a tie goes sideways (listed first), so a window already past
+    // an edge comes back to its sliver rather than crossing the desk
+    const ways = [[-(l + W - SD_PEEK), 0], [DW - l - SD_PEEK, 0], [0, -(t + H - SD_PEEK)], [0, DH - t - SD_PEEK]];
+    let best = ways[0];
+    for (const way of ways) if (Math.abs(way[0] + way[1]) < Math.abs(best[0] + best[1])) best = way;
+    w.style.transform = `translate(${best[0]}px, ${best[1]}px)`;
+    sdParked.push(w);
+  }
+  return true;
+}
+function showDeskEnter() {
+  if (showDeskOn || IS_MOBILE) return;
+  if (showAllOn) showAllExit(); // the grid scatters to the edges
+  menuClose();
+  // the transition rule goes on before the transforms change, so the windows slide
+  document.body.classList.remove("showdesk-out");
+  document.body.classList.add("showdesk");
+  if (!showDeskLayout()) { document.body.classList.remove("showdesk"); toast("No windows are open"); return; }
+  showDeskOn = true;
+  $("#showdesk-btn").classList.add("on");
+  // an app's frame or a terminal may hold the focus; Escape must reach the desktop
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+}
+let showDeskOutT = null;
+function showDeskExit() {
+  if (!showDeskOn) return;
+  showDeskOn = false;
+  $("#showdesk-btn").classList.remove("on");
+  // the windows slide back; the transition rule stays on for the trip
+  document.body.classList.replace("showdesk", "showdesk-out");
+  for (const w of sdParked) w.style.transform = "";
+  sdParked = [];
+  clearTimeout(showDeskOutT);
+  showDeskOutT = setTimeout(() => document.body.classList.remove("showdesk-out"), 250);
+}
+function showDeskToggle() { if (showDeskOn) showDeskExit(); else showDeskEnter(); }
+$("#showdesk-btn").onclick = showDeskToggle;
+// a press on a parked window (its children take no pointer, so the window
+// itself is the target): everything comes back, that window in front, and
+// the press is spent — no drag, no mousedown of the window's own
+document.addEventListener("pointerdown", e => {
+  if (!showDeskOn || e.button === 2) return;
+  const w = e.target.closest("#desktop .window");
+  if (!w) return;
+  e.preventDefault();
+  showDeskExit();
+  focusWin(w);
+}, true);
 
 // ---- desktop icons ----
 const SCREEN_COLORS = { running: "#7FD67F", starting: "#E8B34B", stopping: "#E8B34B", stopped: "#3A3F46", error: "#D66A6A" };
@@ -6393,6 +6480,7 @@ const ICON_DEFS = [
   // the menubar Mac is the 32-grid art shown at 15px — edited at 32, the
   // custom SVG gets its display size re-stamped on the way into the DOM
   { key: "apple", label: "Apple Menu", size: 32, disp: 15, dom: "#menubar .menu.appl svg" },
+  { key: "showdesk", label: "Show Desktop", size: 15, dom: "#showdesk-btn svg" },
   { key: "showall", label: "Show All Windows", size: 15, dom: "#showall-btn svg" },
   { key: "search", label: "Search", size: 15, dom: "#search-btn svg" },
   { key: "clock", label: "Clock (phone)", size: 15, get: () => CLOCK_ICON, set: s => CLOCK_ICON = s,

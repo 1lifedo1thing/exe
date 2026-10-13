@@ -69,7 +69,7 @@ var deskMenuTabs = map[string]bool{"svc": true, "term": true, "vibe": true, "exp
 
 var deskMenuActions = map[string]deskMenuAction{
 	// menu bar equivalents
-	"about": {}, "newvm": {}, "upload": {}, "closewin": {}, "showall": {}, "refresh": {},
+	"about": {}, "newvm": {}, "upload": {}, "closewin": {}, "showall": {}, "showdesk": {}, "refresh": {},
 	"winvms": {}, "winmyapps": {}, "winchat": {}, "winnews": {}, "winicons": {},
 	"winconfig": {}, "winlog": {}, "join": {}, "hubjoin": {}, "cfstatus": {}, "cfwizard": {},
 	"token": {}, "docs": {}, "skillguide": {}, "welcome": {}, "update": {},
@@ -119,7 +119,7 @@ const deskMenuDefault = `# Desktop menu — right-click the desktop (long-press 
 # a bad line is reported and nothing changes. An empty file restores this.
 #
 # Actions:
-#   newvm  upload  refresh  closewin  showall  search  trash  customize
+#   newvm  upload  refresh  closewin  showall  showdesk  search  trash  customize
 #   terminal [command]  claude  codex  workspace [folder]  edit <file>
 #   winvms  winmyapps  winchat  winnews  winicons  winconfig  winlog
 #   vm <name> [svc|term|vibe|expose|sess|notes]  app <name>  chat [vm]
@@ -137,6 +137,7 @@ Virtual Machines     @vms
 Apps                 @apps
 Windows              @windows
 Show All Windows     showall
+Show Desktop         showdesk
 -
 Tools
   Chat               winchat

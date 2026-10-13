@@ -495,6 +495,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   changes its words. A module tied to something the machine may lack
   (Tailscale) hides its tile when the daemon says so and remembers that
   per browser, so the strip has its final width from the first paint.
+- Show Desktop (the menubar button left of Show All Windows, inverted the
+  same way while it is up): every open window slides off the desk to its
+  nearest edge, 8px of it left in view, by the same `transform` and 200ms
+  flight as Show All Windows below; the desk, its icons and the Control
+  Strip stay in use. A parked window is one thing to the pointer
+  (`pointer-events: none` on its children), and a press on its sliver
+  brings them all back with that one in front, as do the button, Escape,
+  and anything that opens, closes or re-lays a window.
 - Show All Windows (the menubar button left of the magnifier, inverted
   like an open menu title while it is up): every open window flies into a
   grid on a field inset 24px from the desktop, 24px between tiles, 40px
@@ -524,9 +532,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   desktop icon launches its window the way a home screen does: the tile
   scales to 1.35 and fades to nothing over 120ms ease-in, then the window
   covers it and the tile resets unseen (`launchIcon`). That, and the 200ms
-  flight of Show All Windows, is all the motion on the desktop but for
-  Software Update's barber pole (above, Controls); all three honour
-  `prefers-reduced-motion`. In an app the one motion so far is Notes'
+  flights of Show Desktop and Show All Windows, is all the motion on the
+  desktop but for Software Update's barber pole (above, Controls); all of
+  them honour `prefers-reduced-motion`. In an app the one motion so far is Notes'
   zoom between its corkboard and a note (240ms ease-in-out: the sheet grows
   from its card's rectangle and fades in, and shrinks back into it), which
   honours it too and leaves nothing transformed. Welcome has two: its
