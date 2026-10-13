@@ -790,6 +790,7 @@ Right-click a row for its menu:
 | When the session started, in grey | Says when; it is not a command. |
 | **New Session** | Starts a new session, as **New** does. |
 | **Copy Title** | Copies the row's title. |
+| **Get Info** | Claude Code: a dialog about the conversation — its summary, turns, tokens and more (below). |
 | **Archive…** | Ends the session and its process, after a dialog. |
 
 An archived conversation stays on this machine. In the Claude Code window,
@@ -805,6 +806,33 @@ says otherwise.
   before it, or failing that the one after. Archiving the agent's only
   session leaves the window with none, and it stops as it does whenever the
   last session ends.
+
+### Get Info on a conversation
+
+In the Claude Code window, right-click a row and choose **Get Info** for a
+dialog over the window about that conversation, read from the transcript
+Claude Code keeps on this machine. It tells you what a session was before
+you archive it:
+
+| Line | What it says |
+| --- | --- |
+| **Summary** | What Claude Code calls the conversation: its summary once it has compacted the context, else the title it gave it, else the first prompt. |
+| **First prompt**, **Last prompt** | The first line of each. |
+| **Turns** | How many prompts you sent, and how many replies the model gave. |
+| **Tokens** | What the replies cost: the input the model read, the prompt cache included, and the output it wrote; under it, how much of the input came from the cache and how much was written to it. |
+| **Model** | The models that replied, in the order they first did. |
+| **Started**, **Last active**, **Where** | When it began, when the transcript was last written, and its folder. |
+
+- The row is only asked about: the window stays on the session it was
+  showing.
+- **Archive…** in the dialog is the row's own. A conversation no session
+  holds — one started elsewhere — gets **OK** alone.
+- Return and **OK** put the dialog away, and so does Escape.
+- The figures are the transcript's: a sub-agent's turns are in a transcript
+  of its own and are not counted.
+- A long transcript takes a moment to read; the status line says so, and
+  the dialog opens filled.
+- The Codex window has no **Get Info** yet.
 
 ### Continue a conversation started elsewhere
 
@@ -998,6 +1026,8 @@ is set.
 | `POST /v1/agents/claude/sessions` | Opens a numbered session and answers with its `name` and `number`. |
 | `POST /v1/agents/claude/sessions/<name>/prompt` | Types a message into a session. |
 | `DELETE /v1/agents/claude/sessions/<name>` | Ends the session, as **Archive…** does. |
+| `GET /v1/agents/claude/sessions/<name>/info` | What **Get Info** shows for a session: `summary`, `prompt`, `last_prompt`, `turns`, `replies`, `tokens` (`input`, `output`, `cache_read`, `cache_write`), `models`, `created`, `activity`, `cwd`. Claude Code only. |
+| `GET /v1/agents/claude/threads/<id>` | The same for a conversation no session holds, by its session id. |
 | `GET /v1/agents/work` | Lists the sessions of both agents that are at work now: when each one's turn began (`since`, beside the daemon's own `now`) and the issue addresses, such as `EXE-12`, that its instructions named (`refs`). |
 
 A session's `<name>` is its tmux session's: `exe-claude` for the one the

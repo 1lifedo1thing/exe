@@ -29,6 +29,10 @@ import (
 //	                                                 (Codex: prompt and resume, a thread id, alone)
 //	POST   /v1/agents/{app}/sessions/{name}/prompt   {prompt, say}: one message, "say" typed and the prompt pasted after it
 //	DELETE /v1/agents/{app}/sessions/{name}          ends the session, as the column's Archive does
+//	GET    /v1/agents/{app}/sessions/{name}/info     what the column's Get Info shows: the conversation's title, summary,
+//	                                                 first and last prompt, turns, replies, tokens, models, start, last
+//	                                                 activity and folder, read from its transcript (claudeinfo.go; Claude Code only)
+//	GET    /v1/agents/{app}/threads/{id}             the same for a conversation no session holds, by its id
 
 var agentIDPattern = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
 
@@ -268,4 +272,73 @@ func (s *Server) handleAgentSessionDelete(w http.ResponseWriter, r *http.Request
 	os.Remove(s.agentStatusFile(a, name))
 	os.Remove(s.agentStateFile(a, name))
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleAgentSessionInfo answers Get Info on one of the column's sessions:
+// its status file names the conversation and the transcript (the
+// status-line hook's JSON, or the stub a resume left), and the transcript
+// is read whole (claudeSessionInfoOf). Claude Code only: Codex keeps no
+// transcript the daemon reads this far.
+func (s *Server) handleAgentSessionInfo(w http.ResponseWriter, r *http.Request) {
+	a, ok := s.agentOf(w, r)
+	if !ok {
+		return
+	}
+	name := r.PathValue("name")
+	if agentSessionNumber(a, name) == 0 {
+		writeErr(w, http.StatusBadRequest, fmt.Errorf("not a %s session: %q", a.title, name))
+		return
+	}
+	if a.notify {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("no info on a %s session yet", a.title))
+		return
+	}
+	id, path := readClaudeStatusSession(s.agentStatusFile(a, name))
+	if id == "" {
+		writeErr(w, http.StatusNotFound, errors.New("no conversation yet"))
+		return
+	}
+	if _, err := os.Stat(path); path == "" || err != nil {
+		t := claudeSessionByID(claudeHome(), id)
+		if t == nil {
+			writeErr(w, http.StatusNotFound, errors.New("no conversation yet"))
+			return
+		}
+		path = t.path
+	}
+	info := claudeSessionInfoOf(path)
+	if info == nil {
+		writeErr(w, http.StatusNotFound, errors.New("no conversation yet"))
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
+}
+
+// handleAgentThreadInfo answers Get Info on a conversation no session
+// holds — one started elsewhere, or archived — by its id.
+func (s *Server) handleAgentThreadInfo(w http.ResponseWriter, r *http.Request) {
+	a, ok := s.agentOf(w, r)
+	if !ok {
+		return
+	}
+	if a.notify {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("no info on a %s thread yet", a.title))
+		return
+	}
+	id := r.PathValue("id")
+	if !agentIDPattern.MatchString(id) {
+		writeErr(w, http.StatusBadRequest, errors.New("not a session id"))
+		return
+	}
+	t := claudeSessionByID(claudeHome(), id)
+	if t == nil {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("no %s session %s on this machine", a.title, id))
+		return
+	}
+	info := claudeSessionInfoOf(t.path)
+	if info == nil {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("no %s session %s on this machine", a.title, id))
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
 }

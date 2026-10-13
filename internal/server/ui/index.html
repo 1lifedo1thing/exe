@@ -1272,6 +1272,18 @@ a.svc:hover { text-decoration: underline; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sf-btns button { flex: none; width: 58px; padding-left: 0; padding-right: 0; }
 .sf-btns .sf-open { outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
+/* Get Info on a row: the Search dialog's box with the Finder's Info
+   layout inside — the icon and the row's title over a groove, then the
+   facts as bold labels down a column — and the button row with Archive…
+   at its left, as wide as its word, and OK at the right wearing the ring */
+.si-dlg { width: 420px; }
+.si-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 12px 6px; }
+.si-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.si-head .si-icon svg { display: block; }
+.si-head .si-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
+.si-grid { line-height: 15px; }
+.si-grid .muted { font-size: 11px; }
+.si-btns .si-archive { width: auto; padding: 0 10px; }
 /* Text inset lives on .xterm, not the box: FitAddon subtracts element padding
    when sizing rows, but the absolutely-positioned viewport anchors to the
    padding box — so the scrollbar runs flush to the frame, OS 9 style. */
@@ -8824,6 +8836,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
       { label: "Continue Here", dis: !!pending, act: () => resumeThread(t) },
       "-",
       { label: "Copy Title", act: () => copyText(threadTitle(t), "title") },
+      ...(findBtn ? [{ label: "Get Info", act: () => sessInfo(null, t) }] : []),
     ], () => term.focus());
   }
   const sendNew = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ new: true })); term.focus(); };
@@ -8845,6 +8858,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
     items.push({ label: "New Session", act: sendNew });
     if (s) {
       items.push("-", { label: "Copy Title", act: () => copyText(sessTitle(s), "title") });
+      if (s.resumable && findBtn) items.push({ label: "Get Info", act: () => sessInfo(s) });
       if (s.resumable) items.push("-", { label: "Archive…", act: () => archiveSession(s) });
     }
     showCtxMenu(e.clientX, e.clientY, items, () => term.focus());
@@ -8861,6 +8875,92 @@ function openHostTermWin(app, cmd, vm, termSess) {
     });
     if (ok && ws && ws.readyState === 1) ws.send(JSON.stringify({ archive: s.name }));
     term.focus();
+  }
+  // Get Info, on a row's menu in the Claude Code window: a dialog over
+  // the window, like Search, with what the daemon reads out of the
+  // conversation's transcript (claudeinfo.go) — its summary, the first
+  // and the latest prompt, turns and replies, tokens, models, when it
+  // started and was last written, its folder — under the row's title.
+  // The daemon answers first and the dialog opens filled, so nothing in
+  // it moves; the status line says so while a long transcript is read.
+  // Archive… is the row's own, for a session of the column's; a
+  // conversation that is not here gets OK alone. The row is only asked
+  // about: the window stays on the session it was showing
+  let infoVeil = null, infoAsked = 0;
+  const infoEls = {};
+  // a model's id as the status line names it: claude-fable-5-1 is Fable 5.1
+  const modelName = m => {
+    const x = /^claude-([a-z]+)-(\d+)-(\d+)(?:-\d{8})?$/.exec(m);
+    return x ? x[1][0].toUpperCase() + x[1].slice(1) + " " + x[2] + "." + x[3] : m;
+  };
+  const count = (n, one, many = one + "s") => (n || 0).toLocaleString() + " " + (n === 1 ? one : many);
+  const buildInfo = () => {
+    const bar = el("div", { class: "titlebar" });
+    bar.append(el("div", { class: "stripe" }), el("div", { class: "title" }, "Info"), el("div", { class: "stripe" }));
+    const grid = el("div", { class: "gi-grid si-grid" });
+    for (const [key, label] of [["summary", "Summary"], ["prompt", "First prompt"], ["last", "Last prompt"], ["turns", "Turns"],
+      ["tokens", "Tokens"], ["models", "Model"], ["created", "Started"], ["activity", "Last active"], ["cwd", "Where"]]) {
+      infoEls[key] = el("span", { class: "si-" + key });
+      grid.append(el("b", {}, label + ":"), infoEls[key]);
+    }
+    infoEls.icon = el("span", { class: "si-icon" });
+    infoEls.icon.innerHTML = CLAUDE_ICON;
+    infoEls.name = el("b", { class: "si-name" });
+    infoEls.archive = el("button", { class: "ghost si-archive" }, "Archive…");
+    infoEls.ok = el("button", { class: "ghost sf-open si-ok" }, "OK");
+    infoVeil = el("div", { class: "sess-veil si-veil", hidden: "" }, el("div", { class: "sf-dlg si-dlg" }, bar,
+      el("div", { class: "sf-frame" },
+        el("div", { class: "si-body" }, el("div", { class: "si-head" }, infoEls.icon, infoEls.name), el("div", { class: "gi-sep" }), grid),
+        el("div", { class: "sf-btns si-btns" }, infoEls.archive, el("span", { class: "sf-count" }), infoEls.ok))));
+    w.querySelector(".win-frame").append(infoVeil);
+    const close = () => { infoVeil.hidden = true; infoAsked++; term.focus(); };
+    infoEls.ok.onclick = close;
+    infoEls.archive.onclick = () => { const s = infoEls.archive._s; close(); if (s) archiveSession(s); };
+    // the facts can be selected and copied; the keys come back to the
+    // buttons afterwards, so Return and Escape still put the dialog away
+    infoVeil.addEventListener("mouseup", () => { if (!infoVeil.contains(document.activeElement)) infoEls.ok.focus({ preventScroll: true }); });
+    infoVeil.addEventListener("keydown", e => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); close(); }
+      else if (e.key === "Tab") {
+        e.preventDefault();
+        const stops = [infoEls.archive, infoEls.ok].filter(b => !b.hidden);
+        const at = stops.indexOf(document.activeElement);
+        stops[(at + (e.shiftKey ? stops.length - 1 : 1) + stops.length) % stops.length].focus();
+      }
+    });
+  };
+  async function sessInfo(s, t) {
+    if (!infoVeil) buildInfo();
+    const mine = ++infoAsked, was = status.textContent, note = "reading the conversation…";
+    status.textContent = note;
+    let r;
+    try {
+      r = await j("/v1/agents/" + app + (s ? "/sessions/" + encodeURIComponent(s.name) + "/info" : "/threads/" + t.thread));
+    } catch (e) {
+      if (mine === infoAsked) status.textContent = "no info: " + (e.message || e);
+      return;
+    }
+    if (mine !== infoAsked) return; // closed, or asked again, meanwhile
+    if (status.textContent === note) status.textContent = was;
+    const dash = v => v || "—", when = unix => unix ? new Date(unix * 1000).toLocaleString() : "—";
+    const tk = r.tokens || {}, n = v => (v || 0).toLocaleString();
+    infoEls.name.textContent = s ? sessTitle(s) : threadTitle(t);
+    infoEls.summary.textContent = dash(r.summary);
+    infoEls.prompt.textContent = dash(r.prompt);
+    infoEls.last.textContent = dash(r.last_prompt);
+    infoEls.turns.textContent = count(r.turns, "prompt") + ", " + count(r.replies, "reply", "replies");
+    infoEls.tokens.replaceChildren(n((tk.input || 0) + (tk.cache_read || 0) + (tk.cache_write || 0)) + " in, " + n(tk.output) + " out", el("br"),
+      el("span", { class: "muted" }, "of the input, " + n(tk.cache_read) + " read from the cache and " + n(tk.cache_write) + " written to it"));
+    infoEls.models.textContent = (r.models || []).map(modelName).join(", ") || "—";
+    infoEls.created.textContent = when(r.created);
+    infoEls.activity.textContent = when(r.activity);
+    infoEls.cwd.textContent = dash(r.cwd);
+    infoEls.archive.hidden = !s;
+    infoEls.archive._s = s || null;
+    infoVeil.hidden = false;
+    term.blur();
+    infoEls.ok.focus();
   }
   // Search, beside New in the Claude Code window: a modal dialog of the
   // window's own — a veil over its frame, so the desk's other windows go

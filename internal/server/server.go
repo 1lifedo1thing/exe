@@ -324,6 +324,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/agents/{app}/sessions", s.handleAgentSessionCreate)
 	mux.HandleFunc("POST /v1/agents/{app}/sessions/{name}/prompt", s.handleAgentSessionPrompt)
 	mux.HandleFunc("DELETE /v1/agents/{app}/sessions/{name}", s.handleAgentSessionDelete)
+	mux.HandleFunc("GET /v1/agents/{app}/sessions/{name}/info", s.handleAgentSessionInfo)
+	mux.HandleFunc("GET /v1/agents/{app}/threads/{id}", s.handleAgentThreadInfo)
 	mux.HandleFunc("GET /v1/workspace", s.handleWorkspaceList)
 	mux.HandleFunc("GET /v1/workspace/{path...}", s.handleWorkspaceGet)
 	mux.HandleFunc("PUT /v1/workspace/{path...}", s.handleWorkspacePut)
