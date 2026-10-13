@@ -69,6 +69,7 @@ const KEEP = "exe-keep";
 const APPS = "/v1/apps";
 const AUTH = "/sw/auth";       // the Authorization the desk last sent, for the asking this does on its own
 const WAIT = 3000;             // how long exe has to answer before a copy answers for it
+const DESK_WAIT = 8000;        // how long exe has to begin answering a top-level load before the alert does (longer than the alert's own PROBE_BY)
 const WARM_EVERY = 60e3;
 const FIXED_MOST = 32 * 2 ** 20; // a fixed file larger than this is not kept
 
@@ -184,7 +185,7 @@ async function kept(e, u, how) {
   })();
   e.waitUntil(net.catch(() => {}));
   // nothing kept: exe's answer, or its failing, as if this were not here
-  if (!had) return top(r) ? net.catch(() => offline()) : net;
+  if (!had) return top(r) ? bounded(net).catch(() => offline()) : net;
   return (await Promise.race([net.catch(() => null), sleep(WAIT).then(() => null)])) || had;
 }
 
@@ -235,9 +236,13 @@ async function offline() {
   const c = await caches.open(CACHE);
   return (await c.match(OFFLINE)) || Response.error();
 }
-// a top-level load: exe's page, or the alert when exe does not answer
+// A top-level load: exe's page, or the alert when exe does not answer. A
+// line that carries nothing (a phone whose tailnet is up with nobody at
+// the other end) never fails by itself, so the load is given DESK_WAIT to
+// begin answering; a slow line whose answer has begun is waited for.
+const bounded = p => Promise.race([p, sleep(DESK_WAIT).then(() => { throw new Error("no answer in " + DESK_WAIT + " ms"); })]);
 async function desk(e) {
-  try { return await ask(e.request, e.preloadResponse); }
+  try { return await bounded(ask(e.request, e.preloadResponse)); }
   catch (err) { return offline(); }
 }
 

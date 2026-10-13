@@ -103,13 +103,26 @@ button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; bor
 document.getElementById("host").textContent = location.host;
 document.getElementById("retry").addEventListener("click", () => location.reload());
 addEventListener("keydown", e => { if (e.key === "Enter") location.reload(); });
-// a HEAD of the desktop is not a navigation, so the worker lets it reach
-// the network; the moment the daemon answers, the desktop comes back
-const probe = async () => {
-  try { const r = await fetch("/", { method: "HEAD", cache: "no-store" }); if (r.ok) location.reload(); } catch (e) {}
+// A HEAD of the desktop is not a navigation, so the worker lets it reach
+// the network; the moment the daemon answers, the desktop comes back. One
+// is in flight at a time, and one that has not answered in PROBE_BY is
+// given up: a line that carries nothing never fails by itself, and an
+// answer that came late would reload the desk into the worker's own wait
+// (DESK_WAIT in sw.js, longer than this on purpose) and this page again.
+// The browser saying the line is back starts a fresh one, since a HEAD
+// begun on a dead line can sit until its deadline.
+const PROBE_BY = 5000;
+let probing = null;
+const probe = fresh => {
+  if (probing) { if (!fresh) return; probing.abort(); }
+  const stop = probing = new AbortController();
+  const t = setTimeout(() => stop.abort(), PROBE_BY);
+  fetch("/", { method: "HEAD", cache: "no-store", signal: stop.signal })
+    .then(r => { if (r.ok) location.reload(); }, () => {})
+    .finally(() => { clearTimeout(t); if (probing === stop) probing = null; });
 };
-addEventListener("online", probe);
-setInterval(probe, 3000);
+addEventListener("online", () => probe(true));
+setInterval(() => probe(false), 3000);
 
 // An app that keeps a copy on this device (sw.js, "what an app keeps") can
 // be read from it meanwhile: a line says which, and each has a button that

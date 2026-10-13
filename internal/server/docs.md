@@ -591,8 +591,8 @@ offline, the desktop shows an alert in place of the browser's error page and
 comes back by itself once the daemon does.
 
 An app can keep a copy of what it shows on the device, to be read
-meanwhile. The alert names the apps that have one and has a button for
-each: **Open** and the app's name. The app opens as the daemon last had
+meanwhile; Notes and Projects do. The alert names the apps that have one
+and has a button for each: **Open** and the app's name. The app opens as the daemon last had
 it, says how old its copy is, and dims whatever would change something
 until the daemon answers again. The copy is renewed each time the desktop
 is opened and each time a notification arrives, so it is as old as the
