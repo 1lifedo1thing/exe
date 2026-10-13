@@ -50,6 +50,7 @@ Usage:
   exe code <name> [-m model] <prompt...>   vibecode inside the VM (Ollama agent)
   exe expose <name> -port N [-sub name]    publish https://<sub>.<domain> -> VM port
   exe expose <host> -redirect https://target  permanent redirect, preserving path/query
+  exe expose <host> -dir /path/to/site     serve a directory on this machine, by the daemon
   exe site [-sub name]                     publish this daemon's homepage (default exe.<domain>)
   exe unexpose <host>                      remove a proxy route
   exe routes                               show proxy routes
@@ -917,18 +918,32 @@ func cmdExpose(args []string) error {
 	sub := fs.String("sub", "", "subdomain (default: vm name)")
 	redirect := fs.String("redirect", "", "redirect this full hostname to an HTTP(S) origin (no VM needed)")
 	backend := fs.String("backend", "", "route this full hostname to a local HTTP(S) origin such as http://127.0.0.1:7799 (no VM needed)")
+	dir := fs.String("dir", "", "serve this full hostname from a directory on this machine, by the daemon itself (no VM needed)")
 	fs.Parse(rest)
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	if *redirect != "" && *backend != "" {
-		return fmt.Errorf("-redirect and -backend are exclusive")
+	standalone := 0
+	for _, v := range []string{*redirect, *backend, *dir} {
+		if v != "" {
+			standalone++
+		}
 	}
-	if (*redirect != "" || *backend != "") && (*port != 0 || *sub != "") {
-		return fmt.Errorf("-redirect and -backend cannot be combined with -port or -sub")
+	if standalone > 1 {
+		return fmt.Errorf("-redirect, -backend and -dir are exclusive")
 	}
-	if *redirect == "" && *backend == "" && (*port < 1 || *port > 65535) {
-		return fmt.Errorf("-port (1-65535), -redirect or -backend is required")
+	if standalone == 1 && (*port != 0 || *sub != "") {
+		return fmt.Errorf("-redirect, -backend and -dir cannot be combined with -port or -sub")
+	}
+	if standalone == 0 && (*port < 1 || *port > 65535) {
+		return fmt.Errorf("-port (1-65535), -redirect, -backend or -dir is required")
+	}
+	if *dir != "" {
+		abs, err := filepath.Abs(*dir)
+		if err != nil {
+			return err
+		}
+		*dir = abs
 	}
 	cfg, err := config.Load()
 	if err != nil {
@@ -943,6 +958,10 @@ func cmdExpose(args []string) error {
 	if *backend != "" {
 		path = "/v1/routes"
 		body = map[string]any{"host": name, "backend": *backend}
+	}
+	if *dir != "" {
+		path = "/v1/routes"
+		body = map[string]any{"host": name, "dir": *dir}
 	}
 	resp, err := api(cfg, "POST", path, body, 2*time.Minute)
 	if err != nil {

@@ -38,14 +38,17 @@ func localBackend(raw string) (string, error) {
 // handleRoutePublish publishes a hostname straight to a local backend:
 //
 //	POST /v1/routes {"host": "charts.example.com", "backend": "http://127.0.0.1:7799"}
+//	POST /v1/routes {"host": "site.example.com", "dir": "/www/site"}
 //
 // The same DNS record, tunnel ingress and proxy route a VM's Expose tab
-// creates, for a service that is not a VM. DELETE /v1/routes/{host}
-// removes it.
+// creates, for a service that is not a VM: an HTTP(S) origin on this
+// machine, or a directory of files the daemon serves itself (proxy.Dir).
+// DELETE /v1/routes/{host} removes it.
 func (s *Server) handleRoutePublish(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Host    string `json:"host"`
 		Backend string `json:"backend"`
+		Dir     string `json:"dir"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -56,11 +59,18 @@ func (s *Server) handleRoutePublish(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	if strings.HasPrefix(req.Backend, proxy.Redirect) || strings.HasPrefix(req.Backend, proxy.Builtin) {
-		writeErr(w, http.StatusBadRequest, errors.New("backend must be an http(s) origin; redirects use /v1/routes/redirect"))
+	var backend string
+	switch {
+	case req.Dir != "" && req.Backend != "":
+		writeErr(w, http.StatusBadRequest, errors.New("backend and dir are exclusive"))
 		return
+	case req.Dir != "":
+		backend, err = proxy.DirBackend(req.Dir)
+	case strings.HasPrefix(req.Backend, proxy.Redirect) || strings.HasPrefix(req.Backend, proxy.Builtin):
+		err = errors.New("backend must be an http(s) origin; redirects use /v1/routes/redirect, a directory the dir field")
+	default:
+		backend, err = localBackend(req.Backend)
 	}
-	backend, err := localBackend(req.Backend)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return

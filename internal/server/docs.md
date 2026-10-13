@@ -2341,8 +2341,35 @@ exe expose charts.example.com -backend http://127.0.0.1:7799
 - The same DNS record, tunnel rule and proxy route are created, and
   `exe unexpose <host>` removes them.
 
-`-redirect` and `-backend` take a full hostname and stand alone: neither
-combines with `-port`, `-sub` or the other.
+### Publish a directory of files
+
+A hostname can be a folder on this machine, served by the daemon itself, so
+a static site needs no server process of its own:
+
+```sh
+exe expose site.example.com -dir /www/site
+```
+
+- `/` is the folder's `index.html`, `/pictures/a.png` the file of that name;
+  a folder with no `index.html` is not listed, and a file or folder whose
+  name begins with a dot is never served.
+- Downloads can resume: byte ranges are honoured. A disk image or archive
+  (`.dmg`, `.img`, `.toast`, `.iso`, `.sit`, `.zip`, `.bin`, `.hqx`) is sent
+  as a download rather than shown.
+- A folder that holds a file named `.password` is served only to a request
+  carrying HTTP Basic authentication whose password is that file's first
+  line, under any user name; everything beneath the folder is behind it,
+  and the browser asks once. Those answers are marked private and never
+  stored, so the edge in front of the site cannot hand them on.
+- `exe routes` lists it as `exe:dir:/www/site`; `exe unexpose <host>`
+  removes it. The folder is read at each request, so a new file is live at
+  once. Pages are served `no-cache`; other files may be kept for ten
+  minutes.
+- The API: `POST /v1/routes` with `{"host": "site.example.com", "dir":
+  "/www/site"}`.
+
+`-redirect`, `-backend` and `-dir` take a full hostname and stand alone:
+none combines with `-port`, `-sub` or another of the three.
 
 ### Publish the exe homepage
 

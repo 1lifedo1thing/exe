@@ -50,10 +50,14 @@ func (p *Proxy) SetBuiltin(backend string, h http.Handler) {
 // served by, for callers that read a published app without the network.
 func (p *Proxy) BuiltinHandler(backend string) (http.Handler, bool) { return p.builtinFor(backend) }
 
-// builtinFor returns the handler for a builtin backend.
+// builtinFor returns the handler for a builtin backend: one registered
+// by name, or a directory on this machine ("exe:dir:<path>", dir.go).
 func (p *Proxy) builtinFor(backend string) (http.Handler, bool) {
 	if !strings.HasPrefix(backend, Builtin) {
 		return nil, false
+	}
+	if h, ok := dirHandlerFor(backend); ok {
+		return h, true
 	}
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -95,7 +99,12 @@ func (p *Proxy) Set(host, backend string) error {
 	if _, err := url.Parse(backend); err != nil {
 		return err
 	}
-	if strings.HasPrefix(backend, Builtin) {
+	if strings.HasPrefix(backend, Dir) {
+		var err error
+		if backend, err = DirBackend(strings.TrimPrefix(backend, Dir)); err != nil {
+			return err
+		}
+	} else if strings.HasPrefix(backend, Builtin) {
 		if _, ok := p.builtinFor(backend); !ok {
 			return errors.New("no builtin backend " + backend)
 		}
