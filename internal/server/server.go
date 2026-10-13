@@ -93,6 +93,12 @@ type Server struct {
 	// tmux's paste buffers belong to the server, not to a session.
 	agentPromptMu sync.Mutex
 
+	// The sessions at work as last listed (handleAgentWork, agentwork.go):
+	// one listing serves every window that asks within agentWorkFresh.
+	agentWorkMu   sync.Mutex
+	agentWorkAt   time.Time
+	agentWorkList []agentWork
+
 	// Tickets for rendered Workspace pages (pages.go): ticket -> file, expiry.
 	pageMu      sync.Mutex
 	pageTickets map[string]pageTicket
@@ -313,6 +319,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/apps/{app}/data/{path...}", s.handleAppDataPut)
 	mux.HandleFunc("DELETE /v1/apps/{app}/data/{path...}", s.handleAppDataDelete)
 	mux.HandleFunc("GET /v1/agents/usage", s.handleAgentUsage)
+	mux.HandleFunc("GET /v1/agents/work", s.handleAgentWork)
 	mux.HandleFunc("GET /v1/agents/{app}/sessions", s.handleAgentSessionsList)
 	mux.HandleFunc("POST /v1/agents/{app}/sessions", s.handleAgentSessionCreate)
 	mux.HandleFunc("POST /v1/agents/{app}/sessions/{name}/prompt", s.handleAgentSessionPrompt)

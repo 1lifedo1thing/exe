@@ -998,6 +998,7 @@ is set.
 | `POST /v1/agents/claude/sessions` | Opens a numbered session and answers with its `name` and `number`. |
 | `POST /v1/agents/claude/sessions/<name>/prompt` | Types a message into a session. |
 | `DELETE /v1/agents/claude/sessions/<name>` | Ends the session, as **Archive…** does. |
+| `GET /v1/agents/work` | Lists the sessions of both agents that are at work now: when each one's turn began (`since`, beside the daemon's own `now`) and the issue addresses, such as `EXE-12`, that its instructions named (`refs`). |
 
 A session's `<name>` is its tmux session's: `exe-claude` for the one the
 icon opens and `exe-claude-2`, `exe-claude-3` and so on after it, or
