@@ -30,6 +30,10 @@ body {
   background: var(--g400); border: 1px solid var(--black);
   box-shadow: 2px 2px 0 var(--black);
 }
+/* it shows once the apps kept on this device are known (the script below),
+   so it comes up at the size it stays */
+.window { visibility: hidden; }
+body.ready .window { visibility: visible; }
 .window::before { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 4; box-sizing: border-box;
   box-shadow: inset 1px 1px 0 rgba(255,255,255,.5), inset -1px -1px 0 var(--g600), inset 1px 1px 0 #fff; }
 .titlebar { display: flex; align-items: center; gap: 4px; padding: 2px 4px;
@@ -87,9 +91,10 @@ button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; bor
       <div style="flex:1; min-width:0">
         <div style="font-weight:bold; font-size:12px; line-height:1.35">exe is not answering.</div>
         <div style="font-size:11px; line-height:1.45; margin-top:7px">The desktop could not reach its daemon at <span id="host"></span>. It may be restarting, or this device may be offline. This page keeps trying and the desktop returns on its own.</div>
+        <div id="kept" style="font-size:11px; line-height:1.45; margin-top:7px" hidden></div>
       </div>
     </div>
-    <div class="row" style="justify-content:flex-end; margin:0 0 2px">
+    <div class="row" id="btns" style="justify-content:flex-end; flex-wrap:wrap; gap:12px; margin:0 0 2px">
       <button class="ghost default" id="retry" type="button">Try Again</button>
     </div>
   </div>
@@ -105,6 +110,44 @@ const probe = async () => {
 };
 addEventListener("online", probe);
 setInterval(probe, 3000);
+
+// An app that keeps a copy on this device (sw.js, "what an app keeps") can
+// be read from it meanwhile: a line says which, and each has a button that
+// opens its page as the desk would have, the token and a phone's ?mobile=1
+// with it (the desk's own rule for what a phone is), and from=offline, so
+// the page can offer the way back here.
+const IS_MOBILE = /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(navigator.userAgent)
+  || (matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 700);
+(async () => {
+  try {
+    const c = await caches.open("exe-keep"), list = await c.match("/v1/apps");
+    const apps = [];
+    for (const a of list ? await list.json() : []) {
+      const page = "/apps/" + encodeURIComponent(a.name) + "/";
+      if (a.offline && await c.match(page)) apps.push({ title: a.title || a.name, page });
+    }
+    if (apps.length) {
+      const q = new URLSearchParams();
+      try { const tok = localStorage.getItem("exe_token"); if (tok) q.set("token", tok); } catch (e) {}
+      if (IS_MOBILE) q.set("mobile", "1");
+      q.set("from", "offline");
+      const names = apps.map(a => a.title);
+      const kept = document.getElementById("kept");
+      kept.textContent = (names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] + " keep" : names[0] + " keeps")
+        + " a copy on this device, and can be read from it meanwhile.";
+      kept.hidden = false;
+      for (const a of apps) {
+        const b = document.createElement("button");
+        b.className = "ghost"; b.type = "button"; b.textContent = "Open " + a.title;
+        b.addEventListener("click", () => { location.href = a.page + "?" + q; });
+        document.getElementById("retry").before(b);
+      }
+    }
+  } catch (e) {}
+  document.body.classList.add("ready");
+})();
+// whatever becomes of that reading, the alert is not kept back for long
+setTimeout(() => document.body.classList.add("ready"), 1500);
 </script>
 </body>
 </html>

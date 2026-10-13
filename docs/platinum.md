@@ -410,7 +410,10 @@ restyling: `internal/server/ui/index.html` (the desktop),
   holds only an icon, a bold label beside it, a plain narrative and buttons.
   `ui/offline.html`, the alert the service worker shows when the daemon does
   not answer, carries its own copy of the window, alert-bar and button
-  blocks (it must render with nothing else reachable), and the Hub app
+  blocks (it must render with nothing else reachable). It names the apps
+  that keep a copy on the device and gives each a button, Open and the
+  app's name, left of Try Again, which keeps the ring; it is shown only
+  once it knows them, so it comes up at the size it stays. The Hub app
   (`sysapps/hub`) carries the window and alert-bar blocks for the alert it
   raises over itself when the hub refuses a file or a post: change them in
   all three. An app's alert sits on its dialog veil, 380px at most and
@@ -892,6 +895,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
 
 - One `index.html`, vanilla JS, inline CSS, no frameworks or CDNs; the
   bundle folder is the app's identity; `app.json` sizes the window.
+- An app that reads without the daemon says `"offline"` in its app.json
+  (`ui/sw.js`, "what an app keeps", is the contract; Projects the worked
+  example). While it shows a kept copy its status line says so and how old
+  the copy is, "Offline: the copy of 5 min ago", and whatever would write
+  is dimmed where it stands: nothing is hidden and nothing moves. It asks
+  every few seconds whether the daemon is back, and is whole again by
+  itself. Opened from the alert as its own page (`?from=offline`), a
+  phone's first screen has Back to exe in its bar.
 - An app window follows its app's code: `/v1/apps` lists each app's
   `version` (a fingerprint of its files) and the daemon announces a change
   on the app-data stream as `{app: "@apps", path, version}`; the desk

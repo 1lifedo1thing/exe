@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -259,5 +260,74 @@ func TestWorkspaceFileGetServesRanges(t *testing.T) {
 	}
 	if got := rec.Header().Get("Content-Range"); got != "bytes 2-5/10" {
 		t.Fatalf("Content-Range: %q", got)
+	}
+}
+
+// An app says in its app.json what it keeps for when exe does not answer;
+// the list of apps passes on only the addresses that are the app's to keep.
+func TestAppOfflineAddresses(t *testing.T) {
+	apps := t.TempDir()
+	write := func(name, manifest string) {
+		t.Helper()
+		dir := filepath.Join(apps, name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for file, body := range map[string]string{"app.json": manifest, "index.html": "<!doctype html>"} {
+			if err := os.WriteFile(filepath.Join(dir, file), []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	write("plain", `{"title": "Plain"}`)
+	write("off", `{"title": "Off", "offline": false}`)
+	write("folder", `{"title": "Folder", "offline": true}`)
+	write("tracker", `{"title": "Tracker", "offline": {
+		"keep": ["/platinum/popup.css", "/v1/svc/tracker/v1/snapshot", "/v1/svc/tracker/v1/list?state=all",
+			"/v1/apps/tracker/data/notes.json", "/apps/tracker/extra.js",
+			"/v1/vms", "/v1/apps/Notes/data/notes.json", "/v1/svc/tracker/../../vms", "https://example.com/v1/svc/x",
+			"//example.com/v1/svc/x", "/v1/svc/tracker/v1/snapshot?token=abc", "/v1/svc/tracker/v1/a#b", "/v1/svc/", "v1/svc/x"],
+		"fixed": ["/v1/svc/tracker/v1/files/", "/v1/svc/tracker/v1/files", "/v1/svc/tracker/v1/files/?x=1", "/v1/", "/"],
+		"wanted": "/v1/svc/tracker/v1/wanted"}}`)
+	write("greedy", `{"title": "Greedy", "offline": {"keep": ["/v1/hostinfo"], "wanted": "/v1/workspace"}}`)
+
+	s := &Server{StateDir: t.TempDir()}
+	s.cfg.Store(&config.Config{AppsDirs: []string{apps}})
+	got := map[string]*appOffline{}
+	for _, a := range s.listApps() {
+		got[a.Name] = a.Offline
+	}
+	if got["plain"] != nil || got["off"] != nil {
+		t.Fatalf("an app that did not ask keeps something: %+v, %+v", got["plain"], got["off"])
+	}
+	if o := got["folder"]; o == nil || len(o.Keep) != 0 || len(o.Fixed) != 0 {
+		t.Fatalf(`"offline": true is %+v`, o)
+	}
+	o := got["tracker"]
+	if o == nil {
+		t.Fatal("the tracker keeps nothing")
+	}
+	wantKeep := []string{"/platinum/popup.css", "/v1/svc/tracker/v1/snapshot", "/v1/svc/tracker/v1/list?state=all",
+		"/v1/apps/tracker/data/notes.json", "/apps/tracker/extra.js"}
+	if !reflect.DeepEqual(o.Keep, wantKeep) {
+		t.Errorf("keeps %q, want %q", o.Keep, wantKeep)
+	}
+	if want := []string{"/v1/svc/tracker/v1/files/"}; !reflect.DeepEqual(o.Fixed, want) {
+		t.Errorf("fixed %q, want %q", o.Fixed, want)
+	}
+	if o.Wanted != "/v1/svc/tracker/v1/wanted" {
+		t.Errorf("wanted %q", o.Wanted)
+	}
+	// an app that asked only for what is not its own keeps its folder and no more
+	if g := got["greedy"]; g == nil || len(g.Keep) != 0 || g.Wanted != "" {
+		t.Errorf("an app that asked for the desk's own: %+v", g)
+	}
+	// and the desk is told, in the words the worker reads
+	b, _ := json.Marshal(o)
+	if !strings.Contains(string(b), `"keep":["/platinum/popup.css"`) || !strings.Contains(string(b), `"fixed":["/v1/svc/tracker/v1/files/"]`) {
+		t.Errorf("as JSON: %s", b)
+	}
+	if b, _ := json.Marshal(got["folder"]); string(b) != "{}" {
+		t.Errorf(`"offline": true as JSON: %s`, b)
 	}
 }

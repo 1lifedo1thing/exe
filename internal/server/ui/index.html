@@ -2602,11 +2602,16 @@ const IS_IOS = /iPhone|iPad|iPod/.test(navigator.platform || "")
 // clamp would take away Android's pinch zoom entirely.
 if (IS_MOBILE && /iPhone|iPod|iPad/i.test(navigator.userAgent))
   document.querySelector('meta[name="viewport"]').content = "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
-// The service worker (/sw.js) has one job: the alert page for a top-level
-// load the daemon cannot answer (offline.html). Browsers expose the API on
-// a secure origin only, so over the plain-HTTP address this is skipped.
+// The service worker (/sw.js) is for when the daemon cannot answer: the
+// alert page for a top-level load (offline.html), and the copies kept of
+// the apps that say "offline" in their app.json, which it learns from this
+// page's own list of apps as it passes. Browsers expose the API on a secure
+// origin only, so over the plain-HTTP address this is skipped.
 if ("serviceWorker" in navigator) {
   addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+  // a worker that takes this page over after it asked for the apps (the
+  // first visit, a new build's) has not seen the list go by: ask once more
+  navigator.serviceWorker.addEventListener("controllerchange", () => loadApps().catch(() => {}));
   // a tapped notification that names a window (sw.js) opens it here
   navigator.serviceWorker.addEventListener("message", e => {
     if (e.data && typeof e.data.exeShow === "string") showTarget(e.data.exeShow);

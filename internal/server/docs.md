@@ -590,6 +590,14 @@ When the daemon is not answering, because it is restarting or the device is
 offline, the desktop shows an alert in place of the browser's error page and
 comes back by itself once the daemon does.
 
+An app can keep a copy of what it shows on the device, to be read
+meanwhile. The alert names the apps that have one and has a button for
+each: **Open** and the app's name. The app opens as the daemon last had
+it, says how old its copy is, and dims whatever would change something
+until the daemon answers again. The copy is renewed each time the desktop
+is opened and each time a notification arrives, so it is as old as the
+last time the device heard from the daemon.
+
 ### Updates to the desktop
 
 Updates arrive by themselves. When the daemon restarts with a new desktop or
@@ -3059,6 +3067,34 @@ An `app.json` looks like this:
 `title` is the name you see, and without one the folder's name is used.
 `icon` is a picture in the folder. `window` is the size the window opens
 at, with `grow` true when the app draws a resize corner of its own.
+
+An app worth reading while the daemon cannot be reached says so with
+`offline`. A device that has had the desktop open over HTTPS then keeps a
+copy, and the alert shown when the daemon is not answering offers the app.
+`"offline": true` keeps the app's own files. To keep what it shows as
+well, name it:
+
+```json
+"offline": {
+  "keep": ["/v1/apps/Reader/data/list.json"],
+  "fixed": ["/v1/svc/reader/files/"],
+  "wanted": "/v1/svc/reader/wanted"
+}
+```
+
+- `keep` lists whole addresses. Each is asked of the daemon as always and
+  its last answer is kept. When the daemon does not answer, the app gets
+  the kept answer, with the time it was kept in the `X-Exe-Kept` header,
+  in milliseconds. That header is how the app knows to say it is showing
+  a copy and to stop offering changes.
+- `fixed` lists the starts of addresses whose content never changes, such
+  as files named by their hash. One is kept the first time it is asked
+  for, and answered from the copy after that.
+- `wanted` is an address that answers a JSON list of `fixed` addresses,
+  written relative to itself, to fetch ahead of time.
+
+An address has to be the app's own folder or data, a service's
+(`/v1/svc/…`) or a shared `/platinum/` file; any other is left out.
 
 ### Where an app keeps its data
 

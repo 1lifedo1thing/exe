@@ -21,7 +21,9 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -90,6 +92,7 @@ func loadSysAppMeta(name string) (*appMeta, error) {
 		return nil, errors.New("no index.html")
 	}
 	m.Name = name
+	m.Offline = cleanOffline(m.Name, m.Offline)
 	if m.Title == "" {
 		m.Title = name
 	}
@@ -191,6 +194,99 @@ type appMeta struct {
 	// Version fingerprints the code the app's window runs (appcode.go): the
 	// desk reloads a window left on an older one.
 	Version string `json:"version,omitempty"`
+	// Offline is what the app keeps on a device, to be read while exe does
+	// not answer (appOffline).
+	Offline *appOffline `json:"offline,omitempty"`
+}
+
+// appOffline is an app that can be read while exe does not answer: its
+// app.json says "offline": true, or names what it keeps beside its own
+// folder. The service worker (ui/sw.js) does the keeping, on a device that
+// has had the desk open, and the alert it shows when the daemon is away
+// (ui/offline.html) offers the apps it has a copy of.
+//
+// Keep is whole addresses, asked of exe every time and their last answer
+// kept: when exe does not answer, the copy is the answer, and says when it
+// was kept in X-Exe-Kept (milliseconds). Fixed is the starts of addresses
+// under which nothing ever changes, a file named by its hash: what passes
+// is kept once and answered from the copy after. Wanted is one more kept
+// address, whose answer is a JSON list of fixed addresses, written
+// relative to itself, to be had though nobody has asked for them yet: an
+// issue's pictures, say. An address is the app's own folder or data, a
+// service's (/v1/svc/), or one of the shared Platinum blocks; one that is
+// not is left out.
+type appOffline struct {
+	Keep   []string `json:"keep,omitempty"`
+	Fixed  []string `json:"fixed,omitempty"`
+	Wanted string   `json:"wanted,omitempty"`
+}
+
+// UnmarshalJSON reads "offline": true as an app that keeps its folder and
+// nothing more.
+func (o *appOffline) UnmarshalJSON(b []byte) error {
+	var on bool
+	if json.Unmarshal(b, &on) == nil {
+		o.Keep, o.Fixed = nil, nil
+		if !on {
+			o.Keep = []string{offlineOff}
+		}
+		return nil
+	}
+	type plain appOffline
+	return json.Unmarshal(b, (*plain)(o))
+}
+
+// offlineOff marks "offline": false between the reading of an app.json and
+// the cleaning of what it read.
+const offlineOff = "\x00off"
+
+const offlineMost = 32 // addresses of each kind
+
+// cleanOffline is what an app named name may keep, of what its app.json
+// asked for: nil for an app that keeps nothing.
+func cleanOffline(name string, o *appOffline) *appOffline {
+	if o == nil || (len(o.Keep) == 1 && o.Keep[0] == offlineOff) {
+		return nil
+	}
+	own := []string{"/platinum/", "/v1/svc/", "/apps/" + name + "/", "/v1/apps/" + name + "/data/"}
+	allowed := func(a string, prefix bool) bool {
+		u, err := url.Parse(a)
+		if err != nil || u.Scheme != "" || u.Host != "" || u.Fragment != "" || strings.ContainsAny(a, "\\#") {
+			return false
+		}
+		// a path as it is asked for: rooted, with nothing to climb or fold
+		clean := path.Clean(u.Path)
+		if strings.HasSuffix(u.Path, "/") && clean != "/" {
+			clean += "/"
+		}
+		if u.Path != clean || u.Query().Has("token") {
+			return false
+		}
+		if prefix && (u.RawQuery != "" || !strings.HasSuffix(u.Path, "/")) {
+			return false
+		}
+		for _, p := range own {
+			if strings.HasPrefix(u.Path, p) && len(u.Path) > len(p) {
+				return true
+			}
+		}
+		return false
+	}
+	out := &appOffline{}
+	for _, a := range o.Keep {
+		if len(out.Keep) < offlineMost && allowed(a, false) {
+			out.Keep = append(out.Keep, a)
+		}
+	}
+	for _, a := range o.Fixed {
+		if len(out.Fixed) < offlineMost && allowed(a, true) {
+			out.Fixed = append(out.Fixed, a)
+		}
+	}
+	if allowed(o.Wanted, false) {
+		out.Wanted = o.Wanted
+	}
+	return out
 }
 
 // loadAppMeta reads one bundle's app.json; a folder only counts as an app
@@ -210,6 +306,7 @@ func (s *Server) loadAppMeta(root, name string) (*appMeta, error) {
 	}
 	m.SystemIcon = ""               // disk bundles must remain isolated as image resources
 	m.Name = canonicalAppName(name) // app.json cannot claim another identity
+	m.Offline = cleanOffline(m.Name, m.Offline)
 	if strings.TrimSpace(m.Title) == "" {
 		m.Title = name
 	}
