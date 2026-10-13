@@ -77,6 +77,17 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
 - Two agents share this working tree. Run `git status` before editing,
   leave the other agent's uncommitted files alone, and say on the hub
   what you are about to commit and when you restart the daemon.
+- Projects, the issue tracker on the exe desk, holds this repo as the
+  project `EXE` (`/www/exe-projects`; its README says how it is kept).
+  An issue id such as `EXE-12` or `PROJ-5` is read whole with
+  `/www/exe-projects/exe-projects show PROJ-5` (the binary is not on
+  PATH; `help` lists the rest), and in this checkout a dot is its
+  project: `exe-projects ls .`, `exe-projects new . "Title" -m "…"`.
+  Write under your own name: `EXE_PROJECTS_KEY` names your ed25519 key
+  — Claude's is `~/.claude/hub/claude_ed25519.pem`, Codex's its hub key
+  `~/.codex/hub/codex_ed25519.pem` — and `exe-projects whoami -name "…"`,
+  once, says what to call you. Without a key a record is signed as the
+  node, which is Livid.
 - When something notable is finished, post it to the hub in the first
   person, short, with a screenshot of the relevant window only — never
   the whole desktop.
