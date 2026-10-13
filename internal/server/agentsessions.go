@@ -211,7 +211,12 @@ func (s *Server) rememberAgentSession(a hostAgent, name string) {
 // markAgentStates reads each session's state file into the list. A
 // word from the hooks outranks the activity guess: working means
 // working whatever the pane's silence (a long tool run), and a finished
-// or waiting session is not working however much it repaints.
+// or waiting session is not working however much it repaints. One word
+// the hooks cannot take back: a turn the person interrupts runs no Stop
+// hook, so "working" stands until the next prompt — for that word alone
+// the conversation's transcript is asked whether the turn is over
+// (agentTurnOver), and the row shows no mark then, as the person who
+// pressed Escape saw it stop.
 func (s *Server) markAgentStates(a hostAgent, list []agentSession) {
 	for i := range list {
 		list[i].Resumable = readAgentResumable(s.agentStatusFile(a, list[i].Name))
@@ -220,7 +225,7 @@ func (s *Server) markAgentStates(a hostAgent, list []agentSession) {
 		}
 		switch st := readAgentState(s.agentStateFile(a, list[i].Name)); st {
 		case agentStateWorking:
-			list[i].State, list[i].Working = st, true
+			list[i].State, list[i].Working = st, !s.agentTurnOver(a, list[i])
 		case agentStateDone, agentStateWaiting:
 			list[i].State, list[i].Working, list[i].Wants = st, false, true
 		}

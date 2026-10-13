@@ -472,6 +472,22 @@ func (s *Server) agentResumed(a hostAgent, ss agentSession, now int64) bool {
 	return s.agentTrailFor(a, ss).open
 }
 
+// agentTurnOver says whether the turn a session's hooks called working
+// is over all the same. An interrupted turn — Escape on a running one —
+// runs no Stop hook, so the word stands until the next prompt, and the
+// column's dot with it (EXE-2: one session had said so for three
+// weeks). The transcript says what the hook could not: a turn that
+// ended after the word was written, and none open since. A session
+// whose transcript is not known keeps the word.
+func (s *Server) agentTurnOver(a hostAgent, ss agentSession) bool {
+	st, err := os.Stat(s.agentStateFile(a, ss.Name))
+	if err != nil {
+		return false
+	}
+	turn := s.agentTrailFor(a, ss)
+	return !turn.open && turn.ended >= st.ModTime().Unix()
+}
+
 // agentsAtWork lists the sessions at work across the agents, the one
 // longest at it first.
 func (s *Server) agentsAtWork() []agentWork {
@@ -494,11 +510,12 @@ func (s *Server) agentsAtWork() []agentWork {
 // agentWorkOf picks the sessions at work out of an agent's list, its
 // states marked (markAgentStates), with what each conversation's file
 // says of the turn. The title's spinner is a turn in flight whatever the
-// file shows yet. The hooks' "working" is too, unless the file shows a
-// turn ending after the word was written: an interrupted turn runs no
-// hook, and the word would stand for good. A session that only printed
-// something lately — a repaint as a window attached, a key typed at the
-// prompt — needs the file to show a turn in flight.
+// file shows yet. The hooks' "working" is too: markAgentStates has let
+// go of one whose file shows the turn ending after the word was written
+// (agentTurnOver), and the file, read again here, may show that only
+// now. A session that only printed something lately — a repaint as a
+// window attached, a key typed at the prompt — needs the file to show a
+// turn in flight.
 func (s *Server) agentWorkOf(a hostAgent, list []agentSession, now int64) []agentWork {
 	var work []agentWork
 	for _, ss := range list {

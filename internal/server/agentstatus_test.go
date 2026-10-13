@@ -447,12 +447,35 @@ func TestMarkAgentStates(t *testing.T) {
 	os.WriteFile(s.agentStateFile(a, "exe-claude-2"), []byte("working\n"), 0o644)
 	os.WriteFile(s.agentStateFile(a, "exe-claude-3"), []byte("waiting"), 0o644)
 	os.WriteFile(s.agentStateFile(a, "exe-claude-5"), []byte("done"), 0o644)
+	// "working" with a transcript (EXE-2): the word was written when the
+	// prompt went in; the transcript shows the turn interrupted after it
+	// (6), still open (7), or only the turn before it ended (8)
+	now := time.Now()
+	stamp := func(d time.Duration) string { return now.Add(d).UTC().Format(time.RFC3339Nano) }
+	transcript := func(name string, wordAge time.Duration, lines ...string) {
+		t.Helper()
+		path := filepath.Join(s.StateDir, name+".jsonl")
+		writeLines(t, path, lines...)
+		b, _ := json.Marshal(map[string]string{"session_id": name, "transcript_path": path})
+		os.WriteFile(s.agentStatusFile(a, name), b, 0o644)
+		f := s.agentStateFile(a, name)
+		os.WriteFile(f, []byte("working"), 0o644)
+		os.Chtimes(f, now.Add(wordAge), now.Add(wordAge))
+	}
+	transcript("exe-claude-6", -6*time.Minute, claudeUserLine(stamp(-6*time.Minute), "human", `"do EXE-8"`),
+		claudeUserLine(stamp(-4*time.Minute), "", `"[Request interrupted by user]"`))
+	transcript("exe-claude-7", -6*time.Minute, claudeUserLine(stamp(-6*time.Minute), "human", `"do EXE-8"`))
+	transcript("exe-claude-8", -6*time.Minute, claudeUserLine(stamp(-20*time.Minute), "human", `"do EXE-7"`),
+		claudeUserLine(stamp(-9*time.Minute), "", `"[Request interrupted by user]"`))
 	list := []agentSession{
 		{Name: "exe-claude", Working: true},    // repainting, but its turn is over
 		{Name: "exe-claude-2", Working: false}, // silent inside a long tool run
 		{Name: "exe-claude-3", Working: true},
 		{Name: "exe-claude-4", Working: true},                // no file: the activity guess stands
 		{Name: "exe-claude-5", Working: true, spinner: true}, // the title's spinner: the next turn is on, the word is old
+		{Name: "exe-claude-6", Working: true},                // interrupted, and repainting as a window attached
+		{Name: "exe-claude-7", Working: false},
+		{Name: "exe-claude-8", Working: false},
 	}
 	s.markAgentStates(a, list)
 	want := []agentSession{
@@ -461,6 +484,9 @@ func TestMarkAgentStates(t *testing.T) {
 		{Name: "exe-claude-3", State: "waiting", Working: false, Wants: true},
 		{Name: "exe-claude-4", Working: true},
 		{Name: "exe-claude-5", Working: true, spinner: true},
+		{Name: "exe-claude-6", State: "working", Working: false, Resumable: true},
+		{Name: "exe-claude-7", State: "working", Working: true, Resumable: true},
+		{Name: "exe-claude-8", State: "working", Working: true, Resumable: true},
 	}
 	for i := range want {
 		if list[i] != want[i] {

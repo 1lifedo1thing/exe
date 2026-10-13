@@ -12,3 +12,4 @@ before it said is kept in CHANGELOG.md.
 - **Get Info** on a Claude Code session row: summary, turns, tokens, models, dates; **Archive…** beside **OK**.
 - On a phone, a picture window zooms: pinch the picture or double-tap it, and drag it about while zoomed.
 - **Search** in the Claude Code window finds a session by its name too (`exe-claude-90`); its rows and **Get Info** say the name.
+- The green dot on a Claude Code session goes out when its turn was stopped with Escape; it used to stay until the next prompt.

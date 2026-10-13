@@ -767,7 +767,8 @@ that session stands:
 | A black dot | Waits for you: its turn has finished, or a permission or a question is pending. |
 
 Hover a row for which of these it is. The session on screen has no mark,
-since the terminal shows how it stands.
+since the terminal shows how it stands. A turn you stopped with Escape
+leaves no mark either: you saw it stop.
 
 How the desktop learns it:
 
