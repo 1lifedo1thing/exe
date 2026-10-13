@@ -910,6 +910,10 @@ restyling: `internal/server/ui/index.html` (the desktop),
   `{exe:"view-image", url, name}` opens a picture in a PictureViewer window
   of the desk's (a hub embed, a Projects attachment): `url` is the whole
   http(s) address, fetched by the desk itself, and `name` the title.
+  `{exe:"title", title}` names the app's window for what it shows, after
+  the app's own name — "Projects — EXE-12" while that issue is open — and
+  an empty `title` is the app's name alone again; the Window menu and Show
+  All Windows read the title bar, so they say it too.
   `{exe:"close"}` puts the app's own window away (Welcome's OK). A system
   app — one embedded in the binary, never a disk bundle — may also ask for
   something of the desktop's with `{exe:"desk", act, args}`: `act` is one

@@ -5726,7 +5726,7 @@ async function loadApps() {
   for (const a of appsList) {
     const w = document.getElementById("win-app-" + a.name);
     if (!w) continue;
-    w.querySelector(".title").textContent = a.title || a.name;
+    appWinTitle(w, a.title || a.name);
     w.classList.toggle("grow", !!(a.window && a.window.grow));
     // app.json height is only a default — never clobber a height the user
     // resized (restored from the layout snapshot as an inline style)
@@ -5767,6 +5767,13 @@ function appWinSize(w, app) {
   w.style.width = Math.min((app.window && app.window.width) || 420, Math.max(240, window.innerWidth - 160)) + "px";
   const fr = w.querySelector(".app-frame");
   if (app.window && app.window.height) fr.style.height = Math.min(app.window.height, Math.max(120, window.innerHeight - 150)) + "px";
+}
+// appWinTitle writes an app window's title: the app's name, and after it
+// what the app said it shows ({exe:"title"}: "Projects — EXE-12"). The
+// subtitle is kept on the window, so the relisting of the apps that a
+// Refresh or a daemon restart brings (loadApps) draws it again.
+function appWinTitle(w, base) {
+  w.querySelector(".title").textContent = w._sub ? base + " — " + w._sub : base;
 }
 // openAppWin opens or raises an app's window. args (the Writer's path)
 // ride the frame's query when the window is made and reach an open
@@ -5885,6 +5892,14 @@ window.addEventListener("message", e => {
   } else if (e.data.exe === "close") {
     // an app's own button puts its window away (Welcome's OK)
     closeWin(w);
+  } else if (e.data.exe === "title" && typeof e.data.title === "string") {
+    // an app names its window for what it shows, after its own name:
+    // "Projects — EXE-12" while that issue is open, and an empty title
+    // is the app's name alone again. The Window menu and Show All
+    // Windows read the title bar, so they say which issue too.
+    const app = appsList.find(a => "win-app-" + a.name === w.id) || {};
+    w._sub = e.data.title.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 80);
+    appWinTitle(w, app.title || w.id.slice("win-app-".length));
   } else if (e.data.exe === "desk" && typeof e.data.act === "string") {
     // a system app asks for something the desktop does, by the desktop
     // menu's own action names (Welcome's buttons: newvm, cfwizard, app
