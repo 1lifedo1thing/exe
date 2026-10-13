@@ -2,10 +2,14 @@ package peer
 
 import (
 	"bytes"
+	"errors"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -487,5 +491,122 @@ func TestStrayWorkspaceFilesMigrateOnScan(t *testing.T) {
 	// the rename kept size+mtime, so the version must not have re-bumped
 	if v.Vec["other"] != 1 || len(v.Vec) != 1 {
 		t.Fatalf("migration should not re-version: %+v", v)
+	}
+}
+
+// writeHuge puts a file one byte over the sync cap in the engine's workspace
+// and returns its key and the fingerprint a stamp of it would record.
+func writeHuge(t *testing.T, dir, rel string) (key string, size, mtime int64) {
+	t.Helper()
+	p := filepath.Join(dir, "workspace", filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(p, maxSyncFile+1); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return WorkspaceNS + "/" + rel, fi.Size(), fi.ModTime().UnixNano()
+}
+
+func TestLocalWriteLeavesOversizedFileLocal(t *testing.T) {
+	// A workspace move calls LocalWrite on a file of any size; the PUT that
+	// caps a write at 10 MB is not in its way.
+	eng, dir := newWorkspaceEngine(t)
+	key, _, _ := writeHuge(t, dir, "Disk Images/huge.toast")
+	eng.LocalWrite(WorkspaceNS, "Disk Images/huge.toast")
+	if _, ok := eng.man.Get(key); ok {
+		t.Fatal("a file over the cap must not be versioned")
+	}
+	os.WriteFile(filepath.Join(dir, "workspace", "small.txt"), []byte("hello"), 0o644)
+	eng.LocalWrite(WorkspaceNS, "small.txt")
+	if v, ok := eng.man.Get("@workspace/small.txt"); !ok || v.Deleted {
+		t.Fatalf("a file under the cap is versioned as before: %+v %v", v, ok)
+	}
+}
+
+func TestOversizedFileIsNeitherPushedNorServed(t *testing.T) {
+	// An entry can still name a file over the cap — one that grew, or one an
+	// older build stamped. None of it goes on the wire, in either direction.
+	eng, dir := newWorkspaceEngine(t)
+	self := eng.cfg.Self.ID
+	huge, size, mtime := writeHuge(t, dir, "huge.bin")
+	eng.man.Bump(huge, self, false, size, mtime)
+	os.WriteFile(filepath.Join(dir, "workspace", "small.txt"), []byte("hello"), 0o644)
+	eng.man.Bump("@workspace/small.txt", self, false, 5, 1)
+
+	if _, _, err := eng.FileForPeer(WorkspaceNS, "huge.bin"); !errors.Is(err, errTooLarge) {
+		t.Fatalf("serving a file over the cap: want errTooLarge, got %v", err)
+	}
+	if b, _, err := eng.FileForPeer(WorkspaceNS, "small.txt"); err != nil || string(b) != "hello" {
+		t.Fatalf("serving a file under the cap: %q %v", b, err)
+	}
+
+	var mu sync.Mutex
+	var puts []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		puts = append(puts, r.Method+" "+r.URL.Path)
+		mu.Unlock()
+	}))
+	defer ts.Close()
+	p := &Peer{ID: "ffffffffffffffff", Name: "b", Addr: strings.TrimPrefix(ts.URL, "http://")}
+	eng.pushTo(p, huge)
+	eng.pushTo(p, "@workspace/small.txt")
+	mu.Lock()
+	defer mu.Unlock()
+	if len(puts) != 1 || puts[0] != "PUT /v1/peer/file/@workspace/small.txt" {
+		t.Fatalf("only the file under the cap is pushed, got %v", puts)
+	}
+}
+
+func TestScanDropsOversizedEntryNoPeerHolds(t *testing.T) {
+	eng, dir := newWorkspaceEngine(t)
+	self := eng.cfg.Self.ID
+	os.MkdirAll(filepath.Join(dir, "appdata"), 0o755)
+
+	// stamped once on a file over the cap, as LocalWrite used to: no peer
+	// could take that version and there is none before it
+	fresh, size, mtime := writeHuge(t, dir, "fresh.bin")
+	eng.man.Bump(fresh, self, false, size, mtime)
+	// written twice: a peer may hold the first, so the history stays
+	twice, size, mtime := writeHuge(t, dir, "twice.bin")
+	eng.man.Bump(twice, self, false, 5, 1)
+	eng.man.Bump(twice, self, false, size, mtime)
+	// stamped while small and grown since: the version the peers hold
+	grown, _, _ := writeHuge(t, dir, "grown.bin")
+	eng.man.Bump(grown, self, false, 5, 1)
+	// resolved against a peer's version of the same file
+	shared, size, mtime := writeHuge(t, dir, "shared.bin")
+	eng.man.Apply(shared, Version{Vec: map[string]int64{self: 1, "ffffffffffffffff": 1}}, size, mtime)
+
+	before := eng.man.Snapshot()
+	eng.ScanLocal()
+	if _, ok := eng.man.Get(fresh); ok {
+		t.Fatal("an entry no peer can hold must be dropped, with no tombstone left")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "workspace", "fresh.bin")); err != nil {
+		t.Fatalf("the file itself stays: %v", err)
+	}
+	for _, key := range []string{twice, grown, shared} {
+		if v, ok := eng.man.Get(key); !ok || !v.SameVersion(before[key]) {
+			t.Fatalf("%s keeps its version %+v, got %+v %v", key, before[key], v, ok)
+		}
+	}
+	reloaded, err := LoadManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reloaded.Get(fresh); ok {
+		t.Fatal("the drop must be saved")
+	}
+	if _, ok := reloaded.Get(twice); !ok {
+		t.Fatal("the kept entries must be saved with it")
 	}
 }

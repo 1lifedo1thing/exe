@@ -42,8 +42,12 @@ func ParseVersion(verB64 string, deleted bool) Version {
 const WorkspaceNS = "@workspace"
 
 // maxSyncFile caps what sync will carry per file — the same 10 MB the file
-// APIs enforce, so a scan never pushes something the receiving side rejects.
+// APIs enforce, so nothing is versioned, pushed or served that the receiving
+// side rejects.
 const maxSyncFile = 10 << 20
+
+// errTooLarge is readSyncFile's refusal of a file over maxSyncFile.
+var errTooLarge = errors.New("file exceeds the sync cap")
 
 // EngineConfig wires the engine into the daemon.
 type EngineConfig struct {
@@ -424,14 +428,17 @@ func (e *Engine) filePath(key string) string {
 
 // LocalWrite versions a write that just landed through the app-data or
 // workspace API (app is WorkspaceNS for the latter) and pushes it to every
-// peer. Hidden paths (a move into .Trash) stay node-local.
+// peer. Hidden paths (a move into .Trash) stay node-local, and so does a
+// file over maxSyncFile, as the scanner leaves it: a workspace move brings
+// one here whatever its size, and a version stamped on it is one every
+// reconcile would offer the peers and none of them could take.
 func (e *Engine) LocalWrite(app, rel string) {
 	key := app + "/" + rel
 	if !e.validKey(key) {
 		return
 	}
 	fi, err := os.Stat(e.filePath(key))
-	if err != nil {
+	if err != nil || fi.Size() > maxSyncFile {
 		return
 	}
 	e.man.Bump(key, e.cfg.Self.ID, false, fi.Size(), fi.ModTime().UnixNano())
@@ -545,7 +552,13 @@ func (e *Engine) scanRoot(root, prefix string, seen map[string]bool) {
 			return nil
 		}
 		if fi.Size() > maxSyncFile {
-			return nil // stays local (but seen, so never tombstoned)
+			// stays local (but seen, so never tombstoned). An entry stamped
+			// on it before LocalWrite knew the cap goes: while it stands,
+			// every reconcile sends this file and every peer asks for it.
+			if e.man.DropUnshared(key, e.cfg.Self.ID, maxSyncFile) {
+				e.cfg.Logf("peer: %s is over the sync cap and stays local — dropped from the manifest", key)
+			}
+			return nil
 		}
 		if !e.man.Fingerprint(key, fi.Size(), fi.ModTime().UnixNano()) {
 			e.man.Bump(key, e.cfg.Self.ID, false, fi.Size(), fi.ModTime().UnixNano())
@@ -565,6 +578,21 @@ func peerFileURL(addr, key string) string {
 	return "http://" + addr + "/v1/peer/file/" + strings.Join(parts, "/")
 }
 
+// readSyncFile reads key's file for the wire. One over maxSyncFile is refused
+// on its size alone, before any of it is read or sent: the other side takes
+// the first 10 MB, turns it down, and the next reconcile would send it again.
+func (e *Engine) readSyncFile(key string) ([]byte, error) {
+	p := e.filePath(key)
+	fi, err := os.Stat(p)
+	if err != nil {
+		return nil, err
+	}
+	if fi.Size() > maxSyncFile {
+		return nil, errTooLarge
+	}
+	return os.ReadFile(p)
+}
+
 func (e *Engine) pushAll(key string) {
 	for _, p := range e.peers.List() {
 		e.pushTo(p, key)
@@ -581,7 +609,7 @@ func (e *Engine) pushTo(p *Peer, key string) {
 	}
 	var body []byte
 	if !v.Deleted {
-		b, err := os.ReadFile(e.filePath(key))
+		b, err := e.readSyncFile(key)
 		if err != nil {
 			return
 		}
@@ -649,7 +677,7 @@ func (e *Engine) FileForPeer(app, rel string) ([]byte, Version, error) {
 	if !ok || v.Deleted {
 		return nil, Version{}, os.ErrNotExist
 	}
-	b, err := os.ReadFile(e.filePath(key))
+	b, err := e.readSyncFile(key)
 	if err != nil {
 		return nil, Version{}, err
 	}

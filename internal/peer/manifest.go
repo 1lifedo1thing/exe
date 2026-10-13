@@ -204,6 +204,23 @@ func (m *Manifest) Apply(key string, v Version, size, diskMTime int64) {
 	m.saveLocked()
 }
 
+// DropUnshared removes key's entry when it is origin's first and only write
+// of a file larger than max, and reports whether it did. No peer holds that
+// version — nothing that size is carried, and a vector of {origin: 1} has no
+// earlier one behind it — so no tombstone is owed: the entry goes as if it
+// had never been stamped.
+func (m *Manifest) DropUnshared(key, origin string, max int64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st, ok := m.files[key]
+	if !ok || st.Deleted || st.Size <= max || len(st.Vec) != 1 || st.Vec[origin] != 1 {
+		return false
+	}
+	delete(m.files, key)
+	m.saveLocked()
+	return true
+}
+
 // Fingerprint reports whether the on-disk stat still matches the recorded
 // state; false means the file changed behind the API's back.
 func (m *Manifest) Fingerprint(key string, size, diskMTime int64) bool {
