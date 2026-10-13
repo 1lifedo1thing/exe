@@ -8894,7 +8894,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
         : s.state === "done" ? "\nfinished its turn — waiting for you"
         : "\nrang the bell while no window was showing it";
       const row = el("div", { class: "sess-row" + (s.name === current ? " sel" : "") + (s.title ? "" : " untitled"),
-        title: sessTitle(s) + why + (s.created ? "\nstarted " + new Date(s.created * 1000).toLocaleString() : "") });
+        title: sessTitle(s) + (s.name ? "\n" + s.name : "") + why + (s.created ? "\nstarted " + new Date(s.created * 1000).toLocaleString() : "") });
       if (wants) row.append(sessBell());
       else if (working) row.append(el("span", { class: "sess-live" }));
       row.append(el("span", { class: "t" }, sessTitle(s)));
@@ -9008,7 +9008,8 @@ function openHostTermWin(app, cmd, vm, termSess) {
   // the window, like Search, with what the daemon reads out of the
   // conversation's transcript (claudeinfo.go) — its summary, the first
   // and the latest prompt, turns and replies, tokens, models, when it
-  // started and was last written, its folder — under the row's title.
+  // started and was last written, its folder — and the session's name,
+  // the one to search for — under the row's title.
   // The daemon answers first and the dialog opens filled, so nothing in
   // it moves; the status line says so while a long transcript is read.
   // Archive… is the row's own, for a session of the column's; a
@@ -9027,7 +9028,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
     bar.append(el("div", { class: "stripe" }), el("div", { class: "title" }, "Info"), el("div", { class: "stripe" }));
     const grid = el("div", { class: "gi-grid si-grid" });
     for (const [key, label] of [["summary", "Summary"], ["prompt", "First prompt"], ["last", "Last prompt"], ["turns", "Turns"],
-      ["tokens", "Tokens"], ["models", "Model"], ["created", "Started"], ["activity", "Last active"], ["cwd", "Where"]]) {
+      ["tokens", "Tokens"], ["models", "Model"], ["created", "Started"], ["activity", "Last active"], ["cwd", "Where"], ["session", "Session"]]) {
       infoEls[key] = el("span", { class: "si-" + key });
       grid.append(el("b", {}, label + ":"), infoEls[key]);
     }
@@ -9084,6 +9085,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
     infoEls.created.textContent = when(r.created);
     infoEls.activity.textContent = when(r.activity);
     infoEls.cwd.textContent = dash(r.cwd);
+    infoEls.session.textContent = s ? s.name : "none — not in this window";
     infoEls.archive.hidden = !s;
     infoEls.archive._s = s || null;
     infoVeil.hidden = false;
@@ -9093,7 +9095,8 @@ function openHostTermWin(app, cmd, vm, termSess) {
   // Search, beside New in the Claude Code window: a modal dialog of the
   // window's own — a veil over its frame, so the desk's other windows go
   // on working — that finds a conversation by the words of its title, its
-  // first prompt or its folder. It lists the column's sessions and, under
+  // first prompt or its folder, and a session of the column's by its name
+  // too (exe-claude-90). It lists the column's sessions and, under
   // a rule, every conversation on this machine that no session holds (the
   // daemon's ?threads=all): the ones started elsewhere and the archived
   // ones, past the latest ten the column shows. Every word typed must be
@@ -9133,7 +9136,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
     const rowOf = (r, i) => {
       const s = r.s, t = r.t;
       const d = el("div", { class: "sf-row", title: s
-        ? sessTitle(s) + (s.created ? "\nstarted " + new Date(s.created * 1000).toLocaleString() : "") + "\na session in this window"
+        ? sessTitle(s) + (s.created ? "\nstarted " + new Date(s.created * 1000).toLocaleString() : "") + "\n" + (s.name ? "the session " + s.name : "a session") + " in this window"
         : threadTitle(t) + (t.prompt ? "\n“" + t.prompt + "”" : "")
           + "\nstarted in " + t.origin + " " + sessWhen(t.created) + (t.cwd ? ", in " + t.cwd : "")
           + (t.open ? "\nstill open in " + t.origin : "") + "\ncontinues here, in a session of its own" });
@@ -9146,7 +9149,9 @@ function openHostTermWin(app, cmd, vm, termSess) {
         if (wants) m.append(sessBell());
         else if (off && s.working) m.append(el("span", { class: "sess-live" }));
       } else m.append(t.working || t.open ? el("span", { class: "sess-live" }) : sessAway());
-      const dir = t && t.cwd ? t.cwd.split("/").filter(Boolean).pop() || "/" : "";
+      // the small text: a session's name and its day, a conversation's
+      // folder and its day
+      const dir = s ? s.name || "" : t.cwd ? t.cwd.split("/").filter(Boolean).pop() || "/" : "";
       const when = (s ? s.created : t.created) ? sessDay(s ? s.created : t.created) : "";
       d.append(m, el("span", { class: "t" + ((s ? s.title : t.title) ? "" : " untitled") }, s ? sessTitle(s) : threadTitle(t)),
         el("span", { class: "s" }, [dir, when].filter(Boolean).join(" · ")));
@@ -9164,7 +9169,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
       }
       const words = q.value.toLowerCase().split(/\s+/).filter(Boolean);
       const has = (...texts) => { const hay = texts.join("\n").toLowerCase(); return words.every(x => hay.includes(x)); };
-      const here = data.sessions.filter(s => has(sessTitle(s))).map(s => ({ s }));
+      const here = data.sessions.filter(s => has(sessTitle(s), s.name || "")).map(s => ({ s }));
       const away = data.threads.filter(t => has(threadTitle(t), t.prompt || "", t.cwd || "")).map(t => ({ t }));
       found = [...here, ...away];
       const total = data.sessions.length + data.threads.length;

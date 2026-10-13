@@ -11,3 +11,4 @@ before it said is kept in CHANGELOG.md.
 - **Mac OS X** has an **Agent** button: a Chat that works inside Tiger and uploads Workspace files.
 - **Get Info** on a Claude Code session row: summary, turns, tokens, models, dates; **Archive…** beside **OK**.
 - On a phone, a picture window zooms: pinch the picture or double-tap it, and drag it about while zoomed.
+- **Search** in the Claude Code window finds a session by its name too (`exe-claude-90`); its rows and **Get Info** say the name.

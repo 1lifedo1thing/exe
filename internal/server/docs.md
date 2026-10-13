@@ -823,6 +823,7 @@ you archive it:
 | **Tokens** | What the replies cost: the input the model read, the prompt cache included, and the output it wrote; under it, how much of the input came from the cache and how much was written to it. |
 | **Model** | The models that replied, in the order they first did. |
 | **Started**, **Last active**, **Where** | When it began, when the transcript was last written, and its folder. |
+| **Session** | The session's name in the column, such as `exe-claude-90`: what **Search** finds it by. A conversation no session holds says so. |
 
 - The row is only asked about: the window stays on the session it was
   showing.
@@ -884,7 +885,9 @@ the window that lists every conversation on this machine:
 
 Type words to narrow the list. A conversation stays when every word is found
 in its title, its first prompt or its folder, in any case and inside longer
-words. A row says the conversation's folder and the day it started; hover it
+words; a session of the column's also by its name, so `exe-claude-90` or
+`90` finds that session. A session's row says its name and the day it
+started, any other conversation's row its folder and the day; hover a row
 for the rest.
 
 | To | Do this |
