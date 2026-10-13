@@ -899,6 +899,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   An app opens another with `{exe:"open-app", app, path}`: the desk opens
   that app's window with `?path=` on a first open, or posts `{exe:"open",
   path}` into the window already there (Planet hands a post to the Writer).
+  `{exe:"view-image", url, name}` opens a picture in a PictureViewer window
+  of the desk's (a hub embed, a Projects attachment): `url` is the whole
+  http(s) address, fetched by the desk itself, and `name` the title.
   `{exe:"close"}` puts the app's own window away (Welcome's OK). A system
   app — one embedded in the binary, never a disk bundle — may also ask for
   something of the desktop's with `{exe:"desk", act, args}`: `act` is one
