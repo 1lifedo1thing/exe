@@ -560,7 +560,8 @@ fullscreen, one at a time. They cannot be moved or resized there.
 - In Todo and Weather a finger scrolls the list. To move a row, press and
   hold it for half a second until it tints, then drag it to its new place.
 - A picture window swipes down to close, the window under it showing through
-  the gap as it goes.
+  the gap as it goes. Pinch the picture to zoom it, or double-tap it; zoomed
+  in, a finger drags it about, and a double tap brings it back.
 
 ### Install the desktop as an app
 
@@ -3331,8 +3332,9 @@ A click anywhere on a post in the feed, its words included, opens its
 thread. A link, a button, a card, a player and a to-do box of your own
 keep their own click, and dragging to select words opens nothing.
 
-Click a picture to see it in a window of its own; on a phone, swipe that
-window down to put it away and come back to the feed.
+Click a picture to see it in a window of its own; on a phone, pinch or
+double-tap it to zoom in, and swipe the window down to put it away and come
+back to the feed.
 
 ### Threads and replies
 

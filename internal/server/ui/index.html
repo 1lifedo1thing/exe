@@ -1578,6 +1578,13 @@ body.mobile .tbox.close::before { content: ""; position: absolute; inset: -9px; 
    shifts by the pixel a border would take */
 body.mobile .image-window { transition: transform .16s ease-out; }
 body.mobile #desktop .window.image-window.lifted { box-shadow: 0 -1px 0 var(--black); }
+/* and the picture in it zooms under a pinch or a double tap and drags about
+   while zoomed (wireImagePinch): the box takes every touch, so the browser
+   never zooms the page from it, and the picture scales from its own
+   top-left corner, where the maths starts; the box is the corner's
+   offsetParent so that corner is read off offsetLeft/Top */
+body.mobile .win-frame > .iv-box { position: relative; touch-action: none; }
+body.mobile .iv-box img { transform-origin: 0 0; }
 /* grow-box-resizable content tracks the viewport instead of a saved height */
 body.mobile .win-frame > .app-frame,
 body.mobile .win-frame > .finder-icons,
@@ -7638,7 +7645,7 @@ function openImageWin(path, fromWin, name) {
     wireGrow(w.querySelector(".grow-box"), w, w.querySelector(".iv-box"), 240, { minH: 120 });
     $("#desktop").append(w);
     initWindow(w);
-    if (IS_MOBILE) wireImageSwipe(w);
+    if (IS_MOBILE) { wireImagePinch(w); wireImageSwipe(w); }
   }
   openWin(w);
   loadImage(w);
@@ -7670,6 +7677,7 @@ async function loadImage(w) {
     };
     img.src = w._imgURL;
     box.replaceChildren(img);
+    if (w._ivReset) w._ivReset();
   } catch (e) { dims.textContent = e.message; }
 }
 // A picture window on a phone is dismissed by swiping it down, the way a
@@ -7679,9 +7687,9 @@ async function loadImage(w) {
 // which on a phone brings back the window it covered — the Hub app's
 // feed, where the picture was tapped. Nothing in the window scrolls, so a
 // downward drag is ours to take; the axis is settled at 6px like the
-// Newsfeed's swipe, so a sideways drag and a second finger (pinch zoom)
-// are left to the browser, and a touch that starts on the close box is
-// the close box's.
+// Newsfeed's swipe, so a sideways drag and a second finger (the pinch,
+// wireImagePinch's) are left alone, and a touch that starts on the close
+// box is the close box's.
 function wireImageSwipe(w) {
   const FAR = 90, FLICK = 40, QUICK = 300;
   let sx = 0, sy = 0, dy = 0, t0 = 0, down = null, under = null;
@@ -7717,8 +7725,10 @@ function wireImageSwipe(w) {
   // a pinch-zoomed page pans with one finger, and the desktop allows the
   // pinch (its viewport meta sets neither user-scalable nor a maximum
   // scale): while the page is zoomed in, the pan is the browser's and the
-  // picture stays put (Codex found this one on the patch)
-  const zoomed = () => !!window.visualViewport && window.visualViewport.scale > 1.01;
+  // picture stays put (Codex found this one on the patch). A zoomed
+  // picture pans the same way, and that finger is wireImagePinch's.
+  const zoomed = () => (!!window.visualViewport && window.visualViewport.scale > 1.01)
+    || (w._ivZoomed && w._ivZoomed());
   w.addEventListener("touchstart", e => {
     if (e.touches.length !== 1 || zoomed() || e.target.closest(".tbox")) { down = false; rest(); return; }
     sx = e.touches[0].clientX; sy = e.touches[0].clientY;
@@ -7746,6 +7756,124 @@ function wireImageSwipe(w) {
   // a drag the browser takes away — a system gesture, a call arriving — is
   // no dismissal however far it went: the window springs back
   w.addEventListener("touchcancel", () => settle(true), { passive: true });
+}
+// A picture on a phone zooms the way one does in a phone's photo viewer —
+// Livid asked for it after the swipe. A pinch scales it about the fingers,
+// a double tap takes it to its own pixels (at least twice over) and the
+// next one back, and while it is larger than its box one finger drags it
+// about, kept covering the box so no white edge shows; smaller than the
+// box it stays centred. The box takes every touch (touch-action: none, and
+// each move is prevented), so the browser never zooms the page from it,
+// and the swipe that closes the window stands down while the picture is
+// zoomed — that finger is the pan's. A pinch past the limits goes a little
+// way and springs back to them when the fingers lift. The transform is a
+// translate then a scale from the picture's top-left corner, where the
+// maths starts; offsetLeft/Top give that corner's laid-out place in the
+// box whatever the transform says.
+function wireImagePinch(w) {
+  const box = w.querySelector(".iv-box");
+  const MAXX = 4, GIVE = 1.4, DBL = 300, TAP = 12;
+  let s = 1, tx = 0, ty = 0;      // the picture's transform
+  let img = null, fit = null;     // the picture, and its laid-out box inside ours
+  let grip = null;                // the gesture under way
+  let moved = false, tapAt = 0, tapX = 0, tapY = 0;
+  const pageZoomed = () => !!window.visualViewport && window.visualViewport.scale > 1.01;
+  // as far as its own pixels, and at least four times over
+  const maxScale = () => fit ? Math.max(MAXX, img.naturalWidth / fit.w) : MAXX;
+  const measure = () => {
+    img = box.querySelector("img");
+    if (!img || !img.naturalWidth || !img.offsetWidth) { fit = null; return false; }
+    fit = { x: img.offsetLeft, y: img.offsetTop, w: img.offsetWidth, h: img.offsetHeight,
+      bw: box.clientWidth, bh: box.clientHeight };
+    return true;
+  };
+  // a scaled picture wider than the box covers it; one narrower sits
+  // centred — and at 1 the layout has it centred already, to the pixel
+  const clamp = () => {
+    if (s === 1) { tx = ty = 0; return; }
+    const vw = fit.w * s, vh = fit.h * s;
+    tx = vw <= fit.bw ? (fit.bw - vw) / 2 - fit.x : Math.min(-fit.x, Math.max(fit.bw - vw - fit.x, tx));
+    ty = vh <= fit.bh ? (fit.bh - vh) / 2 - fit.y : Math.min(-fit.y, Math.max(fit.bh - vh - fit.y, ty));
+  };
+  const apply = glide => {
+    if (!img) return;
+    img.style.transition = glide ? "transform .2s ease-out" : "none";
+    img.style.transform = s === 1 && !tx && !ty ? "" : `translate(${tx}px, ${ty}px) scale(${s})`;
+  };
+  // the picture point that was under p0 (at scale s0, offset t0) goes under p1 at s1
+  const about = (p0, s0, t0, p1, s1) => {
+    s = s1;
+    tx = p1.x - fit.x - (p0.x - fit.x - t0.x) / s0 * s1;
+    ty = p1.y - fit.y - (p0.y - fit.y - t0.y) / s0 * s1;
+    clamp();
+  };
+  const pt = t => { const r = box.getBoundingClientRect(); return { x: t.clientX - r.left, y: t.clientY - r.top }; };
+  const mid = ts => { const a = pt(ts[0]), b = pt(ts[1]); return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+  const span = ts => Math.hypot(ts[0].clientX - ts[1].clientX, ts[0].clientY - ts[1].clientY);
+  // the gesture restarts from the fingers down now: two pinch, one drags
+  const take = ts => {
+    if (!fit) { grip = null; return; }
+    if (ts.length >= 2) grip = { two: true, p: mid(ts), d: span(ts), s, t: { x: tx, y: ty } };
+    else if (ts.length === 1) grip = { two: false, p: pt(ts[0]), s, t: { x: tx, y: ty } };
+    else grip = null;
+  };
+  // a pinch that went past the limits comes back to them
+  const settle = () => {
+    if (!fit) return;
+    const s1 = Math.min(maxScale(), Math.max(1, s));
+    if (s1 === s) return;
+    const c = { x: fit.bw / 2, y: fit.bh / 2 };
+    about(c, s, { x: tx, y: ty }, c, s1);
+    apply(true);
+  };
+  w._ivZoomed = () => s > 1.01;
+  // a picture newly loaded starts at its fitted size (loadImage)
+  w._ivReset = () => { s = 1; tx = ty = 0; grip = null; img = box.querySelector("img"); apply(false); };
+  box.addEventListener("touchstart", e => {
+    // a page the browser has zoomed pans with one finger: that is its gesture
+    if (pageZoomed()) { grip = null; return; }
+    if (e.touches.length === 1) { moved = false; measure(); }
+    take(e.touches);
+  }, { passive: true });
+  box.addEventListener("touchmove", e => {
+    if (pageZoomed() || !grip) return;
+    e.preventDefault(); // nothing in the box scrolls, and the page is not to zoom from it
+    const ts = e.touches;
+    if (grip.two && ts.length >= 2) {
+      const want = grip.s * span(ts) / grip.d, top = maxScale();
+      about(grip.p, grip.s, grip.t, mid(ts), want < 1 ? Math.max(1 / GIVE, want) : Math.min(top * GIVE, want));
+      moved = true;
+    } else if (!grip.two && ts.length === 1) {
+      const p = ts[0], q = pt(p);
+      if (!moved && Math.hypot(q.x - grip.p.x, q.y - grip.p.y) > TAP) moved = true;
+      if (s <= 1.01) return; // not zoomed: the finger is the swipe's
+      tx = grip.t.x + q.x - grip.p.x; ty = grip.t.y + q.y - grip.p.y;
+      clamp();
+    } else return;
+    apply(false);
+  }, { passive: false });
+  box.addEventListener("touchend", e => {
+    if (!grip) return;
+    if (e.touches.length) { take(e.touches); return; } // one finger of two lifted: the other drags on
+    const was = grip;
+    grip = null;
+    settle();
+    if (was.two || moved || !e.changedTouches.length) return;
+    // two quick taps on the one spot: in to the picture's own pixels, or back out
+    const q = pt(e.changedTouches[0]), now = Date.now();
+    if (now - tapAt < DBL && Math.hypot(q.x - tapX, q.y - tapY) < 30) {
+      tapAt = 0;
+      about(q, s, { x: tx, y: ty }, q, s > 1.01 ? 1 : Math.min(maxScale(), Math.max(2, img.naturalWidth / fit.w)));
+      apply(true);
+    } else { tapAt = now; tapX = q.x; tapY = q.y; }
+  }, { passive: true });
+  box.addEventListener("touchcancel", () => { grip = null; settle(); }, { passive: true });
+  // the box changes shape (the phone turns): a zoomed picture keeps its
+  // scale and is kept covering the new box
+  new ResizeObserver(() => {
+    if (grip || s === 1 || !measure()) return;
+    clamp(); apply(false);
+  }).observe(box);
 }
 // ---- movie windows: QuickTime for the Workspace ----
 // A movie or sound from Finder opens over the movie controller traced
