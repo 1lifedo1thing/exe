@@ -15,7 +15,7 @@ import (
 // The schemas mirror what the apps write (exe-apps Todo, Notes, World Clock):
 //
 //	todos.json   {"version":2,"items":[{id,text,done,created,updated,order?,deleted?}]}
-//	notes.json   {"notes":[{id,text,color?,created,updated,deleted?}]}
+//	notes.json   {"notes":[{id,text,color?,created,updated,deleted?,place?,placed?}]}
 //	             (color is the sheet's Stickies colour name: yellow, blue…)
 //	clocks.json  {"version":1,"items":[{id,name,region,tz,created,updated,deleted?}]}
 //	             (World Clock only — the City app has a cities.json of its own shape)
@@ -176,6 +176,22 @@ type noteItem struct {
 	Created int64  `json:"created"`
 	Updated int64  `json:"updated"`
 	Deleted int64  `json:"deleted,omitempty"`
+	// A note stuck to the desk as a Sticky: where its window stands (desk
+	// pixels: its corner, its width, its sheet's height, and whether it is
+	// windowshaded), stamped by `placed` on its own — a drag never touches
+	// `updated`, so the text and the place merge apart: each from whichever
+	// side changed it last. No place is a note on the pad alone, and taking
+	// it off the desk bumps `placed` with no place, so that wins too.
+	Place  *notePlace `json:"place,omitempty"`
+	Placed int64      `json:"placed,omitempty"`
+}
+
+type notePlace struct {
+	X      int  `json:"x"`
+	Y      int  `json:"y"`
+	W      int  `json:"w"`
+	H      int  `json:"h"`
+	Shaded bool `json:"shaded,omitempty"`
 }
 
 // noteDoc drops any legacy "sel" field on re-serialize: selection is
@@ -212,15 +228,29 @@ func mergeNotes(local, remote []byte) ([]byte, bool) {
 	}
 	for _, n := range b.Notes {
 		old, seen := m[n.ID]
-		if !seen || wins(n.Updated, n.Deleted != 0, old.Updated, old.Deleted != 0, n, old) {
+		if !seen {
 			m[n.ID] = n
+			continue
 		}
+		pick, other := old, n
+		if wins(n.Updated, n.Deleted != 0, old.Updated, old.Deleted != 0, n, old) {
+			pick, other = n, old
+		}
+		// the place goes by its own stamp, whichever side the text came from
+		if other.Placed > pick.Placed {
+			pick.Place, pick.Placed = other.Place, other.Placed
+		}
+		m[n.ID] = pick
 	}
 	now := time.Now().UnixMilli()
 	notes := make([]noteItem, 0, len(m))
 	for _, n := range m {
 		if n.Deleted != 0 && now-n.Deleted > tombstoneTTL.Milliseconds() {
 			continue
+		}
+		if n.Deleted != 0 {
+			// a tombstone holds nothing it said, its place included
+			n.Place, n.Placed = nil, 0
 		}
 		notes = append(notes, n)
 	}

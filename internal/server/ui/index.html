@@ -428,6 +428,22 @@ body.mobile #cstrip { z-index: 5; }
 /* desktop app windows (~/.exe/apps) host their UI in an iframe set into the
    sunken frame; the app page brings its own Platinum styling */
 .app-frame { display: block; border: 0; width: 100%; height: 400px; background: var(--g200); }
+/* Stickies: a note stuck to the desk (Notes' Stick to Desk). The window
+   is the sheet: a title bar in the note's colour, its stripes in the
+   colour's edge, with the close box and the windowshade box, and under
+   one line the Notes page on that one note, frameless. --stk and
+   --stk-edge are set per window from the note's colour. */
+.sticky-window { min-width: 140px; background: var(--stk, #ffffcc); }
+.sticky-window .titlebar { background: var(--stk, #ffffcc); }
+.sticky-window .titlebar .stripe { background-color: var(--stk, #ffffcc);
+  background-image: linear-gradient(#fff, #fff 50%, var(--stk-edge, #ffcc00) 50%, var(--stk-edge, #ffcc00)); }
+.sticky-window .titlebar .stripe::before {
+  background-image: linear-gradient(#fff, #fff 50%, var(--stk, #ffffcc) 50%, var(--stk, #ffffcc));
+  border-bottom-color: var(--stk, #ffffcc); }
+.sticky-window .titlebar .stripe::after {
+  background-image: linear-gradient(var(--stk, #ffffcc), var(--stk, #ffffcc) 50%, var(--stk-edge, #ffcc00) 50%, var(--stk-edge, #ffcc00)); }
+.sticky-window .win-frame { margin: 0; border: 0; border-top: 1px solid var(--black); background: var(--stk, #ffffcc); }
+.sticky-window .app-frame { background: var(--stk, #ffffcc); }
 /* Full screen inside a Home Screen web app: preserve inline window geometry
    so leaving this view returns to the same desktop window. */
 #desktop.mac-fullscreen { z-index: 6000; }
@@ -3074,7 +3090,7 @@ function openWindows() {
   return [...document.querySelectorAll("#desktop .window")]
     .filter(w => !w.hidden || (IS_MOBILE && mobileStack.includes(w.id)));
 }
-const winLabel = w => (w.querySelector(".title") || {}).textContent || w.id;
+const winLabel = w => (w.querySelector(".title") || {}).textContent || w._label || w.id;
 function initWindow(w) {
   w.addEventListener("mousedown", () => { if (!w.closest(".overlay")) focusWin(w); });
   const tb = w.querySelector(".titlebar");
@@ -3834,6 +3850,8 @@ function winSnapshot() {
     // a one-off Terminal (no tmux) is gone with its link, and a dead one
     // (its shell exited) has nothing to come back to — neither is saved
     if (w.id.startsWith("win-term-") && (!isTermSessWin(w.id) || w._dead)) return;
+    // a sticky stands where its note says (notes.json), on every desk
+    if (w.classList.contains("sticky-window")) return;
     // style.*, not offset*: hidden windows are display:none, which reads 0
     st[w.id] = {
       l: parseInt(w.style.left) || 0, t: parseInt(w.style.top) || 0,
@@ -5749,6 +5767,7 @@ async function loadApps() {
     if (fr._ver === undefined && a.version) fr._ver = a.version;
   }
   appStaleCheck();
+  stickiesSoon();
 }
 // An app window's address: the token, and on a phone ?mobile=1 so the app
 // can size its chrome for one (the Hub swaps its composer labels for
@@ -5799,7 +5818,7 @@ function openAppWin(name, args) {
   if (!w) {
     const app = appsList.find(a => a.name === name) || {};
     w = el("div", { class: "window app-window", id });
-    const n = document.querySelectorAll("#desktop .app-window").length;
+    const n = document.querySelectorAll("#desktop .app-window:not(.sticky-window)").length;
     w.style.left = (120 + n * 24) + "px";
     w.style.top = (70 + n * 20) + "px";
     w.innerHTML = `<div class="titlebar"><button class="tbox close"></button><div class="stripe"></div>
@@ -7423,6 +7442,7 @@ function winIcon(w) {
     const app = appsList.find(a => a.name === id.slice(8));
     return appIcon(app, 16);
   }
+  if (id.startsWith("win-sticky-")) return appIcon(appsList.find(a => a.name === STICKY_APP), 16);
   if (id.startsWith("win-ws-")) return at16(FOLDER_ICON);
   if (id.startsWith("win-ed-")) return at16(isPlainTextFile(decodeURIComponent(id.slice(7))) ? TEXT_ICON : DOC_ICON);
   if (id.startsWith("win-iv-")) return at16(IMAGE_ICON);
@@ -13020,7 +13040,7 @@ function appDataSubscribe() {
     const resync = () => document.querySelectorAll(".app-window .app-frame").forEach(fr => {
       if (fr.contentWindow && !appFrameStale(fr)) fr.contentWindow.postMessage({ exe: "data-resync" }, location.origin);
     });
-    loadApps().then(resync, resync);
+    loadApps().then(resync, resync); // loadApps rereads the stickies too
   };
   appES.onmessage = e => {
     let ev;
@@ -13056,16 +13076,153 @@ function appDataSubscribe() {
     // Forward even to a closed window: closeWin only hides the iframe, which
     // keeps running, so a hidden app must still hear the change or it would
     // reopen with stale in-memory state and clobber the synced-in doc.
-    const w = document.getElementById("win-app-" + canonicalAppName(ev.app));
-    const fr = w && w.querySelector(".app-frame");
-    if (fr && fr.contentWindow) {
-      fr.contentWindow.postMessage(
+    const name = canonicalAppName(ev.app);
+    const w = document.getElementById("win-app-" + name);
+    for (const fr of [w && w.querySelector(".app-frame"), ...stickyFrames(name)]) {
+      if (fr && fr.contentWindow) fr.contentWindow.postMessage(
         { exe: "data-changed", path: ev.path, deleted: !!ev.deleted, client: ev.client || "" },
         location.origin);
     }
+    // a note put on the desk, moved or taken off, here or on a peer
+    if (name === STICKY_APP && ev.path === "notes.json") stickiesSoon();
   };
 }
 document.addEventListener("exe-token", () => { if (appES) appDataSubscribe(); });
+
+// ---- Stickies: notes stuck to the desk ----
+// Notes' Stick to Desk gives a note a place (notes.json: `place`, with a
+// stamp of its own, `placed`), and the desk opens the Notes page a second
+// time on that one note, in a window that is the sheet: the note's
+// colour for a title bar, with a close box that takes the note off the
+// desk and a windowshade box, and the page under one line, frameless.
+// Every keystroke goes through Notes' own writer. The desk reads
+// notes.json itself — at load, after every change to it, and when the
+// change stream comes back — and opens, places and closes the stickies to
+// match; a place is clamped into this viewport on the way in, and the
+// clamp is not written back, so a smaller desk leaves a larger desk's
+// placement alone. A drag, a resize or a windowshade here is told to the
+// sticky's own frame ({exe:"placed"}), which writes it, and until that
+// write comes back as a change an older place read from disk is not
+// applied over it (a change from the pad between the drag and its save
+// would send the sheet back and forth). A phone opens none: its windows
+// fill the screen.
+const STICKY_APP = "Notes";
+// the Notes app's paper colours, each with its edge (Notes/index.html,
+// TINTS and EDGES); white is Note Pad's grey-edged sheet
+const STICKY_TINTS = { white: ["#ffffff", "#999999"], yellow: ["#ffffcc", "#ffcc00"], blue: ["#ccffff", "#00ccff"],
+  green: ["#ccffcc", "#66ff66"], pink: ["#ffcccc", "#ff9999"], purple: ["#ccccff", "#9999ff"], gray: ["#eeeeee", "#bbbbbb"] };
+let stickiesT = 0, stickiesBusy = null, stickiesAgain = false;
+const stickyFrames = name => name === STICKY_APP
+  ? [...document.querySelectorAll("#desktop .sticky-window .app-frame")] : [];
+const stickyPlace = n => {
+  const p = n && !n.deleted && n.place;
+  return p && typeof p === "object" && [p.x, p.y, p.w, p.h].every(v => Number.isFinite(+v)) ? p : null;
+};
+const stickySame = (a, b) => !!a && !!b && +a.x === +b.x && +a.y === +b.y && +a.w === +b.w && +a.h === +b.h && !a.shaded === !b.shaded;
+function stickiesSoon() { clearTimeout(stickiesT); stickiesT = setTimeout(stickiesLoad, 100); }
+async function stickiesLoad() {
+  clearTimeout(stickiesT);
+  if (IS_MOBILE || !appsList.some(a => a.name === STICKY_APP)) return;
+  if (stickiesBusy) { stickiesAgain = true; return; }
+  stickiesBusy = (async () => {
+    let notes;
+    try {
+      const r = await api("/v1/apps/" + encodeURIComponent(STICKY_APP) + "/data/notes.json", { cache: "no-store" });
+      notes = ((await r.json()) || {}).notes;
+    } catch (e) {
+      if (!/\b404\b|not found/i.test(e.message || "")) return; // a line that carries nothing: as it was
+      notes = [];
+    }
+    if (!Array.isArray(notes)) return;
+    const up = new Set();
+    for (const n of notes) {
+      if (!n || !n.id || !stickyPlace(n)) continue;
+      up.add(String(n.id));
+      stickyShow(n);
+    }
+    for (const w of document.querySelectorAll("#desktop .sticky-window")) {
+      if (up.has(w.dataset.note)) continue;
+      if (!w.hidden) closeWin(w); // the window beneath takes the front
+      w.remove();
+    }
+  })();
+  await stickiesBusy;
+  stickiesBusy = null;
+  if (stickiesAgain) { stickiesAgain = false; stickiesLoad(); }
+}
+function stickyShow(n) {
+  const id = "win-sticky-" + n.id, p = stickyPlace(n);
+  let w = document.getElementById(id);
+  if (!w) {
+    w = el("div", { class: "window app-window sticky-window", id });
+    w.dataset.app = STICKY_APP;
+    w.dataset.note = String(n.id);
+    w.innerHTML = `<div class="titlebar"><button class="tbox close" id="${id}-close"></button><div class="stripe"></div><button class="tbox shade"></button></div>
+      <div class="win-frame"><iframe class="app-frame"></iframe></div>`;
+    const fr = w.querySelector(".app-frame");
+    fr._args = { sticky: String(n.id) };
+    fr._ver = appVer(STICKY_APP); // the code this window runs (appStaleCheck)
+    fr.src = appFrameSrc(STICKY_APP, fr._args);
+    // behind the windows until it is clicked: a sticky comes with the
+    // desk, not over what is being worked on
+    w.style.zIndex = 9;
+    $("#desktop").append(w);
+    initWindow(w);
+    wireEdges(w, fr, 140, { minH: 40, hPad: 60 });
+    const tb = w.querySelector(".titlebar");
+    // the close box takes the note off the desk: the frame writes that,
+    // and the window goes for good when the change comes back
+    w.querySelector(".tbox.close").addEventListener("click", e => {
+      e.stopPropagation();
+      stickyTell(w, { exe: "unstick" });
+      closeWin(w);
+    });
+    // a drag, a resize or a windowshade is the note's to keep (the
+    // desk's own handlers, wired first, have moved the window by now)
+    tb.addEventListener("pointerup", e => { if (!e.target.closest(".tbox")) stickyPlaced(w); });
+    tb.addEventListener("dblclick", e => { if (!e.target.closest(".tbox")) stickyPlaced(w); });
+    w.querySelector(".tbox.shade").addEventListener("click", () => stickyPlaced(w));
+    for (const g of w.querySelectorAll(":scope > .win-edge")) g.addEventListener("pointerup", () => stickyPlaced(w));
+  }
+  const [tint, edge] = STICKY_TINTS[n.color] || STICKY_TINTS.white;
+  w.style.setProperty("--stk", tint);
+  w.style.setProperty("--stk-edge", edge);
+  const line = String(n.text || "").split("\n").find(l => l.trim());
+  w._label = line ? line.trim().slice(0, 40) : "Sticky";
+  // a place of this desk's own making, not yet back from disk, stands
+  if (w._want && Date.now() - w._want.at < 15000 && !stickySame(w._want.p, p)) return;
+  w._want = null;
+  if (w === winDragging) return;
+  const fr = w.querySelector(".app-frame");
+  w.style.width = Math.max(140, Math.min(window.innerWidth - 24, Math.round(+p.w))) + "px";
+  fr.style.height = Math.max(40, Math.min(window.innerHeight - 60, Math.round(+p.h))) + "px";
+  w.style.left = Math.round(+p.x) + "px";
+  w.style.top = Math.round(+p.y) + "px";
+  winClampPos(w);
+  w.classList.toggle("shaded", !!p.shaded);
+  w._last = stickyGeom(w);
+  if (w.hidden) { w.hidden = false; tellApp(w, "show"); }
+}
+function stickyGeom(w) {
+  const fr = w.querySelector(".app-frame");
+  const p = { x: parseInt(w.style.left) || 0, y: parseInt(w.style.top) || 0,
+    w: parseInt(w.style.width) || w.offsetWidth, h: parseInt(fr.style.height) || fr.offsetHeight };
+  if (w.classList.contains("shaded")) p.shaded = true;
+  return p;
+}
+// what the sticky's window now says, told to its note when it changed —
+// a click on the title bar that moved nothing writes nothing
+function stickyPlaced(w) {
+  const p = stickyGeom(w);
+  if (stickySame(p, w._last)) return;
+  w._last = p;
+  w._want = { p, at: Date.now() };
+  stickyTell(w, { exe: "placed", ...p });
+}
+function stickyTell(w, msg) {
+  const fr = w.querySelector(".app-frame");
+  if (fr && fr.contentWindow) { try { fr.contentWindow.postMessage(msg, location.origin); } catch (e) {} }
+}
 
 // ---- app windows follow their app's code ----
 // Each window remembers the version of the app it loaded (/v1/apps lists a
@@ -13082,7 +13239,7 @@ function appVer(name) {
   return (a && a.version) || undefined;
 }
 function appFrameStale(fr) {
-  const w = fr.closest(".app-window"), v = w && appVer(w.id.slice(8));
+  const w = fr.closest(".app-window"), v = w && appVer(w.dataset.app || w.id.slice(8));
   return !!v && fr._ver !== undefined && fr._ver !== v;
 }
 function appFrameBusy(w, fr) {
@@ -13103,7 +13260,7 @@ function appStaleCheck() {
   for (const fr of stale) {
     const w = fr.closest(".app-window");
     if (appFrameBusy(w, fr)) continue;
-    const name = w.id.slice(8);
+    const name = w.dataset.app || w.id.slice(8);
     fr._ver = appVer(name);
     // a closed window is told so again once its new page is up
     if (w.hidden) fr.addEventListener("load", () => { if (w.hidden) tellApp(w, "hide"); }, { once: true });

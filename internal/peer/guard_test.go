@@ -122,3 +122,39 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+// Codex's two-desk test (2026-10-14): one desk edits a sticky's text while
+// another drags it, each on a copy that has not seen the other's change.
+// The guard judges the place by its own stamp, so the save that lands
+// second keeps what it changed and takes the other's.
+func TestGuardJudgesAStickysPlaceByItsOwnStamp(t *testing.T) {
+	// the drag landed first; now the edit arrives on an old place
+	disk := `{"notes":[{"id":"a","text":"old","created":1,"updated":50,"place":{"x":300,"y":40,"w":220,"h":150},"placed":70}]}`
+	edit := `{"notes":[{"id":"a","text":"new","created":1,"updated":80,"place":{"x":10,"y":10,"w":220,"h":150},"placed":20}]}`
+	m, changed := guardNotes(t, disk, edit)
+	if !changed || m["a"]["text"] != "new" || m["a"]["placed"] != 70.0 || m["a"]["place"].(map[string]any)["x"] != 300.0 {
+		t.Fatalf("the newer words with the newer place: changed=%v %v", changed, m["a"])
+	}
+	// the edit landed first; now the drag arrives on old words
+	disk = `{"notes":[{"id":"a","text":"new","created":1,"updated":80,"place":{"x":10,"y":10,"w":220,"h":150},"placed":20}]}`
+	drag := `{"notes":[{"id":"a","text":"old","created":1,"updated":50,"place":{"x":300,"y":40,"w":220,"h":150},"placed":70}]}`
+	m, changed = guardNotes(t, disk, drag)
+	if !changed || m["a"]["text"] != "new" || m["a"]["placed"] != 70.0 || m["a"]["place"].(map[string]any)["x"] != 300.0 {
+		t.Fatalf("the drag survives an older copy of the words: changed=%v %v", changed, m["a"])
+	}
+	// at one `updated`, a window that took the note off the desk (no
+	// place, a newer `placed`) is not given the place back
+	disk = `{"notes":[{"id":"a","text":"t","created":1,"updated":50,"place":{"x":1,"y":2,"w":3,"h":4},"placed":20}]}`
+	off := `{"notes":[{"id":"a","text":"t","created":1,"updated":50,"placed":90}]}`
+	out, changed := GuardLocalWrite("Notes/notes.json", []byte(disk), []byte(off))
+	if changed || string(out) != off {
+		t.Fatalf("taking a note off the desk is stored as sent: changed=%v %s", changed, out)
+	}
+	// a writer from before Stickies saves the note at its stamp with no
+	// placement at all: the place is not its to drop
+	old := `{"notes":[{"id":"a","text":"t","created":1,"updated":50}]}`
+	m, changed = guardNotes(t, disk, old)
+	if !changed || m["a"]["placed"] != 20.0 || m["a"]["place"] == nil {
+		t.Fatalf("a place the writer never knew survives: changed=%v %v", changed, m["a"])
+	}
+}

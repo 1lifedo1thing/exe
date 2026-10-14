@@ -354,3 +354,37 @@ func TestMergeDraftsUnionTombstoneAndKey(t *testing.T) {
 		t.Fatalf("not canonical:\n%s\n%s", merged, again)
 	}
 }
+
+// A note's place on the desk (a Sticky) merges apart from its text, by its
+// own stamp: a drag on one node and an edit on another both survive, and
+// taking the note off the desk, being the newer placement, wins over an
+// older drag. A tombstone carries no place.
+func TestMergeNotesPlaceByItsOwnStamp(t *testing.T) {
+	// a: the newer text, an older place; b: older text, a newer place
+	a := []byte(`{"notes":[{"id":"n1","text":"new words","created":1,"updated":30,"place":{"x":10,"y":20,"w":220,"h":150},"placed":5}]}`)
+	b := []byte(`{"notes":[{"id":"n1","text":"old words","created":1,"updated":20,"place":{"x":300,"y":40,"w":200,"h":120,"shaded":true},"placed":25}]}`)
+	for _, pair := range [][2][]byte{{a, b}, {b, a}} {
+		merged, ok := MergeFile("Notes/notes.json", pair[0], pair[1])
+		if !ok {
+			t.Fatal("merge not ok")
+		}
+		var d noteDoc
+		json.Unmarshal(merged, &d)
+		if len(d.Notes) != 1 || d.Notes[0].Text != "new words" || d.Notes[0].Placed != 25 ||
+			d.Notes[0].Place == nil || d.Notes[0].Place.X != 300 || !d.Notes[0].Place.Shaded {
+			t.Fatalf("want the newer words with the newer place: %s", merged)
+		}
+	}
+	// taken off the desk after the drag: no place, the newer stamp
+	off := []byte(`{"notes":[{"id":"n1","text":"old words","created":1,"updated":20,"placed":40}]}`)
+	merged, _ := MergeFile("Notes/notes.json", a, off)
+	if bytes.Contains(merged, []byte(`"place"`)) || !bytes.Contains(merged, []byte(`"placed": 40`)) {
+		t.Fatalf("taking a note off the desk must win over an older drag: %s", merged)
+	}
+	// a deletion drops the place with the rest
+	gone := []byte(`{"notes":[{"id":"n1","text":"","created":1,"updated":50,"deleted":50}]}`)
+	merged, _ = MergeFile("Notes/notes.json", a, gone)
+	if bytes.Contains(merged, []byte(`"place`)) {
+		t.Fatalf("a tombstone carries no place: %s", merged)
+	}
+}

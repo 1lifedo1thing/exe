@@ -59,19 +59,40 @@ func GuardLocalWrite(key string, disk, incoming []byte) (doc []byte, changed boo
 			continue
 		}
 		su, du := stamp(rec, "updated"), stamp(d, "updated")
+		// a note's place on the desk (Notes' Stickies) has a stamp of its
+		// own, `placed`: judged apart from the text, so a window that
+		// dragged a sticky on an old copy of the note keeps the drag and
+		// takes the newer words, and one that typed on an old place keeps
+		// the words and takes the newer place
+		sp, dp := stamp(rec, "placed"), stamp(d, "placed")
 		switch {
 		case su < du:
+			if sp > dp {
+				d = clone(d)
+				takePlace(d, rec)
+			}
 			out = append(out, d)
 			changed = true
 		case su == du:
 			for k, v := range d {
+				if k == "place" || k == "placed" {
+					continue
+				}
 				if _, has := rec[k]; !has {
 					rec[k] = v
 					changed = true
 				}
 			}
+			if dp > sp {
+				takePlace(rec, d)
+				changed = true
+			}
 			out = append(out, rec)
 		default:
+			if dp > sp {
+				takePlace(rec, d)
+				changed = true
+			}
 			out = append(out, rec)
 		}
 	}
@@ -143,6 +164,25 @@ func parseRecordDoc(b []byte, field string) (map[string]any, []map[string]any, b
 		recs = append(recs, m)
 	}
 	return top, recs, true
+}
+
+// takePlace gives dst src's place on the desk, or none when src has none.
+func takePlace(dst, src map[string]any) {
+	for _, k := range []string{"place", "placed"} {
+		if v, ok := src[k]; ok {
+			dst[k] = v
+		} else {
+			delete(dst, k)
+		}
+	}
+}
+
+func clone(m map[string]any) map[string]any {
+	c := make(map[string]any, len(m))
+	for k, v := range m {
+		c[k] = v
+	}
+	return c
 }
 
 // stamp reads an epoch-ms field; absent or unreadable is 0.
