@@ -3249,6 +3249,10 @@ A file attached to an issue is kept in IPFS, which takes Kubo on this
 machine; without it everything else works. Anyone who learns such a
 file's address can fetch it, so attach nothing private.
 
+Click a picture under an issue to see it in a picture window. When the
+issue has more than one, **Left** and **Right** show the one before and
+the one after, and the window's top line says which it is, `2 of 5`.
+
 ## Joining desks together
 
 Joining pairs this exe with another one (say, your laptop's). From then on

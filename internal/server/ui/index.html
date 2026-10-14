@@ -675,6 +675,10 @@ body.mobile #menu-hint { display: none; }
   display: flex; justify-content: space-between; gap: 8px; }
 .iv-info span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .iv-info .iv-dims { flex: none; }
+/* "2 of 5" beside the dimensions while the window has a set of pictures to
+   step through (the arrow keys); the auto margin keeps it at the right */
+.iv-info .iv-count { flex: none; margin-left: auto; }
+.iv-info .iv-count:empty { display: none; }
 .iv-box { background: #fff; height: 300px; overflow: hidden;
   display: flex; align-items: center; justify-content: center; }
 .iv-box img { display: block; max-width: 100%; max-height: 100%; }
@@ -5883,8 +5887,16 @@ window.addEventListener("message", e => {
     revealTimer = null;
   } else if (e.data.exe === "view-image" && isWebURL(e.data.url || "")) {
     // apps have no window chrome of their own, so a clicked picture (a hub
-    // embed, say) opens in a desktop PictureViewer window via the bridge
-    openImageWin(e.data.url, w, typeof e.data.name === "string" ? e.data.name : "");
+    // embed, say) opens in a desktop PictureViewer window via the bridge.
+    // The app may send the pictures around it too (an issue's, in Projects)
+    // and the viewer's arrow keys then step through them; the click left the
+    // keyboard focus in the app's frame, so it is taken back for the desk,
+    // or the keys would land in the app. Focusing the window does it in
+    // WebKit as well as Chromium; a blur of the frame alone does not in
+    // WebKit (exe-05 measured it in Playwright's)
+    openImageWin(e.data.url, w, typeof e.data.name === "string" ? e.data.name : "", pictureSet(e.data.pictures));
+    window.focus();
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
   } else if (e.data.exe === "open-app" && typeof e.data.app === "string") {
     // an app asks for another app on a Workspace file: Planet hands a
     // post's index.md to the Writer. The app must be one the desk lists
@@ -7732,7 +7744,7 @@ function isArchiveFile(name) {
   const dot = name.lastIndexOf(".");
   return dot > 0 && ARC_EXT.has(name.slice(dot + 1).toLowerCase());
 }
-function openImageWin(path, fromWin, name) {
+function openImageWin(path, fromWin, name, pictures) {
   const id = "win-iv-" + encodeURIComponent(path);
   let w = document.getElementById(id);
   if (!w) {
@@ -7753,23 +7765,83 @@ function openImageWin(path, fromWin, name) {
       <div class="title"></div>
       <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
       <div class="win-frame">
-        <div class="iv-info"><span class="iv-path"></span><span class="iv-dims">…</span></div>
+        <div class="iv-info"><span class="iv-path"></span><span class="iv-count"></span><span class="iv-dims">…</span></div>
         <div class="iv-box"></div>
         ${GROW_TILE}
       </div>`;
-    w.querySelector(".title").textContent = name || path.split("/").pop();
-    w.querySelector(".iv-path").textContent = isWebURL(path)
-      ? new URL(path).host + " :" + (name || path.split("/").pop())
-      : "Workspace :" + path.split("/").join(" :");
-    w.dataset.path = path;
+    imageWinName(w, path, name);
     wireGrow(w.querySelector(".grow-box"), w, w.querySelector(".iv-box"), 240, { minH: 120 });
     $("#desktop").append(w);
     initWindow(w);
     if (IS_MOBILE) { wireImagePinch(w); wireImageSwipe(w); }
   }
+  // the pictures this one is among, when the opener says (an issue's in
+  // Projects): the arrow keys step through them. A reopen from a saved
+  // layout says nothing, and a window keeps the set it was last given
+  if (pictures && pictures.some(p => p.url === path)) w._ivSet = pictures;
+  imageWinCount(w);
   openWin(w);
   loadImage(w);
 }
+// the window's name, path line and id are the picture's: set once it is
+// made, and again when the arrow keys bring another picture into it
+function imageWinName(w, path, name) {
+  w.id = "win-iv-" + encodeURIComponent(path);
+  w.dataset.path = path;
+  w.querySelector(".title").textContent = name || path.split("/").pop();
+  w.querySelector(".iv-path").textContent = isWebURL(path)
+    ? new URL(path).host + " :" + (name || path.split("/").pop())
+    : "Workspace :" + path.split("/").join(" :");
+}
+function imageWinCount(w) {
+  const set = w._ivSet, at = set ? set.findIndex(p => p.url === w.dataset.path) : -1;
+  w.querySelector(".iv-count").textContent = set && set.length > 1 && at >= 0 ? `${at + 1} of ${set.length}` : "";
+}
+// the pictures an app sends with view-image, checked: a list of web
+// addresses with names, at most a few hundred, or nothing
+function pictureSet(list) {
+  if (!Array.isArray(list) || list.length < 2 || list.length > 500) return null;
+  const out = [];
+  for (const p of list) {
+    if (!p || typeof p !== "object" || !isWebURL(p.url || "") || out.some(q => q.url === p.url)) continue;
+    out.push({ url: p.url, name: typeof p.name === "string" ? p.name : "" });
+  }
+  return out.length > 1 ? out : null;
+}
+// Left and Right in a picture window that has a set: the previous or the
+// next picture comes into the same window, which is named for it (title,
+// path line, id, so a saved layout and a second click on that picture find
+// it), sized to it like a fresh open, and the count says where it is. The
+// ends hold; nothing wraps. A window already open on that picture is
+// folded into this one, so the desk never shows the same picture twice.
+function imageWinStep(w, dir) {
+  const set = w._ivSet;
+  if (!set) return false;
+  const to = set[set.findIndex(p => p.url === w.dataset.path) + dir];
+  if (!to) return true;
+  const dup = document.getElementById("win-iv-" + encodeURIComponent(to.url));
+  if (dup && dup !== w) {
+    if (!dup.hidden) closeWin(dup);
+    if (dup._imgURL) URL.revokeObjectURL(dup._imgURL);
+    dup.remove();
+  }
+  imageWinName(w, to.url, to.name);
+  imageWinCount(w);
+  w.querySelector(".iv-dims").textContent = "…";
+  if (!IS_MOBILE) w.dataset.fit = "1";
+  winSave();
+  loadImage(w);
+  return true;
+}
+document.addEventListener("keydown", e => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
+  if (showAllOn || showDeskOn || !ctxMenu.hidden || document.querySelector(".overlay:not([hidden])")) return;
+  const w = document.querySelector("#desktop .window.front");
+  if (!w || w.hidden || w.classList.contains("shaded") || !w.classList.contains("image-window")) return;
+  if (imageWinStep(w, e.key === "ArrowRight" ? 1 : -1)) e.preventDefault();
+});
 async function loadImage(w) {
   const path = w.dataset.path, box = w.querySelector(".iv-box"), dims = w.querySelector(".iv-dims");
   try {
