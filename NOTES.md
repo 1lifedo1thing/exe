@@ -6,10 +6,10 @@ before it said is kept in CHANGELOG.md.
 -->
 
 - On Windows, `exe ssh` reaches a VM again on a PC where Codex has run: the VM key is kept to its user.
-- Every release's notes are one page now: [What Changed](https://exe.v2core.com/docs/changelog).
 - **Mac OS X** has an **Agent** button: a Chat that works inside Tiger and uploads Workspace files.
 - **Get Info** on a Claude Code session: summary, turns, tokens, models, dates; **Archive…** beside **OK**.
 - On a phone, a picture window zooms: pinch the picture or double-tap it, and drag it about while zoomed.
+- **Extras…** on Welcome's Apps card has a fourth step, **Projects**: an issue tracker beside exe.
 - **Open in Claude Code** on a project's menu in Projects: a session in its folder, in the Claude Code window.
 - **Show Desktop**, left of Show All Windows in the menu bar: open windows slide off to the edges and back.
 - `exe expose host -dir /www/site`: a folder served as a site by exe itself; a `.password` file guards it.

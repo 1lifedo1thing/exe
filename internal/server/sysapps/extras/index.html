@@ -200,7 +200,7 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
     </svg>
     <div>
       <h1>Extras</h1>
-      <p><span class="wide">Three things that add to exe. Each can be on or off.</span><span class="narrow" id="w-count"></span></p>
+      <p><span class="wide">Four things that add to exe. Each can be on or off.</span><span class="narrow" id="w-count"></span></p>
     </div>
   </div>
   <div class="w-mid">
@@ -248,7 +248,7 @@ const TICK = '<svg class="tick" viewBox="0 0 10 10" shape-rendering="crispEdges"
 const DOT = '<svg class="dot crisp" viewBox="0 0 6 6" width="6" height="6" shape-rendering="crispEdges" aria-hidden="true"><path d="M1 0h4v1H1zM0 1h6v4H0zM1 5h4v1H1z"/></svg>' +
   '<svg class="dot fine" viewBox="0 0 6 6" width="6" height="6" aria-hidden="true"><circle cx="3" cy="3" r="3"/></svg>';
 
-// ---- the three extras, in words. What each is on this machine comes from
+// ---- the four extras, in words. What each is on this machine comes from
 // the daemon (GET /v1/extras, internal/server/extras.go); the names here
 // are its names.
 const EXTRAS = [
@@ -270,6 +270,12 @@ const EXTRAS = [
     box: "Easel on this desktop",
     get: "exe-easel is built from its source, and asks for a few tools besides Claude Code. A coding agent does it from this line:",
     prompt: "Set up exe-easel (https://github.com/livid/exe-easel) on this machine by following its README, asking me before installing anything. exe is already installed and running here." },
+  { name: "projects", step: "Projects", repo: "exe-projects",
+    title: "An issue tracker for your projects",
+    text: "exe-projects keeps your projects and their issues in one window. An issue has an address, such as EXE-12, and a coding agent files, reads and closes it from a shell. It is a program of its own that runs beside exe.",
+    box: "Projects on this desktop",
+    get: "exe-projects is built from its source, which takes Go. A coding agent does it from this line:",
+    prompt: "Install exe-projects (https://github.com/livid/exe-projects) on this machine by following its README, and keep its daemon running. exe is installed and running here." },
 ];
 const STEPS = [...EXTRAS.map(x => x.step), "Review"];
 const LAST = STEPS.length - 1;
@@ -371,7 +377,7 @@ function draw() {
   (back && !back.disabled ? back : $("#w-next")).focus({ preventScroll: true });
 }
 
-// 1 to 3: an extra a page
+// 1 to 4: an extra a page
 function extraPage(x) {
   const i = X.info[x.name], st = stand(x, i), missing = i.state === "missing";
   // bundles in the apps folder by hand are not this switch's to remove
@@ -453,7 +459,7 @@ async function copyText(text) {
   return ok;
 }
 
-// 4: what will change, then what did
+// 5: what will change, then what did
 const changing = () => EXTRAS.filter(x => X.info[x.name] && X.want[x.name] !== (X.info[x.name].state === "on"));
 function reviewPage() {
   const rows = EXTRAS.map(x => {

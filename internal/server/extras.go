@@ -25,10 +25,10 @@ import (
 //	GET  /v1/extras          how each stands on this machine
 //	POST /v1/extras/{name}   {"on": true|false, "dir": "…", "check": true}
 //
-// There are three. The extra apps (exe-apps) are bundles a release brings
-// as one tarball; exe-planet and exe-easel are programs of their own that
-// run beside exe, each with a folder of apps for the desktop and a daemon
-// the desktop reaches as a service.
+// There are four. The extra apps (exe-apps) are bundles a release brings
+// as one tarball; exe-planet, exe-easel and exe-projects are programs of
+// their own that run beside exe, each with a folder of apps for the
+// desktop and a daemon the desktop reaches as a service.
 //
 // On means the same for all of them: the extra's apps show on the desktop,
 // and its service, where it has one, is named in the configuration. How it
@@ -57,7 +57,7 @@ import (
 
 // extraDef is one extra, as exe knows it.
 type extraDef struct {
-	Name    string   // "apps", "planet", "easel"
+	Name    string   // "apps", "planet", "easel", "projects"
 	Repo    string   // the checkout's name
 	Bundles []string // the app folders it brings
 	Service string   // its name under services, "" for none
@@ -71,6 +71,8 @@ var extraDefs = []extraDef{
 		Service: "planet", URL: "http://127.0.0.1:7799", Health: "/v1/status"},
 	{Name: "easel", Repo: "exe-easel", Bundles: []string{"easel"},
 		Service: "easel", URL: "http://127.0.0.1:7794", Health: "/v1/health"},
+	{Name: "projects", Repo: "exe-projects", Bundles: []string{"projects"},
+		Service: "projects", URL: "http://127.0.0.1:7789", Health: "/v1/status"},
 }
 
 func extraNamed(name string) *extraDef {

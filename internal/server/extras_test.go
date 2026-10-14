@@ -76,7 +76,7 @@ func (f *extFixture) get() map[string]extraInfo {
 	for _, x := range out.Extras {
 		m[x.Name] = x
 	}
-	if len(m) != 3 {
+	if len(m) != 4 {
 		f.t.Fatalf("extras: %v", out.Extras)
 	}
 	return m
@@ -231,6 +231,33 @@ func TestExtrasFoundNearby(t *testing.T) {
 	}
 }
 
+// Projects is the fourth: an app whose folder has a lowercase name, and a
+// daemon asked after at its own address and path.
+func TestExtrasProjects(t *testing.T) {
+	f := newExtFixture(t, "")
+	apps := filepath.Join(f.dir, "src", "exe-projects", "apps")
+	bundle(t, apps, "projects")
+	f.running["http://127.0.0.1:7789/v1/status"] = true
+	x := f.get()["projects"]
+	if x.State != "off" || x.From != "folder" || x.Dir != apps || x.Service != "http://127.0.0.1:7789" || x.Running == nil || !*x.Running {
+		t.Fatalf("a checkout nearby, its daemon running: %+v", x)
+	}
+	code, x, why := f.post("projects", `{"on":true}`)
+	if code != 200 || x.State != "on" || x.From != "folder" || !reflect.DeepEqual(x.Have, []string{"projects"}) {
+		t.Fatalf("on: %d %+v %s", code, x, why)
+	}
+	cfg := f.s.Config()
+	if !reflect.DeepEqual(cfg.AppsDirs, []string{apps}) || !reflect.DeepEqual(cfg.Services, map[string]string{"projects": "http://127.0.0.1:7789"}) {
+		t.Fatalf("the configuration: %v %v", cfg.AppsDirs, cfg.Services)
+	}
+	if got := f.apps(); !reflect.DeepEqual(got, []string{"projects"}) {
+		t.Fatalf("the desk's apps: %v", got)
+	}
+	if code, x, _ = f.post("projects", `{"on":false}`); code != 200 || x.State != "off" || x.Dir != apps || len(f.s.Config().AppsDirs) != 0 || len(f.s.Config().Services) != 0 {
+		t.Fatalf("off: %d %+v %v", code, x, f.s.Config())
+	}
+}
+
 // A folder where someone keeps apps of their own beside a copy of Notes is
 // theirs: it is not the extra's folder to name, and off does not take its
 // name away.
@@ -373,7 +400,7 @@ func TestExtrasAppsFromTheRelease(t *testing.T) {
 }
 
 // Every bundle an extra names is a folder its checkout really has, so the
-// list here cannot drift from the three repositories unnoticed. Skipped
+// list here cannot drift from the four repositories unnoticed. Skipped
 // where the checkouts are not beside this one.
 func TestExtrasBundlesAreTheCheckouts(t *testing.T) {
 	for _, def := range extraDefs {

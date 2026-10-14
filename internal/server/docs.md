@@ -2980,7 +2980,7 @@ These are part of exe itself, and each has a chapter of its own.
 | **Dict** | `dict` | A dictionary from English and five other languages into Chinese, Japanese or Korean. | [Dict](https://exe.v2core.com/docs/using/dict) |
 | **Analytics** | `analytics` | The traffic Cloudflare's edge saw for the hostnames this node publishes. | [Analytics](https://exe.v2core.com/docs/using/analytics) |
 | **Welcome** | `welcome` | exe in six cards. It has no desktop icon: choose **Help → Welcome…**. | [The desktop](https://exe.v2core.com/docs/using/the-desktop) |
-| **Extras** | `extras` | Turns the extra apps, Planet and Easel on and off. It has no desktop icon: press **Extras…** on Welcome's Apps card. | This chapter, under **Extras** |
+| **Extras** | `extras` | Turns the extra apps, Planet, Easel and Projects on and off. It has no desktop icon: press **Extras…** on Welcome's Apps card. | This chapter, under **Extras** |
 
 Built-in app IDs use lowercase names; their display titles come from
 `app.json`. Three of them had other IDs once (`Mac OS 9`, `Hub`,
@@ -2999,15 +2999,16 @@ removed; see [Updating](https://exe.v2core.com/docs/using/updating).
 
 ### Extras
 
-Three things add to exe and are not part of it: the extra apps, Planet
-and Easel. **Extras** turns each on and off. Open it with **Extras…** on
-the Apps card of **Help → Welcome…**.
+Four things add to exe and are not part of it: the extra apps, Planet,
+Easel and Projects. **Extras** turns each on and off. Open it with
+**Extras…** on the Apps card of **Help → Welcome…**.
 
 It has a step for each extra and a last one that makes the changes:
 
-1. **Extra Apps**, **Planet**, **Easel.** Each page says what the extra
-   is and how it stands on this machine, and has one check box. Tick it
-   to have the extra on this desktop, clear it to take it off.
+1. **Extra Apps**, **Planet**, **Easel**, **Projects.** Each page says
+   what the extra is and how it stands on this machine, and has one check
+   box. Tick it to have the extra on this desktop, clear it to take it
+   off.
 2. **Review.** What will change, extra by extra. Nothing has changed
    until you press **Apply** here. The desktop's icons follow by
    themselves.
@@ -3018,20 +3019,20 @@ What turning an extra on does depends on where it comes from:
 |---|---|---|
 | The extra apps, on a released exe | Fetches them from the release that is running and places them in `~/.exe/apps`. An update keeps them current. | Removes the ones exe placed. An app you edited stays, and is yours. |
 | The extra apps, from a checkout of exe-apps | Names the folder in `apps_dirs`. | Takes the folder out of `apps_dirs`. |
-| Planet and Easel | Names the program's `apps` folder in `apps_dirs` and its daemon in `services`. | Takes both out again. |
+| Planet, Easel and Projects | Names the program's `apps` folder in `apps_dirs` and its daemon in `services`. | Takes both out again. |
 
-Turning Planet or Easel off changes only exe's configuration. The
-program's files stay, and its daemon keeps running until you stop it.
+Turning Planet, Easel or Projects off changes only exe's configuration.
+The program's files stay, and its daemon keeps running until you stop it.
 
-Planet and Easel are programs of their own, built from their source.
-While one is not on this machine its check box is grey, and the page
-gives a line to hand a coding agent, such as the one in the **Claude
-Code** window, which installs it. If the program is here and exe did not
-find it, type its folder and press **Find**.
+Planet, Easel and Projects are programs of their own, built from their
+source. While one is not on this machine its check box is grey, and the
+page gives a line to hand a coding agent, such as the one in the
+**Claude Code** window, which installs it. If the program is here and
+exe did not find it, type its folder and press **Find**.
 
 An agent turns an extra on with `POST /v1/extras/<name>` and
-`{"on": true}`, where the name is `apps`, `planet` or `easel`;
-`GET /v1/extras` says how each stands.
+`{"on": true}`, where the name is `apps`, `planet`, `easel` or
+`projects`; `GET /v1/extras` says how each stands.
 
 ### Where an app lives
 
@@ -3227,6 +3228,26 @@ whenever the painting changes.
 **Finish…** and **Replay…** are there only to redo them another way: no
 varnish, a longer movie. **Save to Workspace** puts the picture and the
 movie in the Workspace's `Easel` folder.
+
+### Projects
+
+Projects comes with
+[exe-projects](https://github.com/livid/exe-projects), an issue tracker
+that runs beside exe. Its `apps` folder goes in `apps_dirs`, and its
+daemon is the service `projects`: **Extras** sets both.
+
+The window has three columns: your projects on the left, a project's
+issues in the middle and the chosen issue on the right. A project has a
+short name in capitals, such as `EXE`, and its issues are numbered from
+one: `EXE-12` names the same issue for good.
+
+A coding agent works in the same tracker from a shell: `exe-projects new`
+files an issue, `exe-projects show EXE-12` reads one and
+`exe-projects close EXE-12` closes it.
+
+A file attached to an issue is kept in IPFS, which takes Kubo on this
+machine; without it everything else works. Anyone who learns such a
+file's address can fetch it, so attach nothing private.
 
 ## Joining desks together
 

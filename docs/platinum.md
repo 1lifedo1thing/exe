@@ -595,7 +595,7 @@ restyling: `internal/server/ui/index.html` (the desktop),
   Welcome's Apps card): the same head, list, page and button row with no
   status bar under them, in a fixed-size window with no grow box, sized
   so that its tallest page fits without a scroll bar (580 by 500). Its
-  steps are a page for each of three things that can be on or off, and a
+  steps are a page for each of four things that can be on or off, and a
   last one, Review. A page says what the thing is, then under a
   separator how it stands on this machine — a bold line and two lines
   kept for the answer, under the green check when it is on and nothing

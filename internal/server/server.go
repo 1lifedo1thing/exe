@@ -179,7 +179,8 @@ type Server struct {
 	// Software Update: the check, the one job, what is on disk (update.go).
 	upd updateState
 
-	// Extras: exe-apps, exe-planet and exe-easel, on and off (extras.go).
+	// Extras: exe-apps, exe-planet, exe-easel and exe-projects, on and off
+	// (extras.go).
 	ext extrasState
 
 	// App-data change fanout to open desktops (see appevents.go).
