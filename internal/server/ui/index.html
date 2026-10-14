@@ -7814,7 +7814,7 @@ function pictureSet(list) {
 // it), sized to it like a fresh open, and the count says where it is. The
 // ends hold; nothing wraps. A window already open on that picture is
 // folded into this one, so the desk never shows the same picture twice.
-function imageWinStep(w, dir) {
+function imageWinStep(w, dir, slide) {
   const set = w._ivSet;
   if (!set) return false;
   const to = set[set.findIndex(p => p.url === w.dataset.path) + dir];
@@ -7829,7 +7829,9 @@ function imageWinStep(w, dir) {
   imageWinCount(w);
   w.querySelector(".iv-dims").textContent = "…";
   if (!IS_MOBILE) w.dataset.fit = "1";
+  w._ivEnter = slide ? dir : 0; // a swipe's picture comes in from the side it was pulled from
   winSave();
+  if (IS_MOBILE) mobSave(); // the window on screen has a new id
   loadImage(w);
   return true;
 }
@@ -7844,10 +7846,10 @@ document.addEventListener("keydown", e => {
 });
 async function loadImage(w) {
   const path = w.dataset.path, box = w.querySelector(".iv-box"), dims = w.querySelector(".iv-dims");
+  const turn = w._ivTurn = (w._ivTurn || 0) + 1; // a step while this one fetches: the later load wins
   try {
-    const r = isWebURL(path) ? await fetch(path) : await api(wsUrl(path));
-    if (!r.ok) throw new Error("HTTP " + r.status); // bare fetch — api() already threw
-    const blob = await r.blob();
+    const blob = await imageBlob(w, path);
+    if (turn !== w._ivTurn) return;
     if (w._imgURL) URL.revokeObjectURL(w._imgURL); // reopen refetches — drop the old blob
     w._imgURL = URL.createObjectURL(blob);
     const img = el("img", { alt: path.split("/").pop() });
@@ -7870,7 +7872,48 @@ async function loadImage(w) {
     img.src = w._imgURL;
     box.replaceChildren(img);
     if (w._ivReset) w._ivReset();
-  } catch (e) { dims.textContent = e.message; }
+    const enter = w._ivEnter || 0;
+    w._ivEnter = 0;
+    if (enter) {
+      img.style.transition = "none";
+      img.style.transform = `translateX(${enter * box.clientWidth}px)`;
+      void img.offsetWidth; // laid out there before it moves
+      img.style.transition = "transform .16s ease-out";
+      img.style.transform = "";
+    }
+    imageWinPrefetch(w);
+  } catch (e) { if (turn === w._ivTurn) dims.textContent = e.message; }
+}
+// the picture's bytes: the window's own cache when the picture is one of
+// its set (they do not change: the set's addresses are content addresses
+// or a hub's embeds), else fetched
+async function imageBlob(w, path) {
+  const kept = w._ivBlobs && w._ivBlobs.get(path);
+  if (kept) return kept;
+  const r = isWebURL(path) ? await fetch(path) : await api(wsUrl(path));
+  if (!r.ok) throw new Error("HTTP " + r.status); // bare fetch — api() already threw
+  const blob = await r.blob();
+  if (w._ivSet && w._ivSet.some(p => p.url === path)) (w._ivBlobs ||= new Map()).set(path, blob);
+  return blob;
+}
+// the pictures either side of the one shown are fetched ahead, so a step
+// shows at once (a swipe on a phone, the arrow keys); the cache holds those
+// two and the shown one, and lets the rest go
+function imageWinPrefetch(w) {
+  const set = w._ivSet;
+  if (!set) return;
+  const at = set.findIndex(p => p.url === w.dataset.path);
+  const keep = [set[at - 1], set[at], set[at + 1]].filter(Boolean).map(p => p.url);
+  const blobs = w._ivBlobs ||= new Map(), going = w._ivFetching ||= new Set();
+  for (const k of [...blobs.keys()]) if (!keep.includes(k)) blobs.delete(k);
+  for (const u of keep) {
+    if (blobs.has(u) || going.has(u)) continue;
+    going.add(u);
+    fetch(u).then(r => r.ok ? r.blob() : null)
+      .then(b => { if (b && w._ivSet && w._ivSet.some(p => p.url === u)) blobs.set(u, b); })
+      .catch(() => {})
+      .finally(() => going.delete(u));
+  }
 }
 // A picture window on a phone is dismissed by swiping it down, the way a
 // phone's photo viewer is — Livid asked for it after viewing a hub
@@ -7882,9 +7925,26 @@ async function loadImage(w) {
 // Newsfeed's swipe, so a sideways drag and a second finger (the pinch,
 // wireImagePinch's) are left alone, and a touch that starts on the close
 // box is the close box's.
+// A sideways drag, in a window that has a set of pictures (imageWinStep),
+// is the phone's Left and Right: the picture follows the finger, and past
+// a third of its box, or on a flick, the next or the previous one comes in
+// from the side it was pulled from (the set's neighbours are fetched ahead,
+// so it is there at once). A shorter drag springs it back, and past either
+// end the picture gives a third of the way and springs back: nothing
+// further. A window with no set leaves a sideways drag alone, as before.
 function wireImageSwipe(w) {
   const FAR = 90, FLICK = 40, QUICK = 300;
-  let sx = 0, sy = 0, dy = 0, t0 = 0, down = null, under = null;
+  let sx = 0, sy = 0, dy = 0, dx = 0, t0 = 0, down = null, side = false, under = null;
+  const box = w.querySelector(".iv-box");
+  const neighbour = dir => { const set = w._ivSet, at = set ? set.findIndex(p => p.url === w.dataset.path) : -1; return !!(set && at >= 0 && set[at + dir]); };
+  const slide = x => { const img = box.querySelector("img"); if (!img) return; img.style.transition = "none"; img.style.transform = x ? `translateX(${x}px)` : ""; };
+  const sideEnd = cancelled => {
+    const dir = dx < 0 ? 1 : -1;
+    const gone = !cancelled && neighbour(dir) && (Math.abs(dx) > box.clientWidth / 3 || (Math.abs(dx) > FLICK && Date.now() - t0 < QUICK));
+    if (gone) { imageWinStep(w, dir, true); return; }
+    const img = box.querySelector("img");
+    if (img) { img.style.transition = "transform .16s ease-out"; img.style.transform = ""; }
+  };
   // what the picture covers shows through the gap as it moves — the Hub
   // app's feed, where the picture was tapped — and goes back under when
   // the window springs back; a window that closes keeps it, since
@@ -7922,15 +7982,23 @@ function wireImageSwipe(w) {
   const zoomed = () => (!!window.visualViewport && window.visualViewport.scale > 1.01)
     || (w._ivZoomed && w._ivZoomed());
   w.addEventListener("touchstart", e => {
-    if (e.touches.length !== 1 || zoomed() || e.target.closest(".tbox")) { down = false; rest(); return; }
+    if (e.touches.length !== 1 || zoomed() || e.target.closest(".tbox")) { down = false; side = false; rest(); return; }
     sx = e.touches[0].clientX; sy = e.touches[0].clientY;
-    dy = 0; t0 = Date.now(); down = null;
+    dy = dx = 0; t0 = Date.now(); down = null; side = false;
   }, { passive: true });
   w.addEventListener("touchmove", e => {
-    if (down === false) return;
-    if (e.touches.length !== 1 || zoomed()) { down = false; rest(); return; }
+    if (down === false && !side) return;
+    if (e.touches.length !== 1 || zoomed()) { down = false; side = false; rest(); slide(0); return; }
     const mx = e.touches[0].clientX - sx, my = e.touches[0].clientY - sy;
-    if (down === null && (Math.abs(mx) > 6 || Math.abs(my) > 6)) down = my > Math.abs(mx);
+    if (down === null && (Math.abs(mx) > 6 || Math.abs(my) > 6)) {
+      if (my > Math.abs(mx)) down = true;
+      else { down = false; side = !!w._ivSet && Math.abs(mx) > Math.abs(my); }
+    }
+    if (side) {
+      dx = mx;
+      slide(neighbour(mx < 0 ? 1 : -1) ? mx : mx / 3);
+      return;
+    }
     if (!down) return;
     dy = Math.max(0, my);
     lift();
@@ -7938,6 +8006,7 @@ function wireImageSwipe(w) {
     w.style.transform = "translateY(" + dy + "px)";
   }, { passive: true });
   const settle = cancelled => {
+    if (side) { side = false; sideEnd(cancelled); return; }
     if (!down) return;
     down = false;
     const gone = !cancelled && (dy > FAR || (dy > FLICK && Date.now() - t0 < QUICK));

@@ -574,7 +574,9 @@ fullscreen, one at a time. They cannot be moved or resized there.
   hold it for half a second until it tints, then drag it to its new place.
 - A picture window swipes down to close, the window under it showing through
   the gap as it goes. Pinch the picture to zoom it, or double-tap it; zoomed
-  in, a finger drags it about, and a double tap brings it back.
+  in, a finger drags it about, and a double tap brings it back. A picture
+  opened from an issue in Projects swipes sideways to the issue's next or
+  previous picture.
 
 ### Install the desktop as an app
 
@@ -3262,7 +3264,8 @@ file's address can fetch it, so attach nothing private.
 
 Click a picture under an issue to see it in a picture window. When the
 issue has more than one, **Left** and **Right** show the one before and
-the one after, and the window's top line says which it is, `2 of 5`.
+the one after, or a sideways swipe on a phone, and the window's top line
+says which it is, `2 of 5`.
 
 ## Joining desks together
 
