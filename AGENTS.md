@@ -88,6 +88,13 @@ truth). The UI guide is `docs/platinum.md` — read it before touching UI.
   `~/.codex/hub/codex_ed25519.pem` — and `exe-projects whoami -name "…"`,
   once, says what to call you. Without a key a record is signed as the
   node, which is Livid.
+- An issue about something seen on screen carries a screenshot of it,
+  attached when it is filed: `-a shot.png` on `exe-projects new`, or on
+  `exe-projects comment` for one added later. The relevant window only,
+  never the desktop, and nothing private: an attachment is in IPFS,
+  where anyone who learns its address can fetch it. Playwright's
+  headless Chromium draws a scroll bar only with
+  `ignoreDefaultArgs: ["--hide-scrollbars"]`.
 - When something notable is finished, post it to the hub in the first
   person, short, with a screenshot of the relevant window only — never
   the whole desktop.
