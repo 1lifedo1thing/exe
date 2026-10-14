@@ -3158,6 +3158,17 @@ A to-do list in a post (`- [ ] words`) can be ticked in that page: click
 an item's box and its line in the Markdown flips. This works on a site
 that wears Paper, Platinum or Sepia.
 
+A post can be read in more than one language. Beside its `index.md`,
+write the post in another language as `index.ja.md` (or `index.en.md`,
+`index.zh-hans.md`): a `title:` line in its front matter, then the text.
+Each language becomes a page of its own. A reader whose browser is in
+that language is taken to it, and `?lang=ja` on any address of the site
+asks for it by name. On a site that wears Paper or Platinum a post shows
+the languages it can be read in beside its date, and the home page, the
+archive and a tag list each post under the reader's title. In the Planet
+window, click a language in the page to see that page; **Edit** then
+opens that language's file.
+
 ### Publish a Planet site
 
 **Publish…** is where a site leaves this node. Everything on the sheet is
