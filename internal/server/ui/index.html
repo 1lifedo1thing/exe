@@ -428,22 +428,41 @@ body.mobile #cstrip { z-index: 5; }
 /* desktop app windows (~/.exe/apps) host their UI in an iframe set into the
    sunken frame; the app page brings its own Platinum styling */
 .app-frame { display: block; border: 0; width: 100%; height: 400px; background: var(--g200); }
-/* Stickies: a note stuck to the desk (Notes' Stick to Desk). The window
-   is the sheet: a title bar in the note's colour, its stripes in the
-   colour's edge, with the close box and the windowshade box, and under
-   one line the Notes page on that one note, frameless. --stk and
-   --stk-edge are set per window from the note's colour. */
-.sticky-window { min-width: 140px; background: var(--stk, #ffffcc); }
-.sticky-window .titlebar { background: var(--stk, #ffffcc); }
-.sticky-window .titlebar .stripe { background-color: var(--stk, #ffffcc);
-  background-image: linear-gradient(#fff, #fff 50%, var(--stk-edge, #ffcc00) 50%, var(--stk-edge, #ffcc00)); }
-.sticky-window .titlebar .stripe::before {
-  background-image: linear-gradient(#fff, #fff 50%, var(--stk, #ffffcc) 50%, var(--stk, #ffffcc));
-  border-bottom-color: var(--stk, #ffffcc); }
-.sticky-window .titlebar .stripe::after {
-  background-image: linear-gradient(var(--stk, #ffffcc), var(--stk, #ffffcc) 50%, var(--stk-edge, #ffcc00) 50%, var(--stk-edge, #ffcc00)); }
-.sticky-window .win-frame { margin: 0; border: 0; border-top: 1px solid var(--black); background: var(--stk, #ffffcc); }
+/* Stickies: a note stuck to the desk (Notes' Stick to Desk), drawn as
+   Mac OS 9's Stickies draws a note (sampled in the QEMU guest,
+   2026-10-14; docs/platinum.md, Stickies). The window is the sheet with
+   a 1px frame in the colour's edge; the title bar is 9px of the edge and
+   the sheet in a checkerboard dither, with a 7px close box 4px in from
+   the left and a 7px collapse box 4px in from the right, each a well of
+   the sheet with its glyph in the colour's ink; the page follows with no
+   line between; and an 8px size box sits on the bottom-right corner,
+   over the frame. An inactive note is the sheet alone: no dither, no
+   boxes, and only the right and bottom lines of the frame. No bevel and
+   no shadow. --stk, --stk-edge and --stk-ink are set per window from the
+   note's colour; the dither is drawn per window too (its colour is in
+   the picture). */
+.sticky-window { min-width: 140px; background: var(--stk, #ffffcc); border-color: var(--stk-edge, #ffcc00);
+  box-shadow: none; color: var(--stk-ink, #ff9900); }
+.sticky-window::before { display: none; }
+.sticky-window .titlebar { height: 9px; padding: 0; gap: 0; position: relative;
+  background: var(--stk, #ffffcc); background-size: 2px 2px; }
+.sticky-window .tbox { position: absolute; top: 1px; width: 7px; height: 7px; background: var(--stk, #ffffcc);
+  box-shadow: none; display: block; color: inherit; /* a button's own colour is black */ }
+.sticky-window .tbox.close { left: 4px; }
+.sticky-window .tbox.shade { right: 4px; }
+.sticky-window .tbox svg { display: block; }
+.sticky-window .tbox::before, .sticky-window .tbox::after { display: none; }
+.sticky-window .tbox:active { background: var(--stk-ink, #ff9900); }
+.sticky-window .tbox:active svg { visibility: hidden; }
+/* the frame's bevel is drawn outside its box, over the sticky's own frame */
+.sticky-window .win-frame { margin: 0; border: 0; box-shadow: none; background: var(--stk, #ffffcc); }
 .sticky-window .app-frame { background: var(--stk, #ffffcc); }
+.sticky-window.shaded { padding-bottom: 0; }
+.sticky-window .stk-size { position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; z-index: 5; }
+.sticky-window .stk-size svg { display: block; }
+.sticky-window.shaded .stk-size, .sticky-window:not(.front) .stk-size { display: none; }
+.sticky-window:not(.front) { border-top-color: transparent; border-left-color: transparent; }
+.sticky-window:not(.front) .titlebar { background-image: none !important; }
 /* Full screen inside a Home Screen web app: preserve inline window geometry
    so leaving this view returns to the same desktop window. */
 #desktop.mac-fullscreen { z-index: 6000; }
@@ -13111,6 +13130,20 @@ const STICKY_APP = "Notes";
 // TINTS and EDGES); white is Note Pad's grey-edged sheet
 const STICKY_TINTS = { white: ["#ffffff", "#999999"], yellow: ["#ffffcc", "#ffcc00"], blue: ["#ccffff", "#00ccff"],
   green: ["#ccffcc", "#66ff66"], pink: ["#ffcccc", "#ff9999"], purple: ["#ccccff", "#9999ff"], gray: ["#eeeeee", "#bbbbbb"] };
+// each colour's ink, the glyphs' colour, sampled with the rest
+const STICKY_INK = { white: "#777777", yellow: "#ff9900", blue: "#0099ff", green: "#00ee00",
+  pink: "#ff66ff", purple: "#9999ff", gray: "#777777" };
+// the glyphs, pixel for pixel: the close box and the collapse box (7×7,
+// in a well of the sheet) and the size box (8×8, on the corner)
+const STICKY_CLOSE = "M6 0h1v6H6zM1 1h4v1H1zM1 2h1v3H1zM0 6h7v1H0z";
+const STICKY_SHADE = "M6 0h1v6H6zM4 1h1v1H4zM3 2h1v1H3zM2 3h1v1H2zM1 4h1v1H1zM0 6h7v1H0z";
+const STICKY_SIZE = "M4 0h4v1H4zM4 1h1v3H4zM7 1h1v6H7zM0 4h5v1H0zM0 5h1v2H0zM0 7h8v1H0z";
+const stickyGlyph = (d, n) => `<svg width="${n}" height="${n}" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+// the title bar's dither: the edge and the sheet in a 2×2 checkerboard,
+// the edge at the top-left — as the guest draws it from the note's own
+// top-left corner
+const stickyDither = (tint, edge) => 'url("data:image/svg+xml,' + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2" shape-rendering="crispEdges"><rect width="2" height="2" fill="${tint}"/><path fill="${edge}" d="M0 0h1v1H0zM1 1h1v1H1z"/></svg>`) + '")';
 let stickiesT = 0, stickiesBusy = null, stickiesAgain = false;
 const stickyFrames = name => name === STICKY_APP
   ? [...document.querySelectorAll("#desktop .sticky-window .app-frame")] : [];
@@ -13157,8 +13190,8 @@ function stickyShow(n) {
     w = el("div", { class: "window app-window sticky-window", id });
     w.dataset.app = STICKY_APP;
     w.dataset.note = String(n.id);
-    w.innerHTML = `<div class="titlebar"><button class="tbox close" id="${id}-close"></button><div class="stripe"></div><button class="tbox shade"></button></div>
-      <div class="win-frame"><iframe class="app-frame"></iframe></div>`;
+    w.innerHTML = `<div class="titlebar"><button class="tbox close" id="${id}-close" title="Take off Desk">${stickyGlyph(STICKY_CLOSE, 7)}</button><button class="tbox shade" title="Collapse">${stickyGlyph(STICKY_SHADE, 7)}</button></div>
+      <div class="win-frame"><iframe class="app-frame"></iframe></div><div class="stk-size">${stickyGlyph(STICKY_SIZE, 8)}</div>`;
     const fr = w.querySelector(".app-frame");
     fr._args = { sticky: String(n.id) };
     fr._ver = appVer(STICKY_APP); // the code this window runs (appStaleCheck)
@@ -13168,7 +13201,9 @@ function stickyShow(n) {
     w.style.zIndex = 9;
     $("#desktop").append(w);
     initWindow(w);
-    wireEdges(w, fr, 140, { minH: 40, hPad: 60 });
+    // the size box on the corner grows the note, as the guest's does, and
+    // the edges do too
+    wireGrow(w.querySelector(".stk-size"), w, fr, 140, { minH: 40, hPad: 60 });
     const tb = w.querySelector(".titlebar");
     // the close box takes the note off the desk: the frame writes that,
     // and the window goes for good when the change comes back
@@ -13183,10 +13218,16 @@ function stickyShow(n) {
     tb.addEventListener("dblclick", e => { if (!e.target.closest(".tbox")) stickyPlaced(w); });
     w.querySelector(".tbox.shade").addEventListener("click", () => stickyPlaced(w));
     for (const g of w.querySelectorAll(":scope > .win-edge")) g.addEventListener("pointerup", () => stickyPlaced(w));
+    // the size box captures no pointer (wireGrow), so its drag's end is
+    // heard on the window, after the grow's own end has set the size
+    w.querySelector(".stk-size").addEventListener("pointerdown", () =>
+      window.addEventListener("pointerup", () => stickyPlaced(w), { once: true }));
   }
   const [tint, edge] = STICKY_TINTS[n.color] || STICKY_TINTS.white;
   w.style.setProperty("--stk", tint);
   w.style.setProperty("--stk-edge", edge);
+  w.style.setProperty("--stk-ink", STICKY_INK[n.color] || STICKY_INK.white);
+  w.querySelector(".titlebar").style.backgroundImage = stickyDither(tint, edge);
   const line = String(n.text || "").split("\n").find(l => l.trim());
   w._label = line ? line.trim().slice(0, 40) : "Sticky";
   // a place of this desk's own making, not yet back from disk, stands

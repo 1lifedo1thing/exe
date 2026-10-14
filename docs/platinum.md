@@ -418,6 +418,27 @@ restyling: `internal/server/ui/index.html` (the desktop),
   raises over itself when the hub refuses a file or a post: change them in
   all three. An app's alert sits on its dialog veil, 380px at most and
   16px from a phone's edges, and holds the whole message, selectable.
+- Stickies (a note stuck to the desk, `.sticky-window`), as Mac OS 9's
+  Stickies draws a note — sampled in the QEMU guest on 2026-10-14, every
+  colour through its Color menu. The window is the sheet in the note's
+  tint with a 1px frame in the tint's edge, no bevel and no shadow. The
+  title bar is 9px of a 1px checkerboard dither, edge and tint, the edge
+  at the top-left; in it a 7px close box 4px in from the left and a 7px
+  collapse box 4px in from the right, each a well of the tint with its
+  glyph in the colour's ink (close `M6 0h1v6H6zM1 1h4v1H1zM1 2h1v3H1zM0
+  6h7v1H0z`, collapse `M6 0h1v6H6zM4 1h1v1H4zM3 2h1v1H3zM2 3h1v1H2zM1
+  4h1v1H1zM0 6h7v1H0z`). The text follows with no line between, 4px in
+  from the frame and right under the bar, and the note has no scroll
+  bar. An 8px size box sits on the bottom-right corner over the frame
+  (`M4 0h4v1H4zM4 1h1v3H4zM7 1h1v6H7zM0 4h5v1H0zM0 5h1v2H0zM0 7h8v1H0z`).
+  Inactive, a note is the sheet alone: no dither, no boxes, no size box,
+  and only the right and bottom lines of its frame. Tint / edge / ink:
+  yellow `#ffff99 / #ffcc00 / #ff9900` (the desk's Notes keeps its
+  lighter `#ffffcc`), blue `#99ffff / #00ccff / #0099ff` (`#ccffff`
+  here), green `#ccffcc / #66ff66 / #00ee00`, pink `#ffcccc / #ff9999 /
+  #ff66ff`, purple `#ccccff / #9999ff / #9999ff`, gray `#eeeeee /
+  #bbbbbb / #777777`; white is Note Pad's, not Stickies', and takes
+  `#999999 / #777777`.
 - Every title bar has a menu, dialogs' too: a right-click, or a press held
   550ms on a touch screen (`winMenu`). Its one item, **Save a Screenshot**
   (`shotWindow`), draws the window a second time from a copy of its markup

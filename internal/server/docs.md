@@ -2938,12 +2938,14 @@ For you:
   proofreader, a dictionary: each opens in a window beside your VMs and
   terminals, and fills the screen on a phone.
 - **Stickies.** A note can stand on the desk by itself, as Mac OS 9's
-  Stickies did: press the pushpin at a note's foot in Notes, and it
-  becomes a small window in the note's colour that stays where you put
-  it, on every desk that syncs. Drag it by its title bar, size it by its
-  edges, double-click the bar to roll it up, and press its close box to
-  put it back in Notes alone. Each is a page of Notes, so what you type
-  there is in Notes too.
+  Stickies did, and looks as one of its notes did: press the pushpin at
+  a note's foot in Notes, and it becomes a small window in the note's
+  colour that stays where you put it, on every desk that syncs. Drag it
+  by its thin title bar, size it by the box on its corner or by its
+  edges, press the box at the bar's right end or double-click the bar to
+  collapse it, and press the box at its left end to put the note back in
+  Notes alone. Each is a page of Notes, so what you type there is in
+  Notes too.
 - **Data that stays yours.** Each app keeps its data in private storage
   on this machine, and joined desks sync it.
 - **Windows that keep up.** When an app's files change, its open windows
