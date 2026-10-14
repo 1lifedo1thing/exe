@@ -119,7 +119,10 @@ input[type=text]:focus { outline: 2px solid #9999fe; outline-offset: 0; }
 .w-btn span { font-size: 11px; color: #555; min-width: 0; }
 .w-btn input { flex: 1; }
 .w-btn.tight { margin-bottom: 0; }
-#w-said { margin-top: 6px; }
+/* what Find says is the page's last line. Its two lines are the room the
+   window leaves under the field, not height the page asks for: where a
+   wider face gives the text a line more, the page still has no scroll bar */
+#w-said { margin-top: 6px; min-height: 0; }
 .w-field { font-size: 11px; margin: 0 0 3px; }
 /* the last step: each extra on a line, what becomes of it beside its name */
 .r-row { display: flex; align-items: baseline; gap: 8px; margin: 0 0 6px; }
@@ -263,19 +266,19 @@ const EXTRAS = [
     text: "exe-planet turns Markdown files in the Workspace into websites. Planet keeps your sites and their posts, and Writer edits a post with its page beside it. It is a program of its own that runs beside exe.",
     box: "Planet and Writer on this desktop",
     get: "exe-planet is built from its source, which takes Go. A coding agent does it from this line:",
-    prompt: "Install exe-planet (https://github.com/livid/exe-planet) on this machine by following its README, and keep its daemon running. exe is already installed and running here." },
+    prompt: "Install exe-planet (https://github.com/livid/exe-planet) on this machine by following its README, and keep its daemon running. exe is already running here." },
   { name: "easel", step: "Easel", repo: "exe-easel",
     title: "Claude painters at an easel",
-    text: "exe-easel sets Claude to work at an oil paint simulator: a painter mixes its paint, lays it on, looks at the canvas, and stops when it is happy. It is a program of its own that runs beside exe, and it needs Claude Code.",
+    text: "exe-easel sets Claude to work at an oil paint simulator: a painter mixes its paint, lays it on, looks at the canvas, and stops when it is happy. It is a program of its own, and it needs Claude Code.",
     box: "Easel on this desktop",
     get: "exe-easel is built from its source, and asks for a few tools besides Claude Code. A coding agent does it from this line:",
-    prompt: "Set up exe-easel (https://github.com/livid/exe-easel) on this machine by following its README, asking me before installing anything. exe is already installed and running here." },
+    prompt: "Set up exe-easel (https://github.com/livid/exe-easel) on this machine by following its README, asking me before installing anything. exe is already running here." },
   { name: "projects", step: "Projects", repo: "exe-projects",
     title: "An issue tracker for your projects",
-    text: "exe-projects keeps your projects and their issues in one window. An issue has an address, such as EXE-12, and a coding agent files, reads and closes it from a shell. It is a program of its own that runs beside exe.",
+    text: "exe-projects keeps your projects and their issues in one window. An issue has an address, such as EXE-12, and a coding agent files, reads and closes it from a shell. It is a program of its own.",
     box: "Projects on this desktop",
     get: "exe-projects is built from its source, which takes Go. A coding agent does it from this line:",
-    prompt: "Install exe-projects (https://github.com/livid/exe-projects) on this machine by following its README, and keep its daemon running. exe is installed and running here." },
+    prompt: "Install exe-projects (https://github.com/livid/exe-projects) on this machine by following its README, and keep its daemon running. exe is already running here." },
 ];
 const STEPS = [...EXTRAS.map(x => x.step), "Review"];
 const LAST = STEPS.length - 1;

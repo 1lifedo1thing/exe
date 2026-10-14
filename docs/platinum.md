@@ -594,7 +594,13 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - A wizard in a window of its own (Extras, `sysapps/extras`, from
   Welcome's Apps card): the same head, list, page and button row with no
   status bar under them, in a fixed-size window with no grow box, sized
-  so that its tallest page fits without a scroll bar (580 by 500). Its
+  so that its tallest page fits without a scroll bar (580 by 500). The
+  tallest is the page of a thing that is not on the machine: three lines
+  of text, two before the agent's line, three of it, and under the field
+  two for what Find says, which are room the window leaves and not
+  height the page asks for. Count the lines in Safari on a Mac, where
+  Geneva and SF Mono run wider than a Linux test host's faces: a line
+  more of each is a scroll bar there that no Linux picture shows. Its
   steps are a page for each of four things that can be on or off, and a
   last one, Review. A page says what the thing is, then under a
   separator how it stands on this machine — a bold line and two lines
