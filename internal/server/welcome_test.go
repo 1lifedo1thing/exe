@@ -62,7 +62,7 @@ func TestWelcomeMark(t *testing.T) {
 // no other built-in app does.
 func TestWelcomeIsListedHidden(t *testing.T) {
 	s := New(&config.Config{}, nil, nil, "", t.TempDir())
-	hidden := map[string]string{"welcome": "Welcome", "extras": "Extras"}
+	hidden := map[string]string{"welcome": "Welcome", "extras": "Extras", "agents": "Agent Setup"}
 	seen := false
 	for _, a := range s.listApps() {
 		if title, ok := hidden[a.Name]; ok {

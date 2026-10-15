@@ -4276,7 +4276,7 @@ const ACTIONS = {
   showdesk: showDeskToggle,
   showall: showAllToggle,
   refresh: () => {
-    const jobs = [loadVMs(), loadApps()];
+    const jobs = [loadVMs(), loadApps(), loadHostAgents()];
     if (!$("#win-myapps").hidden) jobs.push(loadMyApps());
     Promise.all(jobs).then(() => toast("Refreshed")).catch(e => toast(e.message));
   },
@@ -5508,6 +5508,21 @@ let selectedIcon = null;
 // only on hosts with its CLI installed, and its tooltip names the project
 // dir it opens in
 const hostAgents = {}; // app → { dir, sessions } — sessions: tmux there, so the window gets a session column
+// takeHostAgents reads hostinfo's agents into hostAgents; true when an
+// icon is to be drawn or taken away. One installed while the desk is up
+// (Agent Setup's Install in Terminal) arrives by loadHostAgents, which the
+// refresh action runs.
+function takeHostAgents(h) {
+  let changed = false;
+  for (const app of Object.keys(AGENT_APPS)) {
+    const a = h.agents && h.agents[app];
+    if (a && !hostAgents[app]) changed = true;
+    if (!a && hostAgents[app]) { delete hostAgents[app]; changed = true; }
+    if (a) hostAgents[app] = { dir: a.dir || "the Workspace folder", sessions: !!a.sessions };
+  }
+  return changed;
+}
+const loadHostAgents = () => j("/v1/hostinfo").then(h => { if (takeHostAgents(h)) renderIcons(lastVMs); });
 function renderIcons(vms) {
   const box = $("#icons");
   box.replaceChildren();
@@ -7515,7 +7530,7 @@ for (const k of Object.keys(ACTIONS)) if (!DESK_ACTS[k]) DESK_ACTS[k] = { run: A
 DESK_ACTS.url = { run: href => window.open(href, "_blank", "noopener") };
 // what a system app may ask for over the bridge ({exe:"desk", act, args})
 const BRIDGE_ACTS = new Set(["newvm", "winvms", "winmyapps", "winchat", "winconfig", "claude", "codex",
-  "cfstatus", "cfwizard", "join", "hubjoin", "docs", "skillguide", "app"]);
+  "cfstatus", "cfwizard", "join", "hubjoin", "docs", "skillguide", "app", "terminal", "refresh"]);
 const DESK_EMPTY = { vms: "No VMs", apps: "No Apps", windows: "No Windows" };
 function deskGen(kind) {
   if (kind === "vms") return sortedVMs(lastVMs).map(vm => ({ label: vm.name, items: vmCtxItems(vm) }));
@@ -13672,12 +13687,7 @@ loadIcons().catch(() => {});
 loadDeskMenu().catch(() => {});
 // hosts with an agent CLI (Claude Code, Codex) get its desktop icon
 hostOnce().then(h => {
-  let any = false;
-  for (const app of Object.keys(AGENT_APPS)) {
-    const a = h.agents && h.agents[app];
-    if (a) { hostAgents[app] = { dir: a.dir || "the Workspace folder", sessions: !!a.sessions }; any = true; }
-  }
-  if (any) renderIcons(lastVMs);
+  if (takeHostAgents(h)) renderIcons(lastVMs);
   vmsError = h.vms_error || "";
   applyVMsError();
   // a new install's Welcome, once the saved layout has had its say: a

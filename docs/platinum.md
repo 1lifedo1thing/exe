@@ -642,6 +642,30 @@ restyling: `internal/server/ui/index.html` (the desktop),
   its close box, the wizard starts over the next time. Its icon is a
   jigsaw piece, as Mac OS drew its extensions.
   `~/tools/playwright/exe-extras-test.js` walks it.
+- A wizard with nothing to apply (Agent Setup, `sysapps/agents`, from
+  Welcome's Claude Code and Codex card): the same window (580 by 500, no
+  grow box), a page for each of the two CLIs and Review, whose button is
+  Done. A page says what the CLI is, then under the separator how it
+  stands here — Installed with its version and path under the green
+  check, in `#7a1010` when it is there but would not say its version —
+  and then one of two things. For one that is installed, a bold line
+  and four bullets on what exe adds, and its Open button in a row with
+  a line of words beside it. For one that is not, the way onto this kind
+  of machine: a line of lead, the command in the sunken mono box, the
+  other way in 11px `#555` under it, Copy Command and Install in
+  Terminal… in a row with what they did beside them, a line on the
+  sign-in after, and Check Again on a row of its own with its answer on
+  the line under (one line; two are counted as room, as Extras counts
+  Find's). Review is a row for each CLI and one for Sessions (tmux),
+  under the check where it is so and `#777` where not. The buttons that
+  open things go through the desk bridge, which lets a system app open
+  a terminal on a command (`terminal`) and have the desk look at the
+  machine again (`refresh`), so a CLI installed while the desktop is up
+  gets its icon. Its icon is the agents' compact Mac, its screen showing
+  an arrow coming down onto a line.
+  `~/tools/playwright/exe-agents-test.js` walks it, the desk half with the
+  desk's actions stubbed, since a real Open would start the CLI and a
+  real Install would run an installer on the host.
 - A stack of screens on a phone (Projects, `/www/exe-projects`): an app
   of columns shows them one at a time, each filling the window over the
   status bar, which stays. The screens lie over one another in one box

@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Setup</title>
+<style>
+/* Platinum values match the exe desktop (same block as Welcome and Extras) */
+:root {
+  --black: #262626;
+  --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999;
+  --hl: #333399; --red: #7a1010; --green: #1f9e33;
+  --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { height: 100%; }
+body { margin: 0; font: 12px/16px var(--font); color: var(--black); background: var(--g200);
+  user-select: none; -webkit-user-select: none; cursor: default; overflow: hidden; }
+
+button { font: inherit; cursor: default; }
+button.ghost { background: var(--g300); color: var(--black);
+  border: 1px solid var(--black); border-radius: 3px;
+  padding: 2px 13px; font-size: 12px; line-height: 14px; font-weight: bold; height: 20px;
+  white-space: nowrap; flex: none;
+  box-shadow: inset 1px 1px 0 var(--g300), inset -1px -1px 0 #777,
+    inset 2px 2px 0 #fff, inset -2px -2px 0 #aaa; }
+button.ghost:active { background: #666; color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888,
+    inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
+button.ghost:disabled { color: #777; border-color: #888; background: var(--g300); box-shadow: none; }
+/* the one button Return presses wears the ring */
+button.ghost.default { outline: 2px solid var(--black); outline-offset: 1px; border-radius: 4px; }
+button:focus:not(.default) { outline: none; }
+
+/* The wizard (docs/platinum.md, "A wizard"; the Hub app's Join a Hub is
+   the first of them): a head with the icon, the steps down the left
+   beside the step's page, and a button row of its own under a separator —
+   Cancel at the left, Go Back and the ringed Continue at the right. Every
+   part is there from the first paint and a page only fills it. This
+   window is the wizard and nothing else, so it has no status bar. */
+#wiz { height: 100%; display: flex; flex-direction: column; }
+/* separators are a 1px #999 line over a 1px white one */
+.w-head { flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border-bottom: 1px solid var(--g600); }
+.w-head svg { flex: none; display: block; }
+.w-head h1 { margin: 0; font-size: 12px; line-height: 16px; }
+.w-head p { margin: 0; color: #555; }
+.w-head .narrow { display: none; }
+.w-mid { flex: 1; min-height: 0; display: flex; box-shadow: inset 0 1px 0 #fff; }
+/* the steps: a done one wears the pass mark's green check, the one in
+   hand OS 9's dot and bold type, the ones to come grey. They are read,
+   never pressed. */
+#w-steps { flex: none; width: 132px; margin: 0; padding: 11px 8px 0 14px; list-style: none;
+  border-right: 1px solid var(--g600); }
+#w-steps li { display: flex; align-items: center; gap: 6px; height: 20px; color: #777; white-space: nowrap; }
+#w-steps li.now { color: var(--black); font-weight: bold; }
+#w-steps li.done { color: var(--black); }
+#w-steps .m { flex: none; width: 10px; height: 10px; display: flex; align-items: center; justify-content: center; }
+#w-steps .m svg { display: none; }
+#w-steps li.done .m .tick { display: block; fill: var(--green); }
+/* the dot is stepped pixels at whole scales and a circle between them,
+   where a stepped one comes out a blunt square */
+#w-steps .m .dot { fill: var(--black); }
+#w-steps li.now .m .dot.crisp { display: block; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  #w-steps li.now .m .dot.crisp { display: none; }
+  #w-steps li.now .m .dot.fine { display: block; }
+}
+#w-page { flex: 1; min-width: 0; overflow-y: auto; padding: 12px 14px 4px; box-shadow: inset 1px 0 0 #fff; }
+#w-page > * { max-width: 440px; }
+#w-page h2 { margin: 0 0 6px; font-size: 12px; line-height: 16px; }
+#w-page p { margin: 0 0 10px; }
+#w-page a { color: var(--hl); }
+.w-wait { color: #777; }
+/* how the extra stands on this machine: a bold line, then two lines kept
+   for the answer, the green check before it when the extra is on */
+.w-here { margin: 0 0 10px; padding-top: 8px; border-top: 1px solid var(--g600); box-shadow: inset 0 1px 0 #fff; }
+.w-here h2 { margin-bottom: 2px; }
+.w-stand { min-height: 32px; color: #555; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; cursor: text; }
+.w-stand.one { min-height: 16px; }
+.w-stand.ok { color: #0f6b20; }
+.w-stand.warn { color: var(--red); }
+.tick { display: block; width: 10px; height: 10px; }
+.w-stand .tick, .r-row .tick { display: inline-block; vertical-align: -1px; margin-right: 4px; fill: var(--green); }
+/* what a button did, in words: two lines kept, so the page is as tall
+   before the words come and after */
+.w-note { min-height: 32px; margin: 6px 0 10px; font-size: 11px; color: #555; overflow-wrap: anywhere; }
+.w-note.err { color: var(--red); }
+/* what exe adds to an installed CLI: four short lines, a bullet each */
+.w-adds { margin: 0 0 10px; padding: 0 0 0 16px; }
+.w-adds li { margin: 0 0 4px; }
+/* a CLI that is not on this machine: how to get it, the command in a
+   sunken box (selectable: it is to be copied), another way in small type
+   under it, and what comes after */
+.w-get { margin: 10px 0 8px; }
+.w-alt { margin: -2px 0 8px; font-size: 11px; color: #555; overflow-wrap: anywhere; }
+.w-alt code { font-family: var(--mono); font-size: 10px; }
+.w-after { margin: 0 0 8px; }
+.w-prompt { margin: 0 0 8px; padding: 4px 6px; background: #fff; border: 1px solid var(--black);
+  box-shadow: -1px -1px 0 #999, 1px 1px 0 #fff; font: 11px/16px var(--mono);
+  overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; cursor: text; }
+/* a button of the page's own gets a row, with what it did in words beside it */
+.w-btn { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; min-height: 20px; }
+.w-btn span { font-size: 11px; color: #555; min-width: 0; }
+.w-btn.tight { margin-bottom: 0; }
+/* what Check Again says is the page's last line. Its two lines are the
+   room the window leaves under the row, not height the page asks for:
+   where a wider face gives the text a line more, the page still has no
+   scroll bar */
+#w-said { margin-top: 6px; min-height: 0; }
+/* the last step: each CLI on a line, how it stands beside its name */
+.r-row { display: flex; align-items: baseline; gap: 8px; margin: 0 0 6px; }
+.r-name { flex: none; width: 84px; font-weight: bold; }
+.r-what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.r-what.same { color: #777; }
+.r-what.ok { color: #0f6b20; }
+.r-what.err { color: var(--red); }
+.w-foot { flex: none; display: flex; align-items: center; gap: 12px; padding: 12px;
+  border-top: 1px solid var(--g600); box-shadow: inset 0 1px 0 #fff; }
+.w-foot .gap { flex: 1; min-width: 0; }
+.w-foot button { min-width: 58px; }
+/* a narrow window, and a phone: the list gives its room to the page, and
+   the head counts the steps instead */
+@media (max-width: 459px) {
+  #w-steps { display: none; }
+  #w-page { box-shadow: none; }
+  .w-head .wide { display: none; }
+  .w-head .narrow { display: inline; }
+  .w-foot { flex-wrap: wrap; row-gap: 10px; }
+}
+
+/* Mac OS 9 scrollbars: the desktop's pixel-sampled block, as Tides has it.
+   The window's frame draws the outer black line, so a bar is 15px (1px
+   leading separator + the sampled 14px face) with no trailing border. A
+   window at its own size never shows one; a short window, or a phone held
+   sideways, does. */
+::-webkit-scrollbar { width: 15px; height: 15px; }
+::-webkit-scrollbar-track:vertical { border-left: 1px solid var(--black);
+  background: linear-gradient(to right, #777 0, #777 1px, #888 1px, #888 2px, #aaa 2px, #aaa 12px, #bbb 12px, #bbb 13px, #ccc 13px, #ccc 14px); }
+::-webkit-scrollbar-thumb:vertical { border: 1px solid var(--black); border-right: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="0" width="6" height="1" fill="%23ccccff"/><rect x="4" y="1" width="7" height="1" fill="%23333399"/><rect x="3" y="2" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="2" width="6" height="1" fill="%23ccccff"/><rect x="4" y="3" width="7" height="1" fill="%23333399"/><rect x="3" y="4" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="4" width="6" height="1" fill="%23ccccff"/><rect x="4" y="5" width="7" height="1" fill="%23333399"/><rect x="3" y="6" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="6" width="6" height="1" fill="%23ccccff"/><rect x="4" y="7" width="7" height="1" fill="%23333399"/></svg>') center no-repeat,
+    linear-gradient(to right, #ccccff 0 1px, #9999ff 1px 13px, #6666cc 13px 14px);
+  box-shadow: inset 0 1px 0 #ccccff, inset 0 -1px 0 #6666cc; }
+::-webkit-scrollbar-thumb:vertical:active {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23ccccff"/><rect x="4" y="0" width="6" height="1" fill="%239999ff"/><rect x="4" y="1" width="7" height="1" fill="%23000066"/><rect x="3" y="2" width="1" height="1" fill="%23ccccff"/><rect x="4" y="2" width="6" height="1" fill="%239999ff"/><rect x="4" y="3" width="7" height="1" fill="%23000066"/><rect x="3" y="4" width="1" height="1" fill="%23ccccff"/><rect x="4" y="4" width="6" height="1" fill="%239999ff"/><rect x="4" y="5" width="7" height="1" fill="%23000066"/><rect x="3" y="6" width="1" height="1" fill="%23ccccff"/><rect x="4" y="6" width="6" height="1" fill="%239999ff"/><rect x="4" y="7" width="7" height="1" fill="%23000066"/></svg>') center no-repeat,
+    linear-gradient(to right, #9999ff 0 1px, #6666cc 1px 13px, #333399 13px 14px);
+  box-shadow: inset 0 1px 0 #9999ff, inset 0 -1px 0 #333399; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical {
+  border-top-color: #ccccff; box-shadow: inset 0 -1px 0 #6666cc; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical:active {
+  border-top-color: #9999ff; box-shadow: inset 0 -1px 0 #333399; }
+.at-y-end::-webkit-scrollbar-thumb:vertical {
+  border-bottom-color: #6666cc; box-shadow: inset 0 1px 0 #ccccff; }
+.at-y-end::-webkit-scrollbar-thumb:vertical:active {
+  border-bottom-color: #333399; box-shadow: inset 0 1px 0 #9999ff; }
+/* Safari redraws a custom scroll bar only when its element's own style
+   changes, and the classes above change nothing of the element's own: the
+   thumb's end merges stayed stale there and doubled the line against the
+   arrows. Each class sets a property of its own, so WebKit sees a change. */
+.scrolled-y { --sb-scrolled-y: 1; } .at-y-end { --sb-at-y-end: 1; }
+::-webkit-scrollbar-button { display: block; width: 16px; height: 16px;
+  background: #ddd; border: 1px solid var(--black);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #bbb;
+  background-position: center; background-repeat: no-repeat; }
+::-webkit-scrollbar-button:vertical { border-right: 0; }
+::-webkit-scrollbar-button:vertical:end:increment:enabled { height: 14px; border-top: 0; border-bottom: 0; }
+::-webkit-scrollbar-button:vertical:decrement {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M0 3h8v1h-8z"/></svg>'); }
+::-webkit-scrollbar-button:vertical:increment {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M0 0h8v1h-8z M1 1h6v1h-6z M2 2h4v1h-4z M3 3h2v1h-2z"/></svg>'); }
+::-webkit-scrollbar-button:active { background-color: #777;
+  box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 #999; }
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:start:increment { display: none; }
+::-webkit-scrollbar-corner { background: var(--g300); }
+</style>
+</head>
+<body>
+
+<div id="wiz">
+  <div class="w-head">
+    <svg width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
+    <rect x="6.5" y="1.5" width="19" height="24" fill="#DAD5CA" stroke="#000"/>
+    <rect x="9.5" y="4.5" width="13" height="10" fill="#6e6a61" stroke="#000"/>
+    <rect x="10.5" y="5.5" width="11" height="8" fill="#000" stroke="#000"/>
+    <path fill="#FFFFFF" d="M15 6h2v3h-2zM13 9h6v1h-6zM14 10h4v1h-4zM15 11h2v1h-2z"/>
+    <path fill="#33ff33" d="M12 12h8v1h-8z"/>
+    <rect x="12" y="18" width="8" height="2" fill="#55524B"/>
+    <rect x="20" y="21" width="3" height="2" fill="#B7B2A7"/>
+    <rect x="9.5" y="25.5" width="13" height="3" fill="#C8C3B8" stroke="#000"/>
+    </svg>
+    <div>
+      <h1>Agent Setup</h1>
+      <p><span class="wide">Claude Code and Codex on this machine, and what exe adds to each.</span><span class="narrow" id="w-count"></span></p>
+    </div>
+  </div>
+  <div class="w-mid">
+    <ol id="w-steps" aria-label="Steps"></ol>
+    <div id="w-page"></div>
+  </div>
+  <div class="w-foot">
+    <button class="ghost" id="w-cancel">Cancel</button>
+    <span class="gap"></span>
+    <button class="ghost" id="w-back">Go Back</button>
+    <button class="ghost default" id="w-next">Continue</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  e.append(...kids);
+  return e;
+}
+
+// the desktop hands its window the API token
+const QUERY = new URLSearchParams(location.search);
+const TOKEN = QUERY.get("token") ||
+  (() => { try { return localStorage.getItem("exe_token") || ""; } catch (e) { return ""; } })();
+const IN_DESK = window.parent !== window;
+// the daemon's answer, or its own words for why not
+async function api(path) {
+  const opts = { headers: {} };
+  if (TOKEN) opts.headers["Authorization"] = "Bearer " + TOKEN;
+  const r = await fetch(path, opts);
+  const out = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(out.error || "HTTP " + r.status);
+  return out;
+}
+// The desktop bridge. {exe:"desk", act, args} asks the desktop for one of
+// its own menu actions (claude, codex, terminal, refresh): the names and
+// their greyed-out rules are the desktop menu's.
+const post = msg => { if (IN_DESK) parent.postMessage(msg, location.origin); };
+const desk = (act, ...args) => post({ exe: "desk", act, args });
+
+const TICK = '<svg class="tick" viewBox="0 0 10 10" shape-rendering="crispEdges" aria-hidden="true"><path d="M1 4h1v1H1zM2 5h1v1H2zM3 6h1v1H3zM4 7h1v1H4zM5 6h1v1H5zM6 5h1v1H6zM7 4h1v1H7zM8 3h1v1H8zM8 2h1v1H8zM2 4h1v1H2zM3 5h1v1H3zM4 6h1v1H4zM5 5h1v1H5zM6 4h1v1H6zM7 3h1v1H7z"/></svg>';
+const DOT = '<svg class="dot crisp" viewBox="0 0 6 6" width="6" height="6" shape-rendering="crispEdges" aria-hidden="true"><path d="M1 0h4v1H1zM0 1h6v4H0zM1 5h4v1H1z"/></svg>' +
+  '<svg class="dot fine" viewBox="0 0 6 6" width="6" height="6" aria-hidden="true"><circle cx="3" cy="3" r="3"/></svg>';
+
+// ---- the two CLIs, in words. Whether each is here, and which version,
+// comes from the daemon (GET /v1/agents/cli, internal/server/agentcli.go);
+// the names are its names. install(m) is the way onto this machine, m
+// being the daemon's word on the machine: its os and the tools here.
+const AGENTS = [
+  { name: "claude", step: "Claude Code", act: "claude",
+    title: "Claude Code: Anthropic’s coding agent in the terminal",
+    text: "Claude Code reads, writes and runs code in a folder while you talk to it, on a Claude subscription or an API key.",
+    adds: [
+      "A window of its own on this desktop. Its session runs on the machine, not in the browser: close the tab or the laptop and it works on.",
+      "Its sessions in a column down the left, a dot on one that waits for you, Get Info on any, and every prompt a click away.",
+      "Usage in view: the model, context, tokens and cost on the status line, and the plan’s usage windows in the Control Strip.",
+      "Word when a turn ends: a push to your phone, and a tap opens that session. Drop a file on the window and its path is typed at the prompt.",
+    ],
+    after: "Then open Claude Code from the desktop and sign in, with a Claude account or an API key.",
+    install(m) {
+      if (m.os === "windows") return { lead: "Anthropic’s installer for Windows runs in PowerShell:", cmd: "irm https://claude.ai/install.ps1 | iex",
+        alt: m.tools.npm ? "With npm instead: npm install -g @anthropic-ai/claude-code" : "" };
+      return { lead: "Anthropic’s installer puts it in ~/.local/bin, where exe looks:", cmd: "curl -fsSL https://claude.ai/install.sh | bash",
+        alt: m.os === "darwin" && m.tools.brew ? "With Homebrew instead: brew install --cask claude-code"
+          : m.tools.npm ? "With npm instead: npm install -g @anthropic-ai/claude-code" : "" };
+    } },
+  { name: "codex", step: "Codex", act: "codex",
+    title: "Codex: OpenAI’s coding agent in the terminal",
+    text: "Codex reads, writes and runs code in a folder while you talk to it, on a ChatGPT plan or an OpenAI API key.",
+    adds: [
+      "A window of its own on this desktop. Its session runs on the machine, not in the browser: close the tab or the laptop and it works on.",
+      "Its threads in a column down the left, those begun in the ChatGPT app or over SSH among them: a click continues one here.",
+      "Usage in view: the plan’s usage windows on the status line and in the Control Strip.",
+      "Word when a turn ends: a push to your phone, and a tap opens that thread. Drop a file on the window and its path is typed at the prompt.",
+    ],
+    after: "Then open Codex from the desktop and sign in, with a ChatGPT account or an OpenAI API key.",
+    install(m) {
+      const npm = "npm install -g @openai/codex", brew = "brew install --cask codex";
+      if (m.tools.npm) return { lead: "Codex comes from npm, which this machine has:", cmd: npm,
+        alt: m.os === "darwin" && m.tools.brew ? "With Homebrew instead: " + brew : m.os === "windows" ? "Outside WSL, Codex on Windows is still experimental." : "" };
+      if (m.os === "darwin" && m.tools.brew) return { lead: "Codex comes from npm or Homebrew; this machine has Homebrew:", cmd: brew, alt: "With npm instead, once Node.js is installed: " + npm };
+      return { lead: "Codex comes from npm. Install Node.js from nodejs.org first, then:", cmd: npm,
+        alt: m.os === "windows" ? "Outside WSL, Codex on Windows is still experimental." : "" };
+    } },
+];
+const STEPS = [...AGENTS.map(a => a.step), "Review"];
+const LAST = STEPS.length - 1;
+
+// X is the wizard: the step, the daemon's word (info; null until it has
+// said), what Check Again said on each page (said), and which CLIs were
+// installed when the window last looked (had), so a new one is told to
+// the desktop
+let X;
+function fresh() {
+  X = { step: 0, info: null, failed: "", said: {}, had: null };
+}
+fresh();
+const words = list => list.length < 2 ? list.join("") : list.slice(0, -1).join(", ") + " and " + list[list.length - 1];
+const named = a => { const i = X.info.agents[a.name]; return a.step + (i.version ? " " + i.version : ""); };
+
+// ---- what the daemon says ----
+let asking = null;
+function ask() {
+  if (asking) return asking;
+  asking = api("/v1/agents/cli").then(take, e => { X.failed = e.message; if (!X.info) draw(); }).finally(() => { asking = null; });
+  return asking;
+}
+// take is new word of how the CLIs stand. One installed since the last
+// look is new to the desktop too, whose icons come from a look at the
+// machine when it loaded: refresh has it look again.
+function take(info) {
+  const was = JSON.stringify(X.info);
+  const now = AGENTS.filter(a => info.agents && info.agents[a.name] && info.agents[a.name].installed).map(a => a.name);
+  if (X.had && now.some(n => !X.had.includes(n))) desk("refresh");
+  X.had = now;
+  X.info = info;
+  X.failed = "";
+  if (JSON.stringify(info) !== was) draw();
+}
+
+// ---- how a CLI stands, in a line or two ----
+function stand(a) {
+  const i = X.info.agents[a.name] || {};
+  if (!i.installed) return { kind: "", text: "Not installed. exe looks on PATH, in ~/.local/bin and where npm, bun and Homebrew put programs." };
+  if (i.version) return { kind: "ok", text: "Installed: " + a.step + " " + i.version + ", at " + i.path + "." };
+  return { kind: "warn", text: "Installed at " + i.path + ", but it did not say its version: " + (i.error || "no answer") + "." };
+}
+
+// ---- drawing ----
+$("#w-steps").innerHTML = STEPS.map(s => `<li><span class="m">${TICK}${DOT}</span><span>${s}</span></li>`).join("");
+function buttons() {
+  $("#w-cancel").hidden = !IN_DESK; // a tab of its own has no window to put away
+  $("#w-back").disabled = X.step === 0;
+  const next = $("#w-next");
+  next.textContent = X.step < LAST ? "Continue" : "Done";
+  next.disabled = !X.info || (X.step === LAST && !IN_DESK);
+}
+function draw() {
+  [...$("#w-steps").children].forEach((li, n) => {
+    li.className = n < X.step ? "done" : n === X.step ? "now" : "";
+    n === X.step ? li.setAttribute("aria-current", "step") : li.removeAttribute("aria-current");
+  });
+  $("#w-count").textContent = "Step " + (X.step + 1) + " of " + STEPS.length + ": " + STEPS[X.step];
+  const page = $("#w-page"), had = document.activeElement && document.activeElement.id;
+  page.replaceChildren(...(!X.info ? [el("p", { class: "w-wait" }, X.failed ? "exe did not say what is installed: " + X.failed : "Looking at this machine…")]
+    : X.step === LAST ? reviewPage() : agentPage(AGENTS[X.step])));
+  buttons();
+  // the keyboard stays where it was on a page drawn again, and starts on
+  // the ringed button
+  const back = had && document.getElementById(had);
+  (back && !back.disabled ? back : $("#w-next")).focus({ preventScroll: true });
+}
+
+// 1 and 2: a CLI a page
+function agentPage(a) {
+  const st = stand(a), i = X.info.agents[a.name] || {};
+  const here = el("div", { class: "w-stand" + (st.kind ? " " + st.kind : "") });
+  if (st.kind === "ok") here.innerHTML = TICK;
+  here.append(st.text);
+  return [
+    el("h2", {}, a.title),
+    el("p", {}, a.text),
+    el("div", { class: "w-here" }, el("h2", {}, "On this machine"), here),
+    ...(i.installed ? addsPage(a) : getPage(a)),
+  ];
+}
+// the page of a CLI that is here: what exe adds to it, and the way in
+function addsPage(a) {
+  const open = el("button", { class: "ghost", id: "w-open", onclick: () => desk(a.act) }, "Open " + a.step);
+  open.disabled = !IN_DESK; // in a tab of its own there is no desktop to open it on
+  return [
+    el("h2", {}, "What exe adds"),
+    el("ul", { class: "w-adds" }, ...a.adds.map(t => el("li", {}, t))),
+    el("div", { class: "w-btn tight" }, open, el("span", {}, IN_DESK ? "Its icon is on the desktop too." : "Its icon is on the exe desktop.")),
+  ];
+}
+// the page of a CLI that is not here: how to get it, and a look again
+function getPage(a) {
+  const m = X.info, how = a.install({ os: m.os || "", tools: m.tools || {} });
+  const said = el("div", { class: "w-note", id: "w-said", role: "status" }, X.said[a.name] || "");
+  const say = text => { X.said[a.name] = said.textContent = text; };
+  const did = el("span", { role: "status" });
+  const copy = el("button", { class: "ghost", id: "w-copy" }, "Copy Command");
+  copy.onclick = async () => { did.textContent = await copyText(how.cmd) ? "Copied. Paste it into a terminal on this machine." : "Copy failed: select the command and copy it."; };
+  // Install in Terminal opens the desktop's Terminal on the command; on
+  // Linux and a Mac the shell stays after it, for the sign-in
+  const run = el("button", { class: "ghost", id: "w-run" }, "Install in Terminal…");
+  run.disabled = !IN_DESK;
+  run.onclick = () => {
+    desk("terminal", m.os === "windows" ? how.cmd : how.cmd + "; exec $SHELL -l");
+    did.textContent = "Opened a Terminal window: the installer runs there.";
+  };
+  const again = el("button", { class: "ghost", id: "w-again" }, "Check Again");
+  again.onclick = async () => {
+    const me = X;
+    again.disabled = true;
+    say("Looking…");
+    try {
+      await ask();
+      if (X !== me) return;
+      const i = X.info.agents[a.name];
+      say(i && i.installed ? "" : "Looked again: " + a.step + " is not installed yet.");
+      if (i && i.installed) draw();
+    } catch (e) { if (X === me) say(e.message + "."); }
+    again.disabled = false;
+  };
+  const alt = el("div", { class: "w-alt" });
+  if (how.alt) {
+    const [lead, cmd] = how.alt.split(/: (?=\S)/);
+    alt.append(cmd ? lead + ": " : how.alt);
+    if (cmd) alt.append(el("code", {}, cmd));
+  }
+  return [
+    el("div", { class: "w-get" }, how.lead),
+    el("div", { class: "w-prompt", id: "w-cmd" }, how.cmd),
+    alt,
+    el("div", { class: "w-btn" }, copy, run, did),
+    el("p", { class: "w-after" }, a.after),
+    el("div", { class: "w-btn tight" }, again),
+    said,
+  ];
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+  // a plain-http desktop has no clipboard API
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.top = "-1000px";
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) {}
+  ta.remove();
+  return ok;
+}
+
+// 3: each CLI on a line, and whether sessions outlive their windows
+function reviewPage() {
+  const have = AGENTS.filter(a => X.info.agents[a.name] && X.info.agents[a.name].installed);
+  const rows = AGENTS.map(a => {
+    const i = X.info.agents[a.name] || {}, what = el("span", { class: "r-what" });
+    if (i.installed) {
+      what.classList.add("ok");
+      what.innerHTML = TICK;
+      what.append("Installed" + (i.version ? ", " + i.version : ""));
+    } else {
+      what.classList.add("same");
+      what.append("Not installed");
+    }
+    what.dataset.agent = a.name;
+    return el("div", { class: "r-row" }, el("span", { class: "r-name" }, a.step), what);
+  });
+  const sess = el("span", { class: "r-what" + (X.info.tmux ? " ok" : " same") });
+  if (X.info.tmux) sess.innerHTML = TICK;
+  sess.append(X.info.tmux ? "tmux is here: a session outlives its window"
+    : X.info.os === "windows" ? "No tmux on Windows: each window is a fresh run of the CLI" : "No tmux: each window is a fresh run of the CLI");
+  sess.dataset.agent = "tmux";
+  rows.push(el("div", { class: "r-row" }, el("span", { class: "r-name" }, "Sessions"), sess));
+  const note = have.length === AGENTS.length ? "Both have an icon on the desktop. Double-click one and its window opens on a session of this machine’s own."
+    : have.length ? named(have[0]) + " has an icon on the desktop. The " + AGENTS.find(a => !have.includes(a)).step + " page says how to install it; this window looks again whenever it comes forward."
+    : "Neither is installed yet. Each page says how to install it, and this window looks again whenever it comes forward.";
+  return [
+    el("h2", {}, "On this desktop"),
+    el("p", {}, "Each coding agent, and what runs it."),
+    ...rows,
+    el("div", { class: "w-note", id: "r-note", role: "status" }, note),
+  ];
+}
+
+// ---- the buttons and the keys ----
+function close() {
+  fresh();
+  draw();
+  ask();
+  post({ exe: "close" });
+}
+$("#w-cancel").onclick = close;
+$("#w-back").onclick = () => { if (X.step > 0) { X.step--; draw(); } };
+$("#w-next").onclick = () => {
+  if (!X.info) return;
+  if (X.step < LAST) { X.step++; draw(); return; }
+  close();
+};
+// Return presses the ringed button and Escape is Cancel
+document.addEventListener("keydown", e => {
+  if (e.isComposing) return;
+  if (e.key === "Escape") { if (!$("#w-cancel").hidden) { e.preventDefault(); $("#w-cancel").click(); } return; }
+  if (e.key !== "Enter" || e.target.closest("button, a")) return;
+  e.preventDefault();
+  $("#w-next").click();
+});
+
+// clicks inside the frame never reach the window's own mousedown handler
+document.addEventListener("pointerdown", () => post({ exe: "focus" }), true);
+// OS 9 scrollbar end-merges need the same scrolled/at-end flags as the desktop
+document.addEventListener("scroll", e => {
+  const t = e.target;
+  if (!(t instanceof Element)) return;
+  t.classList.toggle("scrolled-y", t.scrollTop >= 1);
+  t.classList.toggle("at-y-end", t.scrollTop >= 1 && t.scrollTop >= t.scrollHeight - t.clientHeight - 1);
+}, { capture: true, passive: true });
+// What a page sent the reader off to do (an installer in a Terminal) is
+// done in another window: coming back asks again. The desktop says when
+// the window is opened again after being put away.
+window.addEventListener("focus", () => ask());
+document.addEventListener("visibilitychange", () => { if (!document.hidden) ask(); });
+window.addEventListener("message", e => {
+  if (e.origin !== location.origin || !e.data || typeof e.data.exe !== "string") return;
+  // put away by its close box, the wizard starts over the next time
+  if (e.data.exe === "hide") { fresh(); draw(); }
+  else if (e.data.exe === "show") ask();
+});
+
+draw();
+ask();
+</script>
+</body>
+</html>

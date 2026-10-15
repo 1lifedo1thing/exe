@@ -321,6 +321,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/apps/{app}/data/{path...}", s.handleAppDataDelete)
 	mux.HandleFunc("GET /v1/agents/usage", s.handleAgentUsage)
 	mux.HandleFunc("GET /v1/agents/work", s.handleAgentWork)
+	mux.HandleFunc("GET /v1/agents/cli", s.handleAgentCLI)
 	mux.HandleFunc("GET /v1/agents/{app}/sessions", s.handleAgentSessionsList)
 	mux.HandleFunc("POST /v1/agents/{app}/sessions", s.handleAgentSessionCreate)
 	mux.HandleFunc("POST /v1/agents/{app}/sessions/{name}/prompt", s.handleAgentSessionPrompt)

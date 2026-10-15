@@ -309,7 +309,7 @@ const TICK = `<svg class="tick" viewBox="0 0 10 10" shape-rendering="crispEdges"
 // ---- what this machine has. Each answer is asked once the window opens
 // and again whenever it is shown or a card is opened; a feature reads what
 // has arrived (undefined: not yet; null: the daemon would not say).
-const S = { host: undefined, vms: undefined, chat: undefined, cf: undefined, apps: undefined, hub: undefined };
+const S = { host: undefined, vms: undefined, chat: undefined, cf: undefined, apps: undefined, hub: undefined, cli: undefined };
 const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
 const WAIT = { kind: "wait", text: "Checking…" };
 const UNKNOWN = { kind: "todo", text: "exe did not say." };
@@ -359,19 +359,24 @@ const FEATS = [
     blurb: "Agent sessions in windows of their own, still at work after the tab, or the laptop, is closed.",
     lead: "Agent sessions that keep working when you leave.",
     text: ["With the Claude Code or the Codex CLI installed on this machine, each gets an icon on the desktop and a window of its own. The session runs on the machine, not in the browser: close the window, the tab or the laptop and it works on. Open it again, from any device, and you are back in the same conversation.",
-      "The window lists its sessions down the left, the Control Strip counts what they use, and a phone that keeps the desktop on its Home Screen hears when a turn ends."],
+      "The window lists its sessions down the left, the Control Strip counts what they use, and a phone that keeps the desktop on its Home Screen hears when a turn ends. Agent Setup… says how to install each CLI, and what exe adds to one that is here."],
     more: "Claude Code, Codex and Terminal",
+    // hostinfo says which are installed, at once; the versions follow
+    // from /v1/agents/cli, which has to ask each CLI
     state() {
       if (S.host === undefined) return WAIT;
       if (!S.host) return UNKNOWN;
-      const a = S.host.agents || {};
-      if (a.claude && a.codex) return { kind: "ok", text: "Claude Code and Codex are both installed." };
-      if (a.claude) return { kind: "ok", text: "Claude Code is installed. Codex is not." };
-      if (a.codex) return { kind: "ok", text: "Codex is installed. Claude Code is not." };
-      return { kind: "todo", text: "Neither CLI is installed on this machine. Install one and its icon appears on the desktop." };
+      const a = S.host.agents || {}, v = (S.cli && S.cli.agents) || {};
+      const name = (id, title) => title + (v[id] && v[id].version ? " " + v[id].version : "");
+      if (a.claude && a.codex) return { kind: "ok", text: name("claude", "Claude Code") + " and " + name("codex", "Codex") + " are both installed." };
+      if (a.claude) return { kind: "ok", text: name("claude", "Claude Code") + " is installed. Codex is not." };
+      if (a.codex) return { kind: "ok", text: name("codex", "Codex") + " is installed. Claude Code is not." };
+      return { kind: "todo", text: "Neither CLI is installed on this machine. Agent Setup… says how to install each; its icon then appears on the desktop." };
     },
+    // the wizard first, then the window of each CLI that is here: with
+    // neither installed the wizard is the one Return presses
     acts() {
-      const a = (S.host && S.host.agents) || {}, out = [];
+      const a = (S.host && S.host.agents) || {}, out = [{ label: "Agent Setup…", act: "app", args: ["agents"] }];
       if (a.codex) out.push({ label: "Open Codex", act: "codex" });
       if (a.claude) out.push({ label: "Open Claude Code", act: "claude" });
       return out;
@@ -441,6 +446,7 @@ function ask() {
     get("chat", "/v1/chat/status"),
     get("cf", "/v1/cloudflare/health"),
     get("apps", "/v1/apps"),
+    get("cli", "/v1/agents/cli"),
     // no file yet is an answer too: the Hub app has never been set up
     api("/v1/apps/hub/data/config.json").then(v => v, () => ({})).then(v => { S.hub = v; paint(); }),
   ]).finally(() => { asking = false; });

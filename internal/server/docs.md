@@ -215,8 +215,9 @@ The magnifier opens one box that finds VMs, chat sessions, notes and todos.
   still needs. A ready feature has a green check beside its name on the
   first page.
 - The card's button goes there: **New VM…**, the pane of Configuration that
-  sets Chat up, the Cloudflare Setup Wizard, **Join a Hub…** until a hub
-  is joined and the Hub after, and **Extras…** on the Apps card.
+  sets Chat up, **Agent Setup…** on the Claude Code and Codex card, the
+  Cloudflare Setup Wizard, **Join a Hub…** until a hub is joined and the
+  Hub after, and **Extras…** on the Apps card.
 - **Read More…** opens this manual on that feature's chapter.
 
 On a new install the window opens with the desktop each time, until you
@@ -715,6 +716,38 @@ For a coding agent:
   the agent the Agent Skill Guide and it uses exe's VMs as its sandboxes.
   [The coding agent](https://exe.v2core.com/docs/using/the-coding-agent) has
   the guide.
+
+### Install Claude Code or Codex
+
+**Help → Welcome…**, the **Claude Code and Codex** card, says which of the
+two is installed on this machine, with its version, and its **Agent
+Setup…** button opens a window of three steps: a page for Claude Code, one
+for Codex, and a review.
+
+- A CLI that is installed shows its version and where it is, and what exe
+  adds to it: the window that outlives the browser, the session column,
+  usage in view and word when a turn ends. **Open Claude Code** or **Open
+  Codex** opens its window.
+- A CLI that is not installed shows the command that installs it on this
+  kind of machine: Anthropic's installer for Claude Code (`curl … | bash`
+  on Linux and a Mac, `irm … | iex` in PowerShell on Windows), npm or
+  Homebrew for Codex, with another way in small type where the machine
+  has one. **Copy Command** copies it; **Install in Terminal…** opens a
+  Terminal window on the desktop that runs it and leaves you at a prompt
+  after. Then open the CLI's window from the desktop and sign in the
+  first time.
+- **Check Again** looks at the machine again, and the window also looks
+  whenever it comes forward, so an install made meanwhile shows on its
+  return. A CLI installed while the desktop is open gets its icon without
+  a reload.
+- **Review** lists both, with the version of each that is here, and
+  whether tmux is on the machine: with it a session outlives its window,
+  without it each window is a fresh run of the CLI.
+
+exe finds a CLI on PATH, in `~/.local/bin`, where npm, bun and Homebrew
+put programs, and in every nvm Node version's `bin`. A script can ask too:
+`GET /v1/agents/cli` names each with its path and version, and what an
+installer would lean on here (`curl`, `node`, `npm`, `brew`).
 
 ### Open a window
 
