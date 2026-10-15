@@ -52,6 +52,9 @@ type pushSub struct {
 	} `json:"keys"`
 	Added time.Time `json:"added,omitempty"`
 	UA    string    `json:"ua,omitempty"`
+	// Origin is the desktop this browser subscribed from, not the push
+	// service's endpoint. Older records acquire it on the next desk load.
+	Origin string `json:"origin,omitempty"`
 }
 
 var b64 = base64.RawURLEncoding
@@ -139,6 +142,19 @@ func (s *Server) handlePushSubscribe(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errors.New("the endpoint must be an https URL"))
 		return
 	}
+	// A browser supplies Origin on this POST, including through an HTTPS
+	// proxy. Never take an origin from the caller's JSON or guess one from
+	// the daemon's listen address: different subscriptions can use different
+	// desktop addresses.
+	sub.Origin = ""
+	if origin := r.Header.Get("Origin"); origin != "" {
+		u := pushOrigin(origin)
+		if u == nil || !strings.EqualFold(u.Host, r.Host) {
+			writeErr(w, http.StatusBadRequest, errors.New("origin must be this desktop's secure origin"))
+			return
+		}
+		sub.Origin = u.String()
+	}
 	s.pushMu.Lock()
 	defer s.pushMu.Unlock()
 	subs := s.loadPushSubs()
@@ -146,6 +162,8 @@ func (s *Server) handlePushSubscribe(w http.ResponseWriter, r *http.Request) {
 	for _, x := range subs {
 		if x.Endpoint != sub.Endpoint {
 			kept = append(kept, x)
+		} else if sub.Origin == "" {
+			sub.Origin = x.Origin // an older non-browser client may omit Origin
 		}
 	}
 	if r.Method == http.MethodPost {
@@ -191,7 +209,7 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errors.New("title and body are both needed"))
 		return
 	}
-	if msg.URL != "" && !strings.HasPrefix(msg.URL, "/") {
+	if !pushPath(msg.URL) {
 		writeErr(w, http.StatusBadRequest, errors.New("url is a path on this desktop, such as /"))
 		return
 	}
@@ -211,6 +229,101 @@ type pushMessage struct {
 	Show string `json:"show,omitempty"`
 }
 
+func pushOrigin(raw string) *url.URL {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil || u.Opaque != "" || u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return nil
+	}
+	if u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1")) {
+		return nil
+	}
+	return u
+}
+
+func pushPath(raw string) bool {
+	if raw == "" {
+		return true
+	}
+	u, err := url.Parse(raw)
+	return err == nil && strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "//") &&
+		!strings.ContainsAny(raw, "\\\r\n\t") && !u.IsAbs() && u.Host == ""
+}
+
+// pushPayload keeps the flat fields for installed workers from before this
+// change. The declarative description lets supporting browsers display and
+// open the same notification even when the worker cannot run. WebKit parses
+// navigate and icon without a base URL, so both must be absolute.
+func pushPayload(msg pushMessage, origin string) ([]byte, error) {
+	base := pushOrigin(origin)
+	if !pushPath(msg.URL) {
+		return nil, errors.New("push URL must be a path on this desktop")
+	}
+	encode := func() ([]byte, error) {
+		if base == nil {
+			return json.Marshal(msg) // no reliable origin yet: ordinary Web Push
+		}
+		m := msg
+		if m.Title == "" {
+			m.Title = "exe"
+		}
+		if m.Tag == "" {
+			m.Tag = "exe"
+		}
+		if m.URL == "" {
+			m.URL = "/"
+		}
+		target, _ := url.Parse(m.URL)
+		return json.Marshal(struct {
+			pushMessage
+			WebPush      int  `json:"web_push"`
+			Mutable      bool `json:"mutable"`
+			Notification any  `json:"notification"`
+		}{m, 8030, true, map[string]any{
+			"title": m.Title, "body": m.Body, "tag": m.Tag,
+			"navigate": base.ResolveReference(target).String(),
+			"icon":     origin + "/ui/icon-192.png", "badge": origin + "/ui/icon-192.png", "renotify": true,
+			// Early Safari reads mutable inside notification; current Safari
+			// and the spec read it at the top level. Both ask the worker to
+			// show its replacement and refresh the apps' kept copies.
+			"mutable": true, "data": map[string]string{"url": m.URL, "show": m.Show},
+		}})
+	}
+	// Leave room for aes128gcm's 86-byte header, delimiter and 16-byte tag
+	// within a 4096-byte push. Dual-format messages repeat their text; shorten
+	// only the visible body/title when needed, never a session or URL.
+	const maxPayload = 4096 - 86 - 1 - 16
+	b, err := encode()
+	for _, field := range []*string{&msg.Body, &msg.Title} {
+		if err != nil || len(b) <= maxPayload {
+			return b, err
+		}
+		if *field == "" {
+			continue
+		}
+		runes := []rune(*field)
+		lo, hi := 0, len(runes)
+		for lo < hi {
+			mid := (lo + hi + 1) / 2
+			*field = string(runes[:mid]) + "…"
+			b, err = encode()
+			if err != nil {
+				return nil, err
+			}
+			if len(b) <= maxPayload {
+				lo = mid
+			} else {
+				hi = mid - 1
+			}
+		}
+		*field = string(runes[:lo]) + "…"
+		b, err = encode()
+	}
+	if len(b) > maxPayload {
+		return nil, errors.New("push routing data too large")
+	}
+	return b, err
+}
+
 // pushAll sends one message to every subscription, dropping the ones whose
 // push service says are gone. It returns how many were sent and the
 // failures, one line each.
@@ -222,11 +335,15 @@ func (s *Server) pushAll(ctx context.Context, msg pushMessage) (int, []string) {
 	s.pushMu.Lock()
 	subs := s.loadPushSubs()
 	s.pushMu.Unlock()
-	payload, _ := json.Marshal(msg)
 	var errs []string
 	var gone []string
 	sent := 0
 	for _, sub := range subs {
+		payload, err := pushPayload(msg, sub.Origin)
+		if err != nil {
+			errs = append(errs, shortEndpoint(sub.Endpoint)+": "+err.Error())
+			continue
+		}
 		drop, err := sendPush(ctx, sub, payload, priv, pub)
 		if drop {
 			gone = append(gone, sub.Endpoint)

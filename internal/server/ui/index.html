@@ -2703,8 +2703,11 @@ function showFromHash() {
   const m = /^#show=(.+)$/.exec(location.hash);
   if (!m) return;
   history.replaceState(null, "", location.pathname + location.search); // a reload must not open it again
-  showTarget(decodeURIComponent(m[1]));
+  try { showTarget(decodeURIComponent(m[1])); } catch (e) { /* malformed target */ }
 }
+// A declarative notification can navigate an already open desktop to its
+// session fragment without loading a new document.
+addEventListener("hashchange", showFromHash);
 // A phone's keyboard: iOS keeps the layout viewport at full height under
 // the keys and pans it to show the focused field, so a fullscreen window's
 // bottom — a Claude Code window's input line — stays behind the keyboard.

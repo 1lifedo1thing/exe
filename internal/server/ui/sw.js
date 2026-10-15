@@ -293,9 +293,17 @@ self.addEventListener("fetch", e => {
 self.addEventListener("push", e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { title: "exe", body: e.data ? e.data.text() : "" }; }
-  e.waitUntil(Promise.all([self.registration.showNotification(d.title || "exe", {
-    body: d.body || "", tag: d.tag || "exe", renotify: true,
-    icon: "/ui/icon-192.png", badge: "/ui/icon-192.png", data: { url: d.url || "/", show: d.show || "" } }),
+  d = d && typeof d === "object" ? d : {};
+  const n = d.web_push === 8030 && d.notification && typeof d.notification === "object" ? d.notification : d;
+  const data = n.data || {};
+  // Do not pass navigate to showNotification: our replacement keeps the
+  // notificationclick handler, which focuses an existing desk and selects
+  // the session without reloading drafts. The browser's declarative
+  // fallback uses navigate itself when this worker cannot show a replacement.
+  e.waitUntil(Promise.all([self.registration.showNotification(n.title || "exe", {
+    body: n.body || "", tag: n.tag || "exe", renotify: true,
+    icon: n.icon || "/ui/icon-192.png", badge: n.badge || "/ui/icon-192.png",
+    data: { url: n.navigate || data.url || d.url || "/", show: data.show || d.show || "" } }),
     warm().catch(() => {})]));
 });
 
@@ -308,10 +316,15 @@ self.addEventListener("notificationclick", e => {
   e.notification.close();
   const d = e.notification.data || {};
   const url = new URL(d.url || "/", self.location.origin).href;
+  let show = d.show || "";
+  if (!show) {
+    const m = new URL(url).hash.match(/^#show=(.+)$/);
+    try { if (m) show = decodeURIComponent(m[1]); } catch (err) { /* malformed target */ }
+  }
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => {
     const c = cs.find(x => x.frameType === "top-level" && new URL(x.url).origin === self.location.origin && new URL(x.url).pathname === "/");
     if (!c) return self.clients.openWindow(url);
-    if (d.show) c.postMessage({ exeShow: d.show });
+    if (show) c.postMessage({ exeShow: show });
     return c.focus();
   }));
 });

@@ -475,6 +475,14 @@ an app**, further down).
 The menu item again turns them off. That one switch covers everything in the
 four sections that follow: none of them has a setting of its own.
 
+On iPhone and iPad Home Screen apps (iOS 18.4 or later), and Safari on Mac
+(18.5 or later), notifications include a browser-readable fallback. An
+agent-finished alert, for example, can still appear and open its session
+if the desktop's background worker cannot run. Open the desktop once after
+updating so it can refresh the subscription's address. Other browsers keep
+receiving the same notifications through the background worker. Permission,
+connectivity and the device's notification settings still apply.
+
 ### Notifications: big price moves
 
 You hear when SOL, PUMP, MET or SKR makes a move that is rare for it, within
