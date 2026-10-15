@@ -133,7 +133,12 @@ input[type=checkbox]:focus-visible { outline: 2px solid #9999fe; }
 @media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
   #c-back .crisp { display: none; } #c-back .fine { display: block; }
 }
-#c-acts { display: flex; gap: 12px; }
+/* the card's buttons are named to fit the row in one line, in the widest
+   bold the type stack lands on (Verdana, on Windows). Should a face be
+   wider still, the row wraps onto a second line, 10px under, rather than
+   run past the edge: the buttons are known when the card opens, so the
+   wrap is there before the card is seen, not a jump after. */
+#c-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px 12px; margin-left: auto; }
 
 /* a phone: one column, the check box on a line of its own above the
    buttons, and no words cut where they would not fit */
@@ -143,7 +148,6 @@ input[type=checkbox]:focus-visible { outline: 2px solid #9999fe; }
   #c-body { padding: 10px 12px 0; }
   .foot { flex-wrap: wrap; row-gap: 10px; }
   #home .foot label.check { order: -1; flex-basis: 100%; }
-  #c-acts { flex-wrap: wrap; justify-content: flex-end; row-gap: 10px; margin-left: auto; }
 }
 
 /* Mac OS 9 scrollbars: the desktop's pixel-sampled block, as Tides has it.
@@ -359,7 +363,7 @@ const FEATS = [
     blurb: "Agent sessions in windows of their own, still at work after the tab, or the laptop, is closed.",
     lead: "Agent sessions that keep working when you leave.",
     text: ["With the Claude Code or the Codex CLI installed on this machine, each gets an icon on the desktop and a window of its own. The session runs on the machine, not in the browser: close the window, the tab or the laptop and it works on. Open it again, from any device, and you are back in the same conversation.",
-      "The window lists its sessions down the left, the Control Strip counts what they use, and a phone that keeps the desktop on its Home Screen hears when a turn ends. Agent Setup… says how to install each CLI, and what exe adds to one that is here."],
+      "The window lists its sessions down the left, the Control Strip counts what they use, and a phone that keeps the desktop on its Home Screen hears when a turn ends. Set Up… says how to install each CLI, and what exe adds to one that is here."],
     more: "Claude Code, Codex and Terminal",
     // hostinfo says which are installed, at once; the versions follow
     // from /v1/agents/cli, which has to ask each CLI
@@ -371,12 +375,14 @@ const FEATS = [
       if (a.claude && a.codex) return { kind: "ok", text: name("claude", "Claude Code") + " and " + name("codex", "Codex") + " are both installed." };
       if (a.claude) return { kind: "ok", text: name("claude", "Claude Code") + " is installed. Codex is not." };
       if (a.codex) return { kind: "ok", text: name("codex", "Codex") + " is installed. Claude Code is not." };
-      return { kind: "todo", text: "Neither CLI is installed on this machine. Agent Setup… says how to install each; its icon then appears on the desktop." };
+      return { kind: "todo", text: "Neither CLI is installed on this machine. Set Up… says how to install each; its icon then appears on the desktop." };
     },
-    // the wizard first, then the window of each CLI that is here: with
-    // neither installed the wizard is the one Return presses
+    // the wizard (Agent Setup) first, then the window of each CLI that is
+    // here: with neither installed the wizard is the one Return presses.
+    // Its name is short so that, with both here, the five buttons fit the
+    // row in one line.
     acts() {
-      const a = (S.host && S.host.agents) || {}, out = [{ label: "Agent Setup…", act: "app", args: ["agents"] }];
+      const a = (S.host && S.host.agents) || {}, out = [{ label: "Set Up…", act: "app", args: ["agents"] }];
       if (a.codex) out.push({ label: "Open Codex", act: "codex" });
       if (a.claude) out.push({ label: "Open Claude Code", act: "claude" });
       return out;

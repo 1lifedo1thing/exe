@@ -215,7 +215,7 @@ The magnifier opens one box that finds VMs, chat sessions, notes and todos.
   still needs. A ready feature has a green check beside its name on the
   first page.
 - The card's button goes there: **New VM…**, the pane of Configuration that
-  sets Chat up, **Agent Setup…** on the Claude Code and Codex card, the
+  sets Chat up, **Set Up…** on the Claude Code and Codex card, the
   Cloudflare Setup Wizard, **Join a Hub…** until a hub is joined and the
   Hub after, and **Extras…** on the Apps card.
 - **Read More…** opens this manual on that feature's chapter.
@@ -720,9 +720,9 @@ For a coding agent:
 ### Install Claude Code or Codex
 
 **Help → Welcome…**, the **Claude Code and Codex** card, says which of the
-two is installed on this machine, with its version, and its **Agent
-Setup…** button opens a window of three steps: a page for Claude Code, one
-for Codex, and a review.
+two is installed on this machine, with its version, and its **Set Up…**
+button opens Agent Setup, a window of three steps: a page for Claude Code,
+one for Codex, and a review.
 
 - A CLI that is installed shows its version and where it is, and what exe
   adds to it: the window that outlives the browser, the session column,

@@ -12,4 +12,4 @@ before it said is kept in CHANGELOG.md.
 - Claude Code window: **Get Info** on a session; its latest prompt over the terminal, a click lists them all.
 - On a phone, pinch a picture to zoom it; press and hold a terminal for **Copy**, **Paste**, **Select All**.
 - Welcome's **Extras…** installs **Projects**, which sends an issue to Claude Code or Codex from its menu.
-- Welcome's **Agent Setup…** shows Claude Code's and Codex's versions, and installs one that is missing.
+- Welcome's Claude Code and Codex card has **Set Up…**: each CLI's version, and how to install a missing one.

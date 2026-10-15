@@ -642,10 +642,11 @@ restyling: `internal/server/ui/index.html` (the desktop),
   its close box, the wizard starts over the next time. Its icon is a
   jigsaw piece, as Mac OS drew its extensions.
   `~/tools/playwright/exe-extras-test.js` walks it.
-- A wizard with nothing to apply (Agent Setup, `sysapps/agents`, from
-  Welcome's Claude Code and Codex card): the same window (580 by 500, no
-  grow box), a page for each of the two CLIs and Review, whose button is
-  Done. A page says what the CLI is, then under the separator how it
+- A wizard with nothing to apply (Agent Setup, `sysapps/agents`, opened by
+  **Set Up…** on Welcome's Claude Code and Codex card, named short so the
+  card's five buttons fit one row): the same window (580 by 500, no grow
+  box), a page for each of the two CLIs and Review, whose button is Done.
+  A page says what the CLI is, then under the separator how it
   stands here — Installed with its version and path under the green
   check, in `#7a1010` when it is there but would not say its version —
   and then one of two things. For one that is installed, a bold line
