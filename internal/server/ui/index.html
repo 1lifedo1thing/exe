@@ -2887,7 +2887,7 @@ tokenInput.addEventListener("keydown", e => {
 const UI_BUILD = "__EXE_BUILD__";
 let buildMine = UI_BUILD.startsWith("__") ? "" : UI_BUILD; // unstamped (served off disk in a test): adopt the daemon's
 let buildNew = "", buildTimer = 0, buildTold = false, buildInputAt = 0;
-let buildAsked = ""; // a build heard of, being asked of the daemon (buildSeen)
+let buildChecking = null; // one bounded, authoritative check shared by all callers
 const buildFalse = new Set(); // builds the daemon said it is not
 const buildTyped = new Set();
 function buildNote(e) {
@@ -2940,30 +2940,39 @@ function buildReload() {
   try { sessionStorage.setItem("exe_build_tried", buildNew); } catch (e) {}
   location.reload();
 }
-function buildSeen(id) {
+function buildConfirmed(id) {
   if (!id) return;
   if (!buildMine) buildMine = id;
   if (id === buildMine) { buildNew = ""; return; } // (back to) the build this page is
-  if (id === buildNew || id === buildAsked || buildFalse.has(id)) return;
+  if (id === buildNew) return;
   // a reload that came back as the same stale page (a cache in between)
   // must not spin: one try per build
   let tried = "";
   try { tried = sessionStorage.getItem("exe_build_tried") || ""; } catch (e) {}
   if (tried === id) return;
-  // and an answer naming a build is only word of it until the daemon says
+  buildNew = id; buildTold = false;
+  if (!buildTimer) buildTimer = setInterval(buildTry, 1000);
+  buildTry();
+}
+function buildCheck() {
+  if (buildChecking) return buildChecking;
+  // An answer naming a build is only word of it until the daemon says
   // so itself: a copy the worker keeps (sw.js) can carry the build it was
   // kept under, and so can any cache on the way. A HEAD of the page is
   // never answered from a copy. Believing a copy, a hidden desk reloaded
   // for a build that was not there, over and over, and its Claude Code
   // window's session took that browser's size at every load
-  buildAsked = id;
-  fetch("/", { method: "HEAD", cache: "no-store" }).then(r => r.headers.get("X-Exe-Build") || "", () => "").then(now => {
-    if (buildAsked === id) buildAsked = "";
+  const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 8000);
+  buildChecking = fetch("/", { method: "HEAD", cache: "no-store", signal: stop.signal })
+    .then(r => r.ok ? r.headers.get("X-Exe-Build") || "" : "", () => "")
+    .then(now => { buildConfirmed(now); return now; })
+    .finally(() => { clearTimeout(timer); buildChecking = null; });
+  return buildChecking;
+}
+function buildSeen(id) {
+  if (!id || id === buildMine || id === buildNew || buildFalse.has(id)) return;
+  buildCheck().then(now => {
     if (now && now !== id) buildFalse.add(id);
-    if (now !== id) return; // not this build, or no answer: the next one that names it asks again
-    buildNew = id; buildTold = false;
-    if (!buildTimer) buildTimer = setInterval(buildTry, 1000);
-    buildTry();
   });
 }
 
@@ -13277,6 +13286,31 @@ function appDataSubscribe() {
   };
 }
 document.addEventListener("exe-token", () => { if (appES) appDataSubscribe(); });
+
+// A Home Screen app can resume the page iOS suspended, without a new load
+// or a stream error. A phone has no layout stream to name a new build,
+// either. Ask the daemon directly and reopen the streams: an apparently
+// open socket can have missed everything that happened while asleep.
+// Coalesce pageshow/visibility/online from the same wake. The app list is
+// read even if the stream cannot reopen; its onopen also resyncs app data.
+let deskResumeTimer = 0;
+function deskResume() {
+  clearTimeout(deskResumeTimer);
+  if (document.hidden) return;
+  deskResumeTimer = setTimeout(() => {
+    if (document.hidden) return;
+    buildCheck();
+    loadApps().catch(() => {});
+    appDataSubscribe();
+    if (winES) winSubscribe();
+  }, 100);
+}
+document.addEventListener("visibilitychange", deskResume);
+addEventListener("pageshow", e => { if (e.persisted) deskResume(); });
+addEventListener("online", deskResume);
+// A wake can precede the network being ready, without a later online
+// event. Retry while visible, including when other API calls are stuck.
+setInterval(() => { if (!document.hidden) buildCheck(); }, 30000);
 
 // ---- Stickies: notes stuck to the desk ----
 // Notes' Stick to Desk gives a note a place (notes.json: `place`, with a

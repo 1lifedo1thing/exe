@@ -607,6 +607,11 @@ new system apps, an open desktop notices and reloads: a few seconds after
 the daemon is back, and at once in a tab you are not looking at. A restart
 that changes nothing the browser runs leaves your windows alone.
 
+Returning to the installed app on an iPhone or iPad checks for a new
+desktop and refreshes the app list, even when the phone resumes an old
+page. If the connection is still waking up, it tries again while open.
+There is no need to force-close the app to pick up an update.
+
 The reload waits:
 
 - While you are typing or clicking.
