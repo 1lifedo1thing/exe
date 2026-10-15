@@ -11,5 +11,5 @@ before it said is kept in CHANGELOG.md.
 - On supported Apple devices, notifications can still appear when the desktop's background worker cannot run.
 - **Mac OS X** has an **Agent** button: a Chat that works inside Tiger and uploads Workspace files.
 - Claude Code window: **Get Info** on a session; its latest prompt over the terminal, a click lists them all.
-- On a phone, a picture window zooms: pinch the picture or double-tap it, and drag it about while zoomed.
+- On a phone, pinch a picture to zoom it; press and hold a terminal for **Copy**, **Paste**, **Select All**.
 - Welcome's **Extras…** installs **Projects**, with **Open in Claude Code** and swipeable issue pictures.

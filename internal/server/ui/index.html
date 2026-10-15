@@ -2470,6 +2470,30 @@ body.mobile th.sorted {
   </div>
 </div>
 
+<!-- Paste into a terminal (modal): the field a touch screen pastes into
+     when the page cannot read the clipboard itself (termPasteField). The
+     browser's own Paste puts the text in the field; Paste below sends it
+     on to the terminal as the menu's Paste would have. -->
+<div id="tp-overlay" class="overlay" hidden>
+  <div class="window modal front" style="max-width:340px">
+    <div class="titlebar"><button class="tbox close" id="tp-x"></button><div class="stripe"></div>
+      <div class="title">Paste</div>
+      <div class="stripe"></div></div>
+    <div class="win-frame">
+      <div class="win-body">
+        <div class="field" style="margin-bottom:10px">
+          <label for="tp-text">Press and hold the field and choose Paste. Then Paste below sends the text to the terminal.</label>
+          <textarea id="tp-text" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+        </div>
+        <div class="row" style="justify-content:flex-end; gap:11px; margin:4px 0 2px">
+          <button class="ghost" id="tp-cancel">Cancel</button>
+          <button class="btn" id="tp-go">Paste</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- New Icon (modal), from the Icon Editor gallery: name it, pick a grid -->
 <div id="ni-overlay" class="overlay" hidden>
   <div class="window modal front" style="max-width:340px">
@@ -9023,9 +9047,37 @@ let termSeq = 0;
 // never through the terminal to the app, which saw no press either.
 // termOf returns the box's current Terminal: the VM console box outlives
 // its Terminal (Open creates a new one each time), so it is wired once.
+// A finger gets the same menu from a press held 550ms without moving (a
+// drag scrolls the history instead), as on the title bar and bare desktop
+// — iOS never fires contextmenu, Android does, and showing twice is
+// harmless. The soft keyboard has no paste keys and xterm's own field is
+// off screen, so this is how a phone pastes into the composer.
 function wireTermMenu(w, box, termOf) {
   const unclip = () => { const term = termOf(); if (term) term._clip = ""; };
   let forced = false;
+  const menuAt = (x, y) => {
+    const term = termOf();
+    if (!term) return;
+    focusWin(w); // the swallowed right press would normally have raised the window
+    // keys go to the menu while it is up (Escape must dismiss it, not reach
+    // the app); the terminal gets focus back however the menu closes
+    term.blur();
+    const sel = term.getSelection() || term._clip;
+    showCtxMenu(x, y, [
+      { label: "Copy", dis: !sel, act: async () => { await copyText(sel, "selection"); term.focus(); } },
+      { label: "Paste", act: () => termPaste(term) },
+      "-",
+      { label: "Select All", act: () => term.selectAll() },
+    ], () => term.focus());
+  };
+  let pressT = 0;
+  box.addEventListener("touchstart", e => {
+    clearTimeout(pressT);
+    if (e.touches.length !== 1) return;
+    const { clientX: x, clientY: y } = e.touches[0];
+    pressT = setTimeout(() => { ctxGuardUntil = Date.now() + 700; menuAt(x, y); }, 550);
+  }, { passive: true });
+  for (const ev of ["touchmove", "touchend", "touchcancel"]) box.addEventListener(ev, () => clearTimeout(pressT), { passive: true });
   box.addEventListener("mousedown", e => {
     const term = termOf();
     forced = !!term && e.button === 0 && term.modes.mouseTrackingMode !== "none" && (IS_MAC ? e.altKey : e.shiftKey);
@@ -9043,34 +9095,48 @@ function wireTermMenu(w, box, termOf) {
     if (term && !e.buttons && term.hasSelection()) e.stopPropagation();
   }, true);
   box.addEventListener("contextmenu", e => {
-    const term = termOf();
-    if (!term) return;
+    if (!termOf()) return;
     e.preventDefault(); e.stopPropagation();
-    focusWin(w); // the swallowed right press would normally have raised the window
-    // keys go to the menu while it is up (Escape must dismiss it, not reach
-    // the app); the terminal gets focus back however the menu closes
-    term.blur();
-    const sel = term.getSelection() || term._clip;
-    showCtxMenu(e.clientX, e.clientY, [
-      { label: "Copy", dis: !sel, act: async () => { await copyText(sel, "selection"); term.focus(); } },
-      { label: "Paste", act: () => termPaste(term) },
-      "-",
-      { label: "Select All", act: () => term.selectAll() },
-    ], () => term.focus());
+    clearTimeout(pressT);
+    menuAt(e.clientX, e.clientY);
   }, true);
 }
 // Paste goes through the async clipboard API, which plain-http origins
-// don't have (and https asks permission once) — failing that, the
-// browser's own paste keys still reach xterm
+// don't have (https asks permission once; iOS puts up a Paste bubble to
+// tap). Failing that, a keyboard's own paste keys still reach xterm — and
+// a touch screen, which has no such keys, gets a field to paste into
+// instead (termPasteField)
 async function termPaste(term) {
   try {
     const text = await navigator.clipboard.readText();
     if (text) term.paste(text);
   } catch (e) {
+    if (navigator.maxTouchPoints > 0) { termPasteField(term); return; }
     toast("Couldn't read the clipboard — paste with " + (IS_MAC ? "⌘V" : "Shift+Insert") + " instead");
   }
   term.focus();
 }
+// the Paste dialog (#tp-overlay): the browser's own Paste puts the
+// clipboard in the field, and the Paste button sends it to the terminal
+// the way the menu's Paste would have, newlines and all
+let tpTerm = null;
+function termPasteField(term) {
+  tpTerm = term;
+  const ta = $("#tp-text");
+  ta.value = "";
+  $("#tp-overlay").hidden = false;
+  ta.focus();
+}
+function tpClose() { $("#tp-overlay").hidden = true; if (tpTerm) tpTerm.focus(); tpTerm = null; }
+$("#tp-x").onclick = tpClose;
+$("#tp-cancel").onclick = tpClose;
+$("#tp-go").onclick = () => {
+  const text = $("#tp-text").value;
+  const term = tpTerm;
+  tpClose();
+  if (text && term) term.paste(text);
+};
+$("#tp-text").addEventListener("keydown", e => { if (e.key === "Escape") tpClose(); });
 
 // app names an agent CLI (AGENT_APPS: "claude" for Claude Code, "codex"
 // for Codex) to open instead of a shell; on hosts with tmux the daemon
