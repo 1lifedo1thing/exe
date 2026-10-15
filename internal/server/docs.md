@@ -577,7 +577,9 @@ fullscreen, one at a time. They cannot be moved or resized there.
 - The clock is a small clock face. Tap it and it spells the time out for a
   few seconds, or opens the World Clock app when that app is installed.
 - In a Claude Code or Codex window a finger drag scrolls back through the
-  session's history, and a flick keeps it going.
+  session's history, and a flick keeps it going. Press and hold the terminal
+  for **Copy**, **Paste** and **Select All**: how to paste into Claude Code's
+  composer, since the phone's keyboard has no paste key.
 - In Todo and Weather a finger scrolls the list. To move a row, press and
   hold it for half a second until it tints, then drag it to its new place.
 - A picture window swipes down to close, the window under it showing through
@@ -1042,6 +1044,12 @@ To copy text, drag across it.
 The right-click menu also has **Paste**, which puts the clipboard's text in
 at the cursor, and **Select All**. If the browser will not let the page read
 the clipboard, its own paste keys still work.
+
+On a touch screen, press and hold the terminal for the same menu. **Paste**
+asks the browser for the clipboard — an iPhone puts up a Paste bubble to tap
+— and where the browser will not read it for the page, a small **Paste**
+dialog opens instead: press and hold its field and choose Paste, then the
+dialog's Paste sends the text on to the terminal.
 
 A web address in a terminal is underlined under the pointer, and a click
 opens it in a new tab.
@@ -3318,8 +3326,9 @@ one: `EXE-12` names the same issue for good.
 
 Right-click an issue for what can be done to it: close or reopen it,
 edit it, **Star** it, or copy its address. A starred issue wears a yellow
-star before its title in the list and on the issue, and **Unstar** takes
-it off.
+star where the list has its dot, and on the issue's own line, and
+**Unstar** takes it off. The pop-up at the top right lists the open, the
+closed, all or the starred issues.
 
 A coding agent works in the same tracker from a shell: `exe-projects new`
 files an issue, `exe-projects show EXE-12` reads one,
