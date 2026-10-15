@@ -3316,9 +3316,15 @@ issues in the middle and the chosen issue on the right. A project has a
 short name in capitals, such as `EXE`, and its issues are numbered from
 one: `EXE-12` names the same issue for good.
 
+Right-click an issue for what can be done to it: close or reopen it,
+edit it, **Star** it, or copy its address. A starred issue wears a yellow
+star before its title in the list and on the issue, and **Unstar** takes
+it off.
+
 A coding agent works in the same tracker from a shell: `exe-projects new`
-files an issue, `exe-projects show EXE-12` reads one and
-`exe-projects close EXE-12` closes it.
+files an issue, `exe-projects show EXE-12` reads one,
+`exe-projects star EXE-12` stars it and `exe-projects close EXE-12`
+closes it.
 
 A file attached to an issue is kept in IPFS, which takes Kubo on this
 machine; without it everything else works. Anyone who learns such a
