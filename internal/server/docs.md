@@ -726,7 +726,8 @@ window closes.
 
 A Claude Code or Codex window has three parts. The session column, on a
 machine with tmux, runs down the left. The terminal with the conversation
-fills the rest. The status line at the foot shows the connection at its left
+fills the rest; in the Claude Code window a line over it shows the session's
+latest prompt. The status line at the foot shows the connection at its left
 and usage at its right.
 
 ### Usage on the status line
@@ -868,6 +869,30 @@ you archive it:
 - A long transcript takes a moment to read; the status line says so, and
   the dialog opens filled.
 - The Codex window has no **Get Info** yet.
+
+### The prompt line: the latest prompt, and every prompt
+
+In the Claude Code window, the line over the terminal shows the first line of
+the latest prompt in the session on screen, and at its right how many prompts
+the session has had. It follows the column: switch sessions and it shows the
+other session's, send a prompt and it shows that one within a couple of
+seconds. A session with no prompt yet says so.
+
+Click the line for **Prompts**, a dialog over the window that lists every
+prompt of the session in order, each with its number, its first line and when
+it was given. The latest is selected, and the selected prompt stands whole in
+the box under the list, every line of it, where it can be selected; **Copy**
+copies all of it. The arrows move along the list; Return, **OK** and Escape
+put it away.
+
+- A prompt is what you typed or pasted. Slash commands and their output, tool
+  results and a sub-agent's turns are not listed, nor is what a background
+  task woke Claude Code with.
+- A prompt longer than 20,000 characters is cut there in the list; the row's
+  tooltip says so, and the whole is in the transcript.
+- The list is read from the transcript when the dialog opens; a long
+  transcript takes a moment, and the status line says so.
+- The Codex window has no prompt line yet.
 
 ### Continue a conversation started elsewhere
 
@@ -1065,6 +1090,7 @@ is set.
 | `DELETE /v1/agents/claude/sessions/<name>` | Ends the session, as **Archive…** does, and answers once its processes are gone with what it gave back: `freed` and `swap`, the bytes they held (`measured` says whether they could be read), and `available`, the machine's memory now. |
 | `GET /v1/agents/claude/sessions/<name>/info` | What **Get Info** shows for a session: `summary`, `prompt`, `last_prompt`, `turns`, `replies`, `tokens` (`input`, `output`, `cache_read`, `cache_write`), `models`, `created`, `activity`, `cwd`. Claude Code only. |
 | `GET /v1/agents/claude/threads/<id>` | The same for a conversation no session holds, by its session id. |
+| `GET /v1/agents/claude/sessions/<name>/prompts` | Every prompt of the session, whole and in order, as `prompts`: each with `text`, `at` (when it was given) and `cut` when it ran past 20,000 characters. What the prompt line's dialog lists. Claude Code only. |
 | `GET /v1/agents/work` | Lists the sessions of both agents that are at work now: when each one's turn began (`since`, beside the daemon's own `now`) and the issue addresses, such as `EXE-12`, that its instructions named (`refs`). |
 
 A session's `<name>` is its tmux session's: `exe-claude` for the one the

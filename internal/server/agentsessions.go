@@ -322,6 +322,9 @@ func (c *agentColumn) follow(ctx context.Context) {
 		list := c.s.agentSessions(c.a)
 		c.s.markAgentStates(c.a, list)
 		frame := map[string]any{"sessions": list, "current": c.current()}
+		if !c.a.notify {
+			frame["prompt"] = c.s.agentLastPrompt(c.a, c.current()) // the line over the terminal (claudeprompts.go)
+		}
 		if threads := c.s.agentThreads(c.a, list); threads != nil {
 			frame["threads"] = threads // conversations started elsewhere (codexthreads.go, claudesessions.go)
 		}

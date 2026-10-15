@@ -1275,6 +1275,20 @@ a.svc:hover { text-decoration: underline; }
 .sess-col.tight .sess-find, body.mobile .sess-find { flex: none; width: 31px; }
 .sess-col.tight .sess-find .gl, body.mobile .sess-find .gl { display: block; margin: 0 auto; }
 .sess-col.tight .sess-find span, body.mobile .sess-find span { display: none; }
+/* the Claude Code window's prompt line: the right side (.agent-main)
+   holds it over the terminal — the first line of the latest prompt in
+   the session on screen, from the column's frames ({"prompt":…},
+   claudeprompts.go), the count at its right in the Search rows' 10px
+   #777, #777 words while the session has none. 20px in the column's
+   grey; the 1px line under it is its one seam with the terminal, which
+   has no top line of its own. A click opens Prompts (below) */
+.agent-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.agent-main .hostterm-box { flex: none; }
+.sess-last { flex: none; box-sizing: border-box; height: 20px; display: flex; align-items: center; gap: 8px;
+  padding: 0 8px; background: var(--g300); border-bottom: 1px solid var(--black); white-space: nowrap; }
+.sess-last .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sess-last.none .t { color: #777; }
+.sess-last .n { flex: none; font-size: 10px; color: #777; }
 /* Search's dialog is the window's own: a veil over its frame — the desk's
    other windows go on working, and the dialog travels with its window —
    and on it a movable modal dialog's box, a title and no close box. The
@@ -1332,6 +1346,21 @@ a.svc:hover { text-decoration: underline; }
 .si-grid { line-height: 15px; }
 .si-grid .muted { font-size: 11px; }
 .si-btns .si-archive { width: auto; padding: 0 10px; }
+/* Prompts, from the prompt line: the Search dialog's box with a white
+   list of the session's prompts — a number in a slot as wide as the
+   count, the first line, and at the right in 10px #777 when it was
+   given — fourteen rows from the first paint; under the list, behind
+   the 1px line that is the list's last arrow's, the selected prompt
+   whole in a sunken white box six lines tall, selectable and scrolling,
+   so the dialog never changes height; then the button row with the
+   count at its left, Copy, and OK in the ring */
+.sp-row .k { flex: none; width: var(--kw, 8px); text-align: right; font-size: 10px; color: #777; }
+.sp-row.sel .k { color: #fff; }
+.sp-box { flex: none; padding: 8px; border-top: 1px solid var(--black); }
+.sp-text { box-sizing: border-box; height: 98px; overflow-y: auto; padding: 3px 5px; line-height: 15px;
+  background: #fff; border: 1px solid var(--black); white-space: pre-wrap; word-break: break-word; user-select: text;
+  box-shadow: -1px -1px 0 var(--g600), -1px 0 0 var(--g600), 0 -1px 0 var(--g600),
+    1px 1px 0 #fff, 1px 0 0 #fff, 0 1px 0 #fff; }
 /* Text inset lives on .xterm, not the box: FitAddon subtracts element padding
    when sizing rows, but the absolutely-positioned viewport anchors to the
    padding box — so the scrollbar runs flush to the frame, OS 9 style. */
@@ -1650,6 +1679,7 @@ body.mobile .term-window .hostterm-box { height: 100%; }
 /* an agent window's session column becomes a strip of tabs above the terminal */
 body.mobile .term-window .agent-wrap { height: 100%; flex-direction: column; }
 body.mobile .term-window .agent-wrap .hostterm-box { flex: 1; min-height: 0; height: auto; }
+body.mobile .agent-main { flex: 1; min-height: 0; }
 body.mobile .sess-col { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--black); contain: none; }
 body.mobile .sess-list { display: flex; overflow-x: auto; overflow-y: hidden; }
 body.mobile .sess-row { flex: none; max-width: 150px; height: auto; padding: 0 8px; border-bottom: 0; border-right: 1px solid #efefef; }
@@ -9103,7 +9133,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
     <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
     <div class="win-frame">
       <div class="win-body" style="padding:0">${column
-        ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">New</button>${app === "claude" ? `<button class="ghost sess-find" aria-label="Search" title="Search every ${agent.title} conversation on this machine">${sessFindGlyph()}<span>Search</span></button>` : ""}</div><div class="sess-grip"></div></div><div class="hostterm-box"></div></div>`
+        ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">New</button>${app === "claude" ? `<button class="ghost sess-find" aria-label="Search" title="Search every ${agent.title} conversation on this machine">${sessFindGlyph()}<span>Search</span></button>` : ""}</div><div class="sess-grip"></div></div><div class="agent-main">${app === "claude" ? `<div class="sess-last none"><span class="t">…</span><span class="n"></span></div>` : ""}<div class="hostterm-box"></div></div></div>`
         : `<div class="hostterm-box${sess ? " tmux" : ""}"></div>`}</div>
       <div class="held" hidden><span class="held-text"></span><button class="ghost held-copy">Copy</button><button class="ghost held-drop">Dismiss</button><button class="ghost held-insert">Insert</button></div>
       <div class="statusbar"><span class="term-status">…</span><span class="term-usage" hidden></span></div>
@@ -9431,6 +9461,105 @@ function openHostTermWin(app, cmd, vm, termSess) {
     term.blur();
     infoEls.ok.focus();
   }
+  // The prompt line over the terminal (.sess-last, the Claude Code
+  // window alone): the first line of the latest prompt in the session on
+  // screen and how many there are, from the column's frames
+  // ({"prompt":{session,n,text,at}}, claudeprompts.go), so it follows a
+  // switch and a new prompt without a request of its own. "…" until the
+  // first frame, in the line's final shape already; "No prompt yet" in
+  // grey for a session with none. A click opens Prompts, below
+  const lastBar = w.querySelector(".sess-last");
+  function showLastPrompt(p) {
+    lastBar.classList.toggle("none", !p.n);
+    lastBar.querySelector(".t").textContent = p.n ? p.text : "No prompt yet";
+    lastBar.querySelector(".n").textContent = p.n ? count(p.n, "prompt") : "";
+    lastBar.title = (p.n ? "The latest prompt in this session" + (p.at ? ", " + sessWhen(p.at) : "") : "This session has no prompt yet")
+      + "\nclick for every prompt in it";
+  }
+  if (lastBar) lastBar.onclick = () => { if (current) sessPrompts(); };
+  // Prompts, from the prompt line: a dialog of the window's own, like
+  // Search and Get Info, listing every prompt of the session on screen
+  // as the daemon reads them out of its transcript
+  // (sessions/{name}/prompts, claudeprompts.go). A row is a prompt's
+  // number, its first line and when it was given; the selected one
+  // stands whole in the box under the list, where it can be selected
+  // and copied, and Copy takes all of it. It opens filled, on the
+  // latest prompt, the status line saying so while a long transcript
+  // is read; the arrows move along the list, Escape, Return and OK put
+  // it away. The list is the daemon's answer from when the dialog opened
+  let spVeil = null, spAsked = 0, spList, spText, spCount, spCopy, spOk, spRows = [], spSel = 0;
+  const spSelect = () => {
+    const rows = spList.querySelectorAll(".sp-row");
+    rows.forEach((d, i) => d.classList.toggle("sel", i === spSel));
+    if (rows[spSel]) revealRow(spList, rows[spSel]);
+    const p = spRows[spSel];
+    spText.textContent = p ? p.text : "";
+    spText.scrollTop = 0;
+    spCopy.disabled = !p;
+  };
+  const buildPrompts = () => {
+    const bar = el("div", { class: "titlebar" });
+    bar.append(el("div", { class: "stripe" }), el("div", { class: "title" }, "Prompts"), el("div", { class: "stripe" }));
+    spList = el("div", { class: "sf-list sp-list vflush" });
+    spText = el("div", { class: "sp-text" });
+    spCount = el("span", { class: "sf-count" });
+    spCopy = el("button", { class: "ghost sp-copy" }, "Copy");
+    spOk = el("button", { class: "ghost sf-open sp-ok" }, "OK");
+    spVeil = el("div", { class: "sess-veil sp-veil", hidden: "" }, el("div", { class: "sf-dlg sp-dlg" }, bar,
+      el("div", { class: "sf-frame" }, spList, el("div", { class: "sp-box" }, spText), el("div", { class: "sf-btns" }, spCount, spCopy, spOk))));
+    w.querySelector(".win-frame").append(spVeil);
+    const close = () => { spVeil.hidden = true; spAsked++; term.focus(); };
+    spOk.onclick = close;
+    spCopy.onclick = () => { const p = spRows[spSel]; if (p) copyText(p.text, "the prompt"); spOk.focus(); };
+    // the text can be selected and copied; the keys come back to the
+    // buttons afterwards, so Return and Escape still put the dialog away
+    spVeil.addEventListener("mouseup", () => { if (!spVeil.contains(document.activeElement)) spOk.focus({ preventScroll: true }); });
+    spVeil.addEventListener("keydown", e => {
+      const page = Math.max(1, Math.floor(spList.clientHeight / 18) - 1);
+      const step = { ArrowDown: 1, ArrowUp: -1, PageDown: page, PageUp: -page }[e.key];
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (e.key === "Enter" && e.target !== spCopy) { e.preventDefault(); close(); }
+      else if (step) {
+        e.preventDefault();
+        if (spRows.length) { spSel = Math.max(0, Math.min(spRows.length - 1, spSel + step)); spSelect(); }
+      } else if (e.key === "Tab") {
+        e.preventDefault();
+        const stops = [spCopy, spOk].filter(b => !b.disabled);
+        const at = stops.indexOf(document.activeElement);
+        stops[(at + (e.shiftKey ? stops.length - 1 : 1) + stops.length) % stops.length].focus();
+      }
+    });
+  };
+  async function sessPrompts() {
+    if (!spVeil) buildPrompts();
+    const name = current, mine = ++spAsked, was = status.textContent, note = "reading the conversation…";
+    status.textContent = note;
+    let r;
+    try {
+      r = await j("/v1/agents/" + app + "/sessions/" + encodeURIComponent(name) + "/prompts");
+    } catch (e) {
+      if (mine === spAsked) status.textContent = "no prompts: " + (e.message || e);
+      return;
+    }
+    if (mine !== spAsked) return; // closed, or asked again, meanwhile
+    if (status.textContent === note) status.textContent = was;
+    spRows = r.prompts || [];
+    spList.style.setProperty("--kw", (String(spRows.length).length * 6 + 2) + "px");
+    spList.replaceChildren(...(spRows.length ? spRows.map((p, i) => {
+      const d = el("div", { class: "sf-row sp-row", title: "Prompt " + (i + 1) + " of " + spRows.length
+        + (p.at ? ", given " + new Date(p.at * 1000).toLocaleString() : "") + (p.cut ? "\ncut at 20,000 characters; the whole is in the transcript" : "") });
+      d.append(el("span", { class: "k" }, String(i + 1)), el("span", { class: "t" }, p.text.split(/\r?\n/, 1)[0].trim()),
+        el("span", { class: "s" }, p.at ? sessWhen(p.at) : ""));
+      d.onclick = () => { spSel = i; spSelect(); };
+      return d;
+    }) : [el("div", { class: "muted sf-hint" }, "No prompts yet.")]));
+    spCount.textContent = spRows.length ? count(spRows.length, "prompt") : "";
+    spSel = Math.max(0, spRows.length - 1);
+    spVeil.hidden = false; // laid out before the latest row is brought into view
+    spSelect();
+    term.blur();
+    spOk.focus();
+  }
   // Search, beside New in the Claude Code window: a modal dialog of the
   // window's own — a veil over its frame, so the desk's other windows go
   // on working — that finds a conversation by the words of its title, its
@@ -9732,6 +9861,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
       if (msg.archived) archivedToast(msg);
       if ("status" in msg) { if (msg.status) showAgentUsage(usage, msg.status); else usage.hidden = true; }
       if ("usage" in msg) showOpenAIUsage(usage, msg.usage);
+      if (lastBar && msg.prompt) showLastPrompt(msg.prompt);
       if (Array.isArray(msg.sessions)) {
         if (msg.sessions.length) sessions = msg.sessions;
         current = msg.current || current;

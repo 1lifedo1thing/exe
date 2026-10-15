@@ -34,6 +34,8 @@ import (
 //	                                                 first and last prompt, turns, replies, tokens, models, start, last
 //	                                                 activity and folder, read from its transcript (claudeinfo.go; Claude Code only)
 //	GET    /v1/agents/{app}/threads/{id}             the same for a conversation no session holds, by its id
+//	GET    /v1/agents/{app}/sessions/{name}/prompts  every prompt of the session, whole, with when each was given: what the
+//	                                                 line over the window's terminal opens (claudeprompts.go; Claude Code only)
 
 var agentIDPattern = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
 

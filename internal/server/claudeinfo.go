@@ -247,7 +247,7 @@ func claudeTurnPrompt(raw json.RawMessage) string {
 
 func claudeTurnText(s string) string {
 	s = strings.TrimSpace(s)
-	if s == "" || strings.HasPrefix(s, "<") {
+	if s == "" || claudeOwnText(s) { // the CLI's own words (claudeprompts.go), not a prompt that opens with pasted markup
 		return ""
 	}
 	return firstLine(s, claudeInfoLine)
