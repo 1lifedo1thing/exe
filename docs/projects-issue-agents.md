@@ -1,52 +1,54 @@
 # Start an agent from a Projects issue
 
-Inside the exe desktop, an issue’s right-click menu offers **Send to
-Claude Code** and **Send to Codex** for the CLIs detected by exe. Detection
-comes from the existing `hostAgents` registry exposed as
-`/v1/hostinfo.agents`, also used by the desktop’s agent windows.
+Inside the exe desktop, an issue's right-click menu in Projects offers
+**Send to Claude Code** and **Send to Codex**. Either starts a fresh
+session of that agent in the project's working directory, with the whole
+issue and its discussion as the session's first message. The manual's
+Claude Code chapter (`internal/server/docs.md`) is how a user meets it;
+this note says how it is put together.
 
-The action reads the full issue, including its discussion, and starts a
-fresh session in the project’s working directory. The prompt is passed as
-one literal CLI argument after `--`; it is never typed into a shell.
-Attachment records identify files, not their contents. The normal agent
-sign-in, repository trust and approval prompts still apply.
+## Which agents
 
-A missing project folder or tmux disables the action. The desktop checks
-detection again before opening the agent. NUL-containing prompts and
-prompts larger than 64 KiB are rejected rather than truncated.
+Detection is exe's: the `hostAgents` registry, reported as
+`/v1/hostinfo`'s `agents`, which the desktop's own agent windows go by.
+Projects lists only the agents found there, and only when the entry
+says `"tasks": true`. That means this desktop's agent bridge takes a
+first message along with the folder. A desktop older than 2026.10.15
+would open the session without the message, so Projects leaves the
+items off there. Projects keeps the last answer so the menu opens at
+once, asks again on each right-click for the next menu, and the desktop
+checks again before it starts anything.
 
-## Verification
+An item is dimmed for a project without a working directory, for one
+whose folder is not on this machine, and where there is no tmux for a
+second session.
 
-Both repositories passed `go test ./...`. Projects browser checks passed:
-131 app checks, 24 draft checks, 120 Chromium phone checks, 109 WebKit
-phone checks and 61 offline checks. The desktop bridge was checked for
-origin and frame validation, refreshed detection, folder-only launches,
-queued task ordering and a missing tmux. An isolated tmux test used inert
-CLI stand-ins for both agents to verify the working directory and literal
-argument transport, including quotes, shell substitutions and Unicode.
-It did not ask a real model to implement a test issue.
+## How the message travels
 
-The Projects window was inspected at display scales 1, 1.5 and 2. The
-screenshot below uses scratch issue data and both detected agents.
+Projects reads the issue (`GET /issues/{address}`), drops its `excerpt`,
+and posts `{exe: "agent", app, dir, prompt}` to the desktop. The desktop
+queues it until the agent window's terminal link is up and sends
+`{new: true, dir, prompt}` over it. The daemon's `agentColumn.openTask`
+checks the folder and the message and starts the session with
+`newAgentTaskSession`. The agents API's `POST /v1/agents/{app}/sessions`
+`prompt` takes the same road.
 
-## Screenshot artifact
+The message does not go on the tmux command line with the rest of the
+launch. tmux takes a command of at most 16 KiB from its client and
+answers anything longer with "command too long". Shell quoting makes
+each `'` four bytes, and long issues are longer than that. So the daemon
+writes the message to a private file beside the session status files
+(`agents/<session>-*.task` in the state directory). The session's shell
+reads it into one argument after `--`, so a message that starts with a
+dash is not taken as an option, and deletes the file before the CLI
+starts. A launch that fails deletes its own file.
 
-File: `projects-issue-agents-1.5x.png` (78,026 bytes).
+A message is at most 64 KiB, well under Linux's 128 KiB limit for one
+argument, and holds no NUL byte. Projects and the daemon both refuse a
+longer one with its size rather than shorten it. The shell's `$(…)`
+drops the message's trailing newlines and nothing else. Attachment
+entries name files, not their contents.
 
-CID: `bafkreic35i76jjcfib6562cmcuzce6h3glmtoxh6tcrajlhlvzyocgfhtu`
-
-SHA-256: `5bea3fe4a445407ddf684c15322278fb32d9375cfe98a204acebae70e118a79d`
-
-The Kubo pin and a fresh download from the
-[local gateway](http://127.0.0.1:8081/ipfs/bafkreic35i76jjcfib6562cmcuzce6h3glmtoxh6tcrajlhlvzyocgfhtu)
-were verified on 2026-10-15, including the byte count and SHA-256. That
-verified URL is available on the build machine. An IPFS client can fetch
-the same screenshot by CID:
-
-```sh
-ipfs get bafkreic35i76jjcfib6562cmcuzce6h3glmtoxh6tcrajlhlvzyocgfhtu -o projects-issue-agents-1.5x.png
-```
-
-The [public gateway URL](https://ipfs.io/ipfs/bafkreic35i76jjcfib6562cmcuzce6h3glmtoxh6tcrajlhlvzyocgfhtu)
-and dweb.link returned HTTP 403 during verification; public HTTP retrieval
-is not claimed as verified. The screenshot remains pinned outside Git.
+The agent keeps its own sign-in, folder trust and permission prompts:
+nothing here changes how the CLI is started apart from its first
+message.

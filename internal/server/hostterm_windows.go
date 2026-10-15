@@ -34,6 +34,10 @@ func (s *Server) newAgentSessionIn(a hostAgent, name, dir string, extra ...strin
 	return s.newAgentSession(a, name, extra...)
 }
 
+func (s *Server) newAgentTaskSession(a hostAgent, name, dir, task string, extra ...string) error {
+	return s.newAgentSession(a, name, extra...)
+}
+
 // newTermSession: a Terminal session needs tmux, which Windows has not,
 // so each Terminal window is a one-off PowerShell (startHostShell).
 func (s *Server) newTermSession() (termSession, error) { return termSession{}, errNoTmux }

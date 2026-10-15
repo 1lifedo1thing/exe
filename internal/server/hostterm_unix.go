@@ -160,7 +160,7 @@ func codexHasNoDaemon(bin string) bool {
 // CLI launched as startAgent launches the icon's own and a status file
 // of the session's own, cleared first. A window moves to it with Switch.
 // extra are further CLI arguments (agentLaunchArgs: a resume, a session
-// id, the first message), quoted onto the same command line.
+// id), quoted onto the same command line.
 func (s *Server) newAgentSession(a hostAgent, name string, extra ...string) error {
 	return s.newAgentSessionIn(a, name, "", extra...)
 }
@@ -169,6 +169,24 @@ func (s *Server) newAgentSession(a hostAgent, name string, extra ...string) erro
 // a resumed thread's own (agentColumn.resume) — the project folder
 // when dir is "".
 func (s *Server) newAgentSessionIn(a hostAgent, name, dir string, extra ...string) error {
+	return s.newAgentTaskSession(a, name, dir, "", extra...)
+}
+
+// newAgentTaskSession is newAgentSessionIn with a first message the CLI
+// sends as it starts (task, "" for none): the agents API's prompt, a
+// Projects issue sent to the agent. It does not ride on the command line
+// with the rest: tmux takes a command of at most 16 KiB from its client
+// ("command too long"), fewer characters still once each quote is
+// quoted, and a long issue is more. So it waits in a file of its own
+// beside the status files, and the session's shell reads it into one
+// argument after "--" — a task that starts with a dash is no option —
+// and removes it before the CLI starts. The file is named apart from
+// the session, so a launch that loses a race for the name removes only
+// its own.
+func (s *Server) newAgentTaskSession(a hostAgent, name, dir, task string, extra ...string) (err error) {
+	if err := agentTaskOK(task); err != nil {
+		return err
+	}
 	bin := agentPath(a)
 	if bin == "" {
 		return fmt.Errorf("%s is not installed on this host", a.title)
@@ -178,11 +196,31 @@ func (s *Server) newAgentSessionIn(a hostAgent, name, dir string, extra ...strin
 	}
 	file := s.agentStatusFile(a, name)
 	args, line := agentCommand(a, bin, file)
-	if args != nil {
+	if args != nil || task != "" {
 		os.MkdirAll(filepath.Dir(file), 0o755)
 	}
 	for _, e := range extra {
 		line += " " + shQuote(e)
+	}
+	if task != "" {
+		f, ferr := os.CreateTemp(filepath.Dir(file), name+"-*.task")
+		if ferr != nil {
+			return ferr
+		}
+		tf := f.Name()
+		defer func() {
+			if err != nil {
+				os.Remove(tf)
+			}
+		}()
+		_, werr := f.WriteString(task)
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		if werr != nil {
+			return werr
+		}
+		line += ` -- "$(cat ` + shQuote(tf) + `; rm -f ` + shQuote(tf) + `)"`
 	}
 	os.Remove(file)
 	os.Remove(stateFileOf(file))

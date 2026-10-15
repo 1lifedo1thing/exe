@@ -102,9 +102,13 @@ func agentNameOK(name string) bool {
 
 var claudePermissionModes = map[string]bool{"default": true, "acceptEdits": true, "plan": true, "auto": true}
 
-// agentLaunchArgs turns a request into the CLI's extra arguments, the
-// prompt last since it is positional.
+// agentLaunchArgs turns a request into the CLI's extra arguments. The
+// prompt is not one of them: it is the session's first message, which
+// newAgentTaskSession hands over apart from the command line.
 func agentLaunchArgs(a hostAgent, req agentLaunchRequest) ([]string, error) {
+	if err := agentTaskOK(req.Prompt); err != nil {
+		return nil, fmt.Errorf("prompt: %w", err)
+	}
 	var args []string
 	if a.app == "claude" {
 		if req.Resume != "" {
@@ -151,9 +155,6 @@ func agentLaunchArgs(a hostAgent, req agentLaunchRequest) ([]string, error) {
 			args = append(args, "resume", req.Resume)
 		}
 	}
-	if req.Prompt != "" {
-		args = append(args, req.Prompt)
-	}
 	return args, nil
 }
 
@@ -187,7 +188,7 @@ func (s *Server) handleAgentSessionCreate(w http.ResponseWriter, r *http.Request
 	if dir == "" && a.notify && req.Resume != "" {
 		dir = codexThreadDir(req.Resume)
 	}
-	if err := s.newAgentSessionIn(a, name, dir, extra...); err != nil {
+	if err := s.newAgentTaskSession(a, name, dir, req.Prompt, extra...); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}

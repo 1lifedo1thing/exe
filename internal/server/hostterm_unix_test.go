@@ -71,64 +71,93 @@ func TestCodexStandaloneLaunch(t *testing.T) {
 }
 
 // A real, isolated tmux launch with inert CLIs: no model call and no live
-// sessions. Check the working folder and the exact argv received by each CLI.
+// sessions. Each CLI gets its first message whole, as one argument after
+// "--", in the folder asked for: a whole 64 KiB of it — four times what
+// tmux takes on a command line — full of quotes and shell, which runs
+// nowhere. The file it came in is gone once the CLI starts, and a launch
+// that fails takes its file with it.
 func TestAgentIssueLaunch(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("no tmux")
 	}
 	tmuxSocket = fmt.Sprintf("exe-test-issue-%d", os.Getpid())
 	defer func() { tmuxCmd("kill-server").Run(); tmuxSocket = "" }()
-	for _, app := range []string{"claude", "codex"} {
-		t.Run(app, func(t *testing.T) {
+	piece := "It's an issue: $(touch injected); `touch injected`; \\'\"; \\n 中文\n"
+	head := "--do not parse as flags\n"
+	var b strings.Builder
+	b.WriteString(head)
+	for b.Len()+len(piece) <= maxAgentTask {
+		b.WriteString(piece)
+	}
+	task := b.String() + strings.Repeat(".", maxAgentTask-b.Len())
+	if err := agentTaskOK(task); err != nil || len(task) != maxAgentTask {
+		t.Fatalf("a %d-byte task: %v", len(task), err)
+	}
+	sid := "55d60159-76bf-4dbd-862a-6c02595708e3"
+	for _, c := range []struct {
+		app, task string
+		req       agentLaunchRequest
+		want      []string // the arguments before the task
+	}{
+		{app: "claude", task: task},
+		{app: "codex", task: task},
+		{app: "claude"},
+		{app: "codex", task: "go on", req: agentLaunchRequest{Resume: sid}, want: []string{"resume", sid}},
+	} {
+		t.Run(c.app+fmt.Sprint(len(c.task)), func(t *testing.T) {
 			dir := t.TempDir()
-			bin := filepath.Join(dir, app)
-			script := "#!/bin/sh\nif [ \"$1\" = --help ]; then exit 0; fi\npwd > cwd\nprintf '%s\\0' \"$@\" > argv\nexec sleep 20\n"
+			bin := filepath.Join(dir, c.app)
+			script := "#!/bin/sh\nif [ \"$1\" = --help ]; then exit 0; fi\npwd > cwd\nprintf '%s\\0' \"$@\" > argv.part && mv argv.part argv\nexec sleep 20\n"
 			if err := os.WriteFile(bin, []byte(script), 0755); err != nil {
 				t.Fatal(err)
 			}
-			a := hostAgents[app]
+			a := hostAgents[c.app]
 			a.bin = bin
-			prompt := "--do not parse as flags\nIt's an issue: $(touch injected); `touch injected`; 中文"
-			extra, err := agentTaskArgs(prompt)
+			extra, err := agentLaunchArgs(a, c.req)
 			if err != nil {
 				t.Fatal(err)
 			}
 			s := &Server{StateDir: t.TempDir()}
-			name := "exe-test-issue-" + app
-			if err := s.newAgentSessionIn(a, name, dir, extra...); err != nil {
+			name := "exe-test-issue-" + c.app
+			if err := s.newAgentTaskSession(a, name, dir, c.task, extra...); err != nil {
 				t.Fatal(err)
 			}
 			defer tmuxCmd("kill-session", "-t", "="+name).Run()
 			var got []byte
-			for i := 0; i < 100; i++ {
-				got, _ = os.ReadFile(filepath.Join(dir, "argv"))
-				if len(got) > 0 {
-					break
-				}
+			for i := 0; i < 200 && len(got) == 0; i++ {
 				time.Sleep(20 * time.Millisecond)
+				got, _ = os.ReadFile(filepath.Join(dir, "argv"))
 			}
 			args := strings.Split(strings.TrimSuffix(string(got), "\x00"), "\x00")
-			if len(args) < 2 || args[len(args)-2] != "--" || args[len(args)-1] != prompt {
-				t.Fatalf("task arguments were changed: %q", args)
+			want := append([]string{}, c.want...)
+			if c.task != "" {
+				want = append(want, "--", c.task)
 			}
-			cwd, _ := os.ReadFile(filepath.Join(dir, "cwd"))
-			if strings.TrimSpace(string(cwd)) != dir {
+			if len(args) < len(want) || !slices.Equal(args[len(args)-len(want):], want) || c.task == "" && slices.Contains(args, "--") {
+				t.Fatalf("the CLI got %d arguments, ending %q", len(args), args[max(0, len(args)-3):])
+			}
+			if cwd, _ := os.ReadFile(filepath.Join(dir, "cwd")); strings.TrimSpace(string(cwd)) != dir {
 				t.Fatalf("cwd = %q", cwd)
 			}
 			if _, err := os.Stat(filepath.Join(dir, "injected")); !os.IsNotExist(err) {
-				t.Fatal("prompt executed as shell code")
+				t.Fatal("the task ran as shell code")
+			}
+			left, _ := filepath.Glob(filepath.Join(s.StateDir, "agents", "*.task"))
+			if len(left) > 0 {
+				t.Fatalf("task files left behind: %q", left)
+			}
+			// the same name again: tmux refuses it, and the file goes too
+			if err := s.newAgentTaskSession(a, name, dir, c.task, extra...); err == nil {
+				t.Fatal("a second session under the same name was started")
+			}
+			if left, _ := filepath.Glob(filepath.Join(s.StateDir, "agents", "*.task")); len(left) > 0 {
+				t.Fatalf("a failed launch left %q", left)
 			}
 		})
 	}
-	for _, bad := range []string{"a\x00b", strings.Repeat("x", 64*1024+1)} {
-		if _, err := agentTaskArgs(bad); err == nil {
-			t.Fatal("invalid task accepted")
+	for _, bad := range []string{"a\x00b", strings.Repeat("x", maxAgentTask+1)} {
+		if err := agentTaskOK(bad); err == nil {
+			t.Fatalf("a %d-byte task with NUL %v was taken", len(bad), strings.ContainsRune(bad, 0))
 		}
-	}
-	if args, err := agentTaskArgs(""); err != nil || len(args) != 0 {
-		t.Fatal("empty task changed ordinary New")
-	}
-	if _, err := agentTaskArgs(strings.Repeat("x", 64*1024)); err != nil {
-		t.Fatal(err)
 	}
 }

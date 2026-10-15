@@ -437,29 +437,34 @@ func (c *agentColumn) openIn(dir string) error {
 	return c.openTask(dir, "")
 }
 
-// agentTaskArgs keeps the task a single positional argument, including when
-// its text begins with a dash. Bound it before allocating a tmux session.
-func agentTaskArgs(prompt string) ([]string, error) {
-	if len(prompt) > 64*1024 || strings.ContainsRune(prompt, 0) {
-		return nil, fmt.Errorf("issue prompt must be at most 64 KiB and contain no NUL characters")
+// maxAgentTask bounds a session's first message. It reaches the CLI as
+// one argument (newAgentTaskSession), and Linux takes none over 128 KiB;
+// Projects says the same number when an issue is longer.
+const maxAgentTask = 64 << 10
+
+// agentTaskOK checks a first message before anything is started for it.
+func agentTaskOK(task string) error {
+	if len(task) > maxAgentTask {
+		return fmt.Errorf("a first message is at most 64 KiB; this one is %d KiB", (len(task)+1023)>>10)
 	}
-	if prompt == "" {
-		return nil, nil
+	if strings.ContainsRune(task, 0) {
+		return fmt.Errorf("a first message cannot hold a NUL character")
 	}
-	return []string{"--", prompt}, nil
+	return nil
 }
 
-func (c *agentColumn) openTask(dir, prompt string) error {
-	extra, err := agentTaskArgs(prompt)
-	if err != nil {
+// openTask is openIn with a first message for the new session (an issue
+// Projects sends to the agent), "" for none.
+func (c *agentColumn) openTask(dir, task string) error {
+	if err := agentTaskOK(task); err != nil {
 		return err
 	}
-	dir, err = agentSessionDir(dir)
+	dir, err := agentSessionDir(dir)
 	if err != nil {
 		return err
 	}
 	name := c.s.nextAgentSession(c.a)
-	if err := c.s.newAgentSessionIn(c.a, name, dir, extra...); err != nil {
+	if err := c.s.newAgentTaskSession(c.a, name, dir, task); err != nil {
 		return err
 	}
 	return c.switchTo(name)

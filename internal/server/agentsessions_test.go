@@ -117,8 +117,9 @@ func TestPickLastSession(t *testing.T) {
 	}
 }
 
-// A launch request becomes the CLI's arguments, the prompt last; a model
-// and a name are checked like the ids are, since they land on a command line.
+// A launch request becomes the CLI's arguments; the prompt is not among
+// them (newAgentTaskSession takes it apart), only checked. A model and a
+// name are checked like the ids are, since they land on a command line.
 func TestAgentLaunchArgs(t *testing.T) {
 	claude, codex := hostAgents["claude"], hostAgents["codex"]
 	sid := "55d60159-76bf-4dbd-862a-6c02595708e3"
@@ -127,21 +128,23 @@ func TestAgentLaunchArgs(t *testing.T) {
 		req  agentLaunchRequest
 		want string // the arguments joined by spaces, or "error"
 	}{
-		{claude, agentLaunchRequest{Prompt: "go"}, "go"},
+		{claude, agentLaunchRequest{Prompt: "go"}, ""},
 		{claude, agentLaunchRequest{Prompt: "go", Resume: sid, Fork: true, SessionID: sid, PermissionMode: "auto", Model: "claude-opus-5[1m]"},
-			"--resume " + sid + " --fork-session --session-id " + sid + " --permission-mode auto --model claude-opus-5[1m] go"},
+			"--resume " + sid + " --fork-session --session-id " + sid + " --permission-mode auto --model claude-opus-5[1m]"},
+		{claude, agentLaunchRequest{Prompt: strings.Repeat("x", 64<<10+1)}, "error"},
+		{claude, agentLaunchRequest{Prompt: "a\x00b"}, "error"},
 		{claude, agentLaunchRequest{Model: "opus"}, "--model opus"},
 		{claude, agentLaunchRequest{Model: "opus --dangerously-skip-permissions"}, "error"},
 		{claude, agentLaunchRequest{Model: "-p"}, "error"},
 		{claude, agentLaunchRequest{Model: "opus[1m"}, "error"},
 		{claude, agentLaunchRequest{PermissionMode: "bypassPermissions"}, "error"},
-		{claude, agentLaunchRequest{Prompt: "go", Model: "opus", Name: "Draw a reply: “stroke” replay"}, "--model opus --name Draw a reply: “stroke” replay go"},
+		{claude, agentLaunchRequest{Prompt: "go", Model: "opus", Name: "Draw a reply: “stroke” replay"}, "--model opus --name Draw a reply: “stroke” replay"},
 		{claude, agentLaunchRequest{Name: "-p"}, "error"},
 		{claude, agentLaunchRequest{Name: "two\nlines"}, "error"},
 		{claude, agentLaunchRequest{Name: " padded"}, "error"},
 		{claude, agentLaunchRequest{Name: strings.Repeat("x", 81)}, "error"},
 		{claude, agentLaunchRequest{Name: strings.Repeat("字", 80)}, "--name " + strings.Repeat("字", 80)},
-		{codex, agentLaunchRequest{Prompt: "go", Resume: sid}, "resume " + sid + " go"},
+		{codex, agentLaunchRequest{Prompt: "go", Resume: sid}, "resume " + sid},
 		{codex, agentLaunchRequest{Model: "opus"}, "error"},
 		{codex, agentLaunchRequest{Name: "a title"}, "error"},
 	} {
