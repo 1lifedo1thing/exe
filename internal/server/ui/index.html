@@ -2887,6 +2887,8 @@ tokenInput.addEventListener("keydown", e => {
 const UI_BUILD = "__EXE_BUILD__";
 let buildMine = UI_BUILD.startsWith("__") ? "" : UI_BUILD; // unstamped (served off disk in a test): adopt the daemon's
 let buildNew = "", buildTimer = 0, buildTold = false, buildInputAt = 0;
+let buildAsked = ""; // a build heard of, being asked of the daemon (buildSeen)
+const buildFalse = new Set(); // builds the daemon said it is not
 const buildTyped = new Set();
 function buildNote(e) {
   if (e.type === "pointermove" && !e.buttons) return; // only a drag counts
@@ -2942,15 +2944,27 @@ function buildSeen(id) {
   if (!id) return;
   if (!buildMine) buildMine = id;
   if (id === buildMine) { buildNew = ""; return; } // (back to) the build this page is
-  if (id === buildNew) return;
+  if (id === buildNew || id === buildAsked || buildFalse.has(id)) return;
   // a reload that came back as the same stale page (a cache in between)
   // must not spin: one try per build
   let tried = "";
   try { tried = sessionStorage.getItem("exe_build_tried") || ""; } catch (e) {}
   if (tried === id) return;
-  buildNew = id; buildTold = false;
-  if (!buildTimer) buildTimer = setInterval(buildTry, 1000);
-  buildTry();
+  // and an answer naming a build is only word of it until the daemon says
+  // so itself: a copy the worker keeps (sw.js) can carry the build it was
+  // kept under, and so can any cache on the way. A HEAD of the page is
+  // never answered from a copy. Believing a copy, a hidden desk reloaded
+  // for a build that was not there, over and over, and its Claude Code
+  // window's session took that browser's size at every load
+  buildAsked = id;
+  fetch("/", { method: "HEAD", cache: "no-store" }).then(r => r.headers.get("X-Exe-Build") || "", () => "").then(now => {
+    if (buildAsked === id) buildAsked = "";
+    if (now && now !== id) buildFalse.add(id);
+    if (now !== id) return; // not this build, or no answer: the next one that names it asks again
+    buildNew = id; buildTold = false;
+    if (!buildTimer) buildTimer = setInterval(buildTry, 1000);
+    buildTry();
+  });
 }
 
 // ---- window manager ----

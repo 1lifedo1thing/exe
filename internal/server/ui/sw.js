@@ -139,13 +139,27 @@ async function put(c, key, res, how) {
   if (!dated(how)) return c.put(key, res);
   return stamped(c, key, await res.blob(), res.headers);
 }
-// exe said the copy is current: it is stamped again, and passes as exe's answer
-async function current(c, key, had) {
+// exe said the copy is current: it is stamped again, and passes as exe's
+// answer — naming exe's build as that answer (live) did, never the build
+// the copy was kept under. The desk reads a build it is not as a deploy
+// and reloads for it (buildSeen), and Stickies reads notes.json, a copy
+// Notes keeps, on every load: a hidden desk went round and round
+async function current(c, key, had, live) {
   const body = await had.clone().blob();
   await stamped(c, key, body, had.headers).catch(() => {});
   const h = new Headers(had.headers);
   h.delete("X-Exe-Kept");
+  h.delete("X-Exe-Build");
+  const build = live && live.headers.get("X-Exe-Build");
+  if (build) h.set("X-Exe-Build", build);
   return new Response(body, { status: 200, headers: h });
+}
+// a copy answering for exe says nothing of exe's build, for the same reason
+function unbuilt(had) {
+  if (!had.headers.has("X-Exe-Build")) return had;
+  const h = new Headers(had.headers);
+  h.delete("X-Exe-Build");
+  return new Response(had.body, { status: had.status, statusText: had.statusText, headers: h });
 }
 
 // What a wanted list names and is not kept yet is fetched, one at a time,
@@ -174,19 +188,19 @@ async function kept(e, u, how) {
   const r = e.request, key = keyOf(u, how === "page");
   const c = await caches.open(KEEP);
   const had = await c.match(key, { ignoreVary: true });
-  if (had && how === "fixed") return had;
+  if (had && how === "fixed") return unbuilt(had);
   const net = (async () => {
     const req = had && dated(how) ? again(r, had) : r;
     const res = await ask(req, e.preloadResponse);
     const then = () => how === "wanted" ? have(c, key, r.headers.get("Authorization")) : null;
-    if (res.status === 304 && req !== r) { const now = await current(c, key, had); e.waitUntil(then()); return now; }
+    if (res.status === 304 && req !== r) { const now = await current(c, key, had, res); e.waitUntil(then()); return now; }
     e.waitUntil(put(c, key, res.clone(), how).catch(() => {}).then(then));
     return res;
   })();
   e.waitUntil(net.catch(() => {}));
   // nothing kept: exe's answer, or its failing, as if this were not here
   if (!had) return top(r) ? bounded(net).catch(() => offline()) : net;
-  return (await Promise.race([net.catch(() => null), sleep(WAIT).then(() => null)])) || had;
+  return (await Promise.race([net.catch(() => null), sleep(WAIT).then(() => null)])) || unbuilt(had);
 }
 
 // The desk's list of apps goes to it whatever it says, and so does its
