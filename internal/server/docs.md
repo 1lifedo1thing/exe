@@ -735,6 +735,14 @@ fills the rest; in the Claude Code window a line over it shows the session's
 latest prompt. The status line at the foot shows the connection at its left
 and usage at its right.
 
+In the **installed exe app**, the screen stays awake while Claude Code or
+Codex is the active window. Switching to another window, closing or shading
+the agent window, or leaving the app lets the screen sleep normally again.
+Returning to the agent window asks to keep it awake again. This works on
+supported devices, including iPhone and iPad Home Screen apps on iOS 18.4
+or later; the device can still refuse it to save power. Ordinary browser
+tabs keep their normal screen-sleep behaviour.
+
 ### Usage on the status line
 
 | Window | What the status line shows | How current it is |

@@ -13527,10 +13527,74 @@ function workspaceChanged(path, deleted, client) {
   if (mv && !mv.hidden && !deleted) loadMovie(mv, true);
 }
 
+// ---- keep an installed app awake while watching a coding agent ----
+// The screen belongs to this device, not the daemon or a synced setting.
+// Only the front, unshaded Claude Code or Codex window in a focused PWA
+// needs it. Observe window chrome alone: terminal output must not wake us.
+const agentWakeMode = matchMedia("(display-mode: standalone)");
+let agentWakeLock = null, agentWakePending = false, agentWakeAgain = false;
+let agentWakeWanted = false, agentWakeAway = false;
+function agentWakeWatching() {
+  if (!navigator.wakeLock || !(navigator.standalone === true || agentWakeMode.matches)
+      || agentWakeAway || document.hidden || !document.hasFocus() || showAllOn || showDeskOn) return false;
+  const w = document.querySelector("#desktop > .window.front:not([hidden]):not(.shaded)");
+  return !!w && (w.id === "win-claude" || w.id === "win-codex");
+}
+async function agentWakeSync(retry = false) {
+  const wanted = agentWakeWatching(), changed = wanted !== agentWakeWanted;
+  agentWakeWanted = wanted;
+  if (!wanted) {
+    const lock = agentWakeLock;
+    agentWakeLock = null;
+    if (lock) await lock.release().catch(() => {});
+    return;
+  }
+  if (agentWakeLock) return;
+  if (agentWakePending) { if (changed || retry) agentWakeAgain = true; return; }
+  if (!changed && !retry) return; // a refused or system-released lock waits for a new visit
+  agentWakePending = true;
+  try {
+    const lock = await navigator.wakeLock.request("screen");
+    // The request may settle after the window closed or the app went away.
+    if (!agentWakeWatching() || lock.released) { await lock.release(); return; }
+    agentWakeLock = lock;
+    lock.addEventListener("release", () => {
+      if (agentWakeLock === lock) agentWakeLock = null;
+      // Respect a system release (low power, for example); never retry in
+      // a loop. Returning to the app or agent window is another chance.
+    });
+  } catch (e) { /* unsupported policy, denied permission or low battery: normal screen sleep */ }
+  finally {
+    agentWakePending = false;
+    if (agentWakeAgain) { agentWakeAgain = false; agentWakeSync(true); }
+  }
+}
+function agentWakeStart() {
+  if (!navigator.wakeLock) return;
+  const sync = () => agentWakeSync(), resume = () => agentWakeSync(true);
+  const chrome = new MutationObserver(sync);
+  const windows = () => {
+    chrome.disconnect();
+    for (const w of document.querySelectorAll("#desktop > .window"))
+      chrome.observe(w, { attributes: true, attributeFilter: ["class", "hidden"] });
+    sync();
+  };
+  new MutationObserver(windows).observe($("#desktop"), { childList: true });
+  new MutationObserver(sync).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  document.addEventListener("visibilitychange", resume);
+  addEventListener("focus", resume);
+  addEventListener("blur", sync);
+  addEventListener("pagehide", () => { agentWakeAway = true; sync(); });
+  addEventListener("pageshow", () => { agentWakeAway = false; resume(); });
+  agentWakeMode.addEventListener("change", sync);
+  windows();
+}
+
 // ---- boot ----
 if (IS_MOBILE) $("#vm-hint").textContent = "tap a VM to open it";
 viewsReady = loadViews().catch(() => {}); // before the restore: a Workspace window it opens waits for this
 winRestore();
+agentWakeStart();
 appDataSubscribe();
 renderVMHead();
 loadVMs().catch(e => toast(e.message));
