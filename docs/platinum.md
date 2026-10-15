@@ -944,7 +944,8 @@ restyling: `internal/server/ui/index.html` (the desktop),
   the copy is, "Offline: the copy of 5 min ago", and whatever would write
   is dimmed where it stands: nothing is hidden and nothing moves. It asks
   every few seconds whether the daemon is back, and is whole again by
-  itself. Opened from the alert as its own page (`?from=offline`), a
+  itself. The alert opens it in a new tab, beside itself; in an installed
+  app, which has no tabs, in its own place (`?from=offline`), and then a
   phone's first screen has Back to exe in its bar.
 - An app window follows its app's code: `/v1/apps` lists each app's
   `version` (a fingerprint of its files) and the daemon announces a change

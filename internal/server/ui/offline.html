@@ -127,10 +127,14 @@ setInterval(() => probe(false), 3000);
 // An app that keeps a copy on this device (sw.js, "what an app keeps") can
 // be read from it meanwhile: a line says which, and each has a button that
 // opens its page as the desk would have, the token and a phone's ?mobile=1
-// with it (the desk's own rule for what a phone is), and from=offline, so
-// the page can offer the way back here.
+// with it (the desk's own rule for what a phone is). In a browser it opens
+// in a new tab, and this alert stays where it is to bring the desk back.
+// An installed app has no tabs, and an iPhone's would open outside it,
+// where its copies are not: there the page takes this one's place, with
+// from=offline so it can offer the way back here.
 const IS_MOBILE = /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(navigator.userAgent)
   || (matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 700);
+const INSTALLED = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
 (async () => {
   try {
     const c = await caches.open("exe-keep"), list = await c.match("/v1/apps");
@@ -143,7 +147,8 @@ const IS_MOBILE = /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(navigator.us
       const q = new URLSearchParams();
       try { const tok = localStorage.getItem("exe_token"); if (tok) q.set("token", tok); } catch (e) {}
       if (IS_MOBILE) q.set("mobile", "1");
-      q.set("from", "offline");
+      if (INSTALLED) q.set("from", "offline");
+      const query = String(q);
       const names = apps.map(a => a.title);
       const kept = document.getElementById("kept");
       kept.textContent = (names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] + " keep" : names[0] + " keeps")
@@ -152,7 +157,10 @@ const IS_MOBILE = /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(navigator.us
       for (const a of apps) {
         const b = document.createElement("button");
         b.className = "ghost"; b.type = "button"; b.textContent = "Open " + a.title;
-        b.addEventListener("click", () => { location.href = a.page + "?" + q; });
+        b.addEventListener("click", () => {
+          const url = query ? a.page + "?" + query : a.page;
+          if (INSTALLED) location.href = url; else window.open(url, "_blank", "noopener");
+        });
         document.getElementById("retry").before(b);
       }
     }
