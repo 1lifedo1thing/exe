@@ -882,8 +882,8 @@ Click the line for **Prompts**, a dialog over the window that lists every
 prompt of the session in order, each with its number, its first line and when
 it was given. The latest is selected, and the selected prompt stands whole in
 the box under the list, every line of it, where it can be selected; **Copy**
-copies all of it. The arrows move along the list; Return, **OK** and Escape
-put it away.
+copies all of it. The arrows move along the list; Return, **OK**, Escape and
+the close box in its title bar put it away.
 
 - A prompt is what you typed or pasted. Slash commands and their output, tool
   results and a sub-agent's turns are not listed, nor is what a background

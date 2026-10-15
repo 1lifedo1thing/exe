@@ -810,8 +810,10 @@ restyling: `internal/server/ui/index.html` (the desktop),
   session's latest prompt and, at its right in the Search rows' 10px
   `#777`, the count; `#777` words while there is none. Its 1px bottom
   line is its one seam with the terminal, the column's right line its
-  one seam with the column. A click opens Prompts, the Search box again:
-  a white list of 18px rows — the number in a slot as wide as the count,
+  one seam with the column. A click opens Prompts, the Search box again
+  but with a close box at its title bar's left (Livid asked for the tile,
+  2026-10-14; the stripe on its right runs to the edge, as on a window
+  with no zoom or shade box): a white list of 18px rows — the number in a slot as wide as the count,
   the first line, the time at the right — fourteen from the first paint,
   a 1px line that is the list's last arrow's, then the selected prompt
   whole in a sunken white box six lines tall (98px, selectable,

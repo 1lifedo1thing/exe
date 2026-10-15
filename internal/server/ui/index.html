@@ -9498,8 +9498,12 @@ function openHostTermWin(app, cmd, vm, termSess) {
     spCopy.disabled = !p;
   };
   const buildPrompts = () => {
-    const bar = el("div", { class: "titlebar" });
-    bar.append(el("div", { class: "stripe" }), el("div", { class: "title" }, "Prompts"), el("div", { class: "stripe" }));
+    // the title bar wears a close box at its left, as Livid asked
+    // (2026-10-14), the stripe on its right running to the edge as on a
+    // window with no zoom or shade box; it hides with the window's own
+    // boxes when the window is not in front
+    const bar = el("div", { class: "titlebar" }), closeBox = el("button", { class: "tbox close", "aria-label": "Close" });
+    bar.append(closeBox, el("div", { class: "stripe" }), el("div", { class: "title" }, "Prompts"), el("div", { class: "stripe" }));
     spList = el("div", { class: "sf-list sp-list vflush" });
     spText = el("div", { class: "sp-text" });
     spCount = el("span", { class: "sf-count" });
@@ -9510,6 +9514,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
     w.querySelector(".win-frame").append(spVeil);
     const close = () => { spVeil.hidden = true; spAsked++; term.focus(); };
     spOk.onclick = close;
+    closeBox.onclick = e => { e.stopPropagation(); close(); };
     spCopy.onclick = () => { const p = spRows[spSel]; if (p) copyText(p.text, "the prompt"); spOk.focus(); };
     // the text can be selected and copied; the keys come back to the
     // buttons afterwards, so Return and Escape still put the dialog away
