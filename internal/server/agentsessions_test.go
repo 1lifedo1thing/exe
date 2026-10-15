@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -252,7 +253,8 @@ func TestAgentSessionsLive(t *testing.T) {
 	if len(list) != 1 || list[0].Number != 1 || !list[0].Attached {
 		t.Fatalf("after start: %+v", list)
 	}
-	col := newAgentColumn(s, a, sh, session, nil)
+	frames := &frameRecorder{}
+	col := newAgentColumn(s, a, sh, session, frames)
 	if col.current() != a.session {
 		t.Fatalf("column current = %q", col.current())
 	}
@@ -294,6 +296,27 @@ func TestAgentSessionsLive(t *testing.T) {
 	waitFor("the client on session 2 after the archive", func() bool { return sh.Current() == "exe-test-sh-2" })
 	if list = s.agentSessions(a); len(list) != 2 || list[0].Name != "exe-test-sh-2" {
 		t.Fatalf("after killing 3: %+v", list)
+	}
+	// what the session gave back follows once its shell is gone: the
+	// memory it held, read from /proc before the kill, and what the
+	// machine has available now
+	var archived struct {
+		Archived string `json:"archived"`
+		archiveFigures
+	}
+	waitFor("the archived frame", func() bool {
+		for _, f := range frames.all() {
+			if json.Unmarshal(f, &archived) == nil && archived.Archived == "exe-test-sh-3" {
+				return true
+			}
+		}
+		return false
+	})
+	if archived.Available == 0 {
+		t.Fatalf("archived frame without the machine's memory: %+v", archived)
+	}
+	if runtime.GOOS == "linux" && (!archived.Measured || archived.Freed == 0) {
+		t.Fatalf("archived frame without the shell's memory: %+v", archived)
 	}
 	// close the window and open it again: it lands on session 2, where it
 	// was, without touching session 1 — and so does a daemon that has
@@ -659,4 +682,24 @@ func TestAgentSessionPromptOverlap(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 		}
 	}
+}
+
+// frameRecorder stands in for the window's socket: the text frames the
+// column sent, in order.
+type frameRecorder struct {
+	mu     sync.Mutex
+	frames [][]byte
+}
+
+func (r *frameRecorder) WriteText(p []byte) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.frames = append(r.frames, append([]byte(nil), p...))
+	return nil
+}
+
+func (r *frameRecorder) all() [][]byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([][]byte(nil), r.frames...)
 }

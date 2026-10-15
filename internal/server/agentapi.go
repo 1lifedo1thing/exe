@@ -28,7 +28,8 @@ import (
 //	POST   /v1/agents/{app}/sessions                 {prompt, resume, fork, session_id, permission_mode, model, name} → {name, number}
 //	                                                 (Codex: prompt and resume, a thread id, alone)
 //	POST   /v1/agents/{app}/sessions/{name}/prompt   {prompt, say}: one message, "say" typed and the prompt pasted after it
-//	DELETE /v1/agents/{app}/sessions/{name}          ends the session, as the column's Archive does
+//	DELETE /v1/agents/{app}/sessions/{name}          ends the session, as the column's Archive does; answers with what it gave
+//	                                                 back: freed, swap, available (bytes), measured (agentmemory.go)
 //	GET    /v1/agents/{app}/sessions/{name}/info     what the column's Get Info shows: the conversation's title, summary,
 //	                                                 first and last prompt, turns, replies, tokens, models, start, last
 //	                                                 activity and folder, read from its transcript (claudeinfo.go; Claude Code only)
@@ -272,13 +273,14 @@ func (s *Server) handleAgentSessionDelete(w http.ResponseWriter, r *http.Request
 		writeErr(w, http.StatusInternalServerError, errors.New("sessions need tmux on this host"))
 		return
 	}
+	m := measureSession(name)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		writeErr(w, http.StatusNotFound, fmt.Errorf("tmux kill-session: %s", strings.TrimSpace(string(out))))
 		return
 	}
 	os.Remove(s.agentStatusFile(a, name))
 	os.Remove(s.agentStateFile(a, name))
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, m.settle()) // what the session gave back (agentmemory.go), once its processes are gone
 }
 
 // handleAgentSessionInfo answers Get Info on one of the column's sessions:

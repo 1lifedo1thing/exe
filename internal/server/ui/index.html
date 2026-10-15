@@ -2728,14 +2728,14 @@ function el(tag, attrs = {}, ...kids) {
 // What a request says when the daemon wants a token this browser does not
 // have (see the API token dialog, below).
 const TOK_HINT = "This exe asks for its API token: Special → Set API Token…";
-function toast(msg) {
+function toast(msg, ms = 3500) {
   // while the token dialog is up it is saying this itself
   if (msg === TOK_HINT && !$("#tok-overlay").hidden) return;
   const b = $("#status-bar");
   b.textContent = msg;
   b.classList.add("show");
   clearTimeout(b._t);
-  b._t = setTimeout(() => b.classList.remove("show"), 3500);
+  b._t = setTimeout(() => b.classList.remove("show"), ms);
 }
 const fmtTime = iso => new Date(iso).toLocaleString();
 
@@ -9311,6 +9311,9 @@ function openHostTermWin(app, cmd, vm, termSess) {
     }
     showCtxMenu(e.clientX, e.clientY, items, () => term.focus());
   }
+  // the titles of the sessions being archived, by name, for the toast
+  // that follows: the list has dropped the row by the time it arrives
+  const archivedTitles = new Map();
   async function archiveSession(s) {
     const ok = await confirmDialog({
       message: `Archive “${sessTitle(s)}”?`,
@@ -9321,8 +9324,24 @@ function openHostTermWin(app, cmd, vm, termSess) {
         + (s.name === current ? " The window moves to another session, or ends with the last one." : ""),
       action: "Archive",
     });
-    if (ok && ws && ws.readyState === 1) ws.send(JSON.stringify({ archive: s.name }));
+    if (ok && ws && ws.readyState === 1) {
+      archivedTitles.set(s.name, sessTitle(s));
+      ws.send(JSON.stringify({ archive: s.name }));
+    }
     term.focus();
+  }
+  // what an archived session gave back, {"archived":name,…} once its
+  // processes are gone (agentmemory.go): the memory they held, from
+  // /proc before they ended, and what the machine has available now. A
+  // daemon that could not read the processes says only the latter; one
+  // that could not read the machine's memory says only the former
+  function archivedToast(msg) {
+    const title = archivedTitles.get(msg.archived) || msg.archived;
+    archivedTitles.delete(msg.archived);
+    let t = `Archived “${title}”`;
+    if (msg.measured) t += `: ${fmtBytes(msg.freed || 0)} freed` + (msg.swap ? ` and ${fmtBytes(msg.swap)} of swap` : "");
+    if (msg.available) t += `. ${fmtBytes(msg.available)} available now`;
+    toast(t + ".", 6000);
   }
   // Get Info, on a row's menu in the Claude Code window: a dialog over
   // the window, like Search, with what the daemon reads out of the
@@ -9703,12 +9722,14 @@ function openHostTermWin(app, cmd, vm, termSess) {
     // (null: the session the column moved to has none yet), {"usage":…}
     // with the ChatGPT subscription's for Codex — or the session column's
     // list, {"sessions":[…],"current":…}, or an {"error":…} for a switch
-    // or New that failed, or the {"pong":…} to a beat above
+    // or New that failed, {"archived":…} with what an archived session
+    // gave back, or the {"pong":…} to a beat above
     ws.onmessage = e => {
       if (typeof e.data !== "string") { term.write(new Uint8Array(e.data)); return; }
       let msg;
       try { msg = JSON.parse(e.data); } catch (err) { return; }
       if ("pong" in msg) { pinged = 0; clearTimeout(probe); probe = 0; }
+      if (msg.archived) archivedToast(msg);
       if ("status" in msg) { if (msg.status) showAgentUsage(usage, msg.status); else usage.hidden = true; }
       if ("usage" in msg) showOpenAIUsage(usage, msg.usage);
       if (Array.isArray(msg.sessions)) {

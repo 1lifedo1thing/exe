@@ -238,20 +238,40 @@ func (s *Server) markAgentStates(a hostAgent, list []agentSession) {
 // every two seconds as the titles follow the CLI's task — moves the
 // window's tmux client between sessions, and starts new ones.
 type agentColumn struct {
-	s    *Server
-	a    hostAgent
-	sh   agentShell
-	out  *wsWriter
-	mu   sync.Mutex
-	cur  string
-	kick chan struct{}
+	s        *Server
+	a        hostAgent
+	sh       agentShell
+	out      textSender // the window's socket; nil in tests that only drive the sessions
+	mu       sync.Mutex
+	cur      string
+	kick     chan struct{}
+	settling sync.WaitGroup // archives whose figures are still to be sent
+}
+
+// waitArchived returns once every archive in flight has sent what the
+// session gave back, or after the settling time has passed: the
+// socket's close waits on it (handleHostTerminal), so Archive of the
+// last session still gets its figures through.
+func (c *agentColumn) waitArchived() {
+	done := make(chan struct{})
+	go func() { c.settling.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(archiveSettle + time.Second):
+	}
 }
 
 // newAgentColumn starts a window's column on the session its client
 // was attached to (startAgent) — the client may not have registered
 // with tmux yet, so that is what the first frame says until follow
 // re-reads it.
-func newAgentColumn(s *Server, a hostAgent, sh agentShell, session string, out *wsWriter) *agentColumn {
+// textSender is the window's side of the link, as the column needs it:
+// a text frame, in order with the terminal bytes (wsWriter).
+type textSender interface {
+	WriteText([]byte) error
+}
+
+func newAgentColumn(s *Server, a hostAgent, sh agentShell, session string, out textSender) *agentColumn {
 	c := &agentColumn{s: s, a: a, sh: sh, out: out, kick: make(chan struct{}, 1)}
 	c.cur = session
 	if cur := sh.Current(); cur != "" {
@@ -340,7 +360,11 @@ func (c *agentColumn) switchTo(name string) error {
 // session the window shows, the window moves to a neighbour first — the
 // session before it, else the one after — so it stays open; the last
 // session goes without one, and the window ends as it does when the CLI
-// exits.
+// exits. What the session gave back — the memory its processes held,
+// read before they are ended, and what the machine has available once
+// they are gone (agentmemory.go) — follows as {"archived":name,…}, from
+// a goroutine of its own: the processes take about a second to go, and
+// the window's keys must not wait on them.
 func (c *agentColumn) archive(name string) error {
 	n := agentSessionNumber(c.a, name)
 	if n == 0 {
@@ -370,12 +394,28 @@ func (c *agentColumn) archive(name string) error {
 	if cmd == nil {
 		return fmt.Errorf("sessions need tmux on this host")
 	}
+	m := measureSession(name)
+	// held before the kill: the last session's end closes the socket as
+	// soon as its client is gone, and that close waits on it (waitArchived)
+	c.settling.Add(1)
 	if out, err := cmd.CombinedOutput(); err != nil {
+		c.settling.Done()
 		return fmt.Errorf("tmux kill-session: %s", strings.TrimSpace(string(out)))
 	}
 	os.Remove(c.s.agentStatusFile(c.a, name)) // the next session under this number starts clean
 	os.Remove(c.s.agentStateFile(c.a, name))
 	c.refresh()
+	go func() {
+		defer c.settling.Done()
+		f := m.settle()
+		msg, _ := json.Marshal(struct {
+			Archived string `json:"archived"`
+			archiveFigures
+		}{name, f})
+		if c.out != nil {
+			c.out.WriteText(msg)
+		}
+	}()
 	return nil
 }
 

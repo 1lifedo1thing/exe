@@ -831,6 +831,10 @@ after its last write unless `cleanupPeriodDays` in `~/.claude/settings.json`
 says otherwise.
 
 - **Archive…** shows only once the conversation exists.
+- Once the session's processes are gone, a note at the foot of the screen
+  says what it gave back — the memory those processes held, and the swap —
+  and how much memory the machine has available now. On a Mac or a PC,
+  where the daemon cannot read what a process holds, it says only the latter.
 - A turn still in flight when you archive is lost.
 - When the window was showing that session, it moves to the one started
   before it, or failing that the one after. Archiving the agent's only
@@ -1058,7 +1062,7 @@ is set.
 | `GET /v1/agents/claude/sessions` | Lists the rows with their states and, as `threads`, the conversations started elsewhere: the latest ten, or every one with `?threads=all`. |
 | `POST /v1/agents/claude/sessions` | Opens a numbered session and answers with its `name` and `number`. |
 | `POST /v1/agents/claude/sessions/<name>/prompt` | Types a message into a session. |
-| `DELETE /v1/agents/claude/sessions/<name>` | Ends the session, as **Archive…** does. |
+| `DELETE /v1/agents/claude/sessions/<name>` | Ends the session, as **Archive…** does, and answers once its processes are gone with what it gave back: `freed` and `swap`, the bytes they held (`measured` says whether they could be read), and `available`, the machine's memory now. |
 | `GET /v1/agents/claude/sessions/<name>/info` | What **Get Info** shows for a session: `summary`, `prompt`, `last_prompt`, `turns`, `replies`, `tokens` (`input`, `output`, `cache_read`, `cache_write`), `models`, `created`, `activity`, `cwd`. Claude Code only. |
 | `GET /v1/agents/claude/threads/<id>` | The same for a conversation no session holds, by its session id. |
 | `GET /v1/agents/work` | Lists the sessions of both agents that are at work now: when each one's turn began (`since`, beside the daemon's own `now`) and the issue addresses, such as `EXE-12`, that its instructions named (`refs`). |

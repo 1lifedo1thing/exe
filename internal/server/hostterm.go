@@ -290,6 +290,10 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 	defer c.CloseNow()
 
 	out := &wsWriter{ctx: ctx, c: c}
+	var col *agentColumn
+	if agent != nil {
+		col = newAgentColumn(s, *agent, ash, session, out)
+	}
 	go func() {
 		io.Copy(out, sh) // pty output → browser; EOF when the shell exits
 		// an agent window's tmux client can be gone with its sessions
@@ -299,6 +303,11 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 			reason = "detached"
 		} else if termName != "" {
 			reason = s.termEndReason(termName)
+		}
+		if col != nil {
+			// Archive of the agent's last session ends the client with it:
+			// the link stays up until what the session gave back is sent
+			col.waitArchived()
 		}
 		c.Close(websocket.StatusNormalClosure, reason)
 		cancel()
@@ -331,9 +340,7 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
-	var col *agentColumn
-	if agent != nil {
-		col = newAgentColumn(s, *agent, ash, session, out)
+	if col != nil {
 		go col.follow(ctx)
 		if agent.statusLine {
 			go pushAgentStatus(ctx, out, col.statusFile)
