@@ -5525,6 +5525,13 @@ function takeHostAgents(h) {
 const loadHostAgents = () => j("/v1/hostinfo").then(h => { if (takeHostAgents(h)) renderIcons(lastVMs); });
 function renderIcons(vms) {
   const box = $("#icons");
+  // An app's picture already on the desk moves to its new icon rather than
+  // being drawn again. Safari asks the worker for every new <img>, and the
+  // worker answers for an app that keeps a copy (sw.js) only once exe has:
+  // Notes and Projects went blank at every return to the Home Screen app
+  // (deskResume) until the network woke. A new version is drawn anew.
+  const drawn = new Map();
+  for (const i of box.querySelectorAll(".dicon > img")) if (i._app) drawn.set(i._app, i);
   box.replaceChildren();
   {
     const ic = el("div", { class: "dicon" + (selectedIcon === "ws" ? " sel" : ""), title: "Workspace — files shared between you, apps and VMs" });
@@ -5583,7 +5590,13 @@ function renderIcons(vms) {
     if (app.hidden) continue; // opened from a menu (Welcome, under Help)
     const key = "app:" + app.name;
     const ic = el("div", { class: "dicon" + (selectedIcon === key ? " sel" : ""), title: app.title || app.name });
-    ic.innerHTML = appIcon(app);
+    const html = appIcon(app), was = drawn.get(app.name);
+    if (was && was._html === html && was._ver === app.version) ic.append(was);
+    else {
+      ic.innerHTML = html;
+      const im = ic.querySelector("img");
+      if (im) Object.assign(im, { _app: app.name, _html: html, _ver: app.version });
+    }
     ic.append(el("span", { class: "lbl" }, app.title || app.name));
     ic.addEventListener("click", e => {
       e.stopPropagation();
