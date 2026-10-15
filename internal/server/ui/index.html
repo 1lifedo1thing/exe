@@ -5997,7 +5997,7 @@ window.addEventListener("resize", () => {
 // deltas up via postMessage (the app can't reach its own window chrome);
 // the desktop resizes the Platinum window and iframe around it
 let appGrow = null; // { win, frame, w, h } captured at grow-start
-window.addEventListener("message", e => {
+window.addEventListener("message", async e => {
   if (e.origin !== location.origin || !e.data || typeof e.data.exe !== "string") return;
   let fr = [...document.querySelectorAll(".app-frame")].find(f => f.contentWindow === e.source);
   // Safari (iPadOS 26 with a trackpad) stamps the grow stream with the
@@ -6061,17 +6061,17 @@ window.addEventListener("message", e => {
     const args = Array.isArray(e.data.args) ? e.data.args.filter(a => typeof a === "string").slice(0, 2) : [];
     if (act && !(act.dis && act.dis(...args))) act.run(...args);
   } else if (e.data.exe === "agent" && AGENT_APPS[e.data.app] && typeof e.data.dir === "string") {
-    // an app asks for an agent session in a folder: Projects' Open in
-    // Claude Code, with the project's working directory. The agent's
-    // window opens, or comes forward, and its session column starts a
-    // session there (sendNewIn); the daemon refuses a folder that is not
-    // on this machine, and the window says so. A host without the CLI
-    // says so too, where the desk menu's item would be greyed
+    // Projects can open just the folder or supply an issue as the first
+    // prompt. Refresh the registry so a CLI installed since the desktop
+    // opened is available here too. The daemon checks the folder and task.
     const app = e.data.app, dir = e.data.dir.trim().slice(0, 1024);
-    if (!dir.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(dir)) return; // a whole path, as the daemon wants it
+    const prompt = typeof e.data.prompt === "string" ? e.data.prompt : "";
+    if (!dir.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(dir)) return;
+    try { await loadHostAgents(); }
+    catch (_) { toast("Could not check agents on this host"); return; }
     if (!hostAgents[app]) { toast(AGENT_APPS[app].title + " is not installed on this host"); return; }
     const aw = openHostTermWin(app);
-    if (aw && aw._openIn) aw._openIn(dir);
+    if (aw && aw._openIn) aw._openIn(dir, prompt);
   } else if (e.data.exe === "view-page" && isWebURL(e.data.url || "")) {
     // a page (an admin's HTML embed on the hub) opens the same way, in a
     // desktop page window, sandboxed like a Workspace page
@@ -9410,7 +9410,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
   // ({exe:"agent"}: Projects' Open in Claude Code, with the project's
   // working directory). It goes on the window's own link, and the daemon
   // starts the session and moves the window to it in one step
-  // (agentColumn.openIn), so the window never stays on the old session
+  // (agentColumn.openTask), so the window never stays on the old session
   // (a session made over the HTTP API and then asked for by name could:
   // _showSession drops a name the list does not hold yet). A window that
   // has only just been opened sends it once its link is up — every
@@ -9418,14 +9418,17 @@ function openHostTermWin(app, cmd, vm, termSess) {
   // the link is up give two sessions. The daemon refuses a folder that
   // is not on this machine, and its {"error":…} is toasted like a
   // failed New
-  const openDirs = [];
-  const sendNewIn = dir => {
-    openDirs.push(dir);
+  const openTasks = [];
+  const flushNewIn = () => {
     if (!(ws && ws.readyState === 1)) return;
-    while (openDirs.length) ws.send(JSON.stringify({ new: true, dir: openDirs.shift() }));
+    while (openTasks.length) ws.send(JSON.stringify({ new: true, ...openTasks.shift() }));
     term.focus();
   };
-  w._openIn = dir => { if (list) sendNewIn(dir); else toast("A session in a folder needs tmux on this host"); };
+  w._openIn = (dir, prompt = "") => {
+    if (!list) { toast("A session in a folder needs tmux on this host"); return; }
+    openTasks.push({ dir, prompt });
+    flushNewIn();
+  };
   // a row's contextual menu: when the session started, then what it can
   // have done to it beyond a click (a click switches, so no Switch To) —
   // and the list's own, off any row, just starts one. Archive ends the session and the CLI in it,
@@ -9953,7 +9956,7 @@ function openHostTermWin(app, cmd, vm, termSess) {
       status.textContent = vm ? "connected to " + vm : "connected";
       if (heldPaths.length) syncHeld(); // Insert wakes with the link
       ws.send(JSON.stringify({ resize: [term.cols, term.rows] }));
-      if (openDirs.length) sendNewIn(openDirs.pop()); // the folders an app asked for before the link was up
+      if (openTasks.length) flushNewIn(); // the tasks an app asked for before the link was up
       // never steal focus on a background reconnect, nor on a restore
       if (initial && !restore) term.focus();
       requestAnimationFrame(() => termSpacerFix(box, term));

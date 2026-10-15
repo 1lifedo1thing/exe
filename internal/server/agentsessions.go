@@ -434,12 +434,32 @@ func (c *agentColumn) open() error {
 // that is not on this machine is refused rather than quietly swapped for
 // the project folder: the caller asked for that one.
 func (c *agentColumn) openIn(dir string) error {
-	dir, err := agentSessionDir(dir)
+	return c.openTask(dir, "")
+}
+
+// agentTaskArgs keeps the task a single positional argument, including when
+// its text begins with a dash. Bound it before allocating a tmux session.
+func agentTaskArgs(prompt string) ([]string, error) {
+	if len(prompt) > 64*1024 || strings.ContainsRune(prompt, 0) {
+		return nil, fmt.Errorf("issue prompt must be at most 64 KiB and contain no NUL characters")
+	}
+	if prompt == "" {
+		return nil, nil
+	}
+	return []string{"--", prompt}, nil
+}
+
+func (c *agentColumn) openTask(dir, prompt string) error {
+	extra, err := agentTaskArgs(prompt)
+	if err != nil {
+		return err
+	}
+	dir, err = agentSessionDir(dir)
 	if err != nil {
 		return err
 	}
 	name := c.s.nextAgentSession(c.a)
-	if err := c.s.newAgentSessionIn(c.a, name, dir); err != nil {
+	if err := c.s.newAgentSessionIn(c.a, name, dir, extra...); err != nil {
 		return err
 	}
 	return c.switchTo(name)

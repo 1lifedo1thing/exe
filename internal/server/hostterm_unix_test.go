@@ -3,12 +3,14 @@
 package server
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Exercise the installed CLI's help and the shell command used by tmux:
@@ -65,5 +67,68 @@ func TestCodexStandaloneLaunch(t *testing.T) {
 				t.Fatal("tmux command did not preserve the launch arguments")
 			}
 		})
+	}
+}
+
+// A real, isolated tmux launch with inert CLIs: no model call and no live
+// sessions. Check the working folder and the exact argv received by each CLI.
+func TestAgentIssueLaunch(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux")
+	}
+	tmuxSocket = fmt.Sprintf("exe-test-issue-%d", os.Getpid())
+	defer func() { tmuxCmd("kill-server").Run(); tmuxSocket = "" }()
+	for _, app := range []string{"claude", "codex"} {
+		t.Run(app, func(t *testing.T) {
+			dir := t.TempDir()
+			bin := filepath.Join(dir, app)
+			script := "#!/bin/sh\nif [ \"$1\" = --help ]; then exit 0; fi\npwd > cwd\nprintf '%s\\0' \"$@\" > argv\nexec sleep 20\n"
+			if err := os.WriteFile(bin, []byte(script), 0755); err != nil {
+				t.Fatal(err)
+			}
+			a := hostAgents[app]
+			a.bin = bin
+			prompt := "--do not parse as flags\nIt's an issue: $(touch injected); `touch injected`; 中文"
+			extra, err := agentTaskArgs(prompt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := &Server{StateDir: t.TempDir()}
+			name := "exe-test-issue-" + app
+			if err := s.newAgentSessionIn(a, name, dir, extra...); err != nil {
+				t.Fatal(err)
+			}
+			defer tmuxCmd("kill-session", "-t", "="+name).Run()
+			var got []byte
+			for i := 0; i < 100; i++ {
+				got, _ = os.ReadFile(filepath.Join(dir, "argv"))
+				if len(got) > 0 {
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			args := strings.Split(strings.TrimSuffix(string(got), "\x00"), "\x00")
+			if len(args) < 2 || args[len(args)-2] != "--" || args[len(args)-1] != prompt {
+				t.Fatalf("task arguments were changed: %q", args)
+			}
+			cwd, _ := os.ReadFile(filepath.Join(dir, "cwd"))
+			if strings.TrimSpace(string(cwd)) != dir {
+				t.Fatalf("cwd = %q", cwd)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "injected")); !os.IsNotExist(err) {
+				t.Fatal("prompt executed as shell code")
+			}
+		})
+	}
+	for _, bad := range []string{"a\x00b", strings.Repeat("x", 64*1024+1)} {
+		if _, err := agentTaskArgs(bad); err == nil {
+			t.Fatal("invalid task accepted")
+		}
+	}
+	if args, err := agentTaskArgs(""); err != nil || len(args) != 0 {
+		t.Fatal("empty task changed ordinary New")
+	}
+	if _, err := agentTaskArgs(strings.Repeat("x", 64*1024)); err != nil {
+		t.Fatal(err)
 	}
 }
