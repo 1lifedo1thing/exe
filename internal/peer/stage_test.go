@@ -318,6 +318,16 @@ func TestFailedConflictBackupStopsTheApply(t *testing.T) {
 			if out, err := eng.applyBytes("Paint/canvas.png", []byte(tc.remote), rv); err != nil || out != "resolved" {
 				t.Fatalf("the next try: %s %v", out, err)
 			}
+			// the retry keeps the winner and saves the loser
+			ents, _ := os.ReadDir(filepath.Join(dir, "sync-conflicts", "Paint"))
+			if len(ents) != 1 {
+				t.Fatalf("want one saved loser, got %v", ents)
+			}
+			saved, _ := os.ReadFile(filepath.Join(dir, "sync-conflicts", "Paint", ents[0].Name()))
+			kept, _ := os.ReadFile(p)
+			if string(kept) != hi || string(saved) != lo {
+				t.Fatalf("kept %q and saved %q, want %q and %q", kept, saved, hi, lo)
+			}
 		})
 	}
 }
