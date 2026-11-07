@@ -164,6 +164,29 @@ func TestStoreUpsertKeyPinning(t *testing.T) {
 	}
 }
 
+// applyBytes is ApplyRemote for content a test holds in memory.
+func (e *Engine) applyBytes(key string, body []byte, rv Version) (string, error) {
+	if rv.Deleted {
+		return e.ApplyRemote(key, nil, rv)
+	}
+	in, err := e.stageBytes(body)
+	if err != nil {
+		return "", err
+	}
+	defer in.Discard()
+	return e.ApplyRemote(key, in, rv)
+}
+
+// served is what FileForPeer sends a peer for the workspace file rel.
+func served(e *Engine, rel string, max int64) ([]byte, error) {
+	f, size, _, err := e.FileForPeer(WorkspaceNS, rel, max)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return io.ReadAll(io.LimitReader(f, size))
+}
+
 func TestApplyRemoteRejectsTraversalKeys(t *testing.T) {
 	dir := t.TempDir()
 	ident, _ := LoadIdentity(dir)
@@ -180,10 +203,10 @@ func TestApplyRemoteRejectsTraversalKeys(t *testing.T) {
 	rv := Version{Vec: map[string]int64{"ffff": 9}}
 	rvDel := Version{Vec: map[string]int64{"ffff": 9}, Deleted: true}
 	for _, key := range []string{"../config.json", "..\\config.json", "Todo/../../config.json", "noslashkey"} {
-		if _, err := eng.ApplyRemote(key, []byte("pwned"), rv); err == nil {
+		if _, err := eng.applyBytes(key, []byte("pwned"), rv); err == nil {
 			t.Fatalf("key %q must be rejected", key)
 		}
-		if _, err := eng.ApplyRemote(key, nil, rvDel); err == nil {
+		if _, err := eng.applyBytes(key, nil, rvDel); err == nil {
 			t.Fatalf("delete key %q must be rejected", key)
 		}
 	}
@@ -209,7 +232,7 @@ func TestApplyRemoteV1RemoteDoesNotClobberV2Local(t *testing.T) {
 
 	// a legacy peer pushes a bare v1 array with a concurrent version
 	v1 := []byte(`[{"text":"legacy","done":false,"created":"2026-01-01T00:00:00Z"}]`)
-	outcome, err := eng.ApplyRemote("Todo/todos.json", v1, Version{Vec: map[string]int64{"ffffffffffffffff": 99}})
+	outcome, err := eng.applyBytes("Todo/todos.json", v1, Version{Vec: map[string]int64{"ffffffffffffffff": 99}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +264,7 @@ func TestConcurrentDeleteLosesToLiveData(t *testing.T) {
 
 	// a concurrent delete from another node (a stale tombstone, high counter)
 	del := Version{Vec: map[string]int64{"othernode": 7}, Deleted: true}
-	outcome, err := eng.ApplyRemote("Todo/todos.json", nil, del)
+	outcome, err := eng.applyBytes("Todo/todos.json", nil, del)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +284,7 @@ func TestConcurrentDeleteLosesToLiveData(t *testing.T) {
 			dominating.Vec[k] = v
 		}
 	}
-	if outcome, err := eng.ApplyRemote("Todo/todos.json", nil, dominating); err != nil || outcome != "applied" {
+	if outcome, err := eng.applyBytes("Todo/todos.json", nil, dominating); err != nil || outcome != "applied" {
 		t.Fatalf("a causally-dominating delete must win: outcome=%s err=%v", outcome, err)
 	}
 	if _, err := os.Stat(p); !os.IsNotExist(err) {
@@ -283,7 +306,7 @@ func TestConcurrentNonMergeableBacksUpLoser(t *testing.T) {
 	os.MkdirAll(filepath.Dir(p), 0o755)
 	os.WriteFile(p, []byte("LOCAL-ART"), 0o644) // scan-versioned on apply
 
-	outcome, err := eng.ApplyRemote("Paint/canvas.png", []byte("REMOTE-ART"), Version{Vec: map[string]int64{"other": 1}})
+	outcome, err := eng.applyBytes("Paint/canvas.png", []byte("REMOTE-ART"), Version{Vec: map[string]int64{"other": 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +346,7 @@ func TestApplyRemoteVersionsUnseenLocalFile(t *testing.T) {
 	os.WriteFile(p, local, 0o644)
 
 	remote := todoJSON(`{"id":"theirs","text":"remote","done":false,"created":2,"updated":2}`)
-	outcome, err := eng.ApplyRemote("Todo/todos.json", remote, Version{Vec: map[string]int64{"ffffffffffffffff": 1}})
+	outcome, err := eng.applyBytes("Todo/todos.json", remote, Version{Vec: map[string]int64{"ffffffffffffffff": 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +382,7 @@ func newWorkspaceEngine(t *testing.T) (*Engine, string) {
 
 func TestWorkspaceKeysRouteToWorkspaceDir(t *testing.T) {
 	eng, dir := newWorkspaceEngine(t)
-	outcome, err := eng.ApplyRemote("@workspace/pics/cat.png", []byte("CAT"), Version{Vec: map[string]int64{"other": 1}})
+	outcome, err := eng.applyBytes("@workspace/pics/cat.png", []byte("CAT"), Version{Vec: map[string]int64{"other": 1}})
 	if err != nil || outcome != "applied" {
 		t.Fatalf("apply: outcome=%s err=%v", outcome, err)
 	}
@@ -372,7 +395,7 @@ func TestWorkspaceKeysRouteToWorkspaceDir(t *testing.T) {
 		t.Fatal("workspace key leaked into appdata")
 	}
 	// a dominating delete tombstones it
-	if outcome, err := eng.ApplyRemote("@workspace/pics/cat.png", nil,
+	if outcome, err := eng.applyBytes("@workspace/pics/cat.png", nil,
 		Version{Vec: map[string]int64{"other": 2}, Deleted: true}); err != nil || outcome != "applied" {
 		t.Fatalf("delete: outcome=%s err=%v", outcome, err)
 	}
@@ -392,7 +415,7 @@ func TestWorkspaceKeysRejectedWhenDisabled(t *testing.T) {
 		t.Fatal(err)
 	}
 	rv := Version{Vec: map[string]int64{"other": 1}}
-	if _, err := eng.ApplyRemote("@workspace/x.txt", []byte("x"), rv); err == nil {
+	if _, err := eng.applyBytes("@workspace/x.txt", []byte("x"), rv); err == nil {
 		t.Fatal("workspace key must be rejected when WorkspaceDir is unset")
 	}
 }
@@ -402,10 +425,10 @@ func TestHiddenSegmentsNeverSync(t *testing.T) {
 	rv := Version{Vec: map[string]int64{"other": 1}}
 	rvDel := Version{Vec: map[string]int64{"other": 1}, Deleted: true}
 	for _, key := range []string{"@workspace/.Trash/doc.txt", "@workspace/sub/.git/config", "Todo/.hidden"} {
-		if _, err := eng.ApplyRemote(key, []byte("x"), rv); err == nil {
+		if _, err := eng.applyBytes(key, []byte("x"), rv); err == nil {
 			t.Fatalf("key %q must be rejected", key)
 		}
-		if _, err := eng.ApplyRemote(key, nil, rvDel); err == nil {
+		if _, err := eng.applyBytes(key, nil, rvDel); err == nil {
 			t.Fatalf("delete key %q must be rejected", key)
 		}
 	}
@@ -551,10 +574,10 @@ func TestOversizedFileIsNeitherPushedNorServed(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "workspace", "small.txt"), []byte("hello"), 0o644)
 	eng.man.Bump("@workspace/small.txt", self, false, 5, 1)
 
-	if _, _, err := eng.FileForPeer(WorkspaceNS, "huge.bin", maxSyncFile); !errors.Is(err, errTooLarge) {
+	if _, err := served(eng, "huge.bin", maxSyncFile); !errors.Is(err, errTooLarge) {
 		t.Fatalf("serving a file over the cap: want errTooLarge, got %v", err)
 	}
-	if b, _, err := eng.FileForPeer(WorkspaceNS, "small.txt", maxSyncFile); err != nil || string(b) != "hello" {
+	if b, err := served(eng, "small.txt", maxSyncFile); err != nil || string(b) != "hello" {
 		t.Fatalf("serving a file under the cap: %q %v", b, err)
 	}
 
@@ -647,10 +670,10 @@ func TestServesWhatTheAskerSaysItTakes(t *testing.T) {
 			t.Errorf("X-Exe-Max-File %q takes %d, want %d", in, got, want)
 		}
 	}
-	if _, _, err := eng.FileForPeer(WorkspaceNS, "mid.bin", ask("")); !errors.Is(err, errTooLarge) {
+	if _, err := served(eng, "mid.bin", ask("")); !errors.Is(err, errTooLarge) {
 		t.Fatalf("an older release asking: want errTooLarge, got %v", err)
 	}
-	if b, _, err := eng.FileForPeer(WorkspaceNS, "mid.bin", ask(strconv.Itoa(maxSyncFile))); err != nil || int64(len(b)) != size {
+	if b, err := served(eng, "mid.bin", ask(strconv.Itoa(maxSyncFile))); err != nil || int64(len(b)) != size {
 		t.Fatalf("this release asking: %d bytes, %v", len(b), err)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -66,11 +65,12 @@ var (
 )
 
 // bigPushes is how many pushes of a file over legacySyncFile run at once: a
-// scan that finds many starts a push for each, and every push holds its
-// whole file in memory. Smaller files never wait for them.
+// scan that finds many starts a push for each, and they would split the
+// link between them. Smaller files never wait for them.
 const bigPushes = 2
 
-// errTooLarge is readSyncFile's refusal of a file over maxSyncFile.
+// errTooLarge is the refusal of a file over the sync cap, by openSyncFile or
+// stage.
 var errTooLarge = errors.New("file exceeds the sync cap")
 
 // EngineConfig wires the engine into the daemon.
@@ -204,7 +204,7 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sync-manifest.json: %w", err)
 	}
-	return &Engine{
+	e := &Engine{
 		cfg:    cfg,
 		peers:  store,
 		man:    man,
@@ -215,7 +215,9 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 		status: map[string]*Status{},
 		kick:   make(chan struct{}, 1),
 		stop:   make(chan struct{}),
-	}, nil
+	}
+	e.clearStaging()
+	return e, nil
 }
 
 // Start runs the reconcile loop until Stop.
@@ -634,20 +636,29 @@ func peerFileURL(addr, key string) string {
 	return "http://" + addr + "/v1/peer/file/" + strings.Join(parts, "/")
 }
 
-// readSyncFile reads key's file for the wire, to a peer that takes up to
-// max. One bigger is refused on its size alone, before any of it is read or
+// openSyncFile opens key's file for the wire, to a peer that takes up to
+// max, and says its size; the caller sends that many bytes of it and closes
+// it. One bigger is refused on its size alone, before any of it is read or
 // sent: the other side takes the first max bytes, turns it down, and the
-// next reconcile would send it again.
-func (e *Engine) readSyncFile(key string, max int64) ([]byte, error) {
-	p := e.filePath(key)
-	fi, err := os.Stat(p)
+// next reconcile would send it again. A file replaced while it is sent
+// (they are, by a rename) is sent whole as it was opened.
+func (e *Engine) openSyncFile(key string, max int64) (*os.File, int64, error) {
+	f, err := openForSend(e.filePath(key))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	if fi.Size() > max {
-		return nil, errTooLarge
+	fi, err := f.Stat()
+	if err == nil && !fi.Mode().IsRegular() {
+		err = errors.New("not a regular file")
 	}
-	return os.ReadFile(p)
+	if err == nil && fi.Size() > max {
+		err = errTooLarge
+	}
+	if err != nil {
+		f.Close()
+		return nil, 0, err
+	}
+	return f, fi.Size(), nil
 }
 
 // progress passes reads through, putting off the transfer's stall timer on
@@ -708,7 +719,9 @@ func (e *Engine) pushTo(p *Peer, key string) {
 	if !ok {
 		return
 	}
-	var body []byte
+	// the file is hashed for the signature, then sent off the disk
+	sum, size := bodySum(nil), int64(0)
+	var f *os.File
 	if !v.Deleted {
 		max := e.takes(p.ID)
 		fi, err := os.Stat(e.filePath(key))
@@ -719,19 +732,31 @@ func (e *Engine) pushTo(p *Peer, key string) {
 			e.big <- struct{}{}
 			defer func() { <-e.big }()
 		}
-		if body, err = e.readSyncFile(key, max); err != nil {
+		if f, size, err = e.openSyncFile(key, max); err != nil {
+			return
+		}
+		defer f.Close()
+		if sum, err = hashFile(f, size); err != nil {
 			return
 		}
 	}
-	req, err := http.NewRequest("PUT", peerFileURL(p.Addr, key), bytes.NewReader(body))
+	req, err := http.NewRequest("PUT", peerFileURL(p.Addr, key), nil)
 	if err != nil {
 		return
+	}
+	if size > 0 {
+		req.ContentLength = size
+		req.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(io.NewSectionReader(f, 0, size)), nil
+		}
+		req.Body, _ = req.GetBody()
 	}
 	req.Header.Set(hdrVer, EncodeVector(v))
 	if v.Deleted {
 		req.Header.Set(hdrDeleted, "1")
 	}
-	SignRequest(e.cfg.Self, req, body, p.ID)
+	req.Header.Set(hdrSum, sum)
+	signSum(e.cfg.Self, req, sum, p.ID)
 	resp, answer, done, err := e.doFile(req)
 	if err != nil {
 		e.cfg.Logf("peer: push %s to %s: %v", key, p.Name, err)
@@ -768,34 +793,36 @@ func (e *Engine) fetchFrom(p *Peer, key string, rv Version) {
 	if resp.StatusCode != http.StatusOK {
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(answer, maxSyncFile+1))
-	if err != nil || len(body) > maxSyncFile {
+	in, err := e.stage(answer, maxSyncFile)
+	if err != nil {
 		return
 	}
+	defer in.Discard()
 	got := ParseVersion(resp.Header.Get(hdrVer), false)
 	if len(got.Vec) == 0 {
 		got = rv // response carried no version header; use the manifest one
 	}
-	if _, err := e.ApplyRemote(key, body, got); err != nil {
+	if _, err := e.ApplyRemote(key, in, got); err != nil {
 		e.cfg.Logf("peer: apply %s from %s: %v", key, p.Name, err)
 	}
 }
 
-// FileForPeer serves a peer's GET: content plus our version of it, to an
-// asker that takes files up to max (Takes). A bigger one is refused, so an
+// FileForPeer opens what a peer's GET is served: the file, its size and our
+// version of it, to an asker that takes files up to max (Takes). The caller
+// sends size bytes of the file and closes it. A bigger one is refused, so an
 // older release that lists it in our manifest asks for it in vain without
 // fetching any of it.
-func (e *Engine) FileForPeer(app, rel string, max int64) ([]byte, Version, error) {
+func (e *Engine) FileForPeer(app, rel string, max int64) (*os.File, int64, Version, error) {
 	key := app + "/" + rel
 	v, ok := e.man.Get(key)
 	if !ok || v.Deleted {
-		return nil, Version{}, os.ErrNotExist
+		return nil, 0, Version{}, os.ErrNotExist
 	}
-	b, err := e.readSyncFile(key, max)
+	f, size, err := e.openSyncFile(key, max)
 	if err != nil {
-		return nil, Version{}, err
+		return nil, 0, Version{}, err
 	}
-	return b, v, nil
+	return f, size, v, nil
 }
 
 // ---- applying remote changes ------------------------------------------------
@@ -815,9 +842,15 @@ func (e *Engine) FileForPeer(app, rel string, max int64) ([]byte, Version, error
 // inputs (no self-increment), so all nodes converge on the same vector with
 // no ping-pong. A delete only wins when it causally dominates the local
 // version, so a stale tombstone can never delete concurrent real data.
-func (e *Engine) ApplyRemote(key string, body []byte, rv Version) (string, error) {
+//
+// in is the remote content, staged (ReceiveFile, stage); nil for a delete.
+// What lands is moved into place, so the caller's Discard finds nothing.
+func (e *Engine) ApplyRemote(key string, in *Staged, rv Version) (string, error) {
 	if !e.validKey(key) {
 		return "", errors.New("invalid sync key")
+	}
+	if in == nil && !rv.Deleted {
+		return "", errors.New("a live version needs its content")
 	}
 	e.fileMu.Lock()
 	defer e.fileMu.Unlock()
@@ -835,28 +868,28 @@ func (e *Engine) ApplyRemote(key string, body []byte, rv Version) (string, error
 	}
 	app, rel, _ := strings.Cut(key, "/")
 	if !exists {
-		return e.adoptRemote(key, app, rel, p, body, rv)
+		return e.adoptRemote(key, app, rel, p, in, rv)
 	}
 	switch {
 	case local.SameVersion(rv), local.Dominates(rv):
 		return "stale", nil
 	case rv.Dominates(local):
-		return e.adoptRemote(key, app, rel, p, body, rv)
+		return e.adoptRemote(key, app, rel, p, in, rv)
 	default:
-		return e.resolveConcurrent(key, app, rel, p, body, rv, local)
+		return e.resolveConcurrent(key, app, rel, p, in, rv, local)
 	}
 }
 
 // adoptRemote takes the remote version verbatim — it dominates ours, or we
 // had nothing: its bytes for a write, or a delete of our copy.
-func (e *Engine) adoptRemote(key, app, rel, p string, body []byte, rv Version) (string, error) {
+func (e *Engine) adoptRemote(key, app, rel, p string, in *Staged, rv Version) (string, error) {
 	if rv.Deleted {
 		os.Remove(p)
 		e.man.Apply(key, rv, 0, 0)
 		e.notifyApply(app, rel, true)
 		return "applied", nil
 	}
-	if err := writeFileAtomic(p, body); err != nil {
+	if err := in.moveTo(p); err != nil {
 		return "", err
 	}
 	fi, _ := os.Stat(p)
@@ -869,7 +902,7 @@ func (e *Engine) adoptRemote(key, app, rel, p string, body []byte, rv Version) (
 // other. The result carries the pointwise-max vector (dominating both), so
 // every node converges; then we push so peers that resolved differently or
 // not yet catch up.
-func (e *Engine) resolveConcurrent(key, app, rel, p string, body []byte, rv, local Version) (string, error) {
+func (e *Engine) resolveConcurrent(key, app, rel, p string, in *Staged, rv, local Version) (string, error) {
 	max := Version{Vec: MaxVec(local.Vec, rv.Vec)}
 
 	// delete vs. live: the live side always survives, so a stale tombstone
@@ -881,7 +914,7 @@ func (e *Engine) resolveConcurrent(key, app, rel, p string, body []byte, rv, loc
 			go e.pushAll(key)
 			return "kept-live", nil
 		}
-		if err := writeFileAtomic(p, body); err != nil { // we are a tombstone -> restore
+		if err := in.moveTo(p); err != nil { // we are a tombstone -> restore
 			return "", err
 		}
 		fi, _ := os.Stat(p)
@@ -895,8 +928,13 @@ func (e *Engine) resolveConcurrent(key, app, rel, p string, body []byte, rv, loc
 		return "stale", nil
 	}
 
-	// both live and mergeable: union the records item-by-item
+	// both live and mergeable: union the records item-by-item (the one
+	// kind of file read into memory)
 	if Mergeable(key) {
+		body, err := in.bytes()
+		if err != nil {
+			return "", err
+		}
 		if out, err, handled := e.mergeConcurrent(key, app, rel, p, body, max); handled {
 			return out, err
 		}
@@ -904,16 +942,16 @@ func (e *Engine) resolveConcurrent(key, app, rel, p string, body []byte, rv, loc
 
 	// non-mergeable (or unparseable) both-live conflict: deterministic winner
 	// by content hash; the loser is preserved under sync-conflicts.
-	localBytes, _ := os.ReadFile(p)
-	if bytes.Equal(localBytes, body) { // same content, just converge the vector
+	localSum := fileSum(p)
+	if localSum == in.sum { // same content, just converge the vector
 		fi, _ := os.Stat(p)
 		e.man.Apply(key, max, sizeOf(fi), mtimeOf(fi))
 		go e.pushAll(key)
 		return "stale", nil
 	}
-	if contentHash(body) > contentHash(localBytes) { // remote wins
-		e.backupConflict(app, rel, localBytes)
-		if err := writeFileAtomic(p, body); err != nil {
+	if in.sum > localSum { // remote wins
+		e.backupConflict(app, rel, p, nil)
+		if err := in.moveTo(p); err != nil {
 			return "", err
 		}
 		fi, _ := os.Stat(p)
@@ -922,7 +960,7 @@ func (e *Engine) resolveConcurrent(key, app, rel, p string, body []byte, rv, loc
 		go e.pushAll(key)
 		return "resolved", nil
 	}
-	e.backupConflict(app, rel, body) // local wins; remote copy preserved
+	e.backupConflict(app, rel, "", in) // local wins; remote copy preserved
 	fi, _ := os.Stat(p)
 	e.man.Apply(key, max, sizeOf(fi), mtimeOf(fi))
 	go e.pushAll(key)
@@ -980,15 +1018,15 @@ func mtimeOf(fi os.FileInfo) int64 {
 	return fi.ModTime().UnixNano()
 }
 
-func contentHash(b []byte) string {
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
-}
-
 // backupConflict preserves the losing side of a non-mergeable conflict under
-// ~/.exe/sync-conflicts/<app>/, outside appdata so it never itself syncs.
-func (e *Engine) backupConflict(app, rel string, body []byte) {
-	if len(body) == 0 {
+// ~/.exe/sync-conflicts/<app>/, outside appdata so it never itself syncs:
+// a copy of our file at local, or the staged remote copy, moved there.
+func (e *Engine) backupConflict(app, rel, local string, remote *Staged) {
+	src := local
+	if remote != nil {
+		src = remote.path
+	}
+	if fi, err := os.Stat(src); err != nil || fi.Size() == 0 {
 		return
 	}
 	dir := filepath.Join(e.cfg.StateDir, "sync-conflicts", app)
@@ -996,7 +1034,14 @@ func (e *Engine) backupConflict(app, rel string, body []byte) {
 		return
 	}
 	name := fmt.Sprintf("%s.%d.bak", strings.ReplaceAll(rel, "/", "_"), time.Now().UnixNano())
-	if err := os.WriteFile(filepath.Join(dir, name), body, 0o644); err != nil {
+	dst := filepath.Join(dir, name)
+	var err error
+	if remote != nil {
+		err = remote.moveTo(dst)
+	} else {
+		err = copyFile(local, dst)
+	}
+	if err != nil {
 		e.cfg.Logf("peer: conflict backup %s/%s failed: %v", app, rel, err)
 		return
 	}
@@ -1015,6 +1060,11 @@ func (e *Engine) notifyApply(app, rel string, deleted bool) {
 }
 
 func writeFileAtomic(p string, body []byte) error {
+	return writeAtomic(p, bytes.NewReader(body))
+}
+
+// writeAtomic writes src to a temp file beside p and renames it over p.
+func writeAtomic(p string, src io.Reader) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
@@ -1022,7 +1072,7 @@ func writeFileAtomic(p string, body []byte) error {
 	if err != nil {
 		return err
 	}
-	if _, err = tmp.Write(body); err == nil {
+	if _, err = io.Copy(tmp, src); err == nil {
 		err = tmp.Close()
 	} else {
 		tmp.Close()

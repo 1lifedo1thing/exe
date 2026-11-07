@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"exe/internal/config"
@@ -219,21 +220,29 @@ func (s *Server) handlePeerFileGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	body, ver, err := e.FileForPeer(app, rel, peer.Takes(r))
+	f, size, ver, err := e.FileForPeer(app, rel, peer.Takes(r))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, errors.New("not found"))
 		return
 	}
+	defer f.Close()
 	w.Header().Set("X-Exe-Ver", peer.EncodeVector(ver))
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(body)
+	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+	io.CopyN(w, f, size) // straight off the disk, never whole in memory
 }
 
 func (s *Server) handlePeerFilePut(w http.ResponseWriter, r *http.Request) {
-	e, body, ok := s.verifiedPeer(w, r, fileMax)
-	if !ok {
+	e := s.peerEngine(w)
+	if e == nil {
 		return
 	}
+	in, code, err := e.ReceiveFile(r) // the body goes to a staging file, not memory
+	if err != nil {
+		writeErr(w, code, err)
+		return
+	}
+	defer in.Discard()
 	app, rel, err := peerFileKey(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -244,7 +253,7 @@ func (s *Server) handlePeerFilePut(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errors.New("missing version"))
 		return
 	}
-	outcome, err := e.ApplyRemote(app+"/"+rel, body, rv)
+	outcome, err := e.ApplyRemote(app+"/"+rel, in, rv)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

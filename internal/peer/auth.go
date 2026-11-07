@@ -27,6 +27,10 @@ const (
 	hdrVer     = "X-Exe-Ver" // base64(json) of the file's version vector
 	hdrDeleted = "X-Exe-Deleted"
 	hdrMaxFile = "X-Exe-Max-File" // the biggest file a fetching peer takes
+	// hdrSum is a file push's body hash, the one its signature covers, said
+	// up front so the receiver checks the signature before the body arrives
+	// (ReceiveFile). An older release sends none.
+	hdrSum = "X-Exe-Sum"
 
 	// Personal machines (laptops that sleep) drift; a generous window keeps
 	// sync working across modest skew. Replay is already defanged by the
@@ -50,11 +54,17 @@ func bodySum(body []byte) string {
 // SignRequest stamps r with this node's identity headers, bound to recipient
 // node `to`. Call after the version headers (if any) are set.
 func SignRequest(id *Identity, r *http.Request, body []byte, to string) {
+	signSum(id, r, bodySum(body), to)
+}
+
+// signSum is SignRequest for a body hashed beforehand (bodySum's form): a
+// file pushed straight off the disk.
+func signSum(id *Identity, r *http.Request, sum, to string) {
 	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	r.Header.Set(hdrPeer, id.ID)
 	r.Header.Set(hdrTo, to)
 	r.Header.Set(hdrTS, ts)
-	msg := canonical(r.Method, r.URL.Path, to, ts, bodySum(body),
+	msg := canonical(r.Method, r.URL.Path, to, ts, sum,
 		r.Header.Get(hdrVer), r.Header.Get(hdrDeleted))
 	r.Header.Set(hdrSig, id.Sign(msg))
 }
@@ -64,6 +74,19 @@ func SignRequest(id *Identity, r *http.Request, body []byte, to string) {
 // addressed to anyone else is rejected, so a peer cannot relay a signature
 // meant for it to a third node.
 func VerifyRequest(store *Store, r *http.Request, body []byte, selfID string) (*Peer, error) {
+	p, err := checkSigner(store, r, selfID)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkSig(p, r, bodySum(body), selfID); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// checkSigner is all of VerifyRequest but the signature: an enrolled sender,
+// this node as the recipient, a timestamp inside the window.
+func checkSigner(store *Store, r *http.Request, selfID string) (*Peer, error) {
 	id := r.Header.Get(hdrPeer)
 	p, ok := store.Get(id)
 	if !ok {
@@ -72,26 +95,30 @@ func VerifyRequest(store *Store, r *http.Request, body []byte, selfID string) (*
 	if to := r.Header.Get(hdrTo); to != selfID {
 		return nil, errors.New("request not addressed to this node")
 	}
-	ts := r.Header.Get(hdrTS)
-	ms, err := strconv.ParseInt(ts, 10, 64)
+	ms, err := strconv.ParseInt(r.Header.Get(hdrTS), 10, 64)
 	if err != nil {
 		return nil, errors.New("bad timestamp")
 	}
 	if d := time.Since(time.UnixMilli(ms)); d > maxSkew || d < -maxSkew {
 		return nil, fmt.Errorf("timestamp skew %s exceeds %s (are both clocks synced? check NTP)", d.Round(time.Second), maxSkew)
 	}
+	return p, nil
+}
+
+// checkSig verifies that p signed r over a body that hashes to sum.
+func checkSig(p *Peer, r *http.Request, sum, selfID string) error {
 	key, err := p.Key()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	sig, err := base64.StdEncoding.DecodeString(r.Header.Get(hdrSig))
 	if err != nil {
-		return nil, errors.New("bad signature encoding")
+		return errors.New("bad signature encoding")
 	}
-	msg := canonical(r.Method, r.URL.Path, selfID, ts, bodySum(body),
+	msg := canonical(r.Method, r.URL.Path, selfID, r.Header.Get(hdrTS), sum,
 		r.Header.Get(hdrVer), r.Header.Get(hdrDeleted))
 	if !ed25519.Verify(key, msg, sig) {
-		return nil, errors.New("bad signature")
+		return errors.New("bad signature")
 	}
-	return p, nil
+	return nil
 }
