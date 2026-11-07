@@ -556,6 +556,13 @@ body.mobile #cstrip { z-index: 5; }
   text-align: center; font-size: 12px; padding: 4px 8px 3px; }
 .finder-icons { background: #fff; height: 336px; display: flex; flex-wrap: wrap;
   align-content: flex-start; padding: 10px 0 0 10px; }
+/* a Workspace window's line says how an upload into its folder goes while
+   one does (wsUpload), and so does the Upload window's: each keeps one
+   line for it, a long name cut at its end, where a phone's line has the
+   figure first */
+.ws-status, #up-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Choose File… keeps its one line: the name beside it gives way instead */
+#up-choose { flex: none; }
 /* a phone's Workspace window has what the desk's menus give the window in
    a row at its foot, where a thumb is: the foot row of a phone's screen
    (docs/platinum.md), its top line its one seam with the icons, 12px all
@@ -6722,7 +6729,7 @@ function openFinderWin(path, fromWin) {
       <div class="title"></div>
       <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
       <div class="win-frame">
-        <div class="finder-status"><span class="ws-items">…</span></div>
+        <div class="finder-status ws-status"><span class="ws-items">…</span></div>
         <div class="finder-icons doc-scroll"></div>
         <div class="ws-tools"><span class="popup"><select class="ws-view">
           <option value="icons"></option><option value="list"></option>
@@ -6833,8 +6840,10 @@ function renderFinder(w) {
   };
   walk(w._entries, "", 0);
   w.querySelector(".ws-view").value = v.view;
-  // the count is of what is shown, an open folder's items among them, as the Finder counts
-  w.querySelector(".ws-items").textContent = L`${rows.length} item${rows.length === 1 ? "" : "s"}, ${fmtBytes(w._free)} available`;
+  // the count is of what is shown, an open folder's items among them, as
+  // the Finder counts; an upload into the folder says how it goes instead
+  w._count = L`${rows.length} item${rows.length === 1 ? "" : "s"}, ${fmtBytes(w._free)} available`;
+  w.querySelector(".ws-items").textContent = w._upload || w._count;
   box.classList.toggle("as-list", list);
   box.replaceChildren();
   const into = list ? flFrame(w, box, v.sort, Math.max(0, ...rows.map(r => r.depth))) : box;
@@ -9286,8 +9295,7 @@ $("#up-go").onclick = async () => {
   const f = $("#up-file").files[0];
   if (!f) { toast(L("choose a file first")); return; }
   $("#up-go").disabled = true;
-  $("#up-status").textContent = L("uploading…");
-  const n = (await wsUpload("", [f])).length;
+  const n = (await wsUpload("", [f], t => { $("#up-status").textContent = t; })).length;
   $("#up-go").disabled = false;
   $("#up-status").textContent = "";
   if (n) closeWin($("#win-upload"));
@@ -9298,19 +9306,34 @@ $("#up-go").onclick = async () => {
 // that folder, on a terminal window in the root with its path typed there
 // (wireTermDrop). Uploads PUT each file; toasts report skips and failures.
 // Genuinely new files (not overwrites) are announced on the Newsfeed. ----
-async function wsUpload(dir, files) {
+// While the files go, the line of the folder's Workspace window says how
+// far along they are, and so does report (the Upload window's line): by
+// bytes, over all of them. A phone's line is short and cut at its end, so
+// how far comes first there ("40% of name"); the desk's says what first.
+async function wsUpload(dir, files, report) {
   let done = 0, last = "";
   const fresh = [], abs = [];
-  for (const f of files) {
-    if (f.size > 1 << 30) { toast(L`${f.name} exceeds 1 GB`); continue; }
+  const go = files.filter(f => f.size <= 1 << 30 || void toast(L`${f.name} exceeds 1 GB`));
+  const total = go.reduce((n, f) => n + f.size, 0), what = go.length === 1 ? go[0].name : L`${go.length} files`;
+  let sent = 0;
+  const say = loaded => {
+    const pct = total ? Math.floor((sent + loaded) / total * 100) : 0;
+    const text = IS_MOBILE ? L`${pct}% of ${what}` : L`Uploading ${what}… ${pct}%`;
+    wsUploadLine(dir, text);
+    if (report) report(text);
+  };
+  for (const f of go) {
     const rel = dir ? dir + "/" + f.name : f.name;
+    say(0);
     try {
-      const r = await (await api(wsUrl(rel), { method: "PUT", body: f })).json();
+      const r = await wsPut(rel, f, say);
       done++; last = f.name;
       if (r.created) fresh.push(rel);
       abs.push(r.abs || rel);
     } catch (e) { toast(f.name + ": " + e.message); }
+    sent += f.size;
   }
+  if (go.length) { wsUploadLine(dir, ""); if (report) report(""); }
   if (done) {
     toast(done === 1 ? L`Uploaded ${last}` : L`Uploaded ${done} files`);
     const w = document.getElementById("win-ws-" + encodeURIComponent(dir));
@@ -9323,6 +9346,35 @@ async function wsUpload(dir, files) {
       body: fresh.join(", "),
     }}).catch(() => {});
   return abs; // where the daemon put each file that landed, in drop order
+}
+// the line of the folder's window while an upload goes, or its count again
+function wsUploadLine(dir, text) {
+  const w = document.getElementById("win-ws-" + encodeURIComponent(dir));
+  if (!w) return;
+  w._upload = text;
+  w.querySelector(".ws-items").textContent = text || w._count || "…";
+}
+// A Workspace PUT that says how much of the body has gone (onSent, in
+// bytes), which fetch cannot: an XHR with api()'s headers, and the same
+// answer to a refused token
+function wsPut(rel, body, onSent) {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open("PUT", wsUrl(rel));
+    if (apiToken) x.setRequestHeader("Authorization", "Bearer " + apiToken);
+    x.setRequestHeader("X-Exe-Client", WIN_CLIENT);
+    x.upload.onprogress = e => onSent(e.loaded);
+    x.onload = () => {
+      buildSeen(x.getResponseHeader("X-Exe-Build"));
+      if (x.status === 401 && x.getResponseHeader("WWW-Authenticate")) { tokAsk(); reject(new Error(TOK_HINT)); return; }
+      let r = null;
+      try { r = JSON.parse(x.responseText); } catch (e) {}
+      if (x.status >= 200 && x.status < 300 && r) resolve(r);
+      else reject(new Error(r && r.error || "HTTP " + x.status));
+    };
+    x.onerror = () => reject(new Error(L("the upload did not get through")));
+    x.send(body);
+  });
 }
 const dndHasFiles = e => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
 // dropped directories can't be read as bodies — filter them out with a toast

@@ -933,6 +933,13 @@ restyling: `internal/server/ui/index.html` (the desktop),
   Japanese at 390px). What an item can do stays on its held press: on a
   phone a tap opens an item, so no button would have a selection to act
   on. Off a phone the row is `display: none`.
+- An upload into a Workspace folder says how it goes in the line under
+  its window's title bar (`.ws-status`, `wsUpload`), by bytes over all
+  the files: the figure first on a phone ("40% of name", "40% of 3
+  files"), "Uploading name… 40%" on the desk. The line stays one line,
+  cut at its end, so the window never moves; the count comes back when
+  the files are in, and a refusal is a toast. The upload is an XHR
+  (`wsPut`), since fetch cannot tell how much of a body has gone.
 
 - A modal dialog of a window's own (the Claude Code window's Search,
   `.sess-veil`): a veil of the overlay's 15% black over the window's

@@ -3346,6 +3346,13 @@ window's folder.
 A file can be 1 GB at most, and a file with the name of one already
 there replaces it. Folders cannot be dragged in; drag their files.
 
+While files go up, the line under the title bar of their folder's window
+says how far along they are: "Uploading photo.jpg… 40%". On a phone the
+figure comes first, "40% of photo.jpg", and several files count as one,
+"40% of 3 files". The **Upload to Workspace** window says the same over
+its buttons. When the files are in, the line shows the folder's items
+again.
+
 New files brought in this way are announced on the Newsfeed, so every desk
 in the mesh sees them arrive; overwriting an existing file stays quiet.
 
