@@ -240,3 +240,18 @@ func (m *Manifest) Snapshot() map[string]Version {
 	}
 	return out
 }
+
+// SnapshotTaking is Snapshot less every live file larger than max that held
+// does not name: what a peer that takes files up to max, and holds the
+// files in held, can use.
+func (m *Manifest) SnapshotTaking(max int64, held map[string]bool) map[string]Version {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make(map[string]Version, len(m.files))
+	for k, st := range m.files {
+		if st.Deleted || st.Size <= max || held[k] {
+			out[k] = st.Version
+		}
+	}
+	return out
+}

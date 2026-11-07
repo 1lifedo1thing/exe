@@ -42,19 +42,21 @@ func ParseVersion(verB64 string, deleted bool) Version {
 // ("@workspace/rel") can never collide with app-data keys ("App/rel").
 const WorkspaceNS = "@workspace"
 
-// maxSyncFile caps what sync will carry per file — the same 100 MB the file
-// APIs enforce, so nothing is versioned, pushed or served that the receiving
-// side rejects. A peer says its own cap (manifest max_file, the X-Exe-Max-File
-// of a fetch); one that says none is an older release and takes
-// legacySyncFile, the 10 MB every release held files to before.
+// maxSyncFile caps what sync will carry per file: 1 GB, what the Workspace
+// takes, so nothing is versioned, pushed or served that the receiving side
+// rejects. A file goes disk to disk (stage.go), so the cap is no memory's.
+// A peer says its own cap (manifest max_file, the X-Exe-Max-File of a
+// fetch): 100 MB for the releases before this one. One that says none is
+// older still and takes legacySyncFile, the 10 MB every release held files
+// to before that.
 const (
-	maxSyncFile    = 100 << 20
+	maxSyncFile    = 1 << 30
 	legacySyncFile = 10 << 20
 )
 
 // stallTimeout gives up a file transfer that has moved no bytes for this
 // long — connecting, sending or receiving — in place of the client's flat
-// 15 s, which would fail a 100 MB file on a slow link every time; the next
+// 15 s, which would fail a big file on a slow link every time; the next
 // reconcile tries again. Once a push has handed over its last byte, the
 // answer gets answerTimeout: the last MB still drain from the socket
 // buffers, and then the peer writes the file. Vars so a test can shorten
@@ -72,6 +74,31 @@ const bigPushes = 2
 // errTooLarge is the refusal of a file over the sync cap, by openSyncFile or
 // stage.
 var errTooLarge = errors.New("file exceeds the sync cap")
+
+// errBusy turns down a push of a file that is on its way in already.
+var errBusy = errors.New("this file is on its way in from another node")
+
+// claim marks key's content as on its way in, by a push or a fetch, and
+// says whether nothing else was bringing it; release ends the claim. A file
+// that several peers hold is taken once: when a laptop wakes, each of them
+// pushes it on its own reconcile, and over a slow link a 1 GB file would
+// cross it once a peer.
+func (e *Engine) claim(key string) (release func(), ok bool) {
+	e.inMu.Lock()
+	defer e.inMu.Unlock()
+	if e.incoming[key] {
+		return nil, false
+	}
+	e.incoming[key] = true
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			e.inMu.Lock()
+			delete(e.incoming, key)
+			e.inMu.Unlock()
+		})
+	}, true
+}
 
 // EngineConfig wires the engine into the daemon.
 type EngineConfig struct {
@@ -103,6 +130,9 @@ type Engine struct {
 	big    chan struct{} // slots for pushes of a big file (bigPushes)
 
 	fileMu sync.Mutex // serializes apply/scan against each other
+
+	inMu     sync.Mutex
+	incoming map[string]bool // keys whose content is on its way in (claim)
 
 	codeMu sync.Mutex
 	codes  map[string]time.Time // active join codes -> expiry
@@ -149,7 +179,8 @@ type Status struct {
 	Error     string `json:"error,omitempty"`
 	LastSeen  int64  `json:"last_seen,omitempty"` // unix ms
 
-	takes int64 // the max_file its last manifest named; 0 for none
+	takes int64           // the max_file its last manifest named; 0 for none
+	held  map[string]bool // the files its last manifest listed; nil before one
 }
 
 // PeerInfo is the wire form of a peer entry (pairing + mesh gossip).
@@ -205,16 +236,17 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 		return nil, fmt.Errorf("sync-manifest.json: %w", err)
 	}
 	e := &Engine{
-		cfg:    cfg,
-		peers:  store,
-		man:    man,
-		client: &http.Client{Timeout: 15 * time.Second},
-		files:  &http.Client{},
-		big:    make(chan struct{}, bigPushes),
-		codes:  map[string]time.Time{},
-		status: map[string]*Status{},
-		kick:   make(chan struct{}, 1),
-		stop:   make(chan struct{}),
+		cfg:      cfg,
+		peers:    store,
+		man:      man,
+		client:   &http.Client{Timeout: 15 * time.Second},
+		files:    &http.Client{},
+		big:      make(chan struct{}, bigPushes),
+		codes:    map[string]time.Time{},
+		status:   map[string]*Status{},
+		incoming: map[string]bool{},
+		kick:     make(chan struct{}, 1),
+		stop:     make(chan struct{}),
 	}
 	e.clearStaging()
 	return e, nil
@@ -277,7 +309,24 @@ func (e *Engine) LockFiles(fn func()) {
 	fn()
 }
 
-func (e *Engine) ManifestSnapshot() map[string]Version { return e.man.Snapshot() }
+// ManifestFor is the manifest peer id is served: ours, less each file it
+// cannot take and does not hold. Offered one, an older release asks for it
+// every reconcile and is turned down every time; once its release takes
+// the file, the next reconcile here learns so and offers it. Until we have
+// read the peer's own manifest, it is served all of ours: it may hold an
+// earlier version of a file that has grown since.
+func (e *Engine) ManifestFor(id string) map[string]Version {
+	e.statusMu.Lock()
+	var held map[string]bool
+	if st := e.status[id]; st != nil {
+		held = st.held
+	}
+	e.statusMu.Unlock()
+	if held == nil {
+		return e.man.Snapshot()
+	}
+	return e.man.SnapshotTaking(e.takes(id), held)
+}
 
 // MaxFile is the biggest file this node takes from a peer, for its manifest.
 func (e *Engine) MaxFile() int64 { return maxSyncFile }
@@ -765,7 +814,8 @@ func (e *Engine) pushTo(p *Peer, key string) {
 	defer done()
 	io.Copy(io.Discard, io.LimitReader(answer, 4096))
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	// 409: the peer has this file on its way in from another node already
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
 		e.cfg.Logf("peer: push %s to %s: HTTP %d", key, p.Name, resp.StatusCode)
 	}
 }
@@ -777,6 +827,11 @@ func (e *Engine) fetchFrom(p *Peer, key string, rv Version) {
 		}
 		return
 	}
+	release, ok := e.claim(key)
+	if !ok {
+		return // on its way in already; the next reconcile looks again
+	}
+	defer release()
 	req, err := http.NewRequest("GET", peerFileURL(p.Addr, key), nil)
 	if err != nil {
 		return
@@ -949,8 +1004,12 @@ func (e *Engine) resolveConcurrent(key, app, rel, p string, in *Staged, rv, loca
 		go e.pushAll(key)
 		return "stale", nil
 	}
+	// A loser that cannot be saved stops the apply: ours stays as it is,
+	// the remote's stays on its node, and the next reconcile tries again.
 	if in.sum > localSum { // remote wins
-		e.backupConflict(app, rel, p, nil)
+		if err := e.backupConflict(app, rel, p, nil); err != nil {
+			return "", err
+		}
 		if err := in.moveTo(p); err != nil {
 			return "", err
 		}
@@ -960,7 +1019,9 @@ func (e *Engine) resolveConcurrent(key, app, rel, p string, in *Staged, rv, loca
 		go e.pushAll(key)
 		return "resolved", nil
 	}
-	e.backupConflict(app, rel, "", in) // local wins; remote copy preserved
+	if err := e.backupConflict(app, rel, "", in); err != nil { // local wins
+		return "", err
+	}
 	fi, _ := os.Stat(p)
 	e.man.Apply(key, max, sizeOf(fi), mtimeOf(fi))
 	go e.pushAll(key)
@@ -1020,22 +1081,28 @@ func mtimeOf(fi os.FileInfo) int64 {
 
 // backupConflict preserves the losing side of a non-mergeable conflict under
 // ~/.exe/sync-conflicts/<app>/, outside appdata so it never itself syncs:
-// a copy of our file at local, or the staged remote copy, moved there.
-func (e *Engine) backupConflict(app, rel, local string, remote *Staged) {
+// a copy of our file at local, or the staged remote copy, moved there. An
+// error means the loser is not saved, and the caller must not replace it
+// or settle the conflict. An empty or missing loser has nothing to save.
+func (e *Engine) backupConflict(app, rel, local string, remote *Staged) error {
 	src := local
 	if remote != nil {
 		src = remote.path
 	}
-	if fi, err := os.Stat(src); err != nil || fi.Size() == 0 {
-		return
+	fi, err := os.Stat(src)
+	if os.IsNotExist(err) || (err == nil && fi.Size() == 0) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("conflict backup of %s/%s: %w", app, rel, err)
 	}
 	dir := filepath.Join(e.cfg.StateDir, "sync-conflicts", app)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return
+		e.cfg.Logf("peer: conflict backup %s/%s failed: %v", app, rel, err)
+		return fmt.Errorf("conflict backup of %s/%s: %w", app, rel, err)
 	}
 	name := fmt.Sprintf("%s.%d.bak", strings.ReplaceAll(rel, "/", "_"), time.Now().UnixNano())
 	dst := filepath.Join(dir, name)
-	var err error
 	if remote != nil {
 		err = remote.moveTo(dst)
 	} else {
@@ -1043,7 +1110,7 @@ func (e *Engine) backupConflict(app, rel, local string, remote *Staged) {
 	}
 	if err != nil {
 		e.cfg.Logf("peer: conflict backup %s/%s failed: %v", app, rel, err)
-		return
+		return fmt.Errorf("conflict backup of %s/%s: %w", app, rel, err)
 	}
 	e.cfg.Logf("peer: conflict on %s/%s — losing copy saved to sync-conflicts/%s/%s", app, rel, app, name)
 	if e.cfg.OnConflict != nil {
@@ -1051,6 +1118,7 @@ func (e *Engine) backupConflict(app, rel, local string, remote *Staged) {
 		// which takes the file lock this apply path already holds
 		go e.cfg.OnConflict(app, rel)
 	}
+	return nil
 }
 
 func (e *Engine) notifyApply(app, rel string, deleted bool) {
@@ -1120,9 +1188,13 @@ func (e *Engine) reconcile(p *Peer) {
 		return
 	}
 	e.setStatus(p, latency, nil)
+	held := make(map[string]bool, len(mr.Files))
+	for key := range mr.Files {
+		held[key] = true
+	}
 	e.statusMu.Lock()
 	if st := e.status[p.ID]; st != nil {
-		st.takes = mr.MaxFile
+		st.takes, st.held = mr.MaxFile, held
 	}
 	e.statusMu.Unlock()
 	if mr.Name != "" && mr.Name != p.Name {

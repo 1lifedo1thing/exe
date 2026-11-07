@@ -21,17 +21,25 @@ import (
 // Staged is a peer's file landed in the staging folder, waiting for
 // ApplyRemote, with the SHA-256 it hashed to on the way in.
 type Staged struct {
-	path string
-	sum  string // hex, bodySum's form
-	size int64
+	path    string
+	sum     string // hex, bodySum's form
+	size    int64
+	release func() // ends ReceiveFile's claim on the key; nil for none
 }
 
-// Discard removes the staged file unless ApplyRemote took it. Safe on nil
-// and more than once.
+// Discard removes the staged file unless ApplyRemote took it, and ends the
+// claim on its key. Safe on nil and more than once.
 func (s *Staged) Discard() {
-	if s != nil && s.path != "" {
+	if s == nil {
+		return
+	}
+	if s.path != "" {
 		os.Remove(s.path)
 		s.path = ""
+	}
+	if s.release != nil {
+		s.release()
+		s.release = nil
 	}
 }
 
@@ -91,17 +99,19 @@ func (e *Engine) stageBytes(b []byte) (*Staged, error) {
 	return e.stage(bytes.NewReader(b), int64(len(b)))
 }
 
-// ReceiveFile authenticates a peer's file push and stages its body, for
-// ApplyRemote; the caller discards what it does not apply. On an error the
-// int is the HTTP status to answer with.
+// ReceiveFile authenticates a peer's push of key and stages its body, for
+// ApplyRemote; the caller discards what it does not apply (Discard, which
+// also lets the next copy of key in). On an error the int is the HTTP
+// status to answer with.
 //
 // The sender, recipient and timestamp are checked before any of the body is
 // read, so the timestamp has to be fresh when a push starts, not when a big
 // file is finally in. A sender that says the body's hash (hdrSum) has its
 // signature checked then too, and the body must hash to it; one from an
 // older release says none, and its signature is checked over the staged
-// body's hash.
-func (e *Engine) ReceiveFile(r *http.Request) (*Staged, int, error) {
+// body's hash. A push of a file already on its way in is turned down, 409,
+// before its body is read (claim).
+func (e *Engine) ReceiveFile(r *http.Request, key string) (*Staged, int, error) {
 	p, err := checkSigner(e.peers, r, e.cfg.Self.ID)
 	if err != nil {
 		return nil, http.StatusUnauthorized, err
@@ -115,11 +125,23 @@ func (e *Engine) ReceiveFile(r *http.Request) (*Staged, int, error) {
 	if r.ContentLength > maxSyncFile {
 		return nil, http.StatusRequestEntityTooLarge, errTooLarge
 	}
+	release := func() {}
+	if r.Header.Get(hdrDeleted) != "1" {
+		var ok bool
+		if release, ok = e.claim(key); !ok {
+			return nil, http.StatusConflict, errBusy
+		}
+	}
 	var body io.Reader = http.NoBody
 	if r.Body != nil {
 		body = r.Body
 	}
 	in, err := e.stage(body, maxSyncFile)
+	if err != nil {
+		release()
+	} else {
+		in.release = release
+	}
 	if errors.Is(err, errTooLarge) {
 		return nil, http.StatusRequestEntityTooLarge, err
 	}

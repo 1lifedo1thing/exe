@@ -276,21 +276,24 @@ type zeros struct{}
 
 func (zeros) Read(b []byte) (int, error) { clear(b); return len(b), nil }
 
-// A PUT stores up to 100 MB, streamed to disk as it arrives, and refuses
-// one byte more — by its Content-Length when it says one, else by the
-// count — leaving no file or temp file behind.
-func TestWorkspacePutTakes100MB(t *testing.T) {
+// An app-data PUT stores up to 100 MB, streamed to disk as it arrives, and
+// refuses one byte more — by its Content-Length when it says one, else by
+// the count — leaving no file or temp file behind. (A Workspace PUT takes
+// 1 GB by the same code: TestWorkspaceTakesMoreThanAppData.)
+func TestAppDataPutTakes100MB(t *testing.T) {
 	s := New(&config.Config{APIToken: "test-secret"}, nil, nil, "", t.TempDir())
 	h := s.Handler()
+	writeTestApp(t, s.appsDir(), "paint", "Paint")
 	put := func(body io.Reader, length int64) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("PUT", "http://exe.test/v1/workspace/big.bin", body)
+		r := httptest.NewRequest("PUT", "http://exe.test/v1/apps/paint/data/big.bin", body)
 		r.Header.Set("Authorization", "Bearer test-secret")
 		r.ContentLength = length
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
 		return w
 	}
-	p := filepath.Join(s.workspaceDir(), "big.bin")
+	dir := s.appDataDir("paint")
+	p := filepath.Join(dir, "big.bin")
 	if w := put(io.LimitReader(zeros{}, fileMax), -1); w.Code != 200 {
 		t.Fatalf("PUT of 100 MB: %d %s", w.Code, w.Body.String())
 	}
@@ -304,7 +307,7 @@ func TestWorkspacePutTakes100MB(t *testing.T) {
 	if w := put(strings.NewReader("x"), fileMax+1); w.Code != 413 {
 		t.Fatalf("PUT announcing 100 MB and a byte: %d %s", w.Code, w.Body.String())
 	}
-	left, _ := os.ReadDir(s.workspaceDir())
+	left, _ := os.ReadDir(dir)
 	if len(left) != 0 {
 		t.Fatalf("a refused PUT left %v", left)
 	}

@@ -67,7 +67,7 @@ The small Mac at its left end is the **Apple menu**.
 | Apple | **Reload for Update** | Reloads the desktop into a new build. It is there only while unsaved work holds that reload back. |
 | Apple | The name of an open window | Brings that window to the front. |
 | File | **New VM…** | Makes a VM. See [Virtual machines](https://exe.v2core.com/docs/using/virtual-machines). |
-| File | **Upload to Workspace…** | Puts a file from this device, 100 MB at most, in the Workspace. |
+| File | **Upload to Workspace…** | Puts a file from this device, 1 GB at most, in the Workspace. |
 | File | **Close Window** | Closes the window in front. |
 | File | **Refresh** | Loads the lists of VMs and apps again. |
 | Windows | **Virtual Machines** | The list of VMs. |
@@ -1305,7 +1305,7 @@ computer onto the window.
 3. "look at this" is all the prompt then needs: the agent reads the file
   from there. Claude Code shows an image it is given a path to.
 
-Several files arrive as several paths. A file over 100 MB is refused, and a
+Several files arrive as several paths. A file over 1 GB is refused, and a
 folder cannot be dropped. A plain Terminal window takes a drop the same way;
 a VM's window does not, since a path on this machine means nothing in the
 guest.
@@ -3337,7 +3337,7 @@ Two menu items bring files in from this browser as well.
 **Upload…**, in the menu of a window's empty space, puts files in that
 window's folder.
 
-A file can be 100 MB at most, and a file with the name of one already
+A file can be 1 GB at most, and a file with the name of one already
 there replaces it. Folders cannot be dragged in; drag their files.
 
 New files brought in this way are announced on the Newsfeed, so every desk
@@ -3357,10 +3357,11 @@ where agents publish the pages they make: a copy of each claude.ai
 artifact Claude publishes, for one. exe does not make that folder or fill
 it by itself, so tell your agent to keep its pages there.
 
-Between joined desks a file travels if it is 100 MB or less. A desk on an
-older release takes only files up to 10 MB; a bigger one reaches it once
-that desk is updated. A file over 100 MB that an agent put in the folder
-stays on this machine, and so does everything whose name begins with a
+Between joined desks a file travels if it is 1 GB or less, from disk to
+disk: neither desk holds it in memory. A desk on an older release takes
+less, 100 MB a file or on the oldest releases 10 MB, and is not offered a
+bigger one; that file reaches it once the desk is updated. A file over
+1 GB that an agent put in the folder stays on this machine, and so does everything whose name begins with a
 dot, the Trash included. An empty folder does not travel until it holds a
 file.
 
@@ -3376,7 +3377,7 @@ this machine works in the folder itself.
 | `GET /v1/workspace` | Lists every file with its path, size and date modified. |
 | `GET /v1/workspace?dir=<folder>` | Lists one folder: its files and its folders. An empty `dir` is the root. |
 | `GET /v1/workspace/<path>` | Returns the file. |
-| `PUT /v1/workspace/<path>` | Stores the request body as that file, 100 MB at most, and makes its folders as needed. |
+| `PUT /v1/workspace/<path>` | Stores the request body as that file, 1 GB at most, and makes its folders as needed. |
 | `POST /v1/workspace/<path>` with `{"to": "<new path>"}` | Moves or renames a file or a folder. |
 | `POST /v1/workspace/<path>?mkdir=1` | Makes a folder. |
 | `DELETE /v1/workspace/<path>` | Deletes the file. |
@@ -3957,7 +3958,7 @@ Joined nodes sync continuously, both ways:
 
 - **App data.** What the apps save: your notes, to-dos, settings and the
   rest.
-- **Workspace files**, up to 100 MB each. A file an agent writes into the
+- **Workspace files**, up to 1 GB each. A file an agent writes into the
   Workspace on one node reaches the others too.
 - **The Newsfeed.** One timeline of what happened on every node.
 

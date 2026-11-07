@@ -3,7 +3,9 @@ package peer
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -25,7 +27,7 @@ func peerServer(t *testing.T, e *Engine) *httptest.Server {
 		app, rel, _ := strings.Cut(key, "/")
 		switch r.Method {
 		case "PUT":
-			in, code, err := e.ReceiveFile(r)
+			in, code, err := e.ReceiveFile(r, key)
 			if err != nil {
 				http.Error(w, err.Error(), code)
 				return
@@ -185,7 +187,7 @@ func TestReceiveFileChecksTheSenderFirst(t *testing.T) {
 		if edit != nil {
 			edit(r)
 		}
-		in, code, _ := b.ReceiveFile(r)
+		in, code, _ := b.ReceiveFile(r, "@workspace/x.txt")
 		return trip, in, code
 	}
 
@@ -273,4 +275,165 @@ func TestOlderReleaseTakesThisReleasesPush(t *testing.T) {
 	if !slices.Equal(got, []int{200, 200}) {
 		t.Fatalf("the write and the delete are taken, got %v", got)
 	}
+}
+
+func TestFailedConflictBackupStopsTheApply(t *testing.T) {
+	// The loser of a conflict is saved first. When it cannot be, nothing is
+	// replaced or settled: each node keeps its copy, and the next reconcile
+	// tries again.
+	lo, hi := "AAAA-ART", "BBBB-ART"
+	if bodySum([]byte(lo)) > bodySum([]byte(hi)) {
+		lo, hi = hi, lo
+	}
+	for name, tc := range map[string]struct{ local, remote string }{
+		"remote wins": {lo, hi}, // the higher hash wins
+		"local wins":  {hi, lo},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			ident, _ := LoadIdentity(dir)
+			eng, err := NewEngine(EngineConfig{StateDir: dir, DataDir: filepath.Join(dir, "appdata"), Self: ident})
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := filepath.Join(dir, "appdata", "Paint", "canvas.png")
+			os.MkdirAll(filepath.Dir(p), 0o755)
+			os.WriteFile(p, []byte(tc.local), 0o644)
+			// a file where the backups' folder goes: no backup can be made
+			os.WriteFile(filepath.Join(dir, "sync-conflicts"), nil, 0o644)
+
+			rv := Version{Vec: map[string]int64{"other": 1}}
+			if out, err := eng.applyBytes("Paint/canvas.png", []byte(tc.remote), rv); err == nil {
+				t.Fatalf("an apply whose loser cannot be saved goes on: %s", out)
+			}
+			if b, _ := os.ReadFile(p); string(b) != tc.local {
+				t.Fatalf("our copy is now %q", b)
+			}
+			if v, _ := eng.man.Get("Paint/canvas.png"); v.Vec["other"] != 0 {
+				t.Fatalf("the conflict was settled: %+v", v)
+			}
+			stagingEmpty(t, eng)
+
+			os.Remove(filepath.Join(dir, "sync-conflicts"))
+			if out, err := eng.applyBytes("Paint/canvas.png", []byte(tc.remote), rv); err != nil || out != "resolved" {
+				t.Fatalf("the next try: %s %v", out, err)
+			}
+		})
+	}
+}
+
+func TestManifestForLeavesOutWhatAPeerCannotTake(t *testing.T) {
+	eng, _ := newWorkspaceEngine(t)
+	self := eng.cfg.Self.ID
+	files := map[string]int64{
+		"@workspace/small.txt": 5,
+		"@workspace/mid.bin":   legacySyncFile + 1,
+		"@workspace/big.img":   200 << 20,
+		"@workspace/held.img":  200 << 20, // grew past the peer's cap
+	}
+	for key, size := range files {
+		eng.man.Bump(key, self, false, size, 1)
+	}
+	eng.man.Bump("@workspace/gone.img", self, false, 200<<20, 1)
+	eng.man.Bump("@workspace/gone.img", self, true, 0, 0) // a tombstone goes to all
+	const id = "ffffffffffffffff"
+	keys := func() []string { return slices.Sorted(maps.Keys(eng.ManifestFor(id))) }
+	all := slices.Sorted(maps.Keys(eng.man.Snapshot()))
+	if got := keys(); !slices.Equal(got, all) {
+		t.Fatalf("before its own manifest is read, a peer is served all: %v", got)
+	}
+
+	for _, tc := range []struct {
+		name    string
+		maxFile int64
+		want    []string
+	}{
+		{"older release", 0, []string{"@workspace/gone.img", "@workspace/held.img", "@workspace/small.txt"}},
+		{"100 MB release", 100 << 20, []string{"@workspace/gone.img", "@workspace/held.img", "@workspace/mid.bin", "@workspace/small.txt"}},
+		{"this release", maxSyncFile, all},
+	} {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/v1/peer/manifest" {
+				http.NotFound(w, r)
+				return
+			}
+			held, _ := eng.man.Get("@workspace/held.img")
+			m := map[string]any{"id": id, "files": map[string]Version{"@workspace/held.img": held}}
+			if tc.maxFile > 0 {
+				m["max_file"] = tc.maxFile
+			}
+			json.NewEncoder(w).Encode(m)
+		}))
+		eng.reconcile(&Peer{ID: id, Name: "b", Addr: strings.TrimPrefix(ts.URL, "http://")})
+		ts.Close()
+		if got := keys(); !slices.Equal(got, tc.want) {
+			t.Errorf("%s is served %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestAFileOnItsWayInIsTakenOnce(t *testing.T) {
+	a, _ := newWorkspaceEngine(t)
+	b, _ := newWorkspaceEngine(t)
+	pair(t, a, b, "127.0.0.1:1")
+	const key = "@workspace/big.img"
+	body := []byte("one copy")
+	push := func(r io.Reader) (*tripwire, *Staged, int) {
+		trip := &tripwire{r: r}
+		req := httptest.NewRequest("PUT", "/v1/peer/file/"+key, trip)
+		req.Header.Set(hdrVer, EncodeVector(Version{Vec: map[string]int64{a.cfg.Self.ID: 1}}))
+		req.Header.Set(hdrSum, bodySum(body))
+		SignRequest(a.cfg.Self, req, body, b.cfg.Self.ID)
+		in, code, _ := b.ReceiveFile(req, key)
+		return trip, in, code
+	}
+
+	// the first copy, still arriving
+	pr, pw := io.Pipe()
+	first := make(chan *Staged)
+	go func() { _, in, _ := push(pr); first <- in }()
+	pw.Write(body[:3])
+	for i := 0; ; i++ {
+		b.inMu.Lock()
+		on := b.incoming[key]
+		b.inMu.Unlock()
+		if on {
+			break
+		}
+		if i > 200 {
+			t.Fatal("the first push never claimed the file")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	// a second copy, from another node, is turned down unread
+	if trip, in, code := push(bytes.NewReader(body)); code != http.StatusConflict || in != nil || trip.read {
+		t.Fatalf("a second copy while the first arrives: %d %+v read=%v", code, in, trip.read)
+	}
+	// and so is a fetch of it
+	var gets int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { gets++ }))
+	defer ts.Close()
+	pa := &Peer{ID: a.cfg.Self.ID, Name: "a", Addr: strings.TrimPrefix(ts.URL, "http://")}
+	b.fetchFrom(pa, key, Version{Vec: map[string]int64{a.cfg.Self.ID: 1}})
+	if gets != 0 {
+		t.Fatal("a fetch went out for a file on its way in")
+	}
+
+	pw.Write(body[3:])
+	pw.Close()
+	in := <-first
+	if in == nil || in.sum != bodySum(body) {
+		t.Fatalf("the first copy: %+v", in)
+	}
+	in.Discard()
+	if _, in, code := push(bytes.NewReader(body)); code != 200 {
+		t.Fatalf("once the first copy is done, the next is let in: %d", code)
+	} else {
+		in.Discard()
+	}
+	b.fetchFrom(pa, key, Version{Vec: map[string]int64{a.cfg.Self.ID: 1}})
+	if gets != 1 {
+		t.Fatalf("a fetch once nothing is on its way in: %d", gets)
+	}
+	stagingEmpty(t, b)
 }

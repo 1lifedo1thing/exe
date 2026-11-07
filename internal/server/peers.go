@@ -169,13 +169,18 @@ func (s *Server) handlePeerPing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePeerManifest(w http.ResponseWriter, r *http.Request) {
-	e, _, ok := s.verifiedPeer(w, r, 4096)
-	if !ok {
+	e := s.peerEngine(w)
+	if e == nil {
+		return
+	}
+	p, err := e.VerifyPeer(r, nil)
+	if err != nil {
+		writeErr(w, http.StatusUnauthorized, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": e.SelfID(), "name": e.SelfName(), "port": e.Port(),
-		"files": e.ManifestSnapshot(), "peers": e.PeerInfos(),
+		"files": e.ManifestFor(p.ID), "peers": e.PeerInfos(),
 		"max_file": e.MaxFile(),
 	})
 }
@@ -237,12 +242,6 @@ func (s *Server) handlePeerFilePut(w http.ResponseWriter, r *http.Request) {
 	if e == nil {
 		return
 	}
-	in, code, err := e.ReceiveFile(r) // the body goes to a staging file, not memory
-	if err != nil {
-		writeErr(w, code, err)
-		return
-	}
-	defer in.Discard()
 	app, rel, err := peerFileKey(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -253,6 +252,13 @@ func (s *Server) handlePeerFilePut(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errors.New("missing version"))
 		return
 	}
+	// the body goes to a staging file, not memory
+	in, code, err := e.ReceiveFile(r, app+"/"+rel)
+	if err != nil {
+		writeErr(w, code, err)
+		return
+	}
+	defer in.Discard()
 	outcome, err := e.ApplyRemote(app+"/"+rel, in, rv)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)

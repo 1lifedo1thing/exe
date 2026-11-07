@@ -16,6 +16,7 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -419,8 +420,22 @@ func (s *Server) appStatic() http.Handler {
 
 // ---- scoped file stores (per-app data + shared workspace) ----
 
-// fileMax caps a single stored file, the same 100 MB sync carries.
-const fileMax = 100 << 20
+// fileMax caps an app-data file, and workspaceMax a Workspace file: what
+// Node Sync carries (peer's maxSyncFile, held to it by a test). App data is
+// the apps' own state, and a record-bearing document of it is read into
+// memory to be judged (handleAppDataPut), so it keeps the lower cap.
+const (
+	fileMax      = 100 << 20
+	workspaceMax = 1 << 30
+)
+
+// sizeName says a cap in words, for its error: "100 MB", "1 GB".
+func sizeName(n int64) string {
+	if n%(1<<30) == 0 {
+		return fmt.Sprintf("%d GB", n>>30)
+	}
+	return fmt.Sprintf("%d MB", n>>20)
+}
 
 // scopedPath resolves rel inside root, rejecting absolute paths and any
 // traversal outside root.
@@ -525,54 +540,84 @@ func handleFileGet(w http.ResponseWriter, r *http.Request, root, rel string) {
 	http.ServeContent(w, r, "", fi.ModTime(), f)
 }
 
-// handleFilePut reports success so app-data callers can notify the sync
-// engine only for writes that actually landed.
+// handleFilePut stores an app-data PUT's body, under the caller's file
+// lock, and reports success so the caller notifies the sync engine only for
+// writes that actually landed.
 func handleFilePut(w http.ResponseWriter, r *http.Request, root, rel string) bool {
+	fp, ok := stageFilePut(w, r, root, rel, fileMax)
+	return ok && fp.commit(w)
+}
+
+// filePut is a PUT's body written beside its file, waiting for commit.
+type filePut struct {
+	p, rel, tmp string
+	size        int64
+}
+
+// stageFilePut writes a PUT's body, max bytes at most, to a temp file in the
+// folder of the file it is for, and answers the request itself when that
+// fails. The body goes there as it arrives, not through memory. A
+// Workspace upload stages before it takes the file lock: a 1 GB body over
+// a slow link would hold every app's saves and every sync apply meanwhile.
+func stageFilePut(w http.ResponseWriter, r *http.Request, root, rel string, max int64) (*filePut, bool) {
 	p, err := scopedPath(root, rel)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
-		return false
+		return nil, false
 	}
-	tooBig := errors.New("file exceeds 100 MB")
-	if r.ContentLength > fileMax {
+	tooBig := errors.New("file exceeds " + sizeName(max))
+	if r.ContentLength > max {
 		writeErr(w, http.StatusRequestEntityTooLarge, tooBig)
-		return false
+		return nil, false
 	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
-		return false
+		return nil, false
 	}
-	_, statErr := os.Lstat(p)
-	created := os.IsNotExist(statErr)
-	// Atomic-ish: temp file in the same directory, then rename over. The
-	// body goes there as it arrives, not through memory: it can be 100 MB.
 	tmp, err := os.CreateTemp(filepath.Dir(p), ".put-*")
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
-		return false
+		return nil, false
 	}
-	size, err := io.Copy(tmp, io.LimitReader(r.Body, fileMax+1))
+	size, err := io.Copy(tmp, io.LimitReader(r.Body, max+1))
 	if cerr := tmp.Close(); err == nil {
 		err = cerr
 	}
-	if err != nil || size > fileMax {
+	if err != nil || size > max {
 		os.Remove(tmp.Name())
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 		} else {
 			writeErr(w, http.StatusRequestEntityTooLarge, tooBig)
 		}
-		return false
+		return nil, false
 	}
-	if err := os.Rename(tmp.Name(), p); err != nil {
-		os.Remove(tmp.Name())
+	return &filePut{p: p, rel: rel, tmp: tmp.Name(), size: size}, true
+}
+
+// commit renames the staged body over its file (atomic-ish: the file is
+// never seen half-written) and answers the request.
+func (fp *filePut) commit(w http.ResponseWriter) bool {
+	_, statErr := os.Lstat(fp.p)
+	created := os.IsNotExist(statErr)
+	if err := os.Rename(fp.tmp, fp.p); err != nil {
+		fp.discard()
 		writeErr(w, http.StatusInternalServerError, err)
 		return false
 	}
+	fp.tmp = ""
 	// abs is where the file sits on this machine, for a caller that hands
 	// the path to a program running here (a file dropped on an agent window)
-	writeJSON(w, http.StatusOK, map[string]any{"status": "saved", "path": rel, "abs": p, "size": size, "created": created})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "saved", "path": fp.rel, "abs": fp.p, "size": fp.size, "created": created})
 	return true
+}
+
+// discard removes a staged body that was not committed.
+func (fp *filePut) discard() {
+	if fp.tmp != "" {
+		os.Remove(fp.tmp)
+		fp.tmp = ""
+	}
 }
 
 func handleFileDelete(w http.ResponseWriter, root, rel string) bool {
@@ -827,9 +872,16 @@ func (s *Server) handleWorkspaceGet(w http.ResponseWriter, r *http.Request) {
 // refreshes open Workspace windows on it.
 func (s *Server) handleWorkspacePut(w http.ResponseWriter, r *http.Request) {
 	rel := r.PathValue("path")
+	// the body is staged with no lock held; the lock covers the rename and
+	// its versioning, so an ApplyRemote cannot come between them
+	fp, ok := stageFilePut(w, r, s.workspaceDir(), rel, workspaceMax)
+	if !ok {
+		return
+	}
+	defer fp.discard()
 	wrote := false
 	s.withFileLock(func() {
-		if handleFilePut(w, r, s.workspaceDir(), rel) {
+		if fp.commit(w) {
 			wrote = true
 			if s.Peers != nil {
 				s.Peers.LocalWrite(peer.WorkspaceNS, rel)
