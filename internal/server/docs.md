@@ -3248,7 +3248,8 @@ see
 A folder of many files reads better as a list: an item to a line, with
 the date it was modified, its size and its kind. Right-click a window's
 empty space and choose **View → as List**. **View → as Icons** goes back,
-and the check mark is on the view you are in.
+and the check mark is on the view you are in. On a phone, choose the view
+from the pop-up menu at the foot of the window.
 
 <img src="https://hub.v2core.com/v1/embed/bafkreigbxdhdqmuhokq2j6xvenamykane43rr73uycxyxnheixgry4g4p4" alt="A Workspace window as a list: items with their dates, sizes and kinds, one folder opened by its triangle with its two items listed under it" width="562" height="298">
 
@@ -3320,6 +3321,11 @@ of that folder.
 Right-click a window's empty space for **New Folder…**,
 **New Text File…**, **Upload…** and **View**. A new name cannot begin with
 a dot or hold a slash.
+
+On a phone, a row at the foot of the window holds the View pop-up menu,
+**New Folder…** and **Upload…**. Where the words do not fit,
+**New Folder…** shows as a plus. Press and hold the window's empty space
+for **New Text File…**, and press and hold an item for what it can do.
 
 ### Bring files in, take files out
 

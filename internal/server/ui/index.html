@@ -556,6 +556,33 @@ body.mobile #cstrip { z-index: 5; }
   text-align: center; font-size: 12px; padding: 4px 8px 3px; }
 .finder-icons { background: #fff; height: 336px; display: flex; flex-wrap: wrap;
   align-content: flex-start; padding: 10px 0 0 10px; }
+/* a phone's Workspace window has what the desk's menus give the window in
+   a row at its foot, where a thumb is: the foot row of a phone's screen
+   (docs/platinum.md), its top line its one seam with the icons, 12px all
+   round, the View pop-up at the left at the button's 20px, New Folder…
+   and Upload… at the right, 12px apart. A finger gets the row's 12px
+   above and below a button and 6px either side; the button keeps its
+   20px look. What an item can do stays on its held press, since a tap
+   opens it. Off a phone the row is not there: the desk has the menus */
+.ws-tools { display: none; }
+body.mobile .ws-tools { flex: none; display: flex; align-items: center; gap: 12px; padding: 12px;
+  background: var(--g300); border-top: 1px solid var(--black); }
+body.mobile .ws-tools .sp { flex: 1; }
+body.mobile .ws-tools .popup { width: 92px; flex: none; height: 20px; }
+body.mobile .ws-tools .popup .well b { background-position: 4px 3px; }
+body.mobile .ws-tools button.ghost { position: relative; flex: none; }
+body.mobile .ws-tools button.ghost::after { content: ""; position: absolute; inset: -12px -6px; box-sizing: border-box; }
+/* New Folder… makes something, so where its words will not fit it wears
+   Projects' 8px plus alone in a 30px button (.tight, measured, since the
+   words differ in width from one language to the next) */
+.ws-tools .ws-new .gl { display: none; fill: currentColor; shape-rendering: crispEdges; }
+body.mobile .ws-tools.tight .ws-new { display: inline-flex; align-items: center; justify-content: center;
+  box-sizing: border-box; width: 30px; height: 20px; padding: 0; }
+body.mobile .ws-tools.tight .ws-new span { display: none; }
+body.mobile .ws-tools.tight .ws-new .gl { display: block; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  .ws-tools .ws-new .gl { shape-rendering: geometricPrecision; }
+}
 .fitem { width: 120px; height: 64px; flex: none; display: flex; flex-direction: column;
   align-items: center; gap: 2px; }
 .fitem .lbl { max-width: 116px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -6697,9 +6724,34 @@ function openFinderWin(path, fromWin) {
       <div class="win-frame">
         <div class="finder-status"><span class="ws-items">…</span></div>
         <div class="finder-icons doc-scroll"></div>
+        <div class="ws-tools"><span class="popup"><select class="ws-view">
+          <option value="icons"></option><option value="list"></option>
+        </select><span class="well"><i><b></b></i></span></span>
+        <span class="sp"></span><button class="ghost ws-new"><svg class="gl" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><path d="M3 0h2v3h3v2H5v3H3V5H0V3h3z"/></svg><span></span></button><button class="ghost ws-up"></button></div>
         ${GROW_TILE}
       </div>`;
     w.querySelector(".title").textContent = path ? path.split("/").pop() : L("Workspace");
+    // the phone's foot row (.ws-tools): the View submenu as a pop-up, and
+    // the window menu's New Folder… and Upload…
+    const view = w.querySelector(".ws-view");
+    view.setAttribute("aria-label", L("View"));
+    view.options[0].textContent = L("as Icons");
+    view.options[1].textContent = L("as List");
+    view.value = finderView(path).view;
+    view.addEventListener("change", () => setFinderView(w, { view: view.value }));
+    const nf = w.querySelector(".ws-new");
+    nf.querySelector("span").textContent = L("New Folder…");
+    nf.setAttribute("aria-label", L("New Folder"));
+    nf.addEventListener("click", () => nfOpen(w, true));
+    // the plus stands in for the words while the row cannot hold them: a
+    // phone turned, or a language whose words are wider
+    const tools = w.querySelector(".ws-tools");
+    if (IS_MOBILE) new ResizeObserver(() => {
+      tools.classList.remove("tight");
+      tools.classList.toggle("tight", tools.scrollWidth > tools.clientWidth);
+    }).observe(tools);
+    w.querySelector(".ws-up").textContent = L("Upload…");
+    w.querySelector(".ws-up").addEventListener("click", () => nfPickUpload(w.dataset.path));
     w.dataset.path = path;
     const box = w.querySelector(".finder-icons");
     // an item stops its own click, so one that reaches the box was on
@@ -6780,6 +6832,7 @@ function renderFinder(w) {
     }
   };
   walk(w._entries, "", 0);
+  w.querySelector(".ws-view").value = v.view;
   // the count is of what is shown, an open folder's items among them, as the Finder counts
   w.querySelector(".ws-items").textContent = L`${rows.length} item${rows.length === 1 ? "" : "s"}, ${fmtBytes(w._free)} available`;
   box.classList.toggle("as-list", list);

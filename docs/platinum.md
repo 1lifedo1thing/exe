@@ -922,6 +922,18 @@ restyling: `internal/server/ui/index.html` (the desktop),
   and raises none when it was down. Off a phone the row is `display:
   none`. `~/tools/playwright/exe-term-keyrow-test.js` checks it.
 
+- A Workspace window's row on a phone (`.ws-tools`): what the desk's
+  menus give the window, in the foot row of a stack's screen. The View
+  pop-up (as Icons, as List) is at the left at the button's 20px, and
+  New Folder… and Upload… are at the right, 12px apart. The row's top
+  line is its one seam with the icons. New Folder… makes something, so
+  it gives up its words for Projects' 8px plus in a 30px button when the
+  row cannot hold them (`.tight`, measured by a ResizeObserver, since
+  the words' width differs by language: English keeps them at 360px,
+  Japanese at 390px). What an item can do stays on its held press: on a
+  phone a tap opens an item, so no button would have a selection to act
+  on. Off a phone the row is `display: none`.
+
 - A modal dialog of a window's own (the Claude Code window's Search,
   `.sess-veil`): a veil of the overlay's 15% black over the window's
   frame, so its title bar stays free, the desk's other windows go on
