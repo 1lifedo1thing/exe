@@ -287,8 +287,9 @@ function bps(n) {
   while (n >= 999.5 && i < units.length - 1) { n /= 1000; i++; }
   return (i && n < 9.95 ? n.toFixed(1) : Math.round(n)) + " " + units[i];
 }
+// a Wi-Fi link's signal has a row of its own under it
 const linkWords = (ifc, n) => !n || !n.up ? "Not connected"
-  : ifc.wireless ? (n.signal != null ? `Wi-Fi, ${Math.round(n.signal)} dBm` : "Wi-Fi")
+  : ifc.wireless ? "Wi-Fi"
   : ifc.speed ? (ifc.speed >= 1000 ? `${+(ifc.speed / 1000).toFixed(1)} Gb/s` : `${ifc.speed} Mb/s`) : "Connected";
 // a rate's share of its link on a scale of tens, from 1 KB/s to the link's
 // speed (1 Gb/s where it names none), so a trickle and a flood both read
@@ -769,7 +770,8 @@ function build() {
       net.figs.append(nm);
       f.in = fig(net.figs, "Received", "Bytes a second in, on a scale of tens up to the link's speed");
       f.out = fig(net.figs, "Sent", "Bytes a second out, on a scale of tens up to the link's speed");
-      if (ifc.wireless) f.signal = fig(net.figs, "Signal", "The Wi-Fi signal, from −90 dBm to −30 dBm");
+      // a strong signal is no alarm: one colour, as a clock's
+      if (ifc.wireless) f.signal = Object.assign(fig(net.figs, "Signal", "The Wi-Fi signal, from −90 dBm to −30 dBm"), { steady: STEADY });
       const hist = document.createElement("canvas");
       const span = el("span", {}, "");
       hists.append(el("div", { class: "hist" }, el("div", { class: "lcd" }, hist),
@@ -787,10 +789,10 @@ function sizeFigs(figs) {
   for (const cv of figs.querySelectorAll(".fig canvas")) size(cv, artW(cv.parentElement.clientWidth), 5);
 }
 
-function layout() {
+function layout(again) {
   if (!V.cpu || $("#view").hidden) return;
   const pane = $("#pane");
-  const W = pane.clientWidth - 24;
+  const cw = pane.clientWidth, W = cw - 24;
   const two = W >= 480;
   const cpuMax = artW(two ? W - ROW_GAP - FIGS_MIN : W);
   const L = cpuLayout(st.info, cpuMax);
@@ -825,6 +827,12 @@ function layout() {
     }
     sizeFigs(V.net.figs);
   }
+  // A new canvas is 150px tall until it is sized, so a page just built is
+  // tall for a moment and has a scroll bar it loses once its canvases are
+  // sized: the width measured with the bar is 15px short of the one left.
+  // The resize observer never sees a bar that came and went in one frame,
+  // so the width is measured again here.
+  if (!again && pane.clientWidth !== cw) return layout(true);
   render();
   sbEnds();
 }
@@ -900,7 +908,7 @@ function renderNet(s) {
     if (x && x.up) up++;
     setFig(n.f.in, x ? rateFrac(x.in, n.ifc) : null, x ? bps(x.in) : "—");
     setFig(n.f.out, x ? rateFrac(x.out, n.ifc) : null, x ? bps(x.out) : "—");
-    if (n.f.signal) setFig(n.f.signal, x && x.signal != null ? (x.signal + 90) / 60 : null, x && x.signal != null ? `${Math.round(x.signal)} dBm` : "—");
+    if (n.f.signal) setFig(n.f.signal, x && x.signal != null ? (x.signal + 90) / 60 : null, x && x.signal != null ? `${Math.round(x.signal).toString().replace("-", "−")} dBm` : "—");
     if (x && x.in != null) { total += x.in + (x.out || 0); any = true; }
     drawNetHist(n, i);
   });
