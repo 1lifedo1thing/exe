@@ -423,6 +423,7 @@
 "{0} exceeds 1 GB": "{0} 超过 1 GB",
 "Waiting": "等待中",
 "Failed": "失败",
+"Stopped": "已停止",
 "the upload did not get through": "上传没有送达",
 "Uploaded {0}": "已上传 {0}",
 "Uploaded {0} files": "已上传 {0} 个文件",

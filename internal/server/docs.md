@@ -3348,12 +3348,15 @@ there replaces it. Folders cannot be dragged in; drag their files.
 
 While files go up, each one has a row under the count line of its
 folder's window, and of the windows of the folders above it: its name,
-how far along it is ("40%", or "Waiting" until its turn), and a thin blue
-line under it that fills as it goes. A file the daemon refuses says
-"Failed", and a message says why. The rows stay until the last file is
-in, then go together, and four show at a time: past that they scroll,
-with the file that is going in view. The **Upload to Workspace** window
-shows its file's row over its buttons.
+how far along it is ("40%", or "Waiting" until its turn), a **Stop**
+button, and a thin blue line under it that fills as it goes. Click
+**Stop** to cancel that file: a file that waits is skipped, and a file
+that is going is cut off, with nothing of it kept. When all of a file has
+gone, **Stop** is dimmed, because the daemon already has the file. A file
+the daemon refuses says "Failed", and a message says why. The rows stay
+until the last file is in, then go together, and four show at a time:
+past that they scroll, with the file that is going in view. The **Upload
+to Workspace** window shows its file's row over its buttons.
 
 New files brought in this way are announced on the Newsfeed, so every desk
 in the mesh sees them arrive; overwriting an existing file stays quiet.

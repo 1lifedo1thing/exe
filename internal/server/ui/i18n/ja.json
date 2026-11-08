@@ -423,6 +423,7 @@
 "{0} exceeds 1 GB": "{0} は 1 GB を超えています",
 "Waiting": "待機中",
 "Failed": "失敗",
+"Stopped": "中止",
 "the upload did not get through": "アップロードが届きませんでした",
 "Uploaded {0}": "{0} をアップロードしました",
 "Uploaded {0} files": "{0} 個のファイルをアップロードしました",

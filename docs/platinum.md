@@ -951,9 +951,15 @@ restyling: `internal/server/ui/index.html` (the desktop),
 - Uploads into a Workspace folder stack under the count line of its
   window and of each window above it (`.up-stack`, `wsUps`,
   `wsUpsDraw`): a row a file in the order they go, its name at the left,
-  how far at the right (Waiting, 40%, Failed), and under it a 2px line
-  in `--hl`, the drop ring's blue, as long as the share that has gone. A
-  file whose bytes have all gone shows 99% till the daemon answers. A
+  how far at the right (Waiting, 40%, Failed, Stopped) and a Stop
+  `button.ghost` 12px on, and under it a 2px line in `--hl`, the drop
+  ring's blue, as long as the share that has gone. A file whose bytes
+  have all gone shows 99% till the daemon answers, its Stop greyed: the
+  daemon has it. Stop is hidden, its place kept, once a file is done,
+  failed or stopped, so the figures stay in line (`wsUpStop`: a waiting
+  file is passed over, a going one's XHR aborted, and the daemon drops a
+  body that comes short). On a phone its press reaches 4px above and
+  below and 8px either side. A
   row is made once and only repainted, so two uploads at once never
   fight over one line, and every row stays till the last upload ends: the
   stack comes and goes once, with the folder's new icons. Past four rows

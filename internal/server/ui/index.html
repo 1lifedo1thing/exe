@@ -559,20 +559,29 @@ body.mobile #cstrip { z-index: 5; }
 .ws-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* uploads under way (wsUpload) stack under the count line of the window
    they go into, and of each window above it: a row a file, in the order
-   they go, its name at the left, how far at the right (Waiting, 40%,
-   Failed), and under it a 2px line in the drop ring's blue as long as
-   the share that has gone. A row is made once and only repainted, and
-   every row stays till the last upload ends, so the stack comes and goes
-   once and nothing between moves. Past four rows it scrolls, keeping the
-   file that is going in view. The Upload window's line is one such row,
+   they go, its name at the left, how far (Waiting, 40%, Failed, Stopped)
+   and a Stop button, 12px on, at the right, and under it a 2px line in
+   the drop ring's blue as long as the share that has gone. Stop is there
+   while a file waits or goes, greyed once all its bytes have gone (the
+   daemon has them), and gone after, its place kept so the figures stay
+   in line. A row is made once and only repainted, and every row stays
+   till the last upload ends, so the stack comes and goes once and
+   nothing between moves. Past four rows it scrolls, keeping the file that
+   is going in view (four rows and the stack's line: 125px, border-box).
+   On a phone Stop's press reaches 4px past its edge above and below and
+   8px either side (the ::after's inset counts from inside the border),
+   short of the next row's. The Upload window's line is one such row,
    bare, the height it keeps when empty */
-.up-stack { flex: none; position: relative; max-height: 100px; overflow: hidden auto;
+.up-stack { flex: none; position: relative; max-height: 125px; overflow: hidden auto;
   background: var(--g300); border-bottom: 1px solid var(--black); }
-.up-row { position: relative; display: flex; gap: 8px; padding: 4px 8px 6px; font-size: 12px; line-height: 15px; }
+.up-row { position: relative; display: flex; align-items: center; gap: 8px; padding: 4px 8px 7px;
+  font-size: 12px; line-height: 15px; }
 .up-row .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .up-row .pc { flex: none; }
+.up-row button.ghost { flex: none; position: relative; margin-left: 4px; }
+body.mobile .up-row button.ghost::after { content: ""; position: absolute; inset: -5px -9px; box-sizing: border-box; }
 .up-row i { position: absolute; left: 0; bottom: 3px; height: 2px; background: var(--hl); }
-#up-status { min-height: 19px; }
+#up-status { min-height: 24px; }
 #up-status .up-row { padding: 0 0 4px; font-size: inherit; }
 #up-status .up-row i { bottom: 0; }
 /* Choose File… keeps its one line: the name beside it gives way instead */
@@ -9315,10 +9324,7 @@ $("#up-go").onclick = async () => {
   if (!f) { toast(L("choose a file first")); return; }
   $("#up-go").disabled = true;
   const st = $("#up-status");
-  const n = (await wsUpload("", [f], u => {
-    if (st.firstChild?._up !== u) st.replaceChildren(wsUpRow(u, u.name));
-    wsUpPaint(st.firstChild);
-  })).length;
+  const n = (await wsUpload("", [f], u => st.replaceChildren(wsUpRow(u, u.name)))).length;
   $("#up-go").disabled = false;
   st.replaceChildren();
   if (n) closeWin($("#win-upload"));
@@ -9331,8 +9337,9 @@ $("#up-go").onclick = async () => {
 // Genuinely new files (not overwrites) are announced on the Newsfeed. ----
 // While the files go, each is a row of the stack (.up-stack) in the
 // window of its folder and of every folder above it, and report (the
-// Upload window's) is handed its row's upload to paint as it goes. Every
-// call's files go one at a time; two calls go side by side.
+// Upload window's) is handed its row's upload when it starts. Every
+// call's files go one at a time; two calls go side by side. A file
+// stopped (wsUpStop) is passed over, and says nothing more.
 async function wsUpload(dir, files, report) {
   let done = 0, last = "";
   const fresh = [], abs = [];
@@ -9342,16 +9349,21 @@ async function wsUpload(dir, files, report) {
   wsUpsDraw();
   for (const [i, f] of go.entries()) {
     const u = ups[i], rel = dir ? dir + "/" + f.name : f.name;
-    const say = () => { wsUpsDraw(); if (report) report(u); };
-    u.state = "go"; say();
+    if (u.state === "stopped") continue;
+    u.state = "go";
+    if (report) report(u);
+    wsUpsDraw();
     try {
-      const r = await wsPut(rel, f, n => { u.sent = n; say(); });
+      const r = await wsPut(rel, f, n => { u.sent = n; wsUpsDraw(); }, u);
       u.state = "done";
       done++; last = f.name;
       if (r.created) fresh.push(rel);
       abs.push(r.abs || rel);
-    } catch (e) { u.state = "fail"; toast(f.name + ": " + e.message); }
-    say();
+    } catch (e) {
+      if (u.state !== "stopped") { u.state = "fail"; toast(f.name + ": " + e.message); }
+    }
+    u.abort = null;
+    wsUpsDraw();
   }
   if (done) {
     toast(done === 1 ? L`Uploaded ${last}` : L`Uploaded ${done} files`);
@@ -9360,7 +9372,7 @@ async function wsUpload(dir, files, report) {
   }
   // the stacks go with the last upload under way, in the same frame as
   // the folder's new icons
-  if (ups.length && wsUps.every(u => u.state === "done" || u.state === "fail")) {
+  if (ups.length && wsUps.every(u => u.state === "done" || u.state === "fail" || u.state === "stopped")) {
     wsUps.length = 0;
     wsUpsDraw();
   }
@@ -9390,26 +9402,43 @@ function wsUpsDraw() {
       box.scrollTop = Math.max(0, now.offsetTop + now.offsetHeight - box.clientHeight);
     box._now = now;
   }
+  const up = $("#up-status .up-row");
+  if (up) wsUpPaint(up);
 }
 function wsUpRow(u, name) {
-  const r = el("div", { class: "up-row", title: name }, el("span", { class: "nm" }, name), el("span", { class: "pc" }), el("i"));
+  const stop = el("button", { class: "ghost" }, L("Stop"));
+  stop.addEventListener("click", () => wsUpStop(u));
+  const r = el("div", { class: "up-row", title: name }, el("span", { class: "nm" }, name), el("span", { class: "pc" }), stop, el("i"));
   r._up = u;
   return r;
 }
-// a row's figure and line. A file whose bytes have all gone is at 99%
-// till the daemon says it has the file
+// a row's figure, line and Stop. A file whose bytes have all gone is at
+// 99% till the daemon says it has the file, and can no longer be stopped
 function wsUpPaint(r) {
-  const u = r._up, pct = u.state === "done" ? 100 : u.state === "fail" || !u.size ? 0
+  const u = r._up, pct = u.state === "done" ? 100 : u.state !== "go" || !u.size ? 0
     : Math.min(99, Math.floor(u.sent / u.size * 100));
-  r.querySelector(".pc").textContent = u.state === "wait" ? L("Waiting") : u.state === "fail" ? L("Failed") : pct + "%";
+  r.querySelector(".pc").textContent = { wait: L("Waiting"), fail: L("Failed"), stopped: L("Stopped") }[u.state] || pct + "%";
   r.querySelector("i").style.width = pct + "%";
+  const stop = r.querySelector("button");
+  stop.style.visibility = u.state === "wait" || u.state === "go" ? "" : "hidden";
+  stop.disabled = u.state === "go" && u.sent >= u.size;
+}
+// Stop: a file waiting is passed over, one going is cut off, and the
+// daemon drops what of it had come
+function wsUpStop(u) {
+  if (u.state !== "wait" && (u.state !== "go" || u.sent >= u.size)) return;
+  u.state = "stopped";
+  if (u.abort) u.abort();
+  wsUpsDraw();
 }
 // A Workspace PUT that says how much of the body has gone (onSent, in
 // bytes), which fetch cannot: an XHR with api()'s headers, and the same
 // answer to a refused token
-function wsPut(rel, body, onSent) {
+function wsPut(rel, body, onSent, u) {
   return new Promise((resolve, reject) => {
     const x = new XMLHttpRequest();
+    u.abort = () => x.abort();
+    x.onabort = () => reject(new Error("stopped"));
     x.open("PUT", wsUrl(rel));
     if (apiToken) x.setRequestHeader("Authorization", "Bearer " + apiToken);
     x.setRequestHeader("X-Exe-Client", WIN_CLIENT);
