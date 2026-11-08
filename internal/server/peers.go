@@ -5,7 +5,9 @@
 //	/v1/peer/*  — daemon-to-daemon (exempt from the API token; each request
 //	              is ed25519-signed by an enrolled peer, except pair, which
 //	              a short-lived join code authenticates). A peer can reach
-//	              ONLY these routes — never VMs, config or the host shell.
+//	              ONLY these routes — never VMs, config or the host shell —
+//	              and beyond app-data sync only /v1/peer/monitor, the
+//	              machine's load figures (hostmon.go).
 package server
 
 import (

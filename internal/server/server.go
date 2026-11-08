@@ -466,9 +466,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/peers/join", s.handlePeersJoin)
 	mux.HandleFunc("DELETE /v1/peers/{id}", s.handlePeersDelete)
 	mux.HandleFunc("GET /v1/peers/status", s.handlePeersStatus)
+	mux.HandleFunc("GET /v1/peers/{id}/monitor", s.handlePeersMonitor)
 	mux.HandleFunc("POST /v1/peer/pair", s.handlePeerPair)
 	mux.HandleFunc("GET /v1/peer/ping", s.handlePeerPing)
 	mux.HandleFunc("GET /v1/peer/manifest", s.handlePeerManifest)
+	mux.HandleFunc("GET /v1/peer/monitor", s.handlePeerMonitor)
 	mux.HandleFunc("POST /v1/peer/unpair", s.handlePeerUnpair)
 	mux.HandleFunc("GET /v1/peer/file/{app}/{path...}", s.handlePeerFileGet)
 	mux.HandleFunc("PUT /v1/peer/file/{app}/{path...}", s.handlePeerFilePut)
@@ -487,7 +489,8 @@ func (s *Server) Handler() http.Handler {
 // data — every API call it makes carries the token, or the session cookie
 // the desk had for it: session.go). /v1/peer/* is exempt:
 // those routes authenticate each request by peer signature (or join code)
-// instead, and expose nothing beyond app-data sync. /pages/ is outside
+// instead, and expose nothing beyond app-data sync and the machine's load
+// figures (/v1/peer/monitor). /pages/ is outside
 // /v1 on purpose: a rendered Workspace page is authorized by its ticket
 // (pages.go), never by the token. /v1/passkeys/login is how a browser
 // with no token signs in, by a passkey's signature (passkey.go).

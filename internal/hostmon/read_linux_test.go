@@ -11,14 +11,75 @@ import (
 )
 
 func TestParseStat(t *testing.T) {
-	busy, total, ok := parseStat(strings.NewReader("cpu  408690183 216559 52384731 5248863620 5380860 0 944647 0 9717658 0\ncpu0 1 2 3 4 5 6 7 8 9 10\n"))
+	busy, total, ok, per := parseStat(strings.NewReader("cpu  408690183 216559 52384731 5248863620 5380860 0 944647 0 9717658 0\n" +
+		"cpu0 1 2 3 4 5 6 7 8 9 10\ncpu2 10 0 10 70 10 0 0 0 0 0\nintr 1 2 3\n"))
 	// guest (9717658) is inside user already: total is the first eight
 	wantTotal := uint64(408690183 + 216559 + 52384731 + 5248863620 + 5380860 + 0 + 944647 + 0)
 	if !ok || total != wantTotal || busy != wantTotal-5248863620-5380860 {
 		t.Fatalf("busy %d total %d ok %v", busy, total, ok)
 	}
-	if _, _, ok := parseStat(strings.NewReader("intr 1 2 3\n")); ok {
+	// each CPU's own line; cpu1 is offline and has none
+	if len(per) != 2 || per[0] != [2]uint64{1 + 2 + 3 + 6 + 7 + 8, 36} || per[2] != [2]uint64{20, 100} {
+		t.Fatalf("per CPU: %v", per)
+	}
+	if _, _, ok, _ := parseStat(strings.NewReader("intr 1 2 3\n")); ok {
 		t.Error("read a cpu line from nothing")
+	}
+}
+
+func TestReadTopology(t *testing.T) {
+	write := func(root, path, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(root+path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(root+path, []byte(body+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// a Xeon of two threads a core: cpu0 and cpu2 share core 0
+	x := t.TempDir()
+	for i, core := range []string{"0", "1", "0", "1"} {
+		d := "/cpu/cpu" + strconv.Itoa(i)
+		write(x, d+"/topology/physical_package_id", "0")
+		write(x, d+"/topology/core_id", core)
+		write(x, d+"/cpufreq/cpuinfo_max_freq", "4800000")
+		write(x, d+"/cpufreq/scaling_cur_freq", strconv.Itoa(1000000+i*500000))
+	}
+	var info strings.Builder
+	for i := range 4 {
+		info.WriteString("processor\t: " + strconv.Itoa(i) + "\nmodel name\t: Intel(R) Xeon(R) w9-3475X CPU @ 2.20GHz\n\n")
+	}
+	write(x, "/cpuinfo", info.String())
+	tp := readTopology(x+"/cpu", x+"/cpuinfo")
+	if len(tp.cpus) != 4 || len(tp.kinds) != 1 || tp.kinds[0] != "Intel Xeon w9-3475X" ||
+		tp.cpus[0].Core != 0 || tp.cpus[1].Core != 1 || tp.cpus[2].Core != 0 || tp.cpus[3].MaxMHz != 4800 {
+		t.Fatalf("Xeon: %+v", tp)
+	}
+	if f := readFreqs(x+"/cpu", 4); len(f) != 4 || f[0] != 1000 || f[3] != 2500 {
+		t.Fatalf("clocks: %v", f)
+	}
+	// the GB10: Arm parts, each CPU its own core, two kinds
+	g := t.TempDir()
+	info.Reset()
+	for i := range 3 {
+		d := "/cpu/cpu" + strconv.Itoa(i)
+		write(g, d+"/topology/physical_package_id", "0")
+		write(g, d+"/topology/core_id", strconv.Itoa(i))
+		part := "0xd87"
+		if i == 2 {
+			part = "0xd85"
+		}
+		info.WriteString("processor\t: " + strconv.Itoa(i) + "\nCPU implementer\t: 0x41\nCPU part\t: " + part + "\n\n")
+	}
+	write(g, "/cpuinfo", info.String())
+	tp = readTopology(g+"/cpu", g+"/cpuinfo")
+	if len(tp.kinds) != 2 || tp.kinds[0] != "Cortex-A725" || tp.kinds[1] != "Cortex-X925" ||
+		tp.cpus[2].Kind != 1 || tp.cpus[2].Core != 2 || tp.cpus[0].MaxMHz != 0 {
+		t.Fatalf("GB10: %+v", tp)
+	}
+	if tp := readTopology(t.TempDir(), "/nonexistent"); tp.cpus != nil {
+		t.Fatalf("no CPUs: %+v", tp)
 	}
 }
 
@@ -69,6 +130,28 @@ func TestParseSMI(t *testing.T) {
 	}
 	if g := parseSMI(""); g.util != nil || g.name != "" {
 		t.Fatalf("no output: %+v", g)
+	}
+	// the full query: the GB10 has no memory, limit or fan of its own
+	g = parseSMI("NVIDIA GB10, 63, 52, 25.19, 0, [N/A], [N/A], [N/A], [N/A], 2535, 3003, P0, 0, 0\n")
+	if g.name != "NVIDIA GB10" || len(g.detail) != 1 || g.cards != nil {
+		t.Fatalf("GB10 detail: %+v", g)
+	}
+	d := g.detail[0]
+	ci := g.detailInfo[0]
+	if *d.Util != 63 || *d.Clock != 2535 || *ci.ClockMax != 3003 || d.MemUsed != nil || ci.MemTotal != nil ||
+		d.Fan != nil || ci.Fan || ci.PowerLimit != nil || d.PState != "P0" || *d.Enc != 0 || !ci.Video || ci.Name != "NVIDIA GB10" {
+		t.Fatalf("GB10 card: %+v %+v", d, ci)
+	}
+	g = parseSMI("NVIDIA RTX 6000 Ada Generation, 0, 50, 19.86, 0, 4734, 49140, 300.00, 30, 210, 3105, P8, 0, 0\n" +
+		"NVIDIA RTX 6000 Ada Generation, 97, 71, 280.5, 40, 10018, 49140, 300.00, 55, 2505, 3105, P2, 12, 3\n")
+	if len(g.detail) != 2 || *g.detail[0].MemUsed != 4734<<20 || *g.detailInfo[1].MemTotal != 49140<<20 ||
+		*g.detail[1].Fan != 55 || !g.detailInfo[1].Fan || *g.detailInfo[1].PowerLimit != 300 || *g.detail[1].Dec != 3 || *g.util != 48.5 {
+		t.Fatalf("two cards' detail: %+v %+v", g.detail, g)
+	}
+	// a driver of the short query: the cards are named, their detail empty
+	g = parseSMI("NVIDIA GB10, 37, 46, 10.90\n")
+	if len(g.detailInfo) != 1 || g.detailInfo[0].Name != "NVIDIA GB10" || g.detailInfo[0].Fan || *g.detail[0].Util != 37 {
+		t.Fatalf("short query: %+v", g)
 	}
 }
 

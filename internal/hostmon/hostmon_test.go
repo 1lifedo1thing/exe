@@ -22,10 +22,13 @@ func (h *fakeHost) read() counters {
 	return counters{
 		at: h.at, cpuOK: true, cpuBusy: 25 * n, cpuTotal: 100 * n,
 		memTotal: 1000, memAvail: 600,
-		net:  map[string][2]uint64{"eth0": {2000 * n, 100 * n}},
-		disk: map[string][2]uint64{"nvme0n1": {0, 512 * n}},
-		gpu:  gpuReading{name: "Test GPU", util: num(12)},
-		info: Info{Cores: 4, MemoryTotal: 1000, GPU: "Test GPU", Net: []string{"eth0"}, Disks: []string{"nvme0n1"}},
+		net:    map[string][2]uint64{"eth0": {2000 * n, 100 * n}},
+		disk:   map[string][2]uint64{"nvme0n1": {0, 512 * n}},
+		gpu:    gpuReading{name: "Test GPU", util: num(12), detail: []Card{{Util: num(12)}}, detailInfo: []CardInfo{{Name: "Test GPU"}}},
+		perCPU: map[int][2]uint64{0: {10 * n, 100 * n}, 1: {90 * n, 100 * n}},
+		freq:   []int{1000, 2000},
+		info: Info{Cores: 4, MemoryTotal: 1000, GPU: "Test GPU", Net: []string{"eth0"}, Disks: []string{"nvme0n1"},
+			CPUs: []CPU{{}, {}}, CPUKinds: []string{"Test CPU"}, Cards: []CardInfo{{Name: "Test GPU"}}},
 	}
 }
 
@@ -52,6 +55,19 @@ func TestMonitorSamplesWhileRead(t *testing.T) {
 	}
 	if _, newer := m.Read(x.T); len(newer) > 1 {
 		t.Errorf("after the newest sample: %d samples", len(newer))
+	}
+	// the Control Strip's read carries no detail; the Activity Monitor's does
+	if info, _ := m.Read(0); x.Cores != nil || x.Cards != nil || info.CPUs != nil || info.Cards != nil {
+		t.Errorf("detail in a plain read: %v %v %+v", x.Cores, x.Cards, info)
+	}
+	info, d := m.ReadDetail(0, true)
+	y := d[len(d)-1]
+	if len(info.CPUs) != 2 || info.Cards[0].Name != "Test GPU" || len(y.Cores) != 2 || y.Cores[0] != 10 || y.Cores[1] != 90 ||
+		y.Freq[1] != 2000 || len(y.Cards) != 1 || *y.Cards[0].Util != 12 {
+		t.Errorf("detail: %+v %+v", info, y)
+	}
+	if _, again := m.Read(0); again[len(again)-1].Cores != nil {
+		t.Error("a detail read changed the ring")
 	}
 	// nobody reads: the loop stops, the samples stay
 	time.Sleep(400 * time.Millisecond)

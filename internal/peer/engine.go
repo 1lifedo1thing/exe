@@ -1252,6 +1252,26 @@ func (e *Engine) setStatus(p *Peer, latency time.Duration, err error) {
 	}
 }
 
+// ErrNoSuchPeer: Fetch was given an id this node has not joined.
+var ErrNoSuchPeer = errors.New("no such node")
+
+// Fetch asks peer id for one of its read-only daemon-to-daemon routes
+// (path and query, "/v1/peer/monitor?after=0"), signed as a sync request
+// is; the Activity Monitor shows another node's figures this way. The
+// caller closes the body.
+func (e *Engine) Fetch(ctx context.Context, id, pathQuery string) (*http.Response, error) {
+	p, ok := e.peers.Get(id)
+	if !ok {
+		return nil, ErrNoSuchPeer
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://"+p.Addr+pathQuery, nil)
+	if err != nil {
+		return nil, err
+	}
+	SignRequest(e.cfg.Self, req, nil, p.ID)
+	return e.client.Do(req)
+}
+
 // ---- status / latency -------------------------------------------------------
 
 // StatusCached returns the last known statuses without probing — a probe

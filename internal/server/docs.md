@@ -3501,6 +3501,7 @@ These are part of exe itself, and each has a chapter of its own.
 | **Dict** | `dict` | A dictionary from English and five other languages into Chinese, Japanese or Korean. | [Dict](https://exe.v2core.com/docs/using/dict) |
 | **Analytics** | `analytics` | The traffic Cloudflare's edge saw for the hostnames this node publishes. | [Analytics](https://exe.v2core.com/docs/using/analytics) |
 | **Solana** | `solana` | A trading chart of SOL, PUMP, MET or SKR, candles or a line, its big moves marked. | [Solana](https://exe.v2core.com/docs/using/solana) |
+| **Activity Monitor** | `activity` | Each core and each graphics card of this node or a joined one, live, as pixel art. | [Activity Monitor](https://exe.v2core.com/docs/using/activity-monitor) |
 | **Welcome** | `welcome` | exe in six cards. It has no desktop icon: choose **Help → Welcome…**. | [The desktop](https://exe.v2core.com/docs/using/the-desktop) |
 | **Extras** | `extras` | Turns the extra apps, Planet, Easel and Projects on and off. It has no desktop icon: press **Extras…** on Welcome's Apps card. | This chapter, under **Extras** |
 
@@ -3977,7 +3978,10 @@ Joined nodes sync continuously, both ways:
 
 VMs, the configuration and the disks of the Mac OS 9 and Mac OS X apps
 (Intel included) are not synced: each stays on its own node. Joining gives the other node the sync and nothing more: not
-your VMs, your configuration or a shell.
+your VMs, your configuration or a shell. The one thing it can read beyond
+the sync is how busy this machine is, for its **Activity Monitor**: the
+load, clocks, heat and power of the CPU and the graphics cards, and their
+names.
 
 ### Join two nodes
 
@@ -5205,6 +5209,45 @@ the last two days, and its rule. A link opens the app on a move:
 `#show=app:solana?coin=SOL&at=<ms>` on the desktop's address, `at` the
 move's time in milliseconds. The push a big move sends carries that link,
 so a tap on it lands on the move.
+
+## Activity Monitor
+
+**Activity Monitor** shows what a machine's CPU and graphics cards are
+doing, every two seconds, drawn as pixel art. It shows this node, or any
+node you joined to it (**Joining desks together**).
+
+- **Pick a node** with the **Node** pop-up at the top. The window's title
+  names the node, and the window opens on it the next time.
+- **The CPU** is a chip. Each tile on its die is a core, and each column
+  in a tile is one of the core's threads, lit from the bottom like a level
+  meter: green, then amber, then red. A slower kind of core is a smaller
+  tile, as the GB10's Cortex-A725 cores are under its Cortex-X925 ones.
+  The die turns warmer as the CPU heats. Rest the pointer on a tile to
+  read its threads' load and its clock.
+- **Beside the chip**: the load of all the cores, the busiest thread, the
+  average clock of its top, the hottest sensor, and memory in use.
+- **Under the chip**: each thread's load over the last ten minutes, a row
+  each, the newest at the right. A row is dark when idle and goes through
+  blue and green to red at full load.
+- **Each graphics card** is its board. The cells of its die light as the
+  GPU works, the memory chips round the die light as its memory fills, and
+  the fan turns as fast as the card's own. A GPU that shares the
+  machine's memory, as the GB10 does, is a package instead: the GPU die,
+  a CPU die with a cell for each core, and memory chips that light as the
+  machine's memory fills.
+- **Beside the card**: load, memory, temperature, power (of the card's
+  limit, where it names one), the graphics clock, the fan, and the video
+  encoder and decoder, each where the card gives it. Under the card, its
+  load over the last ten minutes.
+
+The figures are the daemon's own samples, the same ones as the Control
+Strip's activity module (`GET /v1/host/monitor?detail=1`). The daemon
+reads them on Linux, and the cards through `nvidia-smi`. Another node's
+figures come through this node: its daemon asks the other one over Node
+Sync's signed link (`GET /v1/peers/<id>/monitor`). That node must run an
+exe of this release or later; the window says so when it does not. With
+**Reduce motion** on in your system, the fan and the die's cells stay
+still.
 
 ## Updating
 

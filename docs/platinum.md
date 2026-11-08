@@ -68,6 +68,18 @@ restyling: `internal/server/ui/index.html` (the desktop),
   `prefers-reduced-motion` draw one settled frame and start no timer.
   `~/tools/playwright/exe-welcome-test.js` reads the canvas back and
   compares it with the screen.
+- Live figures as bitmap art (Activity Monitor, `sysapps/activity`): every
+  picture is a canvas at whole device pixels a 2px art pixel, as above,
+  laid out for the width it gets (a CPU's tiles take the columns that fit)
+  and drawn again on each sample. A display is a dark well (`#16162e`)
+  sunk into the window by the Control Strip's two Ls, `#808080` top and
+  left, white bottom and right. A figure with a top is a meter of 2-pixel
+  segments lit from the left, green, amber past 60 percent and red past
+  85, as a level meter is; a figure whose top is no alarm (a clock) lights
+  in one colour, `#33bbdd`. A figure over time is a row or a column a
+  sample, newest at the right, coloured on a ramp from idle violet through
+  blue and green to red. The words beside the art are the page's own type,
+  never pixels drawn in the picture.
 - Where two bevels of different colours meet at a corner, the browser
   splits the corner pixel; when the original leaves that pixel as face
   colour, give each L its own box (the Control Strip's wells and tiles).
@@ -645,7 +657,10 @@ restyling: `internal/server/ui/index.html` (the desktop),
   them honour `prefers-reduced-motion`. In an app the one motion so far is Notes'
   zoom between its corkboard and a note (240ms ease-in-out: the sheet grows
   from its card's rectangle and fades in, and shrinks back into it), which
-  honours it too and leaves nothing transformed. Welcome has two: its
+  honours it too and leaves nothing transformed. Activity Monitor turns a
+  card's fan with the card's fan speed and moves its die's lit cells about,
+  ten frames a second, still under `prefers-reduced-motion` and while
+  hidden. Welcome has two: its
   pages slide (a feature's card comes in from the right as the first page
   leaves by the left, 220ms `cubic-bezier(.3, .7, .2, 1)`, and back the
   other way; Web Animations with no fill, so nothing stays transformed,

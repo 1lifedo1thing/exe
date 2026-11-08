@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Activity Monitor</title>
+<link rel="stylesheet" href="/platinum/popup.css">
+<style>
+/* Platinum values match the exe desktop (the Solana and Analytics apps'
+   block). The pop-up menu button is the shared block, linked above. */
+:root {
+  --black: #262626;
+  --g200: #eee; --g300: #ddd; --g400: #ccc; --g500: #bbb; --g600: #999; --g700: #808080; --g800: #666;
+  --hl: #333399; --lav: #ccf;
+  --font: "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Geneva, Verdana, sans-serif;
+  --lcd: #16162e;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { height: 100%; }
+body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: var(--g200);
+  user-select: none; cursor: default; overflow: hidden; display: flex; flex-direction: column; }
+
+/* the node pop-up; its 1px black bottom line is the one seam with the
+   pane, whose scroll bar has no line of its own at the top */
+#bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 10px 12px;
+  border-bottom: 1px solid var(--black); }
+#node-pop { width: 240px; min-width: 0; flex: 0 1 240px; }
+
+#pane { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: scroll; position: relative; }
+#msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 0 24px; color: #555; }
+
+.sec { padding: 12px 12px 14px; }
+.sep { height: 2px; margin: 0 12px; border-top: 1px solid var(--g600); border-bottom: 1px solid #fff; }
+.head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; min-width: 0; height: 17px; }
+.head .t { flex: none; font-weight: bold; }
+.head .sub { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; font-size: 11px; }
+.head .big { flex: none; font-weight: bold; font-variant-numeric: tabular-nums; }
+.row { display: flex; gap: 16px; align-items: flex-start; }
+.row.stack { flex-direction: column; gap: 10px; }
+.art { flex: none; line-height: 0; }
+canvas { display: block; image-rendering: pixelated; }
+.figs { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.row.stack .figs { width: 100%; }
+.fig { display: grid; grid-template-columns: 74px minmax(36px, 1fr) 106px; align-items: center;
+  column-gap: 8px; height: 18px; font-size: 11px; }
+.fig .k { color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fig .v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a dark display sunk into the window: the Control Strip's well, #808080
+   top and left, white bottom and right, each a border */
+.lcd { background: var(--lcd); line-height: 0; overflow: hidden;
+  border-top: 1px solid var(--g700); border-left: 1px solid var(--g700);
+  border-bottom: 1px solid #fff; border-right: 1px solid #fff; }
+.hist { margin-top: 12px; }
+.axis { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; font-size: 10px; line-height: 12px; color: #777; }
+.axis span { white-space: nowrap; }
+
+/* overflow: clip — the 11px text's line box is taller than the 14px face and
+   hangs a pixel past the bar; clipped, that pixel is no scrollable overflow of
+   the page (docs/platinum.md, status bar) */
+#status { flex: none; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--black);
+  background: var(--g300); font-size: 11px; color: #333; padding: 0 20px 0 8px; height: 15px;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; overflow: clip; }
+#st-left { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#st-right { flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+#grow { position: fixed; right: 0; bottom: 0; width: 15px; height: 15px; touch-action: none; z-index: 6; }
+body.mobile #grow { display: none; }
+body.mobile #status { padding-right: 8px; }
+
+/* Mac OS 9 scrollbars — the desktop's pixel-sampled spec, adapted for a
+   document window: the host frame draws the outer black line, so bars are
+   15px (1px leading separator + the sampled 14px face) with no trailing
+   border of their own — otherwise the edge doubles to 2px. */
+::-webkit-scrollbar { width: 15px; height: 15px; }
+::-webkit-scrollbar-track:vertical { border-left: 1px solid var(--black);
+  background: linear-gradient(to right, #777 0, #777 1px, #888 1px, #888 2px, #aaa 2px, #aaa 12px, #bbb 12px, #bbb 13px, #ccc 13px, #ccc 14px); }
+::-webkit-scrollbar-thumb:vertical { border: 1px solid var(--black); border-right: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="0" width="6" height="1" fill="%23ccccff"/><rect x="4" y="1" width="7" height="1" fill="%23333399"/><rect x="3" y="2" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="2" width="6" height="1" fill="%23ccccff"/><rect x="4" y="3" width="7" height="1" fill="%23333399"/><rect x="3" y="4" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="4" width="6" height="1" fill="%23ccccff"/><rect x="4" y="5" width="7" height="1" fill="%23333399"/><rect x="3" y="6" width="1" height="1" fill="%23eeeeee"/><rect x="4" y="6" width="6" height="1" fill="%23ccccff"/><rect x="4" y="7" width="7" height="1" fill="%23333399"/></svg>') center no-repeat,
+    linear-gradient(to right, #ccccff 0 1px, #9999ff 1px 13px, #6666cc 13px 14px);
+  box-shadow: inset 0 1px 0 #ccccff, inset 0 -1px 0 #6666cc; }
+::-webkit-scrollbar-thumb:vertical:active {
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="8" shape-rendering="crispEdges"><rect x="3" y="0" width="1" height="1" fill="%23ccccff"/><rect x="4" y="0" width="6" height="1" fill="%239999ff"/><rect x="4" y="1" width="7" height="1" fill="%23000066"/><rect x="3" y="2" width="1" height="1" fill="%23ccccff"/><rect x="4" y="2" width="6" height="1" fill="%239999ff"/><rect x="4" y="3" width="7" height="1" fill="%23000066"/><rect x="3" y="4" width="1" height="1" fill="%23ccccff"/><rect x="4" y="4" width="6" height="1" fill="%239999ff"/><rect x="4" y="5" width="7" height="1" fill="%23000066"/><rect x="3" y="6" width="1" height="1" fill="%23ccccff"/><rect x="4" y="6" width="6" height="1" fill="%239999ff"/><rect x="4" y="7" width="7" height="1" fill="%23000066"/></svg>') center no-repeat,
+    linear-gradient(to right, #9999ff 0 1px, #6666cc 1px 13px, #333399 13px 14px);
+  box-shadow: inset 0 1px 0 #9999ff, inset 0 -1px 0 #333399; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical {
+  border-top-color: #ccccff; box-shadow: inset 0 -1px 0 #6666cc; }
+:not(.scrolled-y)::-webkit-scrollbar-thumb:vertical:active {
+  border-top-color: #9999ff; box-shadow: inset 0 -1px 0 #333399; }
+.at-y-end::-webkit-scrollbar-thumb:vertical {
+  border-bottom-color: #6666cc; box-shadow: inset 0 1px 0 #ccccff; }
+.at-y-end::-webkit-scrollbar-thumb:vertical:active {
+  border-bottom-color: #333399; box-shadow: inset 0 1px 0 #9999ff; }
+/* Safari redraws a custom scroll bar only when its element's own style
+   changes, and the classes above change nothing of the element's own: the
+   thumb's end merges stayed stale there and doubled the line against the
+   arrows. Each class sets a property of its own, so WebKit sees a change. */
+.scrolled-y { --sb-scrolled-y: 1; } .at-y-end { --sb-at-y-end: 1; }
+.scrolled-x { --sb-scrolled-x: 1; } .at-x-end { --sb-at-x-end: 1; }
+::-webkit-scrollbar-button { display: block; width: 16px; height: 16px;
+  background: #ddd; border: 1px solid var(--black);
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #bbb;
+  background-position: center; background-repeat: no-repeat; }
+::-webkit-scrollbar-button:vertical { border-right: 0; }
+::-webkit-scrollbar-button:vertical:end:increment:enabled { height: 14px; border-top: 0; border-bottom: 0; }
+::-webkit-scrollbar-button:vertical:decrement {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M0 3h8v1h-8z"/></svg>'); }
+::-webkit-scrollbar-button:vertical:increment {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" shape-rendering="crispEdges"><path fill="black" d="M0 0h8v1h-8z M1 1h6v1h-6z M2 2h4v1h-4z M3 3h2v1h-2z"/></svg>'); }
+::-webkit-scrollbar-button:active { background-color: #777;
+  box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 #999; }
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:start:increment,
+::-webkit-scrollbar-button:horizontal:start:decrement,
+::-webkit-scrollbar-button:horizontal:start:increment { display: none; }
+::-webkit-scrollbar-corner { background: var(--g300); }
+</style>
+</head>
+<body>
+<div id="bar">
+  <label for="node">Node:</label>
+  <span class="popup" id="node-pop"><select id="node"></select><span class="well"><i><b></b></i></span></span>
+</div>
+<div id="pane">
+  <div id="view"></div>
+  <div id="msg" hidden></div>
+</div>
+<div id="status">
+  <span id="st-left">Reading…</span>
+  <span id="st-right"></span>
+</div>
+<!-- grow box sampled pixel-for-pixel from Mac OS 9 (Infinite Mac) -->
+<svg id="grow" width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges">
+  <rect width="15" height="15" fill="#ccc"/>
+  <path fill="#000" d="M0 0h15v1H0zM0 1h1v14H0z"/>
+  <path fill="#fff" d="M1 1h14v1H1zM1 2h1v13H1z"/>
+  <path fill="#fff" d="M9 4h2v1H9zM8 5h1v1H8zM7 6h1v1H7zM6 7h1v1H6zM5 8h1v1H5zM4 9h1v1H4zM11 6h2v1h-2zM10 7h1v1h-1zM9 8h1v1H9zM8 9h1v1H8zM7 10h1v1H7zM6 11h1v1H6zM13 8h2v1h-2zM12 9h1v1h-1zM11 10h1v1h-1zM10 11h1v1h-1zM9 12h1v1H9zM8 13h1v1H8z"/>
+  <path fill="#777" d="M10 5h1v1h-1zM9 6h1v1H9zM8 7h1v1H8zM7 8h1v1H7zM6 9h1v1H6zM5 10h1v1H5zM12 7h1v1h-1zM11 8h1v1h-1zM10 9h1v1h-1zM9 10h1v1H9zM8 11h1v1H8zM7 12h1v1H7zM14 9h1v1h-1zM13 10h1v1h-1zM12 11h1v1h-1zM11 12h1v1h-1zM10 13h1v1h-1zM9 14h1v1H9z"/>
+  <path fill="#aaa" d="M4 10h1v1H4zM6 12h1v1H6zM8 14h1v1H8z"/>
+</svg>
+
+<script>
+"use strict";
+// Activity Monitor: this node's CPU and graphics cards, or another
+// joined node's, drawn as pixel art every two seconds. The daemon samples
+// them (internal/hostmon, GET /v1/host/monitor?detail=1); another node's
+// come through this one (GET /v1/peers/{id}/monitor), signed as Node Sync
+// is. Every picture is bitmap art: an art pixel is 2 CSS pixels, so a
+// whole number of device pixels at any scale (docs/platinum.md, "Pixels at
+// every scale").
+const $ = s => document.querySelector(s);
+const Q = new URLSearchParams(location.search);
+const TOKEN = Q.get("token") || "";
+const MOBILE = Q.has("mobile");
+if (MOBILE) document.body.classList.add("mobile");
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)");
+const KEEP = 300; // samples, as many as the daemon keeps: ten minutes
+
+async function api(url, signal) {
+  const headers = {};
+  if (TOKEN) headers["Authorization"] = "Bearer " + TOKEN;
+  const r = await fetch(url, { headers, signal, cache: "no-store" });
+  let body = null;
+  try { body = await r.json(); } catch {}
+  if (!r.ok) {
+    const e = new Error((body && body.error) || "HTTP " + r.status);
+    e.status = r.status;
+    throw e;
+  }
+  return body;
+}
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+
+// ---- colours ----------------------------------------------------------------
+// The displays are dark wells that light up: a VU meter's green, amber
+// and red by height, and for a figure over time a ramp from idle violet
+// through blue and green to red.
+const LCD = "#16162e", UNLIT = "#2a2a52", OFF = "#0d0d1c";
+const GREEN = "#33cc66", AMBER = "#ffcc33", RED = "#ff4433";
+const GOLD = "#e8b830", GOLD_LO = "#a87a10", GOLD_HI = "#ffe08a";
+const HEAT = ["#2a2a52", "#333380", "#3d3dad", "#3366dd", "#2a9fd6", "#33cc99", "#66cc33", "#ffcc33", "#ff8833", "#ff4433"];
+const vu = f => f < 0.6 ? GREEN : f < 0.85 ? AMBER : RED;
+const heatIdx = v => v == null || v < 0 ? -1 : v < 1 ? 0 : Math.min(9, 1 + Math.floor(v / 11.12));
+const heat = v => { const i = heatIdx(v); return i < 0 ? OFF : HEAT[i]; };
+const HEAT_RGB = HEAT.map(h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+const rgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const LCD_RGB = rgb(LCD), OFF_RGB = rgb(OFF);
+const mix = (a, b, t) => "#" + rgb(a).map((x, i) => Math.round(x + (rgb(b)[i] - x) * t).toString(16).padStart(2, "0")).join("");
+
+// ---- canvases at whole device pixels -----------------------------------------
+const dpr = () => window.devicePixelRatio || 1;
+const scale = () => Math.max(1, Math.round(2 * dpr())); // device pixels an art pixel
+const artW = css => Math.max(1, Math.floor(css * dpr() / scale()));
+const cssOf = art => Math.ceil(art * scale() / dpr() * 64) / 64;
+function size(cv, aw, ah) {
+  const s = scale();
+  cv.width = aw * s;
+  cv.height = ah * s;
+  cv.style.width = cssOf(aw) + "px";
+  cv.style.height = cssOf(ah) + "px";
+  const c = cv.getContext("2d");
+  c.setTransform(s, 0, 0, s, 0, 0);
+  c.imageSmoothingEnabled = false;
+  cv.aw = aw; cv.ah = ah;
+  return c;
+}
+function R(c, x, y, w, h, col) { c.fillStyle = col; c.fillRect(x, y, w, h); }
+function box(c, x, y, w, h, line, face) { R(c, x, y, w, h, line); R(c, x + 1, y + 1, w - 2, h - 2, face); }
+
+// a meter: a row of 2-pixel segments lit from the left, as a level meter
+// by height, or in one colour where a full meter is no alarm (a clock)
+function meter(cv, frac, steady) {
+  const c = cv.getContext("2d"), aw = cv.aw, ah = cv.ah;
+  R(c, 0, 0, aw, ah, LCD);
+  const n = Math.max(1, Math.floor((aw - 1) / 3));
+  let lit = frac == null || !isFinite(frac) ? 0 : Math.round(Math.min(1, Math.max(0, frac)) * n);
+  if (frac > 0.005 && lit === 0) lit = 1;
+  for (let k = 0; k < n; k++) R(c, 1 + 3 * k, 1, 2, ah - 2, k < lit ? steady || vu(k / n) : UNLIT);
+}
+
+// ---- formats ------------------------------------------------------------------
+const GiB = 2 ** 30;
+const pct = v => v == null ? "—" : Math.round(v) + "%";
+const gb = b => { const g = b / GiB; return g < 10 ? g.toFixed(1) : String(Math.round(g)); };
+const ofGB = (u, t) => u == null ? "—" : t ? `${gb(u)} of ${gb(t)} GB` : `${gb(u)} GB`;
+const deg = v => v == null ? "—" : Math.round(v) + "°C";
+const ghz = m => (m / 1000).toFixed(1);
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+// ---- state --------------------------------------------------------------------
+const st = {
+  nodes: [],         // {id, name, self}; this node's id is ""
+  node: Q.get("node") ?? store.get("exe_activity_node") ?? "",
+  info: null, key: "", samples: [], lastT: 0, interval: 2000,
+  seq: 0, ctl: null, timer: 0, paused: false, rtt: 0,
+  state: "loading",  // loading | ok | down | old | unsupported | gone
+  powerTop: [],      // the most each card drew, for a card that names no limit
+};
+const V = { cpu: null, cards: [] }; // what build() made
+
+function nodeName(id = st.node) {
+  const n = st.nodes.find(n => n.id === id);
+  return n ? n.name : (id ? id : (st.info && st.info.host) || "This node");
+}
+
+async function loadNodes() {
+  try {
+    const r = await api("/v1/peers");
+    st.nodes = [{ id: "", name: r.self.name, self: true },
+      ...(r.peers || []).map(p => ({ id: p.id, name: p.name || p.id }))];
+  } catch {
+    st.nodes = [{ id: "", name: (st.info && st.info.host) || "This node", self: true, unnamed: !st.info }];
+  }
+  if (!st.nodes.some(n => n.id === st.node)) {
+    st.nodes.push({ id: st.node, name: st.node }); // a node no longer joined says so when asked
+  }
+  const sel = $("#node");
+  sel.textContent = "";
+  for (const n of st.nodes) sel.append(el("option", { value: n.id }, n.name));
+  sel.value = st.node;
+  announce();
+}
+
+$("#node").addEventListener("change", e => pick(e.target.value));
+function pick(id) {
+  if (id === st.node) return;
+  st.node = id;
+  store.set("exe_activity_node", id);
+  st.seq++;
+  if (st.ctl) st.ctl.abort();
+  st.samples = []; st.lastT = 0; st.powerTop = []; st.info = null; st.key = "";
+  restore();
+  setState("loading");
+  announce();
+  poll();
+}
+function announce() {
+  if (window.parent !== window) parent.postMessage({ exe: "title", title: nodeName() }, location.origin);
+}
+
+// The last layout seen of a node is kept in this browser, so a window opens
+// at the shape it will have and nothing moves when the first answer comes.
+function restore() {
+  let info = null;
+  try { info = JSON.parse(store.get("exe_activity_info:" + (st.node || "self")) || "null"); } catch {}
+  if (info) { st.info = info; st.key = layoutKey(info); build(); }
+  else { V.cpu = null; V.cards = []; $("#view").textContent = ""; }
+}
+const layoutKey = info => JSON.stringify([info.cpus, info.cpu_kinds, info.cards, info.cores]);
+
+// ---- polling ------------------------------------------------------------------
+async function poll() {
+  clearTimeout(st.timer);
+  st.timer = 0;
+  if (st.paused || document.hidden) return;
+  const seq = st.seq;
+  const url = st.node ? `/v1/peers/${encodeURIComponent(st.node)}/monitor?after=${st.lastT}`
+    : `/v1/host/monitor?detail=1&after=${st.lastT}`;
+  st.ctl = new AbortController();
+  const t0 = performance.now();
+  let r = null, err = null;
+  try { r = await api(url, st.ctl.signal); } catch (e) { err = e; }
+  if (seq !== st.seq) return; // another node was picked meanwhile
+  st.rtt = performance.now() - t0;
+  if (err) {
+    if (err.name === "AbortError") return;
+    setState(err.status === 404 ? "gone" : "down");
+  } else if (r.old) setState("old");
+  else if (!r.supported) setState("unsupported");
+  else take(r);
+  if (!st.paused) st.timer = setTimeout(poll, st.interval);
+}
+
+function take(r) {
+  st.interval = Math.max(1000, r.interval || 2000);
+  const info = r.info || {};
+  if (!info.cpus || !info.cpus.length) { // a machine whose kernel names no topology
+    info.cpus = Array.from({ length: info.cores || 1 }, (_, i) => ({ kind: 0, core: i, max_mhz: 0 }));
+    info.cpu_kinds = info.cpu_kinds || ["CPU"];
+  }
+  st.info = info;
+  const key = layoutKey(info);
+  if (key !== st.key) {
+    st.key = key;
+    store.set("exe_activity_info:" + (st.node || "self"), JSON.stringify(info));
+    build();
+  }
+  for (const s of r.samples || []) if (s.t > st.lastT) { st.samples.push(s); st.lastT = s.t; }
+  if (st.samples.length > KEEP) st.samples.splice(0, st.samples.length - KEEP);
+  const self = st.nodes.find(n => n.self);
+  if (self && self.unnamed && !st.node && info.host) { // Node Sync is off: the machine's own name
+    self.name = info.host; self.unnamed = false;
+    $("#node").options[0].textContent = info.host;
+  }
+  setState("ok");
+  render();
+}
+
+function setState(s) {
+  st.state = s;
+  const name = nodeName();
+  const say = {
+    loading: `Reading ${name}…`,
+    down: `${name} is not answering.`,
+    old: `${name} runs an older exe. Update it to see its activity here.`,
+    unsupported: `exe reads a machine's activity on Linux only, and ${name} runs another system.`,
+    gone: `${name} is no longer joined to this node.`,
+  }[s];
+  const showView = !!(s === "ok" || (s === "loading" && V.cpu));
+  const shown = !$("#view").hidden;
+  $("#view").hidden = !showView;
+  $("#msg").hidden = showView;
+  if (!showView) $("#msg").textContent = say;
+  if (showView && !shown) layout(); // measured only where it can be seen
+  if (s === "ok") {
+    const info = st.info, n = info.cpus.length, cores = new Set(info.cpus.map(c => c.core)).size;
+    const cards = (info.cards || []).length;
+    let what = cores === n ? plural(n, "core", "cores") : `${plural(cores, "core", "cores")}, ${n} threads`;
+    if (cards) what += `, ${plural(cards, "graphics card", "graphics cards")}`;
+    $("#st-left").textContent = `${name}: ${what}`;
+    $("#st-right").textContent = st.node ? `Round trip ${Math.round(st.rtt)} ms` : `Every ${Math.round(st.interval / 1000)} seconds`;
+  } else {
+    $("#st-left").textContent = say;
+    $("#st-right").textContent = "";
+  }
+}
+
+// ---- layout -------------------------------------------------------------------
+const FIGS_MIN = 250; // CSS px the figures want beside a picture
+const ROW_GAP = 16;
+
+function fig(parent, label, tip) {
+  const cv = document.createElement("canvas");
+  const v = el("span", { class: "v" }, "—");
+  const row = el("div", { class: "fig" }, el("span", { class: "k" }, label), el("div", { class: "lcd" }, cv), v);
+  if (tip) row.title = tip;
+  parent.append(row);
+  return { row, cv, v };
+}
+const STEADY = "#33bbdd";
+function setFig(f, frac, text) {
+  if (!f) return;
+  meter(f.cv, frac, f.steady);
+  f.v.textContent = text;
+}
+
+// the CPU's groups: each kind of core, the fastest first, and its cores,
+// each with its threads in the kernel's numbering
+function cpuGroups(info) {
+  const cores = new Map();
+  info.cpus.forEach((c, i) => {
+    let k = cores.get(c.core);
+    if (!k) cores.set(c.core, k = { core: c.core, kind: c.kind, threads: [], mhz: 0 });
+    k.threads.push(i);
+    k.mhz = Math.max(k.mhz, c.max_mhz || 0);
+  });
+  const groups = [];
+  for (const k of cores.values()) {
+    let g = groups.find(g => g.kind === k.kind);
+    if (!g) groups.push(g = { kind: k.kind, name: (info.cpu_kinds || [])[k.kind] || "CPU", cores: [], mhz: 0 });
+    g.cores.push(k);
+    g.mhz = Math.max(g.mhz, k.mhz);
+  }
+  groups.sort((a, b) => b.mhz - a.mhz || a.kind - b.kind);
+  const top = Math.max(1, ...groups.map(g => g.mhz));
+  for (const g of groups) {
+    g.t = Math.min(4, Math.max(...g.cores.map(k => k.threads.length)));
+    g.cw = g.t === 1 ? 3 : 2;                                  // a thread's column
+    g.segs = g.mhz ? Math.max(5, Math.round(8 * g.mhz / top)) : 8; // a slower kind is a smaller core
+    g.tw = 4 + g.t * g.cw + (g.t - 1);
+    g.th = 3 + g.segs * 2;
+  }
+  return groups;
+}
+// columns for n tiles: a grid about three times as wide as tall, with no
+// empty places if it can, within maxW art pixels
+function pickCols(n, tw, th, maxW) {
+  let best = null;
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols), w = cols * (tw + 1) - 1, h = rows * (th + 1) - 1;
+    if (w > maxW && cols > 1) break;
+    const empty = rows * cols - n;
+    const score = Math.abs(Math.log(w / h / 3)) + (empty ? 0.6 + empty / n : 0);
+    if (!best || score < best.score) best = { cols, rows, w, h, score };
+  }
+  return best;
+}
+// the package: 2 rows of pins, an outline, 3 of package round the die,
+// and inside the die an outline, a bevel and a pixel of room
+const PINS = 2, PKG = 4, DIE = 3, EDGE = PINS + PKG + DIE;
+function cpuLayout(info, maxAW) {
+  const groups = cpuGroups(info);
+  const inner = Math.max(20, maxAW - 2 * EDGE);
+  let gw = 0, gh = 0;
+  for (const g of groups) {
+    g.grid = pickCols(g.cores.length, g.tw, g.th, inner);
+    gw = Math.max(gw, g.grid.w);
+  }
+  gh = groups.reduce((h, g) => h + g.grid.h, 0) + 3 * (groups.length - 1);
+  const aw = gw + 2 * EDGE, ah = gh + 2 * EDGE;
+  const tiles = [];
+  let y = EDGE;
+  for (const g of groups) {
+    const x0 = EDGE + Math.floor((gw - g.grid.w) / 2);
+    g.cores.forEach((k, i) => {
+      const col = i % g.grid.cols, row = Math.floor(i / g.grid.cols);
+      tiles.push({ x: x0 + col * (g.tw + 1), y: y + row * (g.th + 1), w: g.tw, h: g.th, g, threads: k.threads });
+    });
+    y += g.grid.h + 3;
+  }
+  return { aw, ah, groups, tiles, die: { x: PINS + PKG, y: PINS + PKG, w: aw - 2 * (PINS + PKG), h: ah - 2 * (PINS + PKG) } };
+}
+
+const CARD_W = 118, CARD_H = 64; // the art of a graphics card, and of a package that shares the host's memory
+
+function build() {
+  const info = st.info, view = $("#view");
+  view.textContent = "";
+  // the CPU
+  const groups = cpuGroups(info);
+  const n = info.cpus.length, cores = groups.reduce((k, g) => k + g.cores.length, 0);
+  let sub;
+  if (groups.length === 1) {
+    const g = groups[0];
+    sub = g.name !== "CPU" ? `${g.name} · ` : "";
+    sub += cores === n ? plural(n, "core", "cores") : `${cores} cores, ${n} threads`;
+  } else {
+    sub = groups.map(g => `${g.cores.length} ${g.name}`).join(" + ");
+    if (cores !== n) sub += `, ${n} threads`;
+  }
+  const cpu = { sec: el("div", { class: "sec" }) };
+  cpu.big = el("span", { class: "big" }, "—");
+  cpu.sec.append(el("div", { class: "head" }, el("span", { class: "t" }, "CPU"), el("span", { class: "sub", title: sub }, sub), cpu.big));
+  cpu.art = document.createElement("canvas");
+  cpu.figs = el("div", { class: "figs" });
+  cpu.row = el("div", { class: "row" }, el("div", { class: "art" }, cpu.art), cpu.figs);
+  cpu.sec.append(cpu.row);
+  cpu.f = {
+    load: fig(cpu.figs, "Load", "All the cores together"),
+    busy: fig(cpu.figs, "Busiest", "The busiest core's thread"),
+    clock: Object.assign(fig(cpu.figs, "Clock", "The cores' average clock, of their top"), { steady: STEADY }),
+    temp: fig(cpu.figs, "Temperature", "The hottest of the CPU's sensors"),
+    mem: fig(cpu.figs, "Memory", "Memory in use, of all there is"),
+  };
+  cpu.heat = document.createElement("canvas");
+  cpu.span = el("span", {}, "");
+  cpu.sec.append(el("div", { class: "hist" }, el("div", { class: "lcd" }, cpu.heat),
+    el("div", { class: "axis" }, cpu.span, el("span", {}, `Each row a ${cores === n ? "core" : "thread"} · Now`))));
+  cpu.art.addEventListener("pointermove", e => tipCore(e));
+  view.append(cpu.sec);
+  V.cpu = cpu;
+  // each graphics card
+  V.cards = (info.cards || []).map((card, i, all) => {
+    view.append(el("div", { class: "sep" }));
+    const name = card.name;
+    const k = { i, card, unified: card.mem_total == null, sec: el("div", { class: "sec" }), shimmer: null, angle: 0, frame: 0 };
+    k.big = el("span", { class: "big" }, "—");
+    k.sec.append(el("div", { class: "head" }, el("span", { class: "t" }, all.length > 1 ? `GPU ${i + 1}` : "GPU"),
+      el("span", { class: "sub", title: name }, name), k.big));
+    k.art = document.createElement("canvas");
+    k.figs = el("div", { class: "figs" });
+    k.row = el("div", { class: "row" }, el("div", { class: "art" }, k.art), k.figs);
+    k.sec.append(k.row);
+    k.f = {
+      load: fig(k.figs, "Load", "The share of the time the GPU was at work"),
+      mem: fig(k.figs, "Memory", k.unified ? "Shared with the CPU: the machine's memory in use" : "The card's memory in use"),
+      temp: fig(k.figs, "Temperature"),
+      power: fig(k.figs, "Power", card.power_limit != null ? "What the card draws, of its limit" : "What the GPU draws"),
+      clock: Object.assign(fig(k.figs, "Clock", "The graphics clock, of its top"), { steady: STEADY }),
+    };
+    if (card.fan) k.f.fan = fig(k.figs, "Fan", "The fan's speed, of its top");
+    if (card.video) {
+      k.f.enc = fig(k.figs, "Encoder", "The video encoder at work");
+      k.f.dec = fig(k.figs, "Decoder", "The video decoder at work");
+    }
+    k.hist = document.createElement("canvas");
+    k.span = el("span", {}, "");
+    k.sec.append(el("div", { class: "hist" }, el("div", { class: "lcd" }, k.hist),
+      el("div", { class: "axis" }, k.span, el("span", {}, "Load · Now"))));
+    view.append(k.sec);
+    return k;
+  });
+  layout();
+}
+
+function sizeFigs(figs) {
+  for (const row of figs.querySelectorAll(".fig")) {
+    const cv = row.querySelector("canvas"), wrap = cv.parentElement;
+    size(cv, artW(wrap.clientWidth), 5);
+  }
+}
+
+function layout() {
+  if (!V.cpu || $("#view").hidden) return;
+  const pane = $("#pane");
+  const W = pane.clientWidth - 24;
+  const two = W >= 480;
+  const cpuMax = artW(two ? W - ROW_GAP - FIGS_MIN : W);
+  const L = cpuLayout(st.info, cpuMax);
+  V.cpu.L = L;
+  size(V.cpu.art, L.aw, L.ah);
+  // the pictures share one column, so the figures line up down the window
+  const left = Math.max(cssOf(L.aw), V.cards.length ? cssOf(CARD_W) : 0);
+  for (const s of [V.cpu, ...V.cards]) {
+    s.row.classList.toggle("stack", !two);
+    s.row.firstChild.style.width = two ? left + "px" : "";
+  }
+  for (const k of V.cards) {
+    size(k.art, CARD_W, CARD_H);
+    k.geo = null;
+  }
+  // the histories: an art pixel a sample, the newest at the right
+  const hw = artW(W - 2);
+  const rows = st.info.cpus.length, rowH = Math.max(1, Math.min(4, Math.floor(48 / rows)));
+  V.cpu.rowH = rowH;
+  size(V.cpu.heat, hw, rows * rowH);
+  for (const k of V.cards) size(k.hist, hw, 24);
+  const span = Math.round(Math.min(hw, KEEP) * st.interval / 60000);
+  for (const s of [V.cpu, ...V.cards]) s.span.textContent = span >= 1 ? `${span} min ago` : "";
+  sizeFigs(V.cpu.figs);
+  for (const k of V.cards) sizeFigs(k.figs);
+  render();
+}
+
+// ---- drawing ------------------------------------------------------------------
+function last() { return st.samples[st.samples.length - 1] || null; }
+
+function render() {
+  if (!V.cpu || !V.cpu.L) return;
+  const s = last(), info = st.info;
+  // CPU
+  drawCPU(V.cpu, s);
+  const cores = s && s.cores ? s.cores : null;
+  V.cpu.big.textContent = s ? pct(s.cpu) : "—";
+  setFig(V.cpu.f.load, s && s.cpu != null ? s.cpu / 100 : null, s ? pct(s.cpu) : "—");
+  if (cores && cores.length) {
+    let b = 0;
+    cores.forEach((v, i) => { if (v > cores[b]) b = i; });
+    setFig(V.cpu.f.busy, cores[b] / 100, `CPU ${b}: ${cores[b]}%`);
+  } else setFig(V.cpu.f.busy, null, "—");
+  if (s && s.freq && s.freq.length) {
+    let sum = 0, n = 0, top = 0;
+    s.freq.forEach((m, i) => { if (m > 0 && !(cores && cores[i] < 0)) { sum += m; n++; top += info.cpus[i] ? info.cpus[i].max_mhz : 0; } });
+    if (n) setFig(V.cpu.f.clock, top ? sum / top : null, top ? `${ghz(sum / n)} of ${ghz(top / n)} GHz` : `${ghz(sum / n)} GHz`);
+    else setFig(V.cpu.f.clock, null, "—");
+  } else setFig(V.cpu.f.clock, null, "—");
+  setFig(V.cpu.f.temp, s && s.cpu_temp != null ? (s.cpu_temp - 20) / 80 : null, s ? deg(s.cpu_temp) : "—");
+  setFig(V.cpu.f.mem, s && info.memory_total ? s.mem_used / info.memory_total : null, s ? ofGB(s.mem_used, info.memory_total) : "—");
+  drawHeat();
+  // cards
+  for (const k of V.cards) {
+    const c = s && s.cards ? s.cards[k.i] : null, ci = k.card;
+    k.big.textContent = c ? pct(c.util) : "—";
+    setFig(k.f.load, c && c.util != null ? c.util / 100 : null, c ? pct(c.util) : "—");
+    if (!c) {
+      for (const f of Object.values(k.f)) setFig(f, null, "—");
+      drawCard(k, null, s); drawHist(k);
+      continue;
+    }
+    if (k.unified) setFig(k.f.mem, s.mem != null ? s.mem / 100 : null, ofGB(s.mem_used, info.memory_total));
+    else setFig(k.f.mem, c.mem_used != null && ci.mem_total ? c.mem_used / ci.mem_total : null, ofGB(c.mem_used, ci.mem_total));
+    setFig(k.f.temp, c.temp != null ? (c.temp - 20) / 80 : null, deg(c.temp));
+    if (c.power != null) st.powerTop[k.i] = Math.max(st.powerTop[k.i] || 0, c.power);
+    const pTop = ci.power_limit || Math.max(60, (st.powerTop[k.i] || 0) * 1.25);
+    setFig(k.f.power, c.power != null ? c.power / pTop : null,
+      c.power == null ? "—" : ci.power_limit ? `${Math.round(c.power)} of ${Math.round(ci.power_limit)} W` : `${Math.round(c.power)} W`);
+    setFig(k.f.clock, c.clock != null && ci.clock_max ? c.clock / ci.clock_max : null,
+      c.clock == null ? "—" : ci.clock_max ? `${ghz(c.clock)} of ${ghz(ci.clock_max)} GHz` : `${Math.round(c.clock)} MHz`);
+    setFig(k.f.fan, c.fan != null ? c.fan / 100 : null, pct(c.fan));
+    setFig(k.f.enc, c.enc != null ? c.enc / 100 : null, pct(c.enc));
+    setFig(k.f.dec, c.dec != null ? c.dec / 100 : null, pct(c.dec));
+    drawCard(k, c, s);
+    drawHist(k);
+  }
+  animate();
+}
+
+// The CPU: a package with gold pins round it, its die tinted warmer as it
+// heats, and on the die a tile a core, each thread a VU meter.
+function drawCPU(cpu, s) {
+  const c = cpu.art.getContext("2d"), L = cpu.L, aw = L.aw, ah = L.ah;
+  c.clearRect(0, 0, aw, ah);
+  for (let x = PINS + 3; x < aw - PINS - 3; x += 2) {
+    R(c, x, 0, 1, 1, GOLD_HI); R(c, x, 1, 1, 1, GOLD);
+    R(c, x, ah - 2, 1, 1, GOLD); R(c, x, ah - 1, 1, 1, GOLD_LO);
+  }
+  for (let y = PINS + 3; y < ah - PINS - 3; y += 2) {
+    R(c, 0, y, 1, 1, GOLD_HI); R(c, 1, y, 1, 1, GOLD);
+    R(c, aw - 2, y, 1, 1, GOLD); R(c, aw - 1, y, 1, 1, GOLD_LO);
+  }
+  box(c, PINS, PINS, aw - 2 * PINS, ah - 2 * PINS, "#000", "#444");
+  R(c, PINS + 1, PINS + 1, aw - 2 * PINS - 2, 1, "#666");
+  R(c, PINS + 1, PINS + 1, 1, ah - 2 * PINS - 2, "#666");
+  R(c, PINS + 1, ah - PINS - 2, aw - 2 * PINS - 2, 1, "#2e2e2e");
+  R(c, aw - PINS - 2, PINS + 1, 1, ah - 2 * PINS - 2, "#2e2e2e");
+  R(c, PINS + 2, PINS + 2, 2, 1, GOLD); R(c, PINS + 2, PINS + 3, 1, 1, GOLD); // pin 1
+  const d = L.die;
+  const t = s && s.cpu_temp != null ? Math.min(1, Math.max(0, (s.cpu_temp - 45) / 45)) : 0;
+  box(c, d.x, d.y, d.w, d.h, "#111122", mix("#5c5cb4", "#a8506a", t));
+  R(c, d.x + 1, d.y + 1, d.w - 2, 1, mix("#9a9af4", "#f4a09a", t));
+  R(c, d.x + 1, d.y + 1, 1, d.h - 2, mix("#9a9af4", "#f4a09a", t));
+  R(c, d.x + 1, d.y + d.h - 2, d.w - 2, 1, mix("#3c3c80", "#803c4c", t));
+  R(c, d.x + d.w - 2, d.y + 1, 1, d.h - 2, mix("#3c3c80", "#803c4c", t));
+  const cores = s && s.cores;
+  for (const tile of L.tiles) {
+    const g = tile.g;
+    box(c, tile.x, tile.y, tile.w, tile.h, "#000", LCD);
+    tile.threads.forEach((cpuN, j) => {
+      const v = cores ? cores[cpuN] : null;
+      const x = tile.x + 2 + j * (g.cw + 1);
+      let lit = v == null || v < 0 ? 0 : Math.round(v / 100 * g.segs);
+      if (v >= 3 && lit === 0) lit = 1;
+      for (let i = 0; i < g.segs; i++) // i = 0 the bottom segment
+        R(c, x, tile.y + tile.h - 3 - 2 * i, g.cw, 1, i < lit ? vu(i / g.segs) : v != null && v < 0 ? OFF : UNLIT);
+    });
+  }
+}
+
+// a core's figures in the picture's tip, for the tile under the pointer
+function tipCore(e) {
+  const cpu = V.cpu;
+  if (!cpu || !cpu.L) return;
+  const r = cpu.art.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * cpu.L.aw, y = (e.clientY - r.top) / r.height * cpu.L.ah;
+  const tile = cpu.L.tiles.find(t => x >= t.x && x < t.x + t.w && y >= t.y && y < t.y + t.h);
+  const s = last();
+  let tip = "";
+  if (tile) {
+    const parts = tile.threads.map(n => {
+      const v = s && s.cores ? s.cores[n] : null;
+      return `CPU ${n}: ${v == null ? "—" : v < 0 ? "offline" : v + "%"}`;
+    });
+    const f = s && s.freq ? s.freq[tile.threads[0]] : 0;
+    tip = `${tile.g.name} · ${parts.join(", ")}${f ? ` · ${ghz(f)} GHz` : ""}`;
+  }
+  if (cpu.art.title !== tip) cpu.art.title = tip;
+}
+
+// each thread's load over the last minutes, a row each, the newest at the
+// right: drawn at the art's own size and set onto the canvas whole
+let heatCv = null;
+function drawHeat() {
+  const cv = V.cpu.heat, aw = cv.aw, ah = cv.ah, rowH = V.cpu.rowH, rows = Math.floor(ah / rowH);
+  heatCv = heatCv || document.createElement("canvas");
+  heatCv.width = aw; heatCv.height = ah;
+  const hc = heatCv.getContext("2d"), img = hc.createImageData(aw, ah), p = img.data;
+  for (let i = 0; i < aw * ah; i++) { p[4 * i] = LCD_RGB[0]; p[4 * i + 1] = LCD_RGB[1]; p[4 * i + 2] = LCD_RGB[2]; p[4 * i + 3] = 255; }
+  const n = Math.min(aw, st.samples.length);
+  for (let k = 0; k < n; k++) {
+    const s = st.samples[st.samples.length - n + k], x = aw - n + k;
+    if (!s.cores) continue;
+    for (let r = 0; r < rows; r++) {
+      const i = heatIdx(s.cores[r]), col = i < 0 ? OFF_RGB : HEAT_RGB[i];
+      for (let y = r * rowH; y < (r + 1) * rowH; y++) {
+        const o = 4 * (y * aw + x);
+        p[o] = col[0]; p[o + 1] = col[1]; p[o + 2] = col[2];
+      }
+    }
+  }
+  hc.putImageData(img, 0, 0);
+  const c = cv.getContext("2d");
+  c.drawImage(heatCv, 0, 0);
+}
+
+// a card's load over the last minutes: a column a sample, as tall as the
+// load and in its colour
+function drawHist(k) {
+  const cv = k.hist, c = cv.getContext("2d"), aw = cv.aw, ah = cv.ah;
+  R(c, 0, 0, aw, ah, LCD);
+  R(c, 0, ah - 1 - Math.round((ah - 1) / 2), aw, 1, "#1f1f40"); // the half-way line
+  const n = Math.min(aw, st.samples.length);
+  for (let j = 0; j < n; j++) {
+    const s = st.samples[st.samples.length - n + j], card = s.cards && s.cards[k.i];
+    if (!card || card.util == null) continue;
+    const h = Math.round(card.util / 100 * (ah - 1));
+    if (card.util > 0.5) R(c, aw - n + j, ah - Math.max(1, h), 1, Math.max(1, h), heat(card.util));
+  }
+}
+
+// ---- the graphics card --------------------------------------------------------
+// A board seen from above with its cooler taken off: the bracket at the
+// left, the gold fingers under it, the GPU's die in the middle with cells
+// that light as it works, its memory chips round it lit as they fill, the
+// power stages, and the blower fan, turning as fast as the card's fan.
+// A GPU that shares the host's memory (the GB10) is a package instead: its
+// GPU die, a CPU die whose cells are the cores, and the memory round them.
+const PCB = "#1f2a26", PCB_HI = "#33433c", PCB_LO = "#141c19";
+const CHIP_ON = "#77bb77", CHIP_ON_LO = "#336633", CHIP_OFF = "#3a3a3a", CHIP_OFF_LO = "#262626";
+
+function cardGeo(k) {
+  if (k.geo) return k.geo;
+  const g = { chips: [], cells: [], fan: null, cpuCells: [] };
+  if (!k.unified) {
+    // die: 8 × 8 cells on a substrate
+    g.sub = { x: 26, y: 14, w: 33, h: 33 };
+    g.die = { x: 29, y: 17, w: 27, h: 27 };
+    for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) g.cells.push({ x: 31 + 3 * i, y: 19 + 3 * j });
+    // twelve memory chips round the die, in the order they fill
+    for (let i = 0; i < 4; i++) g.chips.push({ x: 25 + 9 * i, y: 7, w: 7, h: 5 });
+    for (let i = 0; i < 2; i++) g.chips.push({ x: 62, y: 21 + 9 * i, w: 5, h: 7 });
+    for (let i = 3; i >= 0; i--) g.chips.push({ x: 25 + 9 * i, y: 49, w: 7, h: 5 });
+    for (let i = 1; i >= 0; i--) g.chips.push({ x: 18, y: 21 + 9 * i, w: 5, h: 7 });
+    g.fan = fanPixels(97, 31, 15);
+  } else {
+    g.sub = { x: 22, y: 18, w: 35, h: 29 };
+    g.die = { x: 25, y: 21, w: 29, h: 23 };
+    for (let j = 0; j < 6; j++) for (let i = 0; i < 8; i++) g.cells.push({ x: 27 + 3 * i, y: 23 + 3 * j });
+    for (let i = 0; i < 4; i++) g.chips.push({ x: 20 + 22 * i, y: 6, w: 9, h: 6 });
+    for (let i = 3; i >= 0; i--) g.chips.push({ x: 20 + 22 * i, y: 52, w: 9, h: 6 });
+    // the CPU die: a cell a core, up to twenty
+    const n = Math.min(20, new Set(st.info.cpus.map(c => c.core)).size || 1);
+    const cols = n > 10 ? Math.ceil(n / 4) : Math.ceil(n / 2), rows = Math.ceil(n / cols);
+    g.cpuDie = { x: 64 + Math.floor((26 - (cols * 3 + 3)) / 2), y: 32 - Math.floor((rows * 3 + 3) / 2), w: cols * 3 + 3, h: rows * 3 + 3 };
+    for (let i = 0; i < n; i++) g.cpuCells.push({ x: g.cpuDie.x + 2 + 3 * (i % cols), y: g.cpuDie.y + 2 + 3 * Math.floor(i / cols) });
+    g.cpuSub = { x: g.cpuDie.x - 3, y: g.cpuDie.y - 3, w: g.cpuDie.w + 6, h: g.cpuDie.h + 6 };
+  }
+  // a fixed order for lighting cells when nothing moves: a shuffle seeded
+  // by the card's place
+  let seed = 7 + 31 * k.i;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  g.order = g.cells.map((_, i) => i);
+  for (let i = g.order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [g.order[i], g.order[j]] = [g.order[j], g.order[i]]; }
+  k.geo = g;
+  return g;
+}
+
+// the fan's pixels: each inside the housing with its distance and angle
+function fanPixels(cx, cy, r) {
+  const px = [];
+  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+    const d = Math.hypot(x, y);
+    if (d <= r + 0.4) px.push({ x: cx + x, y: cy + y, d, a: Math.atan2(y, x) });
+  }
+  return { cx, cy, r, px };
+}
+
+function drawCard(k, card, s) {
+  const c = k.art.getContext("2d"), g = cardGeo(k);
+  c.clearRect(0, 0, CARD_W, CARD_H);
+  const util = card && card.util != null ? card.util : 0;
+  let memFrac = 0;
+  if (card) memFrac = k.unified ? (s.mem || 0) / 100 : k.card.mem_total ? (card.mem_used || 0) / k.card.mem_total : 0;
+  if (!k.unified) {
+    // the bracket and its screw tab
+    box(c, 0, 0, 5, CARD_H - 4, "#000", "#ccc");
+    R(c, 1, 1, 1, CARD_H - 6, "#fff"); R(c, 3, 1, 1, CARD_H - 6, "#888");
+    box(c, 0, 0, 10, 4, "#000", "#ccc"); R(c, 1, 1, 8, 1, "#fff"); R(c, 6, 1, 2, 2, "#444");
+    for (let y = 8; y < CARD_H - 10; y += 4) R(c, 2, y, 1, 2, "#555");
+    // the board
+    box(c, 5, 4, CARD_W - 5, CARD_H - 9, "#000", PCB);
+    R(c, 6, 5, CARD_W - 7, 1, PCB_HI); R(c, 6, 5, 1, CARD_H - 11, PCB_HI);
+    R(c, 6, CARD_H - 7, CARD_W - 7, 1, PCB_LO);
+    // the fingers, keyed: a short run and a long one
+    for (const [x0, w] of [[22, 12], [37, 51]]) {
+      box(c, x0, CARD_H - 5, w, 5, "#000", GOLD_LO);
+      for (let x = x0 + 1; x < x0 + w - 1; x += 2) R(c, x, CARD_H - 5, 1, 4, GOLD);
+    }
+    // the power connector at the top edge
+    box(c, 100, 0, 15, 6, "#000", "#222");
+    for (let i = 0; i < 6; i++) R(c, 102 + 2 * i, 2, 1, 2, GOLD);
+    // power stages between the memory and the fan
+    for (let j = 0; j < 6; j++) for (let i = 0; i < 2; i++) {
+      const x = 70 + 5 * i, y = 12 + 7 * j;
+      box(c, x, y, 4, 4, "#000", "#888"); R(c, x + 1, y + 1, 1, 1, "#ccc");
+    }
+    // little parts by the die
+    for (const [x, y] of [[23, 15], [60, 15], [23, 44], [60, 44], [41, 13], [43, 13]]) R(c, x, y, 2, 1, "#c8c3b8");
+  } else {
+    // the package: substrate, its edge of pads
+    box(c, 14, 2, 90, 60, "#000", PCB);
+    R(c, 15, 3, 88, 1, PCB_HI); R(c, 15, 3, 1, 58, PCB_HI); R(c, 15, 60, 88, 1, PCB_LO); R(c, 102, 3, 1, 58, PCB_LO);
+    for (let x = 18; x < 101; x += 3) { R(c, x, 3, 1, 1, GOLD_LO); R(c, x, 60, 1, 1, GOLD_LO); }
+    // the CPU die, a cell a core
+    box(c, g.cpuSub.x, g.cpuSub.y, g.cpuSub.w, g.cpuSub.h, "#000", "#3a3a3a");
+    R(c, g.cpuSub.x + 1, g.cpuSub.y + 1, g.cpuSub.w - 2, 1, "#555");
+    box(c, g.cpuDie.x, g.cpuDie.y, g.cpuDie.w, g.cpuDie.h, "#111133", LCD);
+    const per = coreLoads(s, g.cpuCells.length);
+    g.cpuCells.forEach((cell, i) => R(c, cell.x, cell.y, 2, 2, per[i] == null || per[i] < 1 ? UNLIT : heat(Math.max(34, per[i]))));
+  }
+  // the GPU's die
+  box(c, g.sub.x, g.sub.y, g.sub.w, g.sub.h, "#000", "#3a3a3a");
+  R(c, g.sub.x + 1, g.sub.y + 1, g.sub.w - 2, 1, "#555"); R(c, g.sub.x + 1, g.sub.y + 1, 1, g.sub.h - 2, "#555");
+  box(c, g.die.x, g.die.y, g.die.w, g.die.h, "#111133", LCD);
+  const lit = card ? Math.min(g.cells.length, Math.round(util / 100 * g.cells.length) || (util >= 1 ? 1 : 0)) : 0;
+  const on = new Set((k.shimmer && !REDUCED.matches ? k.shimmer : g.order).slice(0, lit));
+  const glow = heat(Math.max(34, util));
+  g.cells.forEach((cell, i) => R(c, cell.x, cell.y, 2, 2, on.has(i) ? glow : UNLIT));
+  // the memory, filling round the die
+  const chipsOn = card ? Math.min(g.chips.length, Math.round(memFrac * g.chips.length) || (memFrac > 0.005 ? 1 : 0)) : 0;
+  g.chips.forEach((ch, i) => {
+    const onC = i < chipsOn;
+    box(c, ch.x, ch.y, ch.w, ch.h, "#000", onC ? CHIP_ON : CHIP_OFF);
+    if (ch.w > ch.h) R(c, ch.x + 1, ch.y + ch.h - 2, ch.w - 2, 1, onC ? CHIP_ON_LO : CHIP_OFF_LO);
+    else R(c, ch.x + ch.w - 2, ch.y + 1, 1, ch.h - 2, onC ? CHIP_ON_LO : CHIP_OFF_LO);
+    R(c, ch.x + 1, ch.y + 1, 1, 1, onC ? "#bbeebb" : "#555");
+  });
+  if (g.fan) drawFan(c, g.fan, k.angle);
+}
+
+// the cores' loads averaged into n cells, in the kernel's numbering
+function coreLoads(s, n) {
+  const out = new Array(n).fill(null);
+  if (!s || !s.cores) return out;
+  const byCore = new Map();
+  st.info.cpus.forEach((c, i) => { const v = s.cores[i]; if (v >= 0) { const a = byCore.get(c.core) || [0, 0]; a[0] += v; a[1]++; byCore.set(c.core, a); } });
+  const loads = [...byCore.values()].map(([sum, m]) => sum / m);
+  const per = Math.max(1, loads.length / n);
+  for (let i = 0; i < n; i++) {
+    const part = loads.slice(Math.floor(i * per), Math.floor((i + 1) * per));
+    if (part.length) out[i] = part.reduce((a, b) => a + b, 0) / part.length;
+  }
+  return out;
+}
+
+function drawFan(c, f, angle) {
+  const B = 9, step = 2 * Math.PI / B;
+  for (const p of f.px) {
+    let col;
+    if (p.d > f.r - 1) col = "#000";
+    else if (p.d > f.r - 2) col = "#555";
+    else if (p.d <= 2) col = p.d < 1 ? "#444" : "#999";
+    else if (p.d <= 4) col = p.x - f.cx + p.y - f.cy < 0 ? "#aaa" : "#777";
+    else {
+      let a = (p.a - angle - (p.d - 4) * 0.07) % step;
+      if (a < 0) a += step;
+      col = a < step * 0.38 ? (a < step * 0.12 ? "#bbb" : "#8a8a8a") : "#262626";
+    }
+    R(c, p.x, p.y, 1, 1, col);
+  }
+}
+
+// ---- motion -------------------------------------------------------------------
+// Ten frames a second on a fixed clock while a card is shown: the fan turns
+// with the card's fan speed and the die's lit cells move about. It stops
+// while the window is hidden; with less motion one settled frame is drawn.
+let anim = 0;
+function animate() {
+  const want = V.cards.length && !REDUCED.matches && !st.paused && !document.hidden && st.state === "ok";
+  if (want && !anim) anim = setInterval(frame, 100);
+  if (!want && anim) { clearInterval(anim); anim = 0; }
+}
+function frame() {
+  const s = last();
+  for (const k of V.cards) {
+    const c = s && s.cards ? s.cards[k.i] : null;
+    if (!c) continue;
+    const g = cardGeo(k);
+    k.frame++;
+    if (g.fan) {
+      const speed = c.fan != null ? c.fan : 0;
+      if (speed > 0) k.angle += (0.03 + speed / 100 * 0.25);
+    }
+    // a few lit cells trade places with dark ones each frame: a twinkle
+    if (!k.shimmer) k.shimmer = g.order.slice();
+    const n = g.cells.length, lit = Math.round((c.util || 0) / 100 * n);
+    if (lit > 0 && lit < n) {
+      for (let m = Math.max(1, Math.round(Math.min(lit, n - lit) * 0.12)); m > 0; m--) {
+        const i = Math.floor(Math.random() * lit), j = lit + Math.floor(Math.random() * (n - lit));
+        [k.shimmer[i], k.shimmer[j]] = [k.shimmer[j], k.shimmer[i]];
+      }
+    }
+    drawCard(k, c, s);
+  }
+}
+REDUCED.addEventListener?.("change", () => { animate(); render(); });
+
+// ---- the window ---------------------------------------------------------------
+const pane = $("#pane");
+pane.addEventListener("scroll", () => {
+  pane.classList.toggle("scrolled-y", pane.scrollTop >= 1);
+  pane.classList.toggle("at-y-end", pane.scrollTop >= 1 && pane.scrollTop >= pane.scrollHeight - pane.clientHeight - 1);
+}, { passive: true });
+let lastW = 0, lastD = 0, relay = 0;
+new ResizeObserver(() => {
+  if (pane.clientWidth === lastW && dpr() === lastD) return;
+  lastW = pane.clientWidth; lastD = dpr();
+  cancelAnimationFrame(relay);
+  relay = requestAnimationFrame(layout);
+}).observe(pane);
+window.addEventListener("resize", () => { if (dpr() !== lastD) { lastD = dpr(); layout(); } });
+
+// the desktop bridge: focus, the grow box, hide and show
+document.addEventListener("pointerdown", () => {
+  if (window.parent !== window) parent.postMessage({ exe: "focus" }, location.origin);
+}, true);
+const grow = $("#grow");
+grow.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  grow.setPointerCapture(e.pointerId);
+  let sx = e.clientX, sy = e.clientY;
+  const move = ev => {
+    parent.postMessage({ exe: "grow", dx: ev.clientX - sx, dy: ev.clientY - sy }, location.origin);
+    sx = ev.clientX; sy = ev.clientY;
+  };
+  const up = () => {
+    grow.removeEventListener("pointermove", move);
+    grow.removeEventListener("pointerup", up);
+    grow.removeEventListener("pointercancel", up);
+    parent.postMessage({ exe: "grow-end" }, location.origin);
+  };
+  parent.postMessage({ exe: "grow-start" }, location.origin);
+  grow.addEventListener("pointermove", move);
+  grow.addEventListener("pointerup", up);
+  grow.addEventListener("pointercancel", up);
+});
+window.addEventListener("message", e => {
+  if (e.origin !== location.origin || !e.data || typeof e.data !== "object") return;
+  if (e.data.exe === "hide") { st.paused = true; clearTimeout(st.timer); st.timer = 0; animate(); }
+  else if (e.data.exe === "show") { if (st.paused) { st.paused = false; poll(); } }
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && !st.paused && !st.timer) poll();
+  animate();
+});
+
+restore();
+setState("loading");
+loadNodes();
+poll();
+</script>
+</body>
+</html>

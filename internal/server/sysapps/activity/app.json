@@ -1,0 +1,5 @@
+{
+  "title": "Activity Monitor",
+  "icon": "icon.svg",
+  "window": { "width": 620, "height": 640, "grow": true }
+}

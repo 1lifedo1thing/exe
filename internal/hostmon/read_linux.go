@@ -5,6 +5,7 @@ package hostmon
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -16,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"exe/internal/hostinfo"
@@ -27,9 +29,11 @@ const Supported = true
 func readHost() counters {
 	c := counters{at: time.Now()}
 	if f, err := os.Open("/proc/stat"); err == nil {
-		c.cpuBusy, c.cpuTotal, c.cpuOK = parseStat(f)
+		c.cpuBusy, c.cpuTotal, c.cpuOK, c.perCPU = parseStat(f)
 		f.Close()
 	}
+	topoOnce.Do(func() { topo = readTopology("/sys/devices/system/cpu", "/proc/cpuinfo") })
+	c.freq = readFreqs("/sys/devices/system/cpu", len(topo.cpus))
 	c.cpuTemp = readCPUTemp()
 	mem := hostinfo.Mem()
 	c.memTotal, c.memAvail = mem.Total, mem.Available
@@ -43,7 +47,8 @@ func readHost() counters {
 	}
 	c.gpu = readGPU()
 	host, _ := os.Hostname()
-	c.info = Info{Host: host, Cores: runtime.NumCPU(), MemoryTotal: c.memTotal, GPU: c.gpu.name, GPUs: c.gpu.names, Net: names(c.net), Disks: names(c.disk)}
+	c.info = Info{Host: host, Cores: runtime.NumCPU(), MemoryTotal: c.memTotal, GPU: c.gpu.name, GPUs: c.gpu.names, Net: names(c.net), Disks: names(c.disk),
+		CPUs: topo.cpus, CPUKinds: topo.kinds, Cards: c.gpu.detailInfo}
 	return c
 }
 
@@ -59,29 +64,180 @@ func physical(dir string) func(string) bool {
 	}
 }
 
-// parseStat reads the aggregate "cpu" line: busy is every jiffy but idle
-// and iowait; guest time is already inside user and nice.
-func parseStat(r io.Reader) (busy, total uint64, ok bool) {
+// parseStat reads the aggregate "cpu" line and each "cpuN" line after it:
+// busy is every jiffy but idle and iowait; guest time is already inside
+// user and nice. A CPU taken offline has no line.
+func parseStat(r io.Reader) (busy, total uint64, ok bool, per map[int][2]uint64) {
 	sc := bufio.NewScanner(r)
 	for sc.Scan() {
 		f := strings.Fields(sc.Text())
-		if len(f) < 5 || f[0] != "cpu" {
+		if len(f) < 5 || !strings.HasPrefix(f[0], "cpu") {
 			continue
 		}
-		var v [8]uint64
-		for i := 0; i < 8 && i+1 < len(f); i++ {
-			n, err := strconv.ParseUint(f[i+1], 10, 64)
-			if err != nil {
-				return 0, 0, false
+		b, t, good := statJiffies(f[1:])
+		if f[0] == "cpu" {
+			if !good {
+				return 0, 0, false, nil
 			}
-			v[i] = n
+			busy, total, ok = b, t, true
+			continue
 		}
-		for _, n := range v {
-			total += n
+		n, err := strconv.Atoi(f[0][3:])
+		if err != nil || n < 0 || !good {
+			continue
 		}
-		return total - v[3] - v[4], total, true
+		if per == nil {
+			per = map[int][2]uint64{}
+		}
+		per[n] = [2]uint64{b, t}
 	}
-	return 0, 0, false
+	return busy, total, ok, per
+}
+
+func statJiffies(f []string) (busy, total uint64, ok bool) {
+	var v [8]uint64
+	for i := 0; i < 8 && i < len(f); i++ {
+		n, err := strconv.ParseUint(f[i], 10, 64)
+		if err != nil {
+			return 0, 0, false
+		}
+		v[i] = n
+	}
+	for _, n := range v {
+		total += n
+	}
+	return total - v[3] - v[4], total, true
+}
+
+// topology is the machine's logical CPUs, read once: which kind of core
+// each is and which physical core it is a thread of.
+type topology struct {
+	cpus  []CPU
+	kinds []string
+}
+
+var topoOnce sync.Once
+var topo topology
+
+// readTopology numbers the logical CPUs under a sysfs cpu directory, groups
+// threads by (package, core_id) and names their kinds from cpuinfo: x86's
+// "model name", or for Arm cores the part number (Cortex-X925 and the like).
+func readTopology(sysCPU, cpuinfo string) topology {
+	dirs, _ := filepath.Glob(sysCPU + "/cpu[0-9]*")
+	ids := []int{}
+	for _, d := range dirs {
+		if n, err := strconv.Atoi(strings.TrimPrefix(filepath.Base(d), "cpu")); err == nil {
+			ids = append(ids, n)
+		}
+	}
+	if len(ids) == 0 {
+		return topology{}
+	}
+	slices.Sort(ids)
+	n := ids[len(ids)-1] + 1
+	kindOf := cpuKinds(cpuinfo)
+	var t topology
+	kindIdx := map[string]int{}
+	coreIdx := map[[2]string]int{}
+	t.cpus = make([]CPU, n)
+	for i := range n {
+		dir := sysCPU + "/cpu" + strconv.Itoa(i)
+		kind := kindOf[i]
+		if kind == "" {
+			kind = "CPU"
+		}
+		k, ok := kindIdx[kind]
+		if !ok {
+			k = len(t.kinds)
+			kindIdx[kind] = k
+			t.kinds = append(t.kinds, kind)
+		}
+		key := [2]string{readTrim(dir + "/topology/physical_package_id"), readTrim(dir + "/topology/core_id")}
+		if key[1] == "" {
+			key[1] = "cpu" + strconv.Itoa(i) // no topology: each CPU a core of its own
+		}
+		c, ok := coreIdx[key]
+		if !ok {
+			c = len(coreIdx)
+			coreIdx[key] = c
+		}
+		khz, _ := strconv.Atoi(readTrim(dir + "/cpufreq/cpuinfo_max_freq"))
+		t.cpus[i] = CPU{Kind: k, Core: c, MaxMHz: khz / 1000}
+	}
+	return t
+}
+
+// cpuKinds reads each processor's kind from /proc/cpuinfo.
+func cpuKinds(path string) map[int]string {
+	out := map[int]string{}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return out
+	}
+	cur, impl := -1, ""
+	for _, line := range strings.Split(string(b), "\n") {
+		k, v, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
+		switch k {
+		case "processor":
+			cur, _ = strconv.Atoi(v)
+			impl = ""
+		case "model name":
+			if cur >= 0 {
+				out[cur] = cleanModel(v)
+			}
+		case "CPU implementer":
+			impl = v
+		case "CPU part":
+			if cur >= 0 && out[cur] == "" {
+				if name, ok := armParts[impl+"/"+v]; ok {
+					out[cur] = name
+				} else {
+					out[cur] = "Arm core " + v
+				}
+			}
+		}
+	}
+	return out
+}
+
+// cleanModel drops the marks and the rated clock from an x86 model name:
+// "Intel(R) Xeon(R) w9-3475X" → "Intel Xeon w9-3475X".
+func cleanModel(s string) string {
+	for _, m := range []string{"(R)", "(r)", "(TM)", "(tm)", " CPU", " Processor"} {
+		s = strings.ReplaceAll(s, m, "")
+	}
+	if i := strings.Index(s, " @ "); i > 0 {
+		s = s[:i]
+	}
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// armParts names Arm's own cores by implementer 0x41 and part number.
+var armParts = map[string]string{
+	"0x41/0xd03": "Cortex-A53", "0x41/0xd05": "Cortex-A55", "0x41/0xd07": "Cortex-A57", "0x41/0xd08": "Cortex-A72",
+	"0x41/0xd09": "Cortex-A73", "0x41/0xd0a": "Cortex-A75", "0x41/0xd0b": "Cortex-A76", "0x41/0xd0c": "Neoverse-N1",
+	"0x41/0xd0d": "Cortex-A77", "0x41/0xd40": "Neoverse-V1", "0x41/0xd41": "Cortex-A78", "0x41/0xd44": "Cortex-X1",
+	"0x41/0xd46": "Cortex-A510", "0x41/0xd47": "Cortex-A710", "0x41/0xd48": "Cortex-X2", "0x41/0xd49": "Neoverse-N2",
+	"0x41/0xd4d": "Cortex-A715", "0x41/0xd4e": "Cortex-X3", "0x41/0xd4f": "Neoverse-V2", "0x41/0xd80": "Cortex-A520",
+	"0x41/0xd81": "Cortex-A720", "0x41/0xd82": "Cortex-X4", "0x41/0xd84": "Neoverse-V3", "0x41/0xd85": "Cortex-X925",
+	"0x41/0xd87": "Cortex-A725", "0x41/0xd8e": "Neoverse-N3",
+}
+
+// readFreqs is each CPU's present clock in MHz, 0 where it has none.
+func readFreqs(sysCPU string, n int) []int {
+	if n == 0 {
+		return nil
+	}
+	out := make([]int, n)
+	for i := range out {
+		khz, _ := strconv.Atoi(readTrim(sysCPU + "/cpu" + strconv.Itoa(i) + "/cpufreq/scaling_cur_freq"))
+		out[i] = khz / 1000
+	}
+	return out
 }
 
 // parseNetDev reads /proc/net/dev: received bytes are the first figure
@@ -207,19 +363,34 @@ func readTrim(path string) string {
 
 var smiOnce sync.Once
 var smiPath string
+var smiShort atomic.Bool // the driver refused the full query once: ask the four figures alone
 
-// readGPU asks nvidia-smi (about 25 ms on the GB10). A host without it, or
-// one where it hangs or fails, reports no GPU figures.
+// smiFields is what nvidia-smi is asked, in parseSMI's order: the four the
+// Control Strip shows, then the Activity Monitor's.
+const smiFields = "name,utilization.gpu,temperature.gpu,power.draw," +
+	"utilization.memory,memory.used,memory.total,power.limit,fan.speed,clocks.sm,clocks.max.sm,pstate,utilization.encoder,utilization.decoder"
+
+// readGPU asks nvidia-smi (about 35 ms on the GB10). A host without it, or
+// one where it hangs or fails, reports no GPU figures. A driver that does
+// not know one of the fields fails the whole query, so it is asked the
+// first four alone from then on.
 func readGPU() gpuReading {
 	smiOnce.Do(func() { smiPath, _ = exec.LookPath("nvidia-smi") })
 	if smiPath == "" {
 		return gpuReading{}
 	}
+	fields := smiFields
+	if smiShort.Load() {
+		fields = "name,utilization.gpu,temperature.gpu,power.draw"
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, smiPath, "--query-gpu=name,utilization.gpu,temperature.gpu,power.draw",
-		"--format=csv,noheader,nounits").Output()
+	out, err := exec.CommandContext(ctx, smiPath, "--query-gpu="+fields, "--format=csv,noheader,nounits").Output()
 	if err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && !smiShort.Load() {
+			smiShort.Store(true)
+		}
 		return gpuReading{}
 	}
 	return parseSMI(string(out))
@@ -260,6 +431,24 @@ func parseSMI(s string) gpuReading {
 		}
 		g.names = append(g.names, f[0])
 		g.cards = append(g.cards, card)
+		d := Card{Util: card.Util, Temp: card.Temp, Power: card.Power}
+		ci := CardInfo{Name: f[0]}
+		if len(f) >= 14 {
+			d.MemUtil, d.Fan, d.Clock, d.Enc, d.Dec = smiPtr(f[4]), smiPtr(f[8]), smiPtr(f[9]), smiPtr(f[12]), smiPtr(f[13])
+			if v, ok := smiNum(f[5]); ok {
+				d.MemUsed = num(v * (1 << 20)) // MiB
+			}
+			if v, ok := smiNum(f[6]); ok && v > 0 {
+				ci.MemTotal = num(v * (1 << 20))
+			}
+			if !strings.HasPrefix(f[11], "[") {
+				d.PState = f[11]
+			}
+			ci.PowerLimit, ci.ClockMax = smiPtr(f[7]), smiPtr(f[10])
+			ci.Fan, ci.Video = d.Fan != nil, d.Enc != nil || d.Dec != nil
+		}
+		g.detail = append(g.detail, d)
+		g.detailInfo = append(g.detailInfo, ci)
 	}
 	if nUtil > 0 {
 		g.util = num(util / float64(nUtil))
@@ -281,6 +470,13 @@ func parseSMI(s string) gpuReading {
 func smiNum(s string) (float64, bool) {
 	v, err := strconv.ParseFloat(s, 64)
 	return v, err == nil
+}
+
+func smiPtr(s string) *float64 {
+	if v, ok := smiNum(s); ok {
+		return num(v)
+	}
+	return nil
 }
 
 func names(m map[string][2]uint64) []string {

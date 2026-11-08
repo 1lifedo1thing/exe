@@ -1,10 +1,12 @@
 // Package hostmon samples this machine's activity — CPU, memory, GPU,
 // network and disk — every couple of seconds for the desktop's Control
-// Strip. It samples only while someone is reading: the first read starts
+// Strip, and each core and each graphics card on its own for the Activity
+// Monitor. It samples only while someone is reading: the first read starts
 // it, and it stops a while after the last one, keeping what it has.
 package hostmon
 
 import (
+	"math"
 	"sync"
 	"time"
 )
@@ -12,19 +14,25 @@ import (
 // Sample is one moment's activity. Rates are bytes a second since the
 // sample before; a figure the host cannot give is nil.
 type Sample struct {
-	T         int64    `json:"t"`         // unix milliseconds
-	CPU       *float64 `json:"cpu"`       // percent of all cores busy
-	CPUTemp   *float64 `json:"cpu_temp"`  // °C, the hottest CPU sensor
-	Mem       *float64 `json:"mem"`       // percent of memory in use (total − available)
-	MemUsed   uint64   `json:"mem_used"`  // bytes
+	T         int64    `json:"t"`              // unix milliseconds
+	CPU       *float64 `json:"cpu"`            // percent of all cores busy
+	CPUTemp   *float64 `json:"cpu_temp"`       // °C, the hottest CPU sensor
+	Mem       *float64 `json:"mem"`            // percent of memory in use (total − available)
+	MemUsed   uint64   `json:"mem_used"`       // bytes
 	GPU       *float64 `json:"gpu"`            // percent utilisation, all GPUs averaged
 	GPUTemp   *float64 `json:"gpu_temp"`       // °C, the hottest GPU
 	GPUPower  *float64 `json:"gpu_power"`      // watts, all GPUs
 	GPUs      []GPU    `json:"gpus,omitempty"` // each card, on a host with more than one
-	NetIn     *float64 `json:"net_in"`    // over physical interfaces
+	NetIn     *float64 `json:"net_in"`         // over physical interfaces
 	NetOut    *float64 `json:"net_out"`
 	DiskRead  *float64 `json:"disk_read"` // over physical disks
 	DiskWrite *float64 `json:"disk_write"`
+
+	// The detail, sent only to a reader that asks for it (ReadDetail): the
+	// Activity Monitor's, not the Control Strip's.
+	Cores []int  `json:"cores,omitempty"` // each logical CPU's percent busy, in Info.CPUs' order; -1 for one offline
+	Freq  []int  `json:"freq,omitempty"`  // each one's clock in MHz, 0 where the kernel gives none
+	Cards []Card `json:"cards,omitempty"` // each graphics card, one or more
 }
 
 // GPU is one card's figures, in nvidia-smi's order (its index).
@@ -32,6 +40,41 @@ type GPU struct {
 	Util  *float64 `json:"util"`  // percent
 	Temp  *float64 `json:"temp"`  // °C
 	Power *float64 `json:"power"` // watts
+}
+
+// Card is one graphics card's reading of the moment. A figure the card
+// does not give is nil: the GB10 shares the host's memory and reports none
+// of its own, nor a fan.
+type Card struct {
+	Util    *float64 `json:"util"`     // percent of the time the GPU was at work
+	MemUtil *float64 `json:"mem_util"` // percent of the time its memory was read or written
+	MemUsed *float64 `json:"mem_used"` // bytes
+	Temp    *float64 `json:"temp"`     // °C
+	Power   *float64 `json:"power"`    // watts
+	Fan     *float64 `json:"fan"`      // percent of the fan's top speed
+	Clock   *float64 `json:"clock"`    // MHz, the graphics clock
+	Enc     *float64 `json:"enc"`      // percent, the video encoder
+	Dec     *float64 `json:"dec"`      // percent, the video decoder
+	PState  string   `json:"pstate,omitempty"`
+}
+
+// CardInfo is what one graphics card is: its name, its fixed figures and
+// which of the changing ones it gives, so a window can be laid out before
+// its first sample.
+type CardInfo struct {
+	Name       string   `json:"name"`
+	MemTotal   *float64 `json:"mem_total"`   // bytes; nil where the card shares the host's memory
+	PowerLimit *float64 `json:"power_limit"` // watts
+	ClockMax   *float64 `json:"clock_max"`   // MHz
+	Fan        bool     `json:"fan"`         // it reports a fan's speed
+	Video      bool     `json:"video"`       // it reports its video encoder and decoder
+}
+
+// CPU is one logical CPU as the kernel numbers them.
+type CPU struct {
+	Kind   int `json:"kind"`    // index into Info.CPUKinds
+	Core   int `json:"core"`    // its physical core: threads of one core share the number
+	MaxMHz int `json:"max_mhz"` // 0 where the kernel gives none
 }
 
 // Info names what the samples cover.
@@ -43,6 +86,12 @@ type Info struct {
 	GPUs        []string `json:"gpus,omitempty"` // each card's name, on a host with more than one
 	Net         []string `json:"net"`
 	Disks       []string `json:"disks"`
+
+	// The detail (ReadDetail): each logical CPU, the kinds of core they
+	// are ("Cortex-X925", "Intel Xeon w9-3475X"), and each graphics card.
+	CPUs     []CPU      `json:"cpus,omitempty"`
+	CPUKinds []string   `json:"cpu_kinds,omitempty"`
+	Cards    []CardInfo `json:"cards,omitempty"`
 }
 
 // counters is one raw read of the host: running totals, from which two
@@ -52,6 +101,8 @@ type counters struct {
 	cpuBusy, cpuTotal  uint64
 	cpuOK              bool
 	cpuTemp            *float64
+	perCPU             map[int][2]uint64 // busy, total jiffies of each logical CPU
+	freq               []int             // MHz of each, in topology order
 	memTotal, memAvail uint64
 	net, disk          map[string][2]uint64 // in/out, read/written bytes per device
 	gpu                gpuReading
@@ -59,10 +110,12 @@ type counters struct {
 }
 
 type gpuReading struct {
-	name              string   // the cards' model, "2 × …" for two of a kind
-	names             []string // each card's, with more than one
-	util, temp, power *float64 // averaged, hottest, summed
-	cards             []GPU    // each card's, with more than one
+	name              string     // the cards' model, "2 × …" for two of a kind
+	names             []string   // each card's, with more than one
+	util, temp, power *float64   // averaged, hottest, summed
+	cards             []GPU      // each card's, with more than one
+	detail            []Card     // each card's fuller reading, one or more
+	detailInfo        []CardInfo // and what the card is
 }
 
 const (
@@ -91,7 +144,11 @@ func New() *Monitor { return &Monitor{interval: Interval, idle: idle, read: read
 // Read returns what the samples cover and every sample newer than after
 // (unix ms; 0 for all), and keeps the sampling going: a cold monitor takes
 // its first reading now, so the first sample lands one interval later.
-func (m *Monitor) Read(after int64) (Info, []Sample) {
+// The per-core and per-card detail is left out (ReadDetail).
+func (m *Monitor) Read(after int64) (Info, []Sample) { return m.ReadDetail(after, false) }
+
+// ReadDetail is Read, with each core and each card when detail is true.
+func (m *Monitor) ReadDetail(after int64, detail bool) (Info, []Sample) {
 	m.mu.Lock()
 	m.wanted = time.Now()
 	start := !m.running
@@ -109,10 +166,17 @@ func (m *Monitor) Read(after int64) (Info, []Sample) {
 	out := []Sample{}
 	for _, s := range m.ring {
 		if s.T > after {
+			if !detail {
+				s.Cores, s.Freq, s.Cards = nil, nil, nil
+			}
 			out = append(out, s)
 		}
 	}
-	return m.info, out
+	info := m.info
+	if !detail {
+		info.CPUs, info.CPUKinds, info.Cards = nil, nil, nil
+	}
+	return info, out
 }
 
 func (m *Monitor) loop() {
@@ -159,6 +223,21 @@ func between(a, b *counters, interval time.Duration) (Sample, bool) {
 	s.GPU, s.GPUTemp, s.GPUPower, s.GPUs = b.gpu.util, b.gpu.temp, b.gpu.power, b.gpu.cards
 	s.NetIn, s.NetOut = rates(a.net, b.net, dt)
 	s.DiskRead, s.DiskWrite = rates(a.disk, b.disk, dt)
+	if n := len(b.info.CPUs); n > 0 && b.perCPU != nil {
+		s.Cores = make([]int, n)
+		for i := range s.Cores {
+			s.Cores[i] = -1
+			x, okA := a.perCPU[i]
+			y, okB := b.perCPU[i]
+			if okA && okB && y[1] > x[1] && y[0] >= x[0] {
+				s.Cores[i] = int(math.Round(min(100, float64(y[0]-x[0])/float64(y[1]-x[1])*100)))
+			}
+		}
+	}
+	if len(b.freq) > 0 {
+		s.Freq = b.freq
+	}
+	s.Cards = b.gpu.detail
 	return s, true
 }
 
