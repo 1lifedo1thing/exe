@@ -81,9 +81,12 @@ canvas { display: block; image-rendering: pixelated; }
   column-gap: 8px; height: 18px; font-size: 11px; }
 .fig .k { color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fig .v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* an interface's own line over its meters: its name, and its link at the right */
-.fig.nm .k { font-weight: bold; color: var(--black); overflow: visible; }
-.fig.nm .v { color: #555; }
+/* an interface's own line over its meters: its name, its model, and its
+   link at the right; a long name pushes the model along, never over it */
+.fig.nm { grid-template-columns: minmax(74px, max-content) minmax(0, 1fr) 106px; }
+.fig.nm .k { font-weight: bold; color: var(--black); }
+.fig.nm .md, .fig.nm .v { color: #555; }
+.fig.nm .md { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .figs .fig.nm:not(:first-child) { margin-top: 6px; }
 /* a dark display sunk into the window: the Control Strip's well, #808080
    top and left, white bottom and right, each a border */
@@ -506,7 +509,7 @@ function restore() {
   else { V.cpu = null; V.cards = []; V.net = null; $("#view").textContent = ""; }
 }
 const layoutKey = info => JSON.stringify([info.cpus, info.cpu_kinds, info.cards, info.cores,
-  (info.ifaces || []).map(i => [i.name, i.wireless])]);
+  (info.ifaces || []).map(i => [i.name, i.wireless, i.model || ""])]);
 
 // ---- polling ------------------------------------------------------------------
 async function poll() {
@@ -760,7 +763,9 @@ function build() {
     const hists = el("div", {});
     for (const ifc of ifaces) {
       const f = {};
-      const nm = el("div", { class: "fig nm" }, el("span", { class: "k" }, ifc.name), el("span", {}), f.link = el("span", { class: "v" }, "—"));
+      const model = ifc.model || "";
+      const nm = el("div", { class: "fig nm" }, el("span", { class: "k" }, ifc.name),
+        el("span", { class: "md", title: model }, model), f.link = el("span", { class: "v" }, "—"));
       net.figs.append(nm);
       f.in = fig(net.figs, "Received", "Bytes a second in, on a scale of tens up to the link's speed");
       f.out = fig(net.figs, "Sent", "Bytes a second out, on a scale of tens up to the link's speed");

@@ -50,7 +50,8 @@ type NetIf struct {
 type Iface struct {
 	Name     string `json:"name"`
 	Wireless bool   `json:"wireless"`
-	Speed    int    `json:"speed"` // Mb/s while a wired link is up; 0 where the kernel gives none
+	Speed    int    `json:"speed"`           // Mb/s while a wired link is up; 0 where the kernel gives none
+	Model    string `json:"model,omitempty"` // its controller, "Intel I219-LM"; "" where the system names none
 }
 
 // GPU is one card's figures, in nvidia-smi's order (its index).

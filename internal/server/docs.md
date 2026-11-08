@@ -5251,7 +5251,8 @@ this node, or any node you joined to it (**Joining desks together**).
   and an antenna for Wi-Fi. A port whose link is up has a cable in it, its
   link lamp lit (green at a gigabit or more, amber under) and its activity
   lamp blinking with the traffic. The antenna's waves light by the signal.
-- **Beside the panel**, for each interface: its link (its speed, or
+- **Beside the panel**, for each interface: its model (the maker and chip
+  of its controller, such as Realtek RTL8127), its link (its speed, or
   **Not connected**), and what it received and sent a second, each on a
   meter that counts in tens from 1 KB/s up to the link's speed. Wi-Fi has
   its signal too. Under the panel, each interface's traffic over the last
@@ -5261,7 +5262,9 @@ The figures are the daemon's own samples, the same ones as the Control
 Strip's activity module (`GET /v1/host/monitor?detail=1`). The daemon
 reads them on Linux, the cards through `nvidia-smi`, and only the
 physical network interfaces: not loopback, bridges, VM taps or tunnels,
-so each byte counts once. On a Mac it reads them from macOS: each core,
+so each byte counts once. It names each controller from the system's
+list of PCI devices (`pci.ids`), or from its driver where the chip is
+newer than the list; a USB adapter names itself. On a Mac it reads them from macOS: each core,
 the performance cores ahead of the efficiency ones, memory as Activity
 Monitor counts it, the Apple chip's GPU and the temperatures of its CPU
 clusters and GPU. macOS keeps the clocks, the power and the Wi-Fi signal

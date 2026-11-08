@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -285,6 +286,7 @@ func readLinks(root string, names []string, signals map[string]float64) ([]Iface
 		} else if _, err := os.Stat(dir + "/phy80211"); err == nil {
 			ifc.Wireless = true
 		}
+		ifc.Model = linuxNICModel(dir)
 		state := readTrim(dir + "/operstate")
 		l := link{up: state == "up" || (state == "unknown" && readTrim(dir+"/carrier") == "1")}
 		if l.up && !ifc.Wireless {
@@ -299,6 +301,99 @@ func readLinks(root string, names []string, signals map[string]float64) ([]Iface
 		links[name] = l
 	}
 	return ifaces, links
+}
+
+// The models are kept by the device an interface sits on, as finding one
+// reads pci.ids, a megabyte and a half; a device that comes back under
+// another name keeps its model.
+var (
+	nicMu     sync.Mutex
+	nicModels = map[string]string{}
+	pciIDs    = []string{"/usr/share/misc/pci.ids", "/usr/share/hwdata/pci.ids", "/usr/share/pci.ids"}
+)
+
+func linuxNICModel(dir string) string {
+	dev, err := filepath.EvalSymlinks(dir + "/device")
+	if err != nil {
+		return ""
+	}
+	nicMu.Lock()
+	defer nicMu.Unlock()
+	m, ok := nicModels[dev]
+	if !ok {
+		m = readNICModel(dev)
+		nicModels[dev] = m
+	}
+	return m
+}
+
+// readNICModel names the device under an interface: a PCI one by its IDs
+// in pci.ids (or its driver, for a chip newer than the file), a USB one by
+// what the adapter says of itself. A SoC's own port has neither: "".
+func readNICModel(dev string) string {
+	sub, _ := filepath.EvalSymlinks(dev + "/subsystem")
+	switch filepath.Base(sub) {
+	case "pci":
+		v, err1 := strconv.ParseUint(strings.TrimPrefix(readTrim(dev+"/vendor"), "0x"), 16, 16)
+		d, err2 := strconv.ParseUint(strings.TrimPrefix(readTrim(dev+"/device"), "0x"), 16, 16)
+		if err1 != nil || err2 != nil {
+			return ""
+		}
+		var vendorName, deviceName string
+		for _, path := range pciIDs {
+			if vendorName, deviceName = pciName(path, uint16(v), uint16(d)); vendorName != "" {
+				break
+			}
+		}
+		if deviceName == "" {
+			driver, _ := filepath.EvalSymlinks(dev + "/driver")
+			deviceName = driverChip(filepath.Base(driver), uint16(v), uint16(d))
+		}
+		return nicModel(uint16(v), vendorName, deviceName)
+	case "usb":
+		// the link names the adapter's interface; the device above it
+		// carries the strings
+		up := dev
+		if _, err := os.Stat(up + "/idVendor"); err != nil {
+			up = filepath.Dir(dev)
+		}
+		return usbModel(readTrim(up+"/manufacturer"), readTrim(up+"/product"))
+	}
+	return ""
+}
+
+// pciName looks a vendor and device up in a pci.ids file: a vendor line
+// "10ec  Realtek Semiconductor Co., Ltd.", its devices under it, each
+// "\t8125  RTL8125 2.5GbE Controller". The device classes at the file's
+// end ("C 02  Network controller") are not looked in.
+func pciName(path string, vendor, device uint16) (vendorName, deviceName string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", ""
+	}
+	defer f.Close()
+	vp, dp := fmt.Sprintf("%04x  ", vendor), fmt.Sprintf("\t%04x  ", device)
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "" || line[0] == '#' {
+			continue
+		}
+		if line[0] != '\t' {
+			if vendorName != "" || strings.HasPrefix(line, "C ") {
+				break
+			}
+			if strings.HasPrefix(line, vp) {
+				vendorName = strings.TrimSpace(line[len(vp):])
+			}
+			continue
+		}
+		if vendorName != "" && strings.HasPrefix(line, dp) {
+			deviceName = strings.TrimSpace(line[len(dp):])
+			break
+		}
+	}
+	return vendorName, deviceName
 }
 
 // parseWireless reads /proc/net/wireless: after two lines of heading, a

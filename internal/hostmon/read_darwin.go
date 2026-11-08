@@ -138,6 +138,63 @@ static int gpuRead(long long *util, char *model, int modelLen) {
 	return found ? 0 : -1;
 }
 
+static int regString(io_registry_entry_t e, const char *key, char *out, int n) {
+	CFStringRef k = CFStringCreateWithCString(kCFAllocatorDefault, key, kCFStringEncodingUTF8);
+	CFTypeRef v = IORegistryEntryCreateCFProperty(e, k, kCFAllocatorDefault, 0);
+	CFRelease(k);
+	int ok = v && CFGetTypeID(v) == CFStringGetTypeID() && CFStringGetCString((CFStringRef)v, out, n, kCFStringEncodingUTF8);
+	if (v) CFRelease(v);
+	return ok;
+}
+
+// regNumber reads a number, or a PCI ID: data whose first two bytes are
+// the ID, low byte first. It is -1 where the entry has neither.
+static long long regNumber(io_registry_entry_t e, const char *key) {
+	CFStringRef k = CFStringCreateWithCString(kCFAllocatorDefault, key, kCFStringEncodingUTF8);
+	CFTypeRef v = IORegistryEntryCreateCFProperty(e, k, kCFAllocatorDefault, 0);
+	CFRelease(k);
+	long long x = -1;
+	if (v && CFGetTypeID(v) == CFNumberGetTypeID()) CFNumberGetValue((CFNumberRef)v, kCFNumberLongLongType, &x);
+	if (v && CFGetTypeID(v) == CFDataGetTypeID() && CFDataGetLength((CFDataRef)v) >= 2) {
+		const UInt8 *b = CFDataGetBytePtr((CFDataRef)v);
+		x = b[0] | b[1] << 8;
+	}
+	if (v) CFRelease(v);
+	return x;
+}
+
+// nicInfo walks up from a network interface to the device under it. On
+// the way, a driver may name its chip (IOModel "AQC113"; Broadcom's Wi-Fi
+// a ChipSet, 4378). A PCI device gives its vendor ID (bus 1); a USB one
+// its maker and product (bus 2). It returns 0 where it finds neither.
+static int nicInfo(const char *bsd, int *vendor, char *model, int n, char *maker, int mn) {
+	io_service_t s = IOServiceGetMatchingService(kIOMainPortDefault, IOBSDNameMatching(kIOMainPortDefault, 0, bsd));
+	io_registry_entry_t e = s;
+	int bus = 0;
+	long long chip = -1;
+	*vendor = 0; model[0] = maker[0] = 0;
+	for (int depth = 0; e && depth < 16 && !bus; depth++) {
+		if (!model[0]) regString(e, "IOModel", model, n);
+		if (chip < 0) chip = regNumber(e, "ChipSet");
+		if (IOObjectConformsTo(e, "IOPCIDevice")) {
+			long long v = regNumber(e, "vendor-id");
+			*vendor = v > 0 ? (int)v : 0;
+			bus = 1;
+		} else if (IOObjectConformsTo(e, "IOUSBHostDevice")) {
+			regString(e, "USB Product Name", model, n);
+			regString(e, "USB Vendor Name", maker, mn);
+			bus = 2;
+		}
+		io_registry_entry_t p = 0;
+		if (!bus && IORegistryEntryGetParentEntry(e, kIOServicePlane, &p) != KERN_SUCCESS) p = 0;
+		IOObjectRelease(e);
+		e = bus ? 0 : p;
+	}
+	if (e) IOObjectRelease(e);
+	if (bus == 1 && !model[0] && chip > 0 && *vendor == 0x14e4) snprintf(model, n, "BCM%lld", chip);
+	return bus;
+}
+
 // The chip's temperature sensors, through the HID event system: a
 // private interface of IOKit's that monitoring tools have long used, and
 // one that needs no root. An M1 names its CPU clusters' sensors "pACC MTR
@@ -309,7 +366,7 @@ func readHost() counters {
 		cs := C.CString(name)
 		up := C.linkActive(cs) == 1
 		C.free(unsafe.Pointer(cs))
-		ifc := Iface{Name: name, Wireless: p.wireless}
+		ifc := Iface{Name: name, Wireless: p.wireless, Model: darwinNICModel(name)}
 		if up && !p.wireless && p.baud >= 1e6 {
 			ifc.Speed = int(p.baud / 1e6)
 		}
@@ -350,6 +407,35 @@ func readHost() counters {
 	c.info = Info{Host: host, Cores: runtime.NumCPU(), MemoryTotal: c.memTotal, GPU: c.gpu.name, Net: names(c.net), Disks: names(c.disk),
 		CPUs: darwinTopo.cpus, CPUKinds: darwinTopo.kinds, Cards: c.gpu.detailInfo, Ifaces: ifaces}
 	return c
+}
+
+// The models are kept by interface: what sits under en0 is the machine's
+// own, and an adapter plugged in gets a name of its own.
+var (
+	nicMu     sync.Mutex
+	nicModels = map[string]string{}
+)
+
+func darwinNICModel(name string) string {
+	nicMu.Lock()
+	defer nicMu.Unlock()
+	if m, ok := nicModels[name]; ok {
+		return m
+	}
+	var vendor C.int
+	var model, maker [128]C.char
+	cs := C.CString(name)
+	bus := C.nicInfo(cs, &vendor, &model[0], C.int(len(model)), &maker[0], C.int(len(maker)))
+	C.free(unsafe.Pointer(cs))
+	m := ""
+	switch bus {
+	case 1:
+		m = nicModel(uint16(vendor), "", C.GoString(&model[0]))
+	case 2:
+		m = usbModel(C.GoString(&maker[0]), C.GoString(&model[0]))
+	}
+	nicModels[name] = m
+	return m
 }
 
 var darwinTopoOnce sync.Once

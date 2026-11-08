@@ -138,6 +138,76 @@ func TestReadLinks(t *testing.T) {
 	}
 }
 
+// A fake sysfs: a PCI port pci.ids names, one newer than the file that
+// its driver names, a USB adapter, and a SoC's own port.
+func TestNICModels(t *testing.T) {
+	root := t.TempDir()
+	mk := func(path, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(root+path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(root+path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link := func(target, path string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(root+path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(root+target, root+path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, d := range []string{"/bus/pci", "/bus/usb", "/bus/platform", "/drivers/e1000e", "/drivers/r8127"} {
+		if err := os.MkdirAll(root+d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("/pci.ids", "# a comment\n10ec  Realtek Semiconductor Co., Ltd.\n\t8125  RTL8125 2.5GbE Controller\n"+
+		"8086  Intel Corporation\n\t1a1b  Ethernet Connection (17) I219-V\n\t1a1c  Ethernet Connection (17) I219-LM\n"+
+		"\t\t1028 0a3a  Some Dell board\n9005  Adaptec\n\t1a1c  Not this one\nC 02  Network controller\n\t00  Ethernet controller\n")
+	old := pciIDs
+	pciIDs = []string{root + "/missing.ids", root + "/pci.ids"}
+	defer func() { pciIDs = old }()
+
+	pci := func(name, slot, vendor, device, driver string) {
+		dev := "/devices/pci0000:00/" + slot
+		mk(dev+"/vendor", vendor+"\n")
+		mk(dev+"/device", device+"\n")
+		link("/bus/pci", dev+"/subsystem")
+		link("/drivers/"+driver, dev+"/driver")
+		link(dev, "/class/net/"+name+"/device")
+	}
+	pci("enp0s31f6", "0000:00:1f.6", "0x8086", "0x1a1c", "e1000e")
+	pci("enP7s7", "0000:01:00.0", "0x10ec", "0x8127", "r8127")
+	usb := "/devices/usb2/2-1"
+	mk(usb+"/idVendor", "0b95\n")
+	mk(usb+"/manufacturer", "ASIX Electronics Corp.\n")
+	mk(usb+"/product", "AX88179A\n")
+	link("/bus/usb", usb+"/subsystem")
+	if err := os.MkdirAll(root+usb+"/2-1:1.0", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link("/bus/usb", usb+"/2-1:1.0/subsystem")
+	link(usb+"/2-1:1.0", "/class/net/enx001122/device")
+	mk("/devices/platform/fe300000.ethernet/uevent", "DRIVER=bcmgenet\n")
+	link("/bus/platform", "/devices/platform/fe300000.ethernet/subsystem")
+	link("/devices/platform/fe300000.ethernet", "/class/net/end0/device")
+
+	ifaces, _ := readLinks(root+"/class/net", []string{"enp0s31f6", "enP7s7", "enx001122", "end0", "lo"}, nil)
+	want := []string{"Intel I219-LM", "Realtek RTL8127", "ASIX AX88179A", "", ""}
+	for i, ifc := range ifaces {
+		if ifc.Model != want[i] {
+			t.Errorf("%s: model %q, want %q", ifc.Name, ifc.Model, want[i])
+		}
+	}
+	if v, d := pciName(root+"/pci.ids", 0x9005, 0x02); v != "Adaptec" || d != "" {
+		t.Errorf("a device pci.ids lacks: %q %q", v, d)
+	}
+}
+
 func TestParseDiskstats(t *testing.T) {
 	text := ` 259       0 nvme0n1 5000 10 80000 300 9000 20 160000 400 0 500 700 0 0 0 0 0 0
  259       1 nvme0n1p1 100 0 2000 3 0 0 0 0 0 4 3 0 0 0 0 0 0
