@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -537,13 +536,4 @@ func smiPtr(s string) *float64 {
 		return num(v)
 	}
 	return nil
-}
-
-func names(m map[string][2]uint64) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }

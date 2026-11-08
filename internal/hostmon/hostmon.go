@@ -7,6 +7,7 @@ package hostmon
 
 import (
 	"math"
+	"sort"
 	"sync"
 	"time"
 )
@@ -298,3 +299,13 @@ func rates(a, b map[string][2]uint64, dt float64) (*float64, *float64) {
 }
 
 func num(f float64) *float64 { return &f }
+
+// names is a device map's names, sorted.
+func names(m map[string][2]uint64) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}

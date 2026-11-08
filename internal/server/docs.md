@@ -502,7 +502,7 @@ CPU, memory, GPU, network and disk, a sample every two seconds.
 | --- | --- |
 | CPU | Its share of all cores, and its hottest sensor's temperature. |
 | Memory | Memory in use: the total less what the kernel says is available. |
-| GPU | Its use, temperature and power, from `nvidia-smi`. A host with more than one card has a row for each, **GPU 1**, **GPU 2** and on, in `nvidia-smi`'s order. A host without `nvidia-smi` has no GPU row. |
+| GPU | Its use, temperature and power, from `nvidia-smi`. A host with more than one card has a row for each, **GPU 1**, **GPU 2** and on, in `nvidia-smi`'s order. A host without `nvidia-smi` has no GPU row. On a Mac with an Apple chip, the chip's GPU: its use and temperature. |
 | Network | Bytes a second in and out over the physical network interfaces. |
 | Disk | Bytes a second read and written on the physical disks. |
 
@@ -514,7 +514,7 @@ the NIC.
 The daemon samples only while a desktop reads (`GET /v1/host/monitor`). The
 figures start when the strip opens and stop ten minutes after the last
 desktop folds it away or goes hidden, and the daemon keeps the last ten
-minutes. It reads Linux so far; on another system the tile stays away.
+minutes. It reads Linux and macOS; on Windows the tile stays away.
 
 ### Notifications: turn them on
 
@@ -5261,7 +5261,12 @@ The figures are the daemon's own samples, the same ones as the Control
 Strip's activity module (`GET /v1/host/monitor?detail=1`). The daemon
 reads them on Linux, the cards through `nvidia-smi`, and only the
 physical network interfaces: not loopback, bridges, VM taps or tunnels,
-so each byte counts once. Another node's
+so each byte counts once. On a Mac it reads them from macOS: each core,
+the performance cores ahead of the efficiency ones, memory as Activity
+Monitor counts it, the Apple chip's GPU and the temperatures of its CPU
+clusters and GPU. macOS keeps the clocks, the power and the Wi-Fi signal
+behind an administrator's password, so a Mac shows no figure for those.
+Another node's
 figures come through this node: its daemon asks the other one over Node
 Sync's signed link (`GET /v1/peers/<id>/monitor`). That node must run an
 exe of this release or later; the window says so when it does not. With
