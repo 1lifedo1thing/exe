@@ -809,7 +809,7 @@ function layout(again) {
     size(k.art, CARD_W, CARD_H);
     k.geo = null;
   }
-  // the histories: an art pixel a sample, the newest at the right
+  // the histories: ten minutes across, or the newest that fit at an art pixel a sample (columns())
   const hw = artW(W - 2);
   const rows = st.info.cpus.length, rowH = Math.max(1, Math.min(4, Math.floor(48 / rows)));
   V.cpu.rowH = rowH;
@@ -979,22 +979,35 @@ function drawAntenna(c, cx, on, signal, busy, frame) {
 
 // an interface's traffic over the last minutes: received rises from the
 // middle line, sent hangs from it, both on the busiest moment in view
+// The histories' time axis: the samples the daemon keeps (ten minutes),
+// or as many as fit, an art pixel each, the newest at the right. A chart
+// wider than that stretches them across it, a column or two a sample, so
+// its left edge is always the start of the span its axis names.
+function columns(aw) {
+  const slots = Math.min(aw, KEEP), per = aw / slots, n = Math.min(slots, st.samples.length), out = [];
+  for (let j = 0; j < n; j++) {
+    const slot = slots - n + j, x = Math.round(slot * per);
+    out.push({ s: st.samples[st.samples.length - n + j], x, w: Math.round((slot + 1) * per) - x });
+  }
+  return out;
+}
+
 function drawNetHist(n, i) {
   const cv = n.hist, c = cv.getContext("2d"), aw = cv.aw, ah = cv.ah, mid = Math.floor(ah / 2);
   R(c, 0, 0, aw, ah, LCD);
   R(c, 0, mid, aw, 1, "#1f1f40");
-  const cnt = Math.min(aw, st.samples.length), from = st.samples.length - cnt;
+  const shown = columns(aw);
   let top = 10000; // an idle link stays flat: the top is never under 10 KB/s
-  for (let j = from; j < st.samples.length; j++) {
-    const x = st.samples[j].nets && st.samples[j].nets[i];
+  for (const { s } of shown) {
+    const x = s.nets && s.nets[i];
     if (x) top = Math.max(top, x.in || 0, x.out || 0);
   }
-  for (let j = 0; j < cnt; j++) {
-    const x = st.samples[from + j].nets && st.samples[from + j].nets[i];
+  for (const { s, x: cx, w } of shown) {
+    const x = s.nets && s.nets[i];
     if (!x) continue;
     const up = Math.round((x.in || 0) / top * (mid - 1)), dn = Math.round((x.out || 0) / top * (ah - mid - 2));
-    if (x.in >= 1) R(c, aw - cnt + j, mid - Math.max(1, up), 1, Math.max(1, up), GREEN);
-    if (x.out >= 1) R(c, aw - cnt + j, mid + 1, 1, Math.max(1, dn), STEADY);
+    if (x.in >= 1) R(c, cx, mid - Math.max(1, up), w, Math.max(1, up), GREEN);
+    if (x.out >= 1) R(c, cx, mid + 1, w, Math.max(1, dn), STEADY);
   }
 }
 
@@ -1068,15 +1081,14 @@ function drawHeat() {
   heatCv.width = aw; heatCv.height = ah;
   const hc = heatCv.getContext("2d"), img = hc.createImageData(aw, ah), p = img.data;
   for (let i = 0; i < aw * ah; i++) { p[4 * i] = LCD_RGB[0]; p[4 * i + 1] = LCD_RGB[1]; p[4 * i + 2] = LCD_RGB[2]; p[4 * i + 3] = 255; }
-  const n = Math.min(aw, st.samples.length);
-  for (let k = 0; k < n; k++) {
-    const s = st.samples[st.samples.length - n + k], x = aw - n + k;
+  for (const { s, x, w } of columns(aw)) {
     if (!s.cores) continue;
     for (let r = 0; r < rows; r++) {
       const i = heatIdx(s.cores[r]), col = i < 0 ? OFF_RGB : HEAT_RGB[i];
       for (let y = r * rowH; y < (r + 1) * rowH; y++) {
-        const o = 4 * (y * aw + x);
-        p[o] = col[0]; p[o + 1] = col[1]; p[o + 2] = col[2];
+        for (let o = 4 * (y * aw + x), end = o + 4 * w; o < end; o += 4) {
+          p[o] = col[0]; p[o + 1] = col[1]; p[o + 2] = col[2];
+        }
       }
     }
   }
@@ -1085,18 +1097,17 @@ function drawHeat() {
   c.drawImage(heatCv, 0, 0);
 }
 
-// a card's load over the last minutes: a column a sample, as tall as the
+// a card's load over the last minutes: a sample's columns as tall as the
 // load and in its colour
 function drawHist(k) {
   const cv = k.hist, c = cv.getContext("2d"), aw = cv.aw, ah = cv.ah;
   R(c, 0, 0, aw, ah, LCD);
   R(c, 0, ah - 1 - Math.round((ah - 1) / 2), aw, 1, "#1f1f40"); // the half-way line
-  const n = Math.min(aw, st.samples.length);
-  for (let j = 0; j < n; j++) {
-    const s = st.samples[st.samples.length - n + j], card = s.cards && s.cards[k.i];
+  for (const { s, x, w } of columns(aw)) {
+    const card = s.cards && s.cards[k.i];
     if (!card || card.util == null) continue;
     const h = Math.round(card.util / 100 * (ah - 1));
-    if (card.util > 0.5) R(c, aw - n + j, ah - Math.max(1, h), 1, Math.max(1, h), heat(card.util));
+    if (card.util > 0.5) R(c, x, ah - Math.max(1, h), w, Math.max(1, h), heat(card.util));
   }
 }
 
