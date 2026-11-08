@@ -274,6 +274,12 @@ async function loadNodes() {
 
 $("#node").addEventListener("change", e => pick(e.target.value));
 function pick(id) {
+  const sel = $("#node");
+  if (st.nodes.length && !st.nodes.some(n => n.id === id)) { // a node no longer joined says so when asked
+    st.nodes.push({ id, name: id });
+    sel.append(el("option", { value: id }, id));
+  }
+  if (sel.options.length) sel.value = id;
   if (id === st.node) return;
   st.node = id;
   store.set("exe_activity_node", id);
@@ -958,6 +964,8 @@ window.addEventListener("message", e => {
   if (e.origin !== location.origin || !e.data || typeof e.data !== "object") return;
   if (e.data.exe === "hide") { st.paused = true; clearTimeout(st.timer); st.timer = 0; animate(); }
   else if (e.data.exe === "show") { if (st.paused) { st.paused = false; poll(); } }
+  // a link that names a node, for a window already open (#show=app:activity?node=<id>)
+  else if (e.data.exe === "open" && typeof e.data.node === "string") pick(e.data.node);
 });
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && !st.paused && !st.timer) poll();
