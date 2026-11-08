@@ -28,7 +28,10 @@ body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: 
   border-bottom: 1px solid var(--black); }
 #node-pop { width: 240px; min-width: 0; flex: 0 1 240px; }
 
-#pane { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: scroll; position: relative; }
+/* a scroll bar only where the figures are taller than the window: grown
+   to fit, it has none (narrower with one, the art only gets taller, so
+   the bar never comes and goes on its own) */
+#pane { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; position: relative; }
 #msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   text-align: center; padding: 0 24px; color: #555; }
 
@@ -940,15 +943,16 @@ window.addEventListener("resize", () => { if (dpr() !== lastD) { lastD = dpr(); 
 document.addEventListener("pointerdown", () => {
   if (window.parent !== window) parent.postMessage({ exe: "focus" }, location.origin);
 }, true);
+// the grow box: dx and dy are measured from where the drag began, as the
+// desk sizes the window from its size at grow-start
 const grow = $("#grow");
+if (window.parent === window) grow.style.display = "none";
 grow.addEventListener("pointerdown", e => {
   e.preventDefault();
   grow.setPointerCapture(e.pointerId);
-  let sx = e.clientX, sy = e.clientY;
-  const move = ev => {
+  const sx = e.clientX, sy = e.clientY;
+  const move = ev =>
     parent.postMessage({ exe: "grow", dx: ev.clientX - sx, dy: ev.clientY - sy }, location.origin);
-    sx = ev.clientX; sy = ev.clientY;
-  };
   const up = () => {
     grow.removeEventListener("pointermove", move);
     grow.removeEventListener("pointerup", up);
