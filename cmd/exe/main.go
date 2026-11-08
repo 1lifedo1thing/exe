@@ -261,6 +261,10 @@ func cmdServe() error {
 	// minutes, kept and drawn by RRDtool as SmokePing does.
 	go srv.RunPing(context.Background())
 
+	// The machine's activity, sampled from now on for the Control Strip and
+	// the Activity Monitor, and its history kept in ~/.exe/activity.
+	srv.RunHostMonitor()
+
 	// A push when a Claude Code or Codex turn ends in one of the desk's
 	// agent sessions; a tap opens that window (Chat runs push their own
 	// end).
@@ -466,6 +470,7 @@ func cmdServe() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		srv.DrainChatRuns(ctx, "stopped: the daemon is shutting down") // detached replies persist and end cleanly
+		srv.CloseHostMonitor()
 		if eng != nil {
 			eng.Stop()
 		}

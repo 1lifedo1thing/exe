@@ -1,13 +1,18 @@
 package server
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"exe/internal/hostmon"
@@ -17,10 +22,17 @@ import (
 // handleHostMonitor answers the Control Strip's activity module: what the
 // samples cover and every sample newer than ?after= (unix ms), the newest
 // ?limit= of them (300, ten minutes, unless asked; at most an hour's
-// 1,800), with "more" when older ones were left out. Each read keeps the
-// sampler going; with no reader for ten minutes it stops. A platform it
-// cannot read says so, and the module hides. ?detail=1 adds each core and
-// each graphics card, for the Activity Monitor.
+// 1,800), with "more" when older ones were left out. The daemon samples
+// from its start (RunHostMonitor); a monitor started by a read alone, as
+// a test server's, stops ten minutes after the last. A platform it cannot
+// read says so, and the module hides. ?detail=1 adds each core and each
+// graphics card, for the Activity Monitor.
+//
+// ?res= picks the history instead: a row a minute (60), ten minutes (600),
+// an hour (3600) or a day (86400), each the slot's averages with its peaks
+// in "peak", the slot still filling the newest; "now" is the newest sample
+// of the moment, for the figures beside the pictures. Any other res, or
+// none, is the samples (and says res 2).
 func (s *Server) handleHostMonitor(w http.ResponseWriter, r *http.Request) {
 	s.writeHostMonitor(w, r, r.URL.Query().Get("detail") == "1")
 }
@@ -37,11 +49,74 @@ func (s *Server) writeHostMonitor(w http.ResponseWriter, r *http.Request, detail
 	if n, err := strconv.Atoi(q.Get("limit")); err == nil {
 		limit = min(max(n, 1), hostmon.Keep)
 	}
-	s.hostMonOnce.Do(func() { s.hostMon = hostmon.New() })
-	info, samples, more := s.hostMon.ReadNewest(after, detail, limit)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"supported": true, "interval": hostmon.Interval.Milliseconds(), "info": info, "samples": samples, "more": more,
+	m := s.hostMonitor()
+	if res, _ := strconv.Atoi(q.Get("res")); slices.Contains(hostmon.Steps(), res) {
+		info, rows, more, now := m.ReadHistory(res, after, limit, detail)
+		writeMonitorJSON(w, r, map[string]any{
+			"supported": true, "interval": res * 1000, "res": res, "info": info, "samples": rows, "more": more, "now": now,
+		})
+		return
+	}
+	info, samples, more := m.ReadNewest(after, detail, limit)
+	writeMonitorJSON(w, r, map[string]any{
+		"supported": true, "interval": hostmon.Interval.Milliseconds(), "res": 2, "info": info, "samples": samples, "more": more,
 	})
+}
+
+// hostMonitor is the daemon's monitor; one a read starts first (a test
+// server's) keeps no history.
+func (s *Server) hostMonitor() *hostmon.Monitor {
+	s.hostMonOnce.Do(func() { s.hostMon = hostmon.New() })
+	return s.hostMon
+}
+
+// RunHostMonitor samples this machine from the daemon's start, read or
+// not, and keeps the history of it in the state directory's activity
+// folder: the Activity Monitor's minutes, hours and days.
+func (s *Server) RunHostMonitor() {
+	if !hostmon.Supported {
+		return
+	}
+	s.hostMonOnce.Do(func() {
+		m, err := hostmon.NewWithHistory(filepath.Join(s.StateDir, "activity"))
+		if err != nil {
+			log.Printf("activity history: %v — sampling without it", err)
+		}
+		s.hostMon = m
+	})
+	s.hostMon.Start()
+}
+
+// CloseHostMonitor writes what the history's slots still filling hold.
+func (s *Server) CloseHostMonitor() {
+	if s.hostMon != nil {
+		s.hostMon.Close()
+	}
+}
+
+// writeMonitorJSON writes an answer gzipped for a reader that takes it: an
+// hour of a big machine's cores, or a window of its history, is megabytes
+// of JSON that packs to a fifth.
+func writeMonitorJSON(w http.ResponseWriter, r *http.Request, v any) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSONBytes(w, r, b)
+}
+
+func writeJSONBytes(w http.ResponseWriter, r *http.Request, b []byte) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Add("Vary", "Accept-Encoding")
+	if len(b) < 1024 || !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Write(b)
+		return
+	}
+	w.Header().Set("Content-Encoding", "gzip")
+	gz, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
+	gz.Write(b)
+	gz.Close()
 }
 
 // handlePeerMonitor gives a joined node this machine's activity with its
@@ -77,6 +152,9 @@ func (s *Server) handlePeersMonitor(w http.ResponseWriter, r *http.Request) {
 	if n, err := strconv.Atoi(q.Get("limit")); err == nil {
 		path += "&limit=" + strconv.Itoa(n) // a node older than the hour gives its ten minutes whatever is asked
 	}
+	if n, err := strconv.Atoi(q.Get("res")); err == nil {
+		path += "&res=" + strconv.Itoa(n) // one older than the history answers with its samples, and no res
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	resp, err := e.Fetch(ctx, r.PathValue("id"), path)
@@ -102,6 +180,5 @@ func (s *Server) handlePeersMonitor(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, errors.New("the node's answer was cut short"))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(body)
+	writeJSONBytes(w, r, body)
 }

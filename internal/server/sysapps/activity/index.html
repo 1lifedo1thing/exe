@@ -33,11 +33,19 @@ body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: 
    mark's column, then the 16px icon's, then the name. */
 #node-wrap { width: 240px; min-width: 0; flex: 0 1 240px; height: 20px; }
 #node-wrap .well b { background-position: 4px 3px; }
-#node-wrap button { position: absolute; inset: 0; width: 100%; height: 100%; appearance: none;
+#node-wrap button, #scale-wrap button { position: absolute; inset: 0; width: 100%; height: 100%; appearance: none;
   display: flex; align-items: center; gap: 6px; background: transparent; border: 0; border-radius: 0;
   padding: 0 27px 0 6px; margin: 0; color: #000; font: 12px/17px var(--font); text-align: left; }
-#node-wrap button:focus { outline: none; }
-#node-wrap .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#node-wrap button:focus, #scale-wrap button:focus { outline: none; }
+#node-wrap .nm, #scale-wrap .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the histories' scale: the same pop-up at the bar's right end, words
+   alone, its menu the plain one (check mark, then the words) */
+#scale-label { margin-left: auto; padding-left: 6px; white-space: nowrap; }
+#scale-wrap { width: 104px; flex: none; height: 20px; }
+#scale-wrap .well b { background-position: 4px 3px; }
+#scale-menu .dd-item { position: relative; } /* the check mark's place is its row */
+/* an item that cannot be had, greyed as Mac OS greyed one */
+.dd-item.dis { color: var(--g500); }
 .hico { flex: none; width: 16px; height: 16px; }
 .hico svg, .dd-ico svg { display: block; width: 16px; height: 16px; }
 /* the icons are 32-grid art at half size; between 1x and 2x a half pixel
@@ -162,8 +170,11 @@ body.mobile #status { padding-right: 8px; }
 <div id="bar">
   <label for="node">Node:</label>
   <span class="popup" id="node-wrap"><button type="button" id="node" aria-label="Node" aria-haspopup="listbox" aria-expanded="false"><span class="hico" id="node-ico"></span><span class="nm" id="node-name">…</span></button><span class="well"><i><b></b></i></span></span>
+  <label for="scale" id="scale-label">Each pixel:</label>
+  <span class="popup" id="scale-wrap"><button type="button" id="scale" aria-label="Each pixel" aria-haspopup="listbox" aria-expanded="false"><span class="nm" id="scale-name">2 seconds</span></button><span class="well"><i><b></b></i></span></span>
 </div>
 <div class="dropdown icons" id="node-menu" role="listbox" aria-label="Node" hidden></div>
+<div class="dropdown" id="scale-menu" role="listbox" aria-label="Each pixel" hidden></div>
 <div id="pane">
   <div id="view"></div>
   <div id="msg" hidden></div>
@@ -305,6 +316,11 @@ const st = {
   node: Q.get("node") ?? store.get("exe_activity_node") ?? "",
   info: null, key: "", samples: [], lastT: 0, interval: 2000,
   more: false,       // the daemon left older samples out: a wider window asks for them
+  asked: 0,          // how many the last ask from the start was for
+  res: [2, 60, 600, 3600, 86400].includes(+store.get("exe_activity_res")) ? +store.get("exe_activity_res") : 2, // seconds a pixel
+  step: 2000,        // ms a sample of those held: 2 s, or the history's row
+  now: null,         // at a history's scale, the sample of the moment, for the figures
+  histOK: true,      // the node's exe keeps a history (it says which res it answered)
   seq: 0, ctl: null, timer: 0, paused: false, rtt: 0,
   state: "loading",  // loading | ok | down | old | unsupported | gone
   powerTop: [],      // the most each card drew, for a card that names no limit
@@ -405,6 +421,7 @@ function nodeOn(row) {
 // the menu hangs 2px under the button at its left edge, at least as wide,
 // kept inside the window
 function openNodeMenu() {
+  closeScaleMenu();
   fillNodeMenu();
   nodeMenu.hidden = false;
   const r = $("#node-wrap").getBoundingClientRect();
@@ -450,6 +467,84 @@ document.addEventListener("keydown", e => {
   e.preventDefault();
 });
 
+// The histories' scale: how long a pixel stands for. Two seconds is the
+// samples of the last hour; the others are the daemon's history, each
+// pixel a slot's average with its peak behind it.
+const SCALES = [[2, "2 seconds"], [60, "1 minute"], [600, "10 minutes"], [3600, "1 hour"], [86400, "1 day"]];
+const scaleBtn = $("#scale"), scaleMenu = $("#scale-menu");
+const shownRes = () => (st.histOK ? st.res : 2);
+function paintScale() {
+  $("#scale-name").textContent = SCALES.find(x => x[0] === shownRes())[1];
+  scaleBtn.title = st.histOK ? "" : "This node's exe keeps no history yet: a newer one keeps its minutes, hours and days";
+}
+function fillScaleMenu() {
+  scaleMenu.replaceChildren(...SCALES.map(([res, words]) => {
+    const row = document.createElement("div"), cur = res === shownRes();
+    row.className = "dd-item" + (res > 2 && !st.histOK ? " dis" : "");
+    row.setAttribute("role", "option");
+    row.setAttribute("aria-selected", cur ? "true" : "false");
+    row.dataset.res = res;
+    row.innerHTML = '<span class="dd-chk"' + (cur ? "" : " hidden") + ">" + CHECK_MARK + "</span>";
+    row.append(words);
+    return row;
+  }));
+}
+function scaleOn(row) { for (const r of scaleMenu.children) r.classList.toggle("on", r === row); }
+function openScaleMenu() {
+  closeNodeMenu();
+  fillScaleMenu();
+  scaleMenu.hidden = false;
+  const r = $("#scale-wrap").getBoundingClientRect();
+  scaleMenu.style.minWidth = r.width + "px";
+  scaleMenu.style.top = (r.bottom + 2) + "px";
+  scaleMenu.style.left = Math.max(4, Math.min(r.left, innerWidth - scaleMenu.offsetWidth - 6)) + "px";
+  scaleOn([...scaleMenu.children].find(row => row.getAttribute("aria-selected") === "true"));
+  scaleBtn.setAttribute("aria-expanded", "true");
+}
+function closeScaleMenu() {
+  if (scaleMenu.hidden) return;
+  scaleMenu.hidden = true;
+  scaleBtn.setAttribute("aria-expanded", "false");
+}
+function pickScale(res) {
+  if ((res > 2 && !st.histOK) || res === st.res) return;
+  st.res = res;
+  store.set("exe_activity_res", String(res));
+  st.seq++; // an answer at the old scale is left unread
+  if (st.ctl) st.ctl.abort();
+  st.samples = []; st.lastT = 0; st.more = false; st.now = null;
+  paintScale();
+  render();
+  poll();
+}
+scaleBtn.addEventListener("click", () => { if (scaleMenu.hidden) openScaleMenu(); else closeScaleMenu(); });
+scaleMenu.addEventListener("pointermove", e => {
+  const row = e.target.closest(".dd-item");
+  if (row && !row.classList.contains("dis") && !row.classList.contains("on")) scaleOn(row);
+});
+scaleMenu.addEventListener("click", e => {
+  const row = e.target.closest(".dd-item");
+  if (row && !row.classList.contains("dis")) { closeScaleMenu(); pickScale(+row.dataset.res); }
+});
+document.addEventListener("pointerdown", e => {
+  if (!e.target.closest("#scale-menu, #scale-wrap")) closeScaleMenu();
+}, true);
+addEventListener("blur", closeScaleMenu);
+document.addEventListener("keydown", e => {
+  if (scaleMenu.hidden) {
+    if (document.activeElement === scaleBtn && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); openScaleMenu(); }
+    return;
+  }
+  const rows = [...scaleMenu.children].filter(r => !r.classList.contains("dis")), at = rows.findIndex(r => r.classList.contains("on"));
+  if (e.key === "Escape") closeScaleMenu();
+  else if (e.key === "ArrowDown") scaleOn(rows[Math.min(rows.length - 1, at + 1)]);
+  else if (e.key === "ArrowUp") scaleOn(rows[Math.max(0, at - 1)]);
+  else if (e.key === "Enter" && at >= 0) { closeScaleMenu(); pickScale(+rows[at].dataset.res); }
+  else return;
+  e.preventDefault();
+});
+paintScale();
+
 // the nodes: this one, then each joined one with the icon it last named
 // and whether it answered Node Sync's last ping
 async function loadNodes() {
@@ -491,7 +586,8 @@ function pick(id) {
   store.set("exe_activity_node", id);
   st.seq++;
   if (st.ctl) st.ctl.abort();
-  st.samples = []; st.lastT = 0; st.powerTop = []; st.info = null; st.key = ""; st.more = false;
+  st.samples = []; st.lastT = 0; st.powerTop = []; st.info = null; st.key = ""; st.more = false; st.now = null;
+  st.histOK = true; paintScale();
   restore();
   setState("loading");
   announce();
@@ -522,10 +618,12 @@ async function poll() {
   // as many samples as the histories are wide, an art pixel each; a window
   // grown wider than what is held asks again from the start
   const want = Math.min(KEEP, artW($("#pane").clientWidth - 26));
-  const refill = st.more && st.samples.length < want;
-  const after = refill ? 0 : st.lastT;
-  const url = st.node ? `/v1/peers/${encodeURIComponent(st.node)}/monitor?after=${after}&limit=${want}`
-    : `/v1/host/monitor?detail=1&after=${after}&limit=${want}`;
+  const res = st.histOK ? st.res : 2, hist = res > 2;
+  const refill = st.more && want > st.asked; // a gap in a history holds fewer rows than were asked for: no use asking again
+  // a history's newest row is the slot still filling: asked again each time
+  const after = refill || !st.lastT ? 0 : hist ? st.lastT - 1 : st.lastT;
+  const q = `after=${after}&limit=${want}${hist ? `&res=${res}` : ""}`;
+  const url = st.node ? `/v1/peers/${encodeURIComponent(st.node)}/monitor?${q}` : `/v1/host/monitor?detail=1&${q}`;
   st.ctl = new AbortController();
   const t0 = performance.now();
   let r = null, err = null;
@@ -539,15 +637,23 @@ async function poll() {
     setState(err.status === 404 ? "gone" : "down");
   } else if (r.old) setState("old");
   else if (!r.supported) setState("unsupported");
-  else {
-    if (after === 0) { st.samples = []; st.lastT = 0; st.more = !!r.more; }
+  else if (hist && r.res !== res) { // an exe from before the history: its samples, at their own scale
+    st.histOK = false; st.samples = []; st.lastT = 0; st.more = false; st.now = null;
+    paintScale();
+    st.timer = setTimeout(poll, 0);
+    return;
+  } else {
+    if (after === 0) { st.samples = []; st.lastT = 0; st.more = !!r.more; st.asked = want; }
+    st.now = hist ? r.now || null : null;
     take(r);
   }
   if (!st.paused) st.timer = setTimeout(poll, st.interval);
 }
 
 function take(r) {
-  st.interval = Math.max(1000, r.interval || 2000);
+  const step = r.interval || 2000;
+  st.interval = r.res > 2 ? 2000 : Math.max(1000, step); // how often to ask: the figures of the moment either way
+  if (step !== st.step) { st.step = step; spanWords(); }
   const info = r.info || {};
   if (!info.cpus || !info.cpus.length) { // a machine whose kernel names no topology
     info.cpus = Array.from({ length: info.cores || 1 }, (_, i) => ({ kind: 0, core: i, max_mhz: 0 }));
@@ -560,7 +666,10 @@ function take(r) {
     store.set("exe_activity_info:" + (st.node || "self"), JSON.stringify(info));
     build();
   }
-  for (const s of r.samples || []) if (s.t > st.lastT) { st.samples.push(s); st.lastT = s.t; }
+  for (const s of r.samples || []) {
+    if (s.t > st.lastT) { st.samples.push(s); st.lastT = s.t; }
+    else if (s.t === st.lastT && st.samples.length) st.samples[st.samples.length - 1] = s; // the slot still filling, further on
+  }
   if (st.samples.length > KEEP) st.samples.splice(0, st.samples.length - KEEP);
   const self = st.nodes.find(n => n.self);
   if (self && self.unnamed && !st.node && info.host) { // Node Sync is off: the machine's own name
@@ -824,15 +933,14 @@ function layout(again) {
   V.cpu.rowH = rowH;
   size(V.cpu.heat, hw, rows * rowH);
   for (const k of V.cards) size(k.hist, hw, 24);
-  const span = Math.round(Math.min(hw, KEEP) * st.interval / 60000);
-  for (const s of [V.cpu, ...V.cards]) s.span.textContent = span >= 1 ? `${span} min ago` : "";
+  V.hw = hw;
+  spanWords();
   sizeFigs(V.cpu.figs);
   for (const k of V.cards) sizeFigs(k.figs);
   if (V.net) {
     size(V.net.art, V.net.aw, PANEL_H);
     for (const n of V.net.ifs) {
       size(n.hist, hw, 20);
-      n.span.textContent = `${n.ifc.name}${span >= 1 ? `, ${span} min ago` : ""}`;
     }
     sizeFigs(V.net.figs);
   }
@@ -847,7 +955,9 @@ function layout(again) {
 }
 
 // ---- drawing ------------------------------------------------------------------
-function last() { return st.samples[st.samples.length - 1] || null; }
+// the sample of the moment: at a history's scale the daemon sends it
+// beside the rows, which are averages
+function last() { return st.now || (st.res > 2 && st.histOK ? null : st.samples[st.samples.length - 1]) || null; }
 
 function render() {
   if (!V.cpu || !V.cpu.L) return;
@@ -991,8 +1101,28 @@ function drawAntenna(c, cx, on, signal, busy, frame) {
 // The histories' time axis: an art pixel a sample, the newest at the
 // right, each placed by its time, so a while the daemon was not sampling
 // (nobody read for ten minutes) is a gap and not two times side by side.
+// how far back a history's left edge is, in the words of its scale
+function agoWords(ms) {
+  const m = ms / 60000;
+  if (m < 1) return "";
+  if (m < 90) return `${Math.round(m)} min ago`;
+  if (m < 48 * 60) return `${Math.round(m / 60)} h ago`;
+  if (m < 730 * 1440) return `${Math.round(m / 1440)} days ago`;
+  return `${Math.round(m / 525600)} years ago`;
+}
+function spanWords() {
+  if (!V.cpu || !V.hw) return;
+  const ago = agoWords(Math.min(V.hw, KEEP) * (st.step || 2000));
+  for (const s of [V.cpu, ...V.cards]) s.span.textContent = ago;
+  if (V.net) for (const n of V.net.ifs) n.span.textContent = `${n.ifc.name}${ago ? `, ${ago}` : ""}`;
+}
+// a history row's peak stands behind its average, in the average's colour
+// darkened most of the way to the display's
+const dimmed = new Map();
+const dim = col => { if (!dimmed.has(col)) dimmed.set(col, mix(col, LCD, 0.6)); return dimmed.get(col); };
+
 function columns(aw) {
-  const out = [], n = st.samples.length, iv = st.interval || 2000;
+  const out = [], n = st.samples.length, iv = st.step || 2000;
   if (!n) return out;
   const newest = st.samples[n - 1].t;
   for (let j = n - 1; j >= 0; j--) {
@@ -1010,10 +1140,17 @@ function drawNetHist(n, i) {
   const shown = columns(aw);
   let top = 10000; // an idle link stays flat: the top is never under 10 KB/s
   for (const { s } of shown) {
-    const x = s.nets && s.nets[i];
-    if (x) top = Math.max(top, x.in || 0, x.out || 0);
+    for (const x of [s.nets && s.nets[i], s.peak && s.peak.nets && s.peak.nets[i]]) {
+      if (x) top = Math.max(top, x.in || 0, x.out || 0);
+    }
   }
   for (const { s, x: cx, w } of shown) {
+    const pk = s.peak && s.peak.nets && s.peak.nets[i];
+    if (pk) {
+      const up = Math.round((pk.in || 0) / top * (mid - 1)), dn = Math.round((pk.out || 0) / top * (ah - mid - 2));
+      if (pk.in >= 1) R(c, cx, mid - Math.max(1, up), w, Math.max(1, up), dim(GREEN));
+      if (pk.out >= 1) R(c, cx, mid + 1, w, Math.max(1, dn), dim(STEADY));
+    }
     const x = s.nets && s.nets[i];
     if (!x) continue;
     const up = Math.round((x.in || 0) / top * (mid - 1)), dn = Math.round((x.out || 0) / top * (ah - mid - 2));
@@ -1115,6 +1252,11 @@ function drawHist(k) {
   R(c, 0, 0, aw, ah, LCD);
   R(c, 0, ah - 1 - Math.round((ah - 1) / 2), aw, 1, "#1f1f40"); // the half-way line
   for (const { s, x, w } of columns(aw)) {
+    const pk = s.peak && s.peak.cards && s.peak.cards[k.i];
+    if (pk && pk.util > 0.5) {
+      const h = Math.round(pk.util / 100 * (ah - 1));
+      R(c, x, ah - Math.max(1, h), w, Math.max(1, h), dim(heat(pk.util)));
+    }
     const card = s.cards && s.cards[k.i];
     if (!card || card.util == null) continue;
     const h = Math.round(card.util / 100 * (ah - 1));

@@ -1052,6 +1052,7 @@ func (s *Server) RestartDaemon(delay time.Duration, running []string) {
 		return
 	}
 	log.Printf("restart: handing over to pid %d (autostart: %s)", cmd.Process.Pid, strings.Join(running, ","))
+	s.CloseHostMonitor()
 	os.Exit(0)
 }
 

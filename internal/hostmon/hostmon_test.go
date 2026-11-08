@@ -136,3 +136,34 @@ func TestReadNewest(t *testing.T) {
 		t.Errorf("a limit over the ring: %d, more %v", len(s), more)
 	}
 }
+
+// A started monitor samples unread and keeps each sample's figures in its
+// history, read back as the slot still filling.
+func TestMonitorKeepsHistory(t *testing.T) {
+	hist, err := OpenHistory(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &fakeHost{at: time.Now()}
+	m := &Monitor{interval: 20 * time.Millisecond, idle: 50 * time.Millisecond, read: h.read, hist: hist}
+	m.Start()
+	time.Sleep(300 * time.Millisecond) // past idle: a started monitor goes on
+	_, rows, _, now := m.ReadHistory(60, 0, 10, true)
+	if len(rows) == 0 || rows[len(rows)-1].N < 3 || now == nil {
+		t.Fatalf("history: %d rows, now %v", len(rows), now)
+	}
+	r := rows[len(rows)-1]
+	if !near(r.CPU, 25) || len(r.Cores) != 2 || r.Cores[1] != 90 || r.Peak == nil || !near(r.Peak.CPU, 25) || len(r.Nets) != 1 {
+		t.Fatalf("the minute: %+v", r)
+	}
+	if _, plain, _, _ := m.ReadHistory(60, 0, 10, false); plain[0].Cores != nil || plain[0].Peak.Cores != nil {
+		t.Error("detail in a plain history read")
+	}
+	m.mu.Lock()
+	running := m.running
+	m.mu.Unlock()
+	if !running {
+		t.Error("a started monitor stopped with nobody reading")
+	}
+	m.Close()
+}

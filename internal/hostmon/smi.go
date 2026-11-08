@@ -3,6 +3,7 @@
 package hostmon
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"os/exec"
@@ -26,18 +27,32 @@ var smiShort atomic.Bool // the driver refused the full query once: ask the four
 const smiFields = "name,utilization.gpu,temperature.gpu,power.draw," +
 	"utilization.memory,memory.used,memory.total,power.limit,fan.speed,clocks.sm,clocks.max.sm,pstate,utilization.encoder,utilization.decoder"
 
-// readGPU asks nvidia-smi (about 35 ms on the GB10). A host without it, or
-// one where it hangs or fails, reports no GPU figures. A driver that does
-// not know one of the fields fails the whole query, so it is asked the
-// first four alone from then on.
+const smiShortFields = "name,utilization.gpu,temperature.gpu,power.draw"
+
+// readGPU gives the cards' newest figures. nvidia-smi is started once and
+// kept going, printing a line a card every two seconds (-lms 2000): started
+// for each reading it cost about 39 ms of CPU on the GB10, mostly its
+// library starting, and kept going about 7 ms a line. Until its first
+// lines come, and while it is not running, a reading asks it once, as
+// before. A host without it reports no GPU figures.
 func readGPU() gpuReading {
 	smiOnce.Do(func() { smiPath, _ = exec.LookPath("nvidia-smi") })
 	if smiPath == "" {
 		return gpuReading{}
 	}
+	if g, ok := smiLoop.read(); ok {
+		return g
+	}
+	return readGPUOnce()
+}
+
+// readGPUOnce asks nvidia-smi once. A driver that does not know one of the
+// fields fails the whole query, so it is asked the first four alone from
+// then on.
+func readGPUOnce() gpuReading {
 	fields := smiFields
 	if smiShort.Load() {
-		fields = "name,utilization.gpu,temperature.gpu,power.draw"
+		fields = smiShortFields
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
@@ -52,6 +67,96 @@ func readGPU() gpuReading {
 		return gpuReading{}
 	}
 	return parseSMI(string(out))
+}
+
+// smiLoop is the nvidia-smi kept going: each card's newest line, by its
+// index. A line older than six seconds is a card that stopped answering.
+var smiLoop loopReader
+
+type loopReader struct {
+	mu      sync.Mutex
+	lines   map[int]smiLine
+	running bool
+	next    time.Time // when it may be started again, after it ended
+}
+
+type smiLine struct {
+	text string
+	at   time.Time
+}
+
+func (l *loopReader) read() (gpuReading, bool) {
+	l.mu.Lock()
+	if !l.running && !time.Now().Before(l.next) {
+		l.start()
+	}
+	var idx []int
+	for i, ln := range l.lines {
+		if time.Since(ln.at) < 6*time.Second {
+			idx = append(idx, i)
+		}
+	}
+	slices.Sort(idx)
+	var b strings.Builder
+	for _, i := range idx {
+		b.WriteString(l.lines[i].text)
+		b.WriteByte('\n')
+	}
+	l.mu.Unlock()
+	if len(idx) == 0 {
+		return gpuReading{}, false
+	}
+	return parseSMI(b.String()), true
+}
+
+// start runs nvidia-smi in its loop, with l.mu held. It ends with the
+// daemon: the pipe it writes to closes, and its next line kills it. One
+// that ends with no line at all refused a field, and is started again
+// with the four alone; one that ran a while is started again in half a
+// minute.
+func (l *loopReader) start() {
+	fields := smiFields
+	if smiShort.Load() {
+		fields = smiShortFields
+	}
+	cmd := exec.Command(smiPath, "--query-gpu=index,"+fields, "--format=csv,noheader,nounits", "-lms", "2000")
+	quiet(cmd)
+	out, err := cmd.StdoutPipe()
+	if err == nil {
+		err = cmd.Start()
+	}
+	if err != nil {
+		l.next = time.Now().Add(time.Minute)
+		return
+	}
+	l.running = true
+	go func() {
+		got := false
+		sc := bufio.NewScanner(out)
+		for sc.Scan() {
+			i, rest, ok := strings.Cut(sc.Text(), ",")
+			n, err := strconv.Atoi(strings.TrimSpace(i))
+			if !ok || err != nil {
+				continue
+			}
+			l.mu.Lock()
+			if l.lines == nil {
+				l.lines = map[int]smiLine{}
+			}
+			l.lines[n] = smiLine{text: strings.TrimSpace(rest), at: time.Now()}
+			l.mu.Unlock()
+			got = true
+		}
+		cmd.Wait()
+		l.mu.Lock()
+		l.running = false
+		if !got && !smiShort.Load() {
+			smiShort.Store(true)
+		} else {
+			l.next = time.Now().Add(30 * time.Second)
+		}
+		l.mu.Unlock()
+	}()
 }
 
 // parseSMI reads one "name, util, temp, power" line per GPU: utilisation

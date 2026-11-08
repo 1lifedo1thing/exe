@@ -1,7 +1,9 @@
 package server
 
 import (
+	"compress/gzip"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -104,5 +106,61 @@ func TestPeersCarryTheirIcon(t *testing.T) {
 	// kept on disk: an offline node keeps its icon after a restart
 	if p := a.eng.ListPeers()[0]; p.Icon != "test-icon" {
 		t.Fatalf("stored peer: %+v", p)
+	}
+}
+
+// ?res= reads the history: a test server's monitor keeps none, but says
+// which step it answered, through the relay too.
+func TestHostMonitorHistoryRoute(t *testing.T) {
+	a, b := newTestNode(t), newTestNode(t)
+	pairNodes(t, a, b)
+	for _, url := range []string{a.ts.URL + "/v1/host/monitor?detail=1&res=600", a.ts.URL + "/v1/peers/" + b.eng.SelfID() + "/monitor?res=600&limit=3"} {
+		resp, err := http.Get(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got map[string]any
+		json.NewDecoder(resp.Body).Decode(&got)
+		resp.Body.Close()
+		if !hostmon.Supported {
+			continue
+		}
+		if got["res"] != float64(600) || got["interval"] != float64(600000) {
+			t.Fatalf("%s: %v", url, got)
+		}
+	}
+	// no res, or one the history does not keep: the samples
+	resp, _ := http.Get(a.ts.URL + "/v1/host/monitor?res=5")
+	var got map[string]any
+	json.NewDecoder(resp.Body).Decode(&got)
+	resp.Body.Close()
+	if hostmon.Supported && got["res"] != float64(2) {
+		t.Fatalf("res=5: %v", got)
+	}
+}
+
+func TestMonitorAnswerGzipped(t *testing.T) {
+	big := make([]int, 2000)
+	for _, enc := range []string{"gzip, deflate", ""} {
+		r := httptest.NewRequest("GET", "/v1/host/monitor", nil)
+		r.Header.Set("Accept-Encoding", enc)
+		w := httptest.NewRecorder()
+		writeMonitorJSON(w, r, map[string]any{"samples": big})
+		gzipped := w.Header().Get("Content-Encoding") == "gzip"
+		if gzipped != (enc != "") {
+			t.Fatalf("Accept-Encoding %q: Content-Encoding %q", enc, w.Header().Get("Content-Encoding"))
+		}
+		body := io.Reader(w.Body)
+		if gzipped {
+			zr, err := gzip.NewReader(w.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body = zr
+		}
+		var got struct{ Samples []int }
+		if err := json.NewDecoder(body).Decode(&got); err != nil || len(got.Samples) != 2000 {
+			t.Fatalf("Accept-Encoding %q: %v, %d", enc, err, len(got.Samples))
+		}
 	}
 }

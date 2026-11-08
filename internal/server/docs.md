@@ -511,11 +511,10 @@ in view, with two-way rates stacked. Counting only physical interfaces and
 disks counts every byte once: a VM's traffic crosses its tap, the bridge and
 the NIC.
 
-The daemon samples only while a desktop reads (`GET /v1/host/monitor`). The
-figures start when the strip opens and stop ten minutes after the last
-desktop folds it away or goes hidden, and the daemon keeps the last hour.
-It reads Linux, macOS and Windows; on any other system the tile
-stays away.
+The daemon samples every two seconds from the moment it starts, whether a
+desktop reads or not (`GET /v1/host/monitor`), and keeps the last hour of
+samples; the Activity Monitor's history is made from them. It reads Linux,
+macOS and Windows; on any other system the tile stays away.
 
 ### Notifications: turn them on
 
@@ -5259,10 +5258,26 @@ this node, or any node you joined to it (**Joining desks together**).
   its signal too. Under the panel, each interface's traffic over the last
   minutes: received above the line, sent below it.
 
-The histories under the pictures are pixel art too: two seconds a pixel,
-so a wider window shows further back, up to the hour the daemon keeps.
-The daemon samples only while someone reads, so a time when nobody did
-is a gap in them.
+The histories under the pictures are pixel art too. **Each pixel** at the
+top right says how long a pixel stands for:
+
+- **2 seconds**: each sample of the last hour, so a wider window shows
+  further back, up to the hour.
+- **1 minute**, **10 minutes**, **1 hour** and **1 day**: the daemon's
+  history, each pixel the average of the samples in that minute, hour or
+  day. Behind it, in a darker shade of its colour, is their peak, so a
+  burst still shows in an hour that was mostly idle. The CPU's rows show
+  averages only.
+
+The daemon keeps a minute a row for a week, ten minutes for 90 days, an
+hour for two years, and a day for good, in `~/.exe/activity`: files that
+never grow but the days', which grows a row a day (a few megabytes in
+all, over twenty for a machine of 72 threads and two cards). A time the
+daemon did not run is a gap. A node on an exe from before the history
+shows its last hour only, and its other scales are grey.
+
+The cards' figures come from `nvidia-smi`, kept running and read every
+two seconds.
 
 The figures are the daemon's own samples, the same ones as the Control
 Strip's activity module (`GET /v1/host/monitor?detail=1`). The daemon

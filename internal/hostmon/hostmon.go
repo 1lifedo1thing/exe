@@ -35,6 +35,11 @@ type Sample struct {
 	Freq  []int   `json:"freq,omitempty"`  // each one's clock in MHz, 0 where the kernel gives none
 	Cards []Card  `json:"cards,omitempty"` // each graphics card, one or more
 	Nets  []NetIf `json:"nets,omitempty"`  // each physical network interface, in Info.Ifaces' order
+
+	// A history row (ReadHistory) is a slot's averages: N is how many
+	// samples it holds, Peak their highest figures, laid out the same.
+	N    int     `json:"n,omitempty"`
+	Peak *Sample `json:"peak,omitempty"`
 }
 
 // NetIf is one network interface's moment: bytes a second each way since
@@ -161,6 +166,7 @@ type Monitor struct {
 	interval time.Duration
 	idle     time.Duration
 	read     func() counters
+	hist     *History // the averages kept on disk; nil for none
 
 	mu      sync.Mutex
 	ring    []Sample
@@ -168,10 +174,31 @@ type Monitor struct {
 	info    Info
 	wanted  time.Time
 	running bool
+	always  bool // sampling whether or not anyone reads (Start)
 }
 
 // New samples the real host. Supported says whether this platform can.
 func New() *Monitor { return &Monitor{interval: Interval, idle: idle, read: readHost} }
+
+// NewWithHistory samples the real host and keeps its history in dir.
+func NewWithHistory(dir string) (*Monitor, error) {
+	h, err := OpenHistory(dir)
+	if err != nil {
+		return New(), err
+	}
+	m := New()
+	m.hist = h
+	return m, nil
+}
+
+// Start samples from now on, read or not: the history needs every slot.
+func (m *Monitor) Start() {
+	m.mu.Lock()
+	m.always = true
+	m.wanted = time.Now()
+	m.mu.Unlock()
+	go m.ReadDetail(time.Now().UnixMilli(), false) // starts the loop if it is not running; its first reading takes a while
+}
 
 // Read returns what the samples cover and every sample newer than after
 // (unix ms; 0 for all), and keeps the sampling going: a cold monitor takes
@@ -228,7 +255,7 @@ func (m *Monitor) loop() {
 	defer t.Stop()
 	for range t.C {
 		m.mu.Lock()
-		if time.Since(m.wanted) > m.idle {
+		if !m.always && time.Since(m.wanted) > m.idle {
 			m.running, m.prev = false, nil // the next reader starts afresh
 			m.mu.Unlock()
 			return
@@ -236,6 +263,7 @@ func (m *Monitor) loop() {
 		m.mu.Unlock()
 		c := m.read()
 		m.mu.Lock()
+		var took *Sample
 		if m.prev != nil {
 			if s, ok := between(m.prev, &c, m.interval); ok {
 				m.ring = append(m.ring, s)
@@ -244,10 +272,15 @@ func (m *Monitor) loop() {
 					// that outgrows it copies the hour to a new one
 					m.ring = m.ring[len(m.ring)-Keep:]
 				}
+				took = &s
 			}
 		}
 		m.prev, m.info = &c, c.info
+		info := c.info
 		m.mu.Unlock()
+		if took != nil && m.hist != nil {
+			m.hist.Add(took, info)
+		}
 	}
 }
 
@@ -328,4 +361,40 @@ func names(m map[string][2]uint64) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// ReadHistory gives the history of a step (Steps): its newest rows up to
+// limit, after after, whether older ones are kept, and the newest sample
+// of the moment for the figures beside the pictures. A monitor with no
+// history gives none.
+func (m *Monitor) ReadHistory(step int, after int64, limit int, detail bool) (info Info, rows []Sample, more bool, now *Sample) {
+	info, recent, _ := m.ReadNewest(0, detail, 1)
+	if len(recent) > 0 {
+		now = &recent[0]
+	}
+	if m.hist == nil {
+		return info, []Sample{}, false, now
+	}
+	rows, more = m.hist.Read(step, time.Now(), after, limit)
+	if rows == nil {
+		rows = []Sample{}
+	}
+	if !detail {
+		for i := range rows {
+			r := &rows[i]
+			r.Cores, r.Freq, r.Cards, r.Nets = nil, nil, nil, nil
+			if r.Peak != nil {
+				r.Peak.Cores, r.Peak.Freq, r.Peak.Cards, r.Peak.Nets = nil, nil, nil, nil
+			}
+		}
+	}
+	return info, rows, more, now
+}
+
+// Close writes what the history's slots hold so far.
+func (m *Monitor) Close() error {
+	if m.hist == nil {
+		return nil
+	}
+	return m.hist.Close()
 }

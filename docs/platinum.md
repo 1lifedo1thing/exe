@@ -78,8 +78,14 @@ restyling: `internal/server/ui/index.html` (the desktop),
   85, as a level meter is; a figure whose top is no alarm (a clock) lights
   in one colour, `#33bbdd`. A figure over time is a row or a column a
   sample, newest at the right, coloured on a ramp from idle violet through
-  blue and green to red. The words beside the art are the page's own type,
-  never pixels drawn in the picture.
+  blue and green to red — never stretched to fill a wider window: a wider
+  window shows further back. A column that stands for a while (an hour's
+  average) has the while's peak behind it, its colour taken 60 percent of
+  the way to the display's. The scale is a plain pop-up (Activity
+  Monitor's "Each pixel"): the shared block around a button, the menu's
+  check mark beside the chosen item, an item that cannot be had greyed.
+  The words beside the art are the page's own type, never pixels drawn
+  in the picture.
 - Where two bevels of different colours meet at a corner, the browser
   splits the corner pixel; when the original leaves that pixel as face
   colour, give each L its own box (the Control Strip's wells and tiles).
