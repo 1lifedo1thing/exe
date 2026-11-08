@@ -147,8 +147,13 @@ type gpuReading struct {
 
 const (
 	Interval = 2 * time.Second
-	keep     = 300 // ten minutes of samples
-	idle     = 10 * time.Minute
+	// Keep is an hour of samples: the Activity Monitor's histories are an
+	// art pixel a sample, and a wide window shows that many.
+	Keep = 1800
+	// Newest is what a reader that names no limit gets: ten minutes, all
+	// the ring held before it held an hour.
+	Newest = 300
+	idle   = 10 * time.Minute
 )
 
 // Monitor holds the ring of samples and the sampling loop.
@@ -176,6 +181,13 @@ func (m *Monitor) Read(after int64) (Info, []Sample) { return m.ReadDetail(after
 
 // ReadDetail is Read, with each core and each card when detail is true.
 func (m *Monitor) ReadDetail(after int64, detail bool) (Info, []Sample) {
+	info, samples, _ := m.ReadNewest(after, detail, 0)
+	return info, samples
+}
+
+// ReadNewest is ReadDetail, with at most the newest limit samples (all
+// with limit 0); more says older ones newer than after were left out.
+func (m *Monitor) ReadNewest(after int64, detail bool, limit int) (info Info, out []Sample, more bool) {
 	m.mu.Lock()
 	m.wanted = time.Now()
 	start := !m.running
@@ -190,8 +202,13 @@ func (m *Monitor) ReadDetail(after int64, detail bool) (Info, []Sample) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	out := []Sample{}
-	for _, s := range m.ring {
+	ring := m.ring
+	if limit > 0 && len(ring) > limit {
+		ring = ring[len(ring)-limit:]
+		more = m.ring[len(m.ring)-limit-1].T > after
+	}
+	out = []Sample{}
+	for _, s := range ring {
 		if s.T > after {
 			if !detail {
 				s.Cores, s.Freq, s.Cards, s.Nets = nil, nil, nil, nil
@@ -199,11 +216,11 @@ func (m *Monitor) ReadDetail(after int64, detail bool) (Info, []Sample) {
 			out = append(out, s)
 		}
 	}
-	info := m.info
+	info = m.info
 	if !detail {
 		info.CPUs, info.CPUKinds, info.Cards, info.Ifaces = nil, nil, nil, nil
 	}
-	return info, out
+	return info, out, more
 }
 
 func (m *Monitor) loop() {
@@ -222,8 +239,10 @@ func (m *Monitor) loop() {
 		if m.prev != nil {
 			if s, ok := between(m.prev, &c, m.interval); ok {
 				m.ring = append(m.ring, s)
-				if len(m.ring) > keep {
-					m.ring = append([]Sample(nil), m.ring[len(m.ring)-keep:]...)
+				if len(m.ring) > Keep {
+					// the slice moves along its array; the next append
+					// that outgrows it copies the hour to a new one
+					m.ring = m.ring[len(m.ring)-Keep:]
 				}
 			}
 		}

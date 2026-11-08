@@ -51,9 +51,12 @@ func TestPeersMonitor(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&got)
 		return resp.StatusCode, got
 	}
-	code, got := get(a.ts.URL + "/v1/peers/" + b.eng.SelfID() + "/monitor?after=0")
+	code, got := get(a.ts.URL + "/v1/peers/" + b.eng.SelfID() + "/monitor?after=0&limit=5")
 	if code != 200 || got["supported"] != hostmon.Supported {
 		t.Fatalf("through a: %d %v", code, got)
+	}
+	if _, ok := got["more"].(bool); hostmon.Supported && !ok {
+		t.Fatalf("no word of older samples: %v", got)
 	}
 	if hostmon.Supported {
 		info, _ := got["info"].(map[string]any)

@@ -513,8 +513,8 @@ the NIC.
 
 The daemon samples only while a desktop reads (`GET /v1/host/monitor`). The
 figures start when the strip opens and stop ten minutes after the last
-desktop folds it away or goes hidden, and the daemon keeps the last ten
-minutes. It reads Linux, macOS and Windows; on any other system the tile
+desktop folds it away or goes hidden, and the daemon keeps the last hour.
+It reads Linux, macOS and Windows; on any other system the tile
 stays away.
 
 ### Notifications: turn them on
@@ -5235,7 +5235,7 @@ this node, or any node you joined to it (**Joining desks together**).
   read its threads' load and its clock.
 - **Beside the chip**: the load of all the cores, the busiest thread, the
   average clock of its top, the hottest sensor, and memory in use.
-- **Under the chip**: each thread's load over the last ten minutes, a row
+- **Under the chip**: each thread's load over the last minutes, a row
   each, the newest at the right. A row is dark when idle and goes through
   blue and green to red at full load.
 - **Each graphics card** is its board. The cells of its die light as the
@@ -5247,7 +5247,7 @@ this node, or any node you joined to it (**Joining desks together**).
 - **Beside the card**: load, memory, temperature, power (of the card's
   limit, where it names one), the graphics clock, the fan, and the video
   encoder and decoder, each where the card gives it. Under the card, its
-  load over the last ten minutes.
+  load over the last minutes.
 - **The network** is the machine's back panel: a jack for each wired port
   and an antenna for Wi-Fi. A port whose link is up has a cable in it, its
   link lamp lit (green at a gigabit or more, amber under) and its activity
@@ -5257,7 +5257,12 @@ this node, or any node you joined to it (**Joining desks together**).
   **Not connected**), and what it received and sent a second, each on a
   meter that counts in tens from 1 KB/s up to the link's speed. Wi-Fi has
   its signal too. Under the panel, each interface's traffic over the last
-  ten minutes: received above the line, sent below it.
+  minutes: received above the line, sent below it.
+
+The histories under the pictures are pixel art too: two seconds a pixel,
+so a wider window shows further back, up to the hour the daemon keeps.
+The daemon samples only while someone reads, so a time when nobody did
+is a gap in them.
 
 The figures are the daemon's own samples, the same ones as the Control
 Strip's activity module (`GET /v1/host/monitor?detail=1`). The daemon

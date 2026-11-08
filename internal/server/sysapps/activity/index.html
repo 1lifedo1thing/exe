@@ -197,7 +197,7 @@ const TOKEN = Q.get("token") || "";
 const MOBILE = Q.has("mobile");
 if (MOBILE) document.body.classList.add("mobile");
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)");
-const KEEP = 300; // samples, as many as the daemon keeps: ten minutes
+const KEEP = 1800; // samples, as many as the daemon keeps: an hour
 
 async function api(url, signal) {
   const headers = {};
@@ -304,6 +304,7 @@ const st = {
   nodes: [],         // {id, name, self}; this node's id is ""
   node: Q.get("node") ?? store.get("exe_activity_node") ?? "",
   info: null, key: "", samples: [], lastT: 0, interval: 2000,
+  more: false,       // the daemon left older samples out: a wider window asks for them
   seq: 0, ctl: null, timer: 0, paused: false, rtt: 0,
   state: "loading",  // loading | ok | down | old | unsupported | gone
   powerTop: [],      // the most each card drew, for a card that names no limit
@@ -490,7 +491,7 @@ function pick(id) {
   store.set("exe_activity_node", id);
   st.seq++;
   if (st.ctl) st.ctl.abort();
-  st.samples = []; st.lastT = 0; st.powerTop = []; st.info = null; st.key = "";
+  st.samples = []; st.lastT = 0; st.powerTop = []; st.info = null; st.key = ""; st.more = false;
   restore();
   setState("loading");
   announce();
@@ -518,8 +519,13 @@ async function poll() {
   st.timer = 0;
   if (st.paused || document.hidden) return;
   const seq = st.seq;
-  const url = st.node ? `/v1/peers/${encodeURIComponent(st.node)}/monitor?after=${st.lastT}`
-    : `/v1/host/monitor?detail=1&after=${st.lastT}`;
+  // as many samples as the histories are wide, an art pixel each; a window
+  // grown wider than what is held asks again from the start
+  const want = Math.min(KEEP, artW($("#pane").clientWidth - 26));
+  const refill = st.more && st.samples.length < want;
+  const after = refill ? 0 : st.lastT;
+  const url = st.node ? `/v1/peers/${encodeURIComponent(st.node)}/monitor?after=${after}&limit=${want}`
+    : `/v1/host/monitor?detail=1&after=${after}&limit=${want}`;
   st.ctl = new AbortController();
   const t0 = performance.now();
   let r = null, err = null;
@@ -533,7 +539,10 @@ async function poll() {
     setState(err.status === 404 ? "gone" : "down");
   } else if (r.old) setState("old");
   else if (!r.supported) setState("unsupported");
-  else take(r);
+  else {
+    if (after === 0) { st.samples = []; st.lastT = 0; st.more = !!r.more; }
+    take(r);
+  }
   if (!st.paused) st.timer = setTimeout(poll, st.interval);
 }
 
@@ -809,7 +818,7 @@ function layout(again) {
     size(k.art, CARD_W, CARD_H);
     k.geo = null;
   }
-  // the histories: ten minutes across, or the newest that fit at an art pixel a sample (columns())
+  // the histories: an art pixel a sample, the newest at the right (columns())
   const hw = artW(W - 2);
   const rows = st.info.cpus.length, rowH = Math.max(1, Math.min(4, Math.floor(48 / rows)));
   V.cpu.rowH = rowH;
@@ -979,17 +988,19 @@ function drawAntenna(c, cx, on, signal, busy, frame) {
 
 // an interface's traffic over the last minutes: received rises from the
 // middle line, sent hangs from it, both on the busiest moment in view
-// The histories' time axis: the samples the daemon keeps (ten minutes),
-// or as many as fit, an art pixel each, the newest at the right. A chart
-// wider than that stretches them across it, a column or two a sample, so
-// its left edge is always the start of the span its axis names.
+// The histories' time axis: an art pixel a sample, the newest at the
+// right, each placed by its time, so a while the daemon was not sampling
+// (nobody read for ten minutes) is a gap and not two times side by side.
 function columns(aw) {
-  const slots = Math.min(aw, KEEP), per = aw / slots, n = Math.min(slots, st.samples.length), out = [];
-  for (let j = 0; j < n; j++) {
-    const slot = slots - n + j, x = Math.round(slot * per);
-    out.push({ s: st.samples[st.samples.length - n + j], x, w: Math.round((slot + 1) * per) - x });
+  const out = [], n = st.samples.length, iv = st.interval || 2000;
+  if (!n) return out;
+  const newest = st.samples[n - 1].t;
+  for (let j = n - 1; j >= 0; j--) {
+    const x = aw - 1 - Math.round((newest - st.samples[j].t) / iv);
+    if (x < 0) break;
+    out.push({ s: st.samples[j], x, w: 1 });
   }
-  return out;
+  return out.reverse();
 }
 
 function drawNetHist(n, i) {
@@ -1097,7 +1108,7 @@ function drawHeat() {
   c.drawImage(heatCv, 0, 0);
 }
 
-// a card's load over the last minutes: a sample's columns as tall as the
+// a card's load over the last minutes: a column a sample, as tall as the
 // load and in its colour
 function drawHist(k) {
   const cv = k.hist, c = cv.getContext("2d"), aw = cv.aw, ah = cv.ah;

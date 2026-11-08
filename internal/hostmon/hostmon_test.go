@@ -104,3 +104,35 @@ func TestBetween(t *testing.T) {
 		t.Error("a sample across a stalled minute")
 	}
 }
+
+// An hour is kept; a reader takes the newest it names, and hears when
+// older ones were left out.
+func TestReadNewest(t *testing.T) {
+	m := &Monitor{interval: time.Hour, idle: time.Hour, read: (&fakeHost{at: time.Now()}).read, running: true}
+	for i := range Keep + 50 {
+		m.ring = append(m.ring, Sample{T: int64(i + 1)})
+		if len(m.ring) > Keep {
+			m.ring = m.ring[len(m.ring)-Keep:]
+		}
+	}
+	if len(m.ring) != Keep || m.ring[0].T != 51 {
+		t.Fatalf("ring: %d, from %d", len(m.ring), m.ring[0].T)
+	}
+	_, s, more := m.ReadNewest(0, false, 300)
+	if len(s) != 300 || s[0].T != Keep+50-299 || !more {
+		t.Errorf("the newest 300: %d from %d, more %v", len(s), s[0].T, more)
+	}
+	_, s, more = m.ReadNewest(0, false, 0)
+	if len(s) != Keep || more {
+		t.Errorf("all: %d, more %v", len(s), more)
+	}
+	// after a sample: the newer ones, and nothing more to fetch before them
+	_, s, more = m.ReadNewest(Keep+50-10, false, 300)
+	if len(s) != 10 || more {
+		t.Errorf("newer than one: %d, more %v", len(s), more)
+	}
+	_, s, more = m.ReadNewest(0, false, Keep+10)
+	if len(s) != Keep || more {
+		t.Errorf("a limit over the ring: %d, more %v", len(s), more)
+	}
+}

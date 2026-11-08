@@ -15,10 +15,12 @@ import (
 )
 
 // handleHostMonitor answers the Control Strip's activity module: what the
-// samples cover and every sample newer than ?after= (unix ms). Each read
-// keeps the sampler going; with no reader for ten minutes it stops. A
-// platform it cannot read says so, and the module hides. ?detail=1 adds
-// each core and each graphics card, for the Activity Monitor.
+// samples cover and every sample newer than ?after= (unix ms), the newest
+// ?limit= of them (300, ten minutes, unless asked; at most an hour's
+// 1,800), with "more" when older ones were left out. Each read keeps the
+// sampler going; with no reader for ten minutes it stops. A platform it
+// cannot read says so, and the module hides. ?detail=1 adds each core and
+// each graphics card, for the Activity Monitor.
 func (s *Server) handleHostMonitor(w http.ResponseWriter, r *http.Request) {
 	s.writeHostMonitor(w, r, r.URL.Query().Get("detail") == "1")
 }
@@ -29,11 +31,16 @@ func (s *Server) writeHostMonitor(w http.ResponseWriter, r *http.Request, detail
 		writeJSON(w, http.StatusOK, map[string]any{"supported": false})
 		return
 	}
-	after, _ := strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
+	q := r.URL.Query()
+	after, _ := strconv.ParseInt(q.Get("after"), 10, 64)
+	limit := hostmon.Newest
+	if n, err := strconv.Atoi(q.Get("limit")); err == nil {
+		limit = min(max(n, 1), hostmon.Keep)
+	}
 	s.hostMonOnce.Do(func() { s.hostMon = hostmon.New() })
-	info, samples := s.hostMon.ReadDetail(after, detail)
+	info, samples, more := s.hostMon.ReadNewest(after, detail, limit)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"supported": true, "interval": hostmon.Interval.Milliseconds(), "info": info, "samples": samples,
+		"supported": true, "interval": hostmon.Interval.Milliseconds(), "info": info, "samples": samples, "more": more,
 	})
 }
 
@@ -64,10 +71,15 @@ func (s *Server) handlePeersMonitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	after, _ := strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	q := r.URL.Query()
+	after, _ := strconv.ParseInt(q.Get("after"), 10, 64)
+	path := "/v1/peer/monitor?after=" + strconv.FormatInt(after, 10)
+	if n, err := strconv.Atoi(q.Get("limit")); err == nil {
+		path += "&limit=" + strconv.Itoa(n) // a node older than the hour gives its ten minutes whatever is asked
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	resp, err := e.Fetch(ctx, r.PathValue("id"), "/v1/peer/monitor?after="+strconv.FormatInt(after, 10))
+	resp, err := e.Fetch(ctx, r.PathValue("id"), path)
 	if err != nil {
 		if errors.Is(err, peer.ErrNoSuchPeer) {
 			writeErr(w, http.StatusNotFound, err)
@@ -85,7 +97,7 @@ func (s *Server) handlePeersMonitor(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, fmt.Errorf("the node answered HTTP %d", resp.StatusCode))
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20)) // an hour of a big machine's cores
 	if err != nil || !json.Valid(body) {
 		writeErr(w, http.StatusBadGateway, errors.New("the node's answer was cut short"))
 		return
