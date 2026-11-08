@@ -3346,12 +3346,14 @@ window's folder.
 A file can be 1 GB at most, and a file with the name of one already
 there replaces it. Folders cannot be dragged in; drag their files.
 
-While files go up, the line under the title bar of their folder's window
-says how far along they are: "Uploading photo.jpg… 40%". On a phone the
-figure comes first, "40% of photo.jpg", and several files count as one,
-"40% of 3 files". The **Upload to Workspace** window says the same over
-its buttons. When the files are in, the line shows the folder's items
-again.
+While files go up, each one has a row under the count line of its
+folder's window, and of the windows of the folders above it: its name,
+how far along it is ("40%", or "Waiting" until its turn), and a thin blue
+line under it that fills as it goes. A file the daemon refuses says
+"Failed", and a message says why. The rows stay until the last file is
+in, then go together, and four show at a time: past that they scroll,
+with the file that is going in view. The **Upload to Workspace** window
+shows its file's row over its buttons.
 
 New files brought in this way are announced on the Newsfeed, so every desk
 in the mesh sees them arrive; overwriting an existing file stays quiet.

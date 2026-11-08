@@ -948,13 +948,19 @@ restyling: `internal/server/ui/index.html` (the desktop),
   Japanese at 390px). What an item can do stays on its held press: on a
   phone a tap opens an item, so no button would have a selection to act
   on. Off a phone the row is `display: none`.
-- An upload into a Workspace folder says how it goes in the line under
-  its window's title bar (`.ws-status`, `wsUpload`), by bytes over all
-  the files: the figure first on a phone ("40% of name", "40% of 3
-  files"), "Uploading name… 40%" on the desk. The line stays one line,
-  cut at its end, so the window never moves; the count comes back when
-  the files are in, and a refusal is a toast. The upload is an XHR
-  (`wsPut`), since fetch cannot tell how much of a body has gone.
+- Uploads into a Workspace folder stack under the count line of its
+  window and of each window above it (`.up-stack`, `wsUps`,
+  `wsUpsDraw`): a row a file in the order they go, its name at the left,
+  how far at the right (Waiting, 40%, Failed), and under it a 2px line
+  in `--hl`, the drop ring's blue, as long as the share that has gone. A
+  file whose bytes have all gone shows 99% till the daemon answers. A
+  row is made once and only repainted, so two uploads at once never
+  fight over one line, and every row stays till the last upload ends: the
+  stack comes and goes once, with the folder's new icons. Past four rows
+  it scrolls (vertical bar only), keeping the file that is going in view.
+  The Upload window's line is one such row, bare, at the height it keeps
+  when empty. A refusal is also a toast. The upload is an XHR (`wsPut`),
+  since fetch cannot tell how much of a body has gone.
 
 - A modal dialog of a window's own (the Claude Code window's Search,
   `.sess-veil`): a veil of the overlay's 15% black over the window's

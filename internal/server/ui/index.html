@@ -556,11 +556,25 @@ body.mobile #cstrip { z-index: 5; }
   text-align: center; font-size: 12px; padding: 4px 8px 3px; }
 .finder-icons { background: #fff; height: 336px; display: flex; flex-wrap: wrap;
   align-content: flex-start; padding: 10px 0 0 10px; }
-/* a Workspace window's line says how an upload into its folder goes while
-   one does (wsUpload), and so does the Upload window's: each keeps one
-   line for it, a long name cut at its end, where a phone's line has the
-   figure first */
-.ws-status, #up-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* uploads under way (wsUpload) stack under the count line of the window
+   they go into, and of each window above it: a row a file, in the order
+   they go, its name at the left, how far at the right (Waiting, 40%,
+   Failed), and under it a 2px line in the drop ring's blue as long as
+   the share that has gone. A row is made once and only repainted, and
+   every row stays till the last upload ends, so the stack comes and goes
+   once and nothing between moves. Past four rows it scrolls, keeping the
+   file that is going in view. The Upload window's line is one such row,
+   bare, the height it keeps when empty */
+.up-stack { flex: none; position: relative; max-height: 100px; overflow: hidden auto;
+  background: var(--g300); border-bottom: 1px solid var(--black); }
+.up-row { position: relative; display: flex; gap: 8px; padding: 4px 8px 6px; font-size: 12px; line-height: 15px; }
+.up-row .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.up-row .pc { flex: none; }
+.up-row i { position: absolute; left: 0; bottom: 3px; height: 2px; background: var(--hl); }
+#up-status { min-height: 19px; }
+#up-status .up-row { padding: 0 0 4px; font-size: inherit; }
+#up-status .up-row i { bottom: 0; }
 /* Choose File… keeps its one line: the name beside it gives way instead */
 #up-choose { flex: none; }
 /* a phone's Workspace window has what the desk's menus give the window in
@@ -2345,7 +2359,7 @@ body.mobile th.sorted {
           <span class="muted" id="up-name" style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">no file selected</span>
         </div>
         <input id="up-file" type="file" hidden>
-        <div class="muted" id="up-status" style="min-height:16px"></div>
+        <div class="muted" id="up-status"></div>
         <div class="row" style="justify-content:flex-end; gap:11px; margin:10px 0 2px">
           <button class="ghost" id="up-cancel">Cancel</button>
           <button class="btn" id="up-go">Upload</button>
@@ -6701,6 +6715,9 @@ window.addEventListener("message", async e => {
 // navigation), created on demand with id win-ws-<encoded path> so the
 // layout snapshot restores each folder window's geometry — spatial Finder
 // remembered per-folder window positions, and the snapshot gives us that.
+// the Workspace uploads under way, in the order they go (wsUpload); each
+// is a row of a stack in its folder's windows (wsUpsDraw)
+const wsUps = [];
 const fmtBytes = n => n >= 2 ** 30 ? (n / 2 ** 30).toFixed(1) + " GB"
   : n >= 2 ** 20 ? (n / 2 ** 20).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " K";
 const GROW_TILE = `<svg class="grow-box" width="15" height="15" viewBox="0 0 15 15" shape-rendering="crispEdges">
@@ -6731,6 +6748,7 @@ function openFinderWin(path, fromWin) {
       <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
       <div class="win-frame">
         <div class="finder-status ws-status"><span class="ws-items">…</span></div>
+        <div class="up-stack doc-scroll" hidden></div>
         <div class="finder-icons doc-scroll"></div>
         <div class="ws-tools"><span class="popup"><select class="ws-view">
           <option value="icons"></option><option value="list"></option>
@@ -6789,6 +6807,7 @@ function openFinderWin(path, fromWin) {
     wireFinderDrop(w);
     $("#desktop").append(w);
     initWindow(w);
+    wsUpsDraw(); // uploads already going into the folder
   }
   openWin(w);
   loadFinder(w);
@@ -6842,9 +6861,8 @@ function renderFinder(w) {
   walk(w._entries, "", 0);
   w.querySelector(".ws-view").value = v.view;
   // the count is of what is shown, an open folder's items among them, as
-  // the Finder counts; an upload into the folder says how it goes instead
-  w._count = L`${rows.length} item${rows.length === 1 ? "" : "s"}, ${fmtBytes(w._free)} available`;
-  w.querySelector(".ws-items").textContent = w._upload || w._count;
+  // the Finder counts
+  w.querySelector(".ws-items").textContent = L`${rows.length} item${rows.length === 1 ? "" : "s"}, ${fmtBytes(w._free)} available`;
   box.classList.toggle("as-list", list);
   box.replaceChildren();
   const into = list ? flFrame(w, box, v.sort, Math.max(0, ...rows.map(r => r.depth))) : box;
@@ -9296,9 +9314,13 @@ $("#up-go").onclick = async () => {
   const f = $("#up-file").files[0];
   if (!f) { toast(L("choose a file first")); return; }
   $("#up-go").disabled = true;
-  const n = (await wsUpload("", [f], t => { $("#up-status").textContent = t; })).length;
+  const st = $("#up-status");
+  const n = (await wsUpload("", [f], u => {
+    if (st.firstChild?._up !== u) st.replaceChildren(wsUpRow(u, u.name));
+    wsUpPaint(st.firstChild);
+  })).length;
   $("#up-go").disabled = false;
-  $("#up-status").textContent = "";
+  st.replaceChildren();
   if (n) closeWin($("#win-upload"));
 };
 
@@ -9307,38 +9329,40 @@ $("#up-go").onclick = async () => {
 // that folder, on a terminal window in the root with its path typed there
 // (wireTermDrop). Uploads PUT each file; toasts report skips and failures.
 // Genuinely new files (not overwrites) are announced on the Newsfeed. ----
-// While the files go, the line of the folder's Workspace window says how
-// far along they are, and so does report (the Upload window's line): by
-// bytes, over all of them. A phone's line is short and cut at its end, so
-// how far comes first there ("40% of name"); the desk's says what first.
+// While the files go, each is a row of the stack (.up-stack) in the
+// window of its folder and of every folder above it, and report (the
+// Upload window's) is handed its row's upload to paint as it goes. Every
+// call's files go one at a time; two calls go side by side.
 async function wsUpload(dir, files, report) {
   let done = 0, last = "";
   const fresh = [], abs = [];
   const go = files.filter(f => f.size <= 1 << 30 || void toast(L`${f.name} exceeds 1 GB`));
-  const total = go.reduce((n, f) => n + f.size, 0), what = go.length === 1 ? go[0].name : L`${go.length} files`;
-  let sent = 0;
-  const say = loaded => {
-    const pct = total ? Math.floor((sent + loaded) / total * 100) : 0;
-    const text = IS_MOBILE ? L`${pct}% of ${what}` : L`Uploading ${what}… ${pct}%`;
-    wsUploadLine(dir, text);
-    if (report) report(text);
-  };
-  for (const f of go) {
-    const rel = dir ? dir + "/" + f.name : f.name;
-    say(0);
+  const ups = go.map(f => ({ dir, name: f.name, size: f.size, sent: 0, state: "wait" }));
+  wsUps.push(...ups);
+  wsUpsDraw();
+  for (const [i, f] of go.entries()) {
+    const u = ups[i], rel = dir ? dir + "/" + f.name : f.name;
+    const say = () => { wsUpsDraw(); if (report) report(u); };
+    u.state = "go"; say();
     try {
-      const r = await wsPut(rel, f, say);
+      const r = await wsPut(rel, f, n => { u.sent = n; say(); });
+      u.state = "done";
       done++; last = f.name;
       if (r.created) fresh.push(rel);
       abs.push(r.abs || rel);
-    } catch (e) { toast(f.name + ": " + e.message); }
-    sent += f.size;
+    } catch (e) { u.state = "fail"; toast(f.name + ": " + e.message); }
+    say();
   }
-  if (go.length) { wsUploadLine(dir, ""); if (report) report(""); }
   if (done) {
     toast(done === 1 ? L`Uploaded ${last}` : L`Uploaded ${done} files`);
     const w = document.getElementById("win-ws-" + encodeURIComponent(dir));
-    if (w && !w.hidden) loadFinder(w);
+    if (w && !w.hidden) await loadFinder(w);
+  }
+  // the stacks go with the last upload under way, in the same frame as
+  // the folder's new icons
+  if (ups.length && wsUps.every(u => u.state === "done" || u.state === "fail")) {
+    wsUps.length = 0;
+    wsUpsDraw();
   }
   if (fresh.length)
     j("/v1/newsfeed", { method: "POST", json: {
@@ -9348,12 +9372,37 @@ async function wsUpload(dir, files, report) {
     }}).catch(() => {});
   return abs; // where the daemon put each file that landed, in drop order
 }
-// the line of the folder's window while an upload goes, or its count again
-function wsUploadLine(dir, text) {
-  const w = document.getElementById("win-ws-" + encodeURIComponent(dir));
-  if (!w) return;
-  w._upload = text;
-  w.querySelector(".ws-items").textContent = text || w._count || "…";
+// brings each Workspace window's stack up to wsUps: the uploads into its
+// folder or one inside it, named from the window's folder. The rows are
+// made again only when that set changes; otherwise each is repainted
+function wsUpsDraw() {
+  for (const w of document.querySelectorAll('.finder-window[id^="win-ws-"]')) {
+    const box = w.querySelector(".up-stack"), at = w.dataset.path;
+    const ups = wsUps.filter(u => !at || u.dir === at || u.dir.startsWith(at + "/"));
+    const rows = [...box.children];
+    if (rows.length !== ups.length || ups.some((u, i) => rows[i]._up !== u))
+      box.replaceChildren(...ups.map(u => wsUpRow(u, (u.dir === at ? "" : u.dir.slice(at ? at.length + 1 : 0) + "/") + u.name)));
+    box.hidden = !ups.length;
+    for (const r of box.children) wsUpPaint(r);
+    // the file that is going stays in view, scrolled to once when it starts
+    const now = [...box.children].find(r => r._up.state === "go");
+    if (now && now !== box._now && box.scrollHeight > box.clientHeight)
+      box.scrollTop = Math.max(0, now.offsetTop + now.offsetHeight - box.clientHeight);
+    box._now = now;
+  }
+}
+function wsUpRow(u, name) {
+  const r = el("div", { class: "up-row", title: name }, el("span", { class: "nm" }, name), el("span", { class: "pc" }), el("i"));
+  r._up = u;
+  return r;
+}
+// a row's figure and line. A file whose bytes have all gone is at 99%
+// till the daemon says it has the file
+function wsUpPaint(r) {
+  const u = r._up, pct = u.state === "done" ? 100 : u.state === "fail" || !u.size ? 0
+    : Math.min(99, Math.floor(u.sent / u.size * 100));
+  r.querySelector(".pc").textContent = u.state === "wait" ? L("Waiting") : u.state === "fail" ? L("Failed") : pct + "%";
+  r.querySelector("i").style.width = pct + "%";
 }
 // A Workspace PUT that says how much of the body has gone (onSent, in
 // bytes), which fetch cannot: an XHR with api()'s headers, and the same
