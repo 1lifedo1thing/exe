@@ -26,7 +26,37 @@ body { margin: 0; font: 12px/1.45 var(--font); color: var(--black); background: 
    pane, whose scroll bar has no line of its own at the top */
 #bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 10px 12px;
   border-bottom: 1px solid var(--black); }
-#node-pop { width: 240px; min-width: 0; flex: 0 1 240px; }
+/* The node pop-up is the Analytics app's host menu: the shared block
+   (/platinum/popup.css, linked above, never copied) at the 20 rows of a
+   push button, a button in the select's place, and a Platinum menu whose
+   rows carry each node's icon — the desktop's .dropdown.icons: the check
+   mark's column, then the 16px icon's, then the name. */
+#node-wrap { width: 240px; min-width: 0; flex: 0 1 240px; height: 20px; }
+#node-wrap .well b { background-position: 4px 3px; }
+#node-wrap button { position: absolute; inset: 0; width: 100%; height: 100%; appearance: none;
+  display: flex; align-items: center; gap: 6px; background: transparent; border: 0; border-radius: 0;
+  padding: 0 27px 0 6px; margin: 0; color: #000; font: 12px/17px var(--font); text-align: left; }
+#node-wrap button:focus { outline: none; }
+#node-wrap .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hico { flex: none; width: 16px; height: 16px; }
+.hico svg, .dd-ico svg { display: block; width: 16px; height: 16px; }
+/* the icons are 32-grid art at half size; between 1x and 2x a half pixel
+   smears, so there they are drawn as geometry */
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  .hico svg, .dd-ico svg { shape-rendering: geometricPrecision; }
+}
+.dropdown { position: fixed; z-index: 30; min-width: 170px; background: var(--g300);
+  border: 1px solid var(--black); padding: 2px 1px;
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 var(--g500), 2px 2px 0 rgba(38,38,38,.85); }
+.dd-item { padding: 3px 22px 3px 18px; line-height: 18px; white-space: nowrap; }
+.dd-item.on { background: var(--hl); color: #fff; }
+.dropdown.icons .dd-item { position: relative; padding-left: 40px; }
+.dd-ico { position: absolute; left: 17px; top: 50%; margin-top: -8px; width: 16px; height: 16px; }
+.dd-chk { position: absolute; left: 5px; top: 50%; margin-top: -4px; width: 10px; height: 8px; }
+.dd-chk svg { display: block; width: 10px; height: 8px; fill: currentColor; }
+/* never wider than the window, never past its foot */
+#node-menu { max-width: calc(100vw - 12px); overflow-x: hidden; overflow-y: auto; }
+#node-menu .dd-item { overflow: hidden; text-overflow: ellipsis; }
 
 /* a scroll bar only where the figures are taller than the window: grown
    to fit, it has none (narrower with one, the art only gets taller, so
@@ -51,6 +81,10 @@ canvas { display: block; image-rendering: pixelated; }
   column-gap: 8px; height: 18px; font-size: 11px; }
 .fig .k { color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fig .v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* an interface's own line over its meters: its name, and its link at the right */
+.fig.nm .k { font-weight: bold; color: var(--black); overflow: visible; }
+.fig.nm .v { color: #555; }
+.figs .fig.nm:not(:first-child) { margin-top: 6px; }
 /* a dark display sunk into the window: the Control Strip's well, #808080
    top and left, white bottom and right, each a border */
 .lcd { background: var(--lcd); line-height: 0; overflow: hidden;
@@ -124,8 +158,9 @@ body.mobile #status { padding-right: 8px; }
 <body>
 <div id="bar">
   <label for="node">Node:</label>
-  <span class="popup" id="node-pop"><select id="node"></select><span class="well"><i><b></b></i></span></span>
+  <span class="popup" id="node-wrap"><button type="button" id="node" aria-label="Node" aria-haspopup="listbox" aria-expanded="false"><span class="hico" id="node-ico"></span><span class="nm" id="node-name">…</span></button><span class="well"><i><b></b></i></span></span>
 </div>
+<div class="dropdown icons" id="node-menu" role="listbox" aria-label="Node" hidden></div>
 <div id="pane">
   <div id="view"></div>
   <div id="msg" hidden></div>
@@ -240,6 +275,25 @@ const ofGB = (u, t) => u == null ? "—" : t ? `${gb(u)} of ${gb(t)} GB` : `${gb
 const deg = v => v == null ? "—" : Math.round(v) + "°C";
 const ghz = m => (m / 1000).toFixed(1);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+// bytes a second in decimal units, as the Control Strip writes them: 812
+// B/s, 4.2 KB/s, 38 KB/s, 1.2 MB/s
+function bps(n) {
+  if (n == null) return "—";
+  const units = ["B/s", "KB/s", "MB/s", "GB/s"];
+  let i = 0;
+  while (n >= 999.5 && i < units.length - 1) { n /= 1000; i++; }
+  return (i && n < 9.95 ? n.toFixed(1) : Math.round(n)) + " " + units[i];
+}
+const linkWords = (ifc, n) => !n || !n.up ? "Not connected"
+  : ifc.wireless ? (n.signal != null ? `Wi-Fi, ${Math.round(n.signal)} dBm` : "Wi-Fi")
+  : ifc.speed ? (ifc.speed >= 1000 ? `${+(ifc.speed / 1000).toFixed(1)} Gb/s` : `${ifc.speed} Mb/s`) : "Connected";
+// a rate's share of its link on a scale of tens, from 1 KB/s to the link's
+// speed (1 Gb/s where it names none), so a trickle and a flood both read
+function rateFrac(v, ifc) {
+  if (v == null) return null;
+  const top = (ifc.speed || 1000) * 125000;
+  return v < 1000 ? (v > 0 ? 0.01 : 0) : Math.min(1, Math.log10(v / 1000) / Math.log10(top / 1000));
+}
 
 // ---- state --------------------------------------------------------------------
 const st = {
@@ -250,40 +304,184 @@ const st = {
   state: "loading",  // loading | ok | down | old | unsupported | gone
   powerTop: [],      // the most each card drew, for a card that names no limit
 };
-const V = { cpu: null, cards: [] }; // what build() made
+const V = { cpu: null, cards: [], net: null }; // what build() made
 
 function nodeName(id = st.node) {
   const n = st.nodes.find(n => n.id === id);
   return n ? n.name : (id ? id : (st.info && st.info.host) || "This node");
 }
 
+// ---- the node menu ------------------------------------------------------------
+// The Analytics app's pop-up: the shared block's frame and well around a
+// button, and a Platinum menu of our own whose rows carry each node's icon
+// (Configuration → General → Icon on that node, drawn from the desk's set),
+// grey while the node does not answer, and the check mark beside the one
+// shown. The row under the pointer or the arrow keys is .on, never :hover.
+const CHECK_MARK = `<svg width="10" height="8" viewBox="0 0 10 8" shape-rendering="crispEdges"><path d="M9 0h1v2H9zM8 1h1v2H8zM7 2h1v2H7zM6 3h1v2H6zM5 4h1v2H5zM4 5h1v2H4zM3 6h1v2H3zM0 3h1v2H0zM1 4h1v2H1zM2 5h1v2H2z"/></svg>`;
+const nodeBtn = $("#node"), nodeMenu = $("#node-menu");
+let iconSet = null; // id → {palette, rows}, from /ui/node-icons.json
+async function loadIconSet() {
+  try {
+    const r = await fetch("/ui/node-icons.json");
+    const set = await r.json();
+    iconSet = new Map(set.icons.map(i => [i.id, i]));
+    paintNodes();
+  } catch {}
+}
+// a node's icon as the desk draws it, 32 rows of palette keys at 16px; an
+// offline node's in greys lightened toward the menu's face, as Mac OS drew
+// what could not be used
+const iconCache = new Map();
+function nodeIcon(id, grey) {
+  if (!iconSet) return "";
+  const ic = iconSet.get(id || "exe") || iconSet.get("exe");
+  if (!ic) return "";
+  const key = ic.id + (grey ? "/grey" : "");
+  if (iconCache.has(key)) return iconCache.get(key);
+  const paths = {};
+  ic.rows.forEach((row, y) => {
+    for (let x = 0; x < row.length;) {
+      const k = row[x];
+      if (k === "." || !ic.palette[k]) { x++; continue; }
+      let e = x;
+      while (e < row.length && row[e] === k) e++;
+      (paths[k] = paths[k] || []).push(`M${x} ${y}h${e - x}v1H${x}z`);
+      x = e;
+    }
+  });
+  const colour = hex => {
+    if (!grey) return hex;
+    const [r, g, b] = rgb(hex), y = 0.299 * r + 0.587 * g + 0.114 * b;
+    const v = Math.round(y * 0.55 + 0xdd * 0.45).toString(16).padStart(2, "0");
+    return "#" + v + v + v;
+  };
+  const svg = `<svg width="16" height="16" viewBox="0 0 32 32" shape-rendering="crispEdges">` +
+    Object.entries(paths).map(([k, d]) => `<path fill="${colour(ic.palette[k])}" d="${d.join("")}"/>`).join("") + `</svg>`;
+  iconCache.set(key, svg);
+  return svg;
+}
+const nodeOnline = n => n.self || n.online;
+function setNodeIcon(box, n) {
+  const want = n ? `${n.icon || ""}/${nodeOnline(n) ? 1 : 0}/${iconSet ? 1 : 0}` : "";
+  if (box.dataset.ico === want) return;
+  box.dataset.ico = want;
+  box.innerHTML = n ? nodeIcon(n.icon, !nodeOnline(n)) : "";
+}
+function paintNodes() {
+  const n = st.nodes.find(n => n.id === st.node);
+  $("#node-name").textContent = nodeName();
+  setNodeIcon($("#node-ico"), n);
+  for (const row of nodeMenu.children) setNodeIcon(row.querySelector(".dd-ico"), st.nodes.find(n => n.id === row.dataset.node));
+}
+function fillNodeMenu() {
+  const key = st.nodes.map(n => n.id + "\t" + n.name).join("\n");
+  if (nodeMenu.dataset.names !== key) {
+    nodeMenu.replaceChildren(...st.nodes.map(n => {
+      const row = document.createElement("div");
+      row.className = "dd-item";
+      row.setAttribute("role", "option");
+      row.dataset.node = n.id;
+      row.innerHTML = '<span class="dd-chk">' + CHECK_MARK + '</span><span class="dd-ico"></span>';
+      row.append(n.name);
+      return row;
+    }));
+    nodeMenu.dataset.names = key;
+  }
+  for (const row of nodeMenu.children) {
+    row.querySelector(".dd-chk").hidden = row.dataset.node !== st.node;
+    row.setAttribute("aria-selected", row.dataset.node === st.node ? "true" : "false");
+  }
+  paintNodes();
+}
+function nodeOn(row) {
+  for (const r of nodeMenu.children) r.classList.toggle("on", r === row);
+  if (row) row.scrollIntoView({ block: "nearest" });
+}
+// the menu hangs 2px under the button at its left edge, at least as wide,
+// kept inside the window
+function openNodeMenu() {
+  fillNodeMenu();
+  nodeMenu.hidden = false;
+  const r = $("#node-wrap").getBoundingClientRect();
+  nodeMenu.style.minWidth = r.width + "px";
+  nodeMenu.style.top = (r.bottom + 2) + "px";
+  nodeMenu.style.maxHeight = Math.max(72, innerHeight - r.bottom - 10) + "px";
+  nodeMenu.style.left = Math.max(4, Math.min(r.left, innerWidth - nodeMenu.offsetWidth - 6)) + "px";
+  nodeOn([...nodeMenu.children].find(row => row.dataset.node === st.node));
+  nodeBtn.setAttribute("aria-expanded", "true");
+  refreshNodes(); // who answers now
+}
+function closeNodeMenu() {
+  if (nodeMenu.hidden) return;
+  nodeMenu.hidden = true;
+  nodeBtn.setAttribute("aria-expanded", "false");
+}
+nodeBtn.addEventListener("click", () => { if (nodeMenu.hidden) openNodeMenu(); else closeNodeMenu(); });
+nodeMenu.addEventListener("pointermove", e => {
+  const row = e.target.closest(".dd-item");
+  if (row && !row.classList.contains("on")) nodeOn(row);
+});
+nodeMenu.addEventListener("click", e => {
+  const row = e.target.closest(".dd-item");
+  if (row) { closeNodeMenu(); pick(row.dataset.node); }
+});
+// a press anywhere else, Escape, or the window losing the keyboard puts
+// the menu away; the arrows walk it and Return picks
+document.addEventListener("pointerdown", e => {
+  if (!e.target.closest("#node-menu, #node-wrap")) closeNodeMenu();
+}, true);
+addEventListener("blur", closeNodeMenu);
+document.addEventListener("keydown", e => {
+  if (nodeMenu.hidden) {
+    if (document.activeElement === nodeBtn && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); openNodeMenu(); }
+    return;
+  }
+  const rows = [...nodeMenu.children], at = rows.findIndex(r => r.classList.contains("on"));
+  if (e.key === "Escape") closeNodeMenu();
+  else if (e.key === "ArrowDown") nodeOn(rows[Math.min(rows.length - 1, at + 1)]);
+  else if (e.key === "ArrowUp") nodeOn(rows[Math.max(0, at - 1)]);
+  else if (e.key === "Enter" && at >= 0) { closeNodeMenu(); pick(rows[at].dataset.node); }
+  else return;
+  e.preventDefault();
+});
+
+// the nodes: this one, then each joined one with the icon it last named
+// and whether it answered Node Sync's last ping
 async function loadNodes() {
   try {
     const r = await api("/v1/peers");
-    st.nodes = [{ id: "", name: r.self.name, self: true },
-      ...(r.peers || []).map(p => ({ id: p.id, name: p.name || p.id }))];
+    st.nodes = [{ id: "", name: r.self.name, self: true, icon: r.self.icon || "" },
+      ...(r.peers || []).map(p => ({ id: p.id, name: p.name || p.id, icon: p.icon || "", online: !!p.online }))];
   } catch {
-    st.nodes = [{ id: "", name: (st.info && st.info.host) || "This node", self: true, unnamed: !st.info }];
+    st.nodes = [{ id: "", name: (st.info && st.info.host) || "This node", self: true, unnamed: !st.info, icon: "" }];
   }
   if (!st.nodes.some(n => n.id === st.node)) {
     st.nodes.push({ id: st.node, name: st.node }); // a node no longer joined says so when asked
   }
-  const sel = $("#node");
-  sel.textContent = "";
-  for (const n of st.nodes) sel.append(el("option", { value: n.id }, n.name));
-  sel.value = st.node;
+  if (!nodeMenu.hidden) fillNodeMenu(); else paintNodes();
   announce();
+  refreshNodes();
 }
+// /v1/peers gives what Node Sync last knew; a probe says who answers now
+// (cached five seconds by the daemon), asked on opening and every half minute
+let nodesAt = 0;
+async function refreshNodes() {
+  if (Date.now() - nodesAt < 5000) return;
+  nodesAt = Date.now();
+  try {
+    const r = await api("/v1/peers/status");
+    for (const p of r.peers || []) {
+      const n = st.nodes.find(n => n.id === p.id);
+      if (n) { n.online = !!p.online; if (p.icon != null) n.icon = p.icon; }
+    }
+    paintNodes();
+  } catch {}
+}
+setInterval(() => { if (!st.paused && !document.hidden) refreshNodes(); }, 30000);
 
-$("#node").addEventListener("change", e => pick(e.target.value));
 function pick(id) {
-  const sel = $("#node");
-  if (st.nodes.length && !st.nodes.some(n => n.id === id)) { // a node no longer joined says so when asked
-    st.nodes.push({ id, name: id });
-    sel.append(el("option", { value: id }, id));
-  }
-  if (sel.options.length) sel.value = id;
-  if (id === st.node) return;
+  if (st.nodes.length && !st.nodes.some(n => n.id === id)) st.nodes.push({ id, name: id }); // not joined (any more)
+  if (id === st.node) { fillNodeMenu(); return; }
   st.node = id;
   store.set("exe_activity_node", id);
   st.seq++;
@@ -292,6 +490,7 @@ function pick(id) {
   restore();
   setState("loading");
   announce();
+  fillNodeMenu();
   poll();
 }
 function announce() {
@@ -304,9 +503,10 @@ function restore() {
   let info = null;
   try { info = JSON.parse(store.get("exe_activity_info:" + (st.node || "self")) || "null"); } catch {}
   if (info) { st.info = info; st.key = layoutKey(info); build(); }
-  else { V.cpu = null; V.cards = []; $("#view").textContent = ""; }
+  else { V.cpu = null; V.cards = []; V.net = null; $("#view").textContent = ""; }
 }
-const layoutKey = info => JSON.stringify([info.cpus, info.cpu_kinds, info.cards, info.cores]);
+const layoutKey = info => JSON.stringify([info.cpus, info.cpu_kinds, info.cards, info.cores,
+  (info.ifaces || []).map(i => [i.name, i.wireless])]);
 
 // ---- polling ------------------------------------------------------------------
 async function poll() {
@@ -324,6 +524,8 @@ async function poll() {
   st.rtt = performance.now() - t0;
   if (err) {
     if (err.name === "AbortError") return;
+    const shown = st.nodes.find(n => n.id === st.node);
+    if (shown && !shown.self && (err.status === 502 || err.status === 404)) { shown.online = false; paintNodes(); }
     setState(err.status === 404 ? "gone" : "down");
   } else if (r.old) setState("old");
   else if (!r.supported) setState("unsupported");
@@ -350,8 +552,10 @@ function take(r) {
   const self = st.nodes.find(n => n.self);
   if (self && self.unnamed && !st.node && info.host) { // Node Sync is off: the machine's own name
     self.name = info.host; self.unnamed = false;
-    $("#node").options[0].textContent = info.host;
   }
+  const shown = st.nodes.find(n => n.id === st.node);
+  if (shown) shown.online = true; // it answered
+  paintNodes();
   setState("ok");
   render();
 }
@@ -540,14 +744,42 @@ function build() {
     view.append(k.sec);
     return k;
   });
+  // the network interfaces
+  V.net = null;
+  const ifaces = info.ifaces || [];
+  if (ifaces.length) {
+    view.append(el("div", { class: "sep" }));
+    const net = { sec: el("div", { class: "sec" }), ifs: [], frame: 0 };
+    net.big = el("span", { class: "big" }, "—");
+    net.sub = el("span", { class: "sub" }, plural(ifaces.length, "interface", "interfaces"));
+    net.sec.append(el("div", { class: "head" }, el("span", { class: "t" }, "Network"), net.sub, net.big));
+    net.art = document.createElement("canvas");
+    net.figs = el("div", { class: "figs" });
+    net.row = el("div", { class: "row" }, el("div", { class: "art" }, net.art), net.figs);
+    net.sec.append(net.row);
+    const hists = el("div", {});
+    for (const ifc of ifaces) {
+      const f = {};
+      const nm = el("div", { class: "fig nm" }, el("span", { class: "k" }, ifc.name), el("span", {}), f.link = el("span", { class: "v" }, "—"));
+      net.figs.append(nm);
+      f.in = fig(net.figs, "Received", "Bytes a second in, on a scale of tens up to the link's speed");
+      f.out = fig(net.figs, "Sent", "Bytes a second out, on a scale of tens up to the link's speed");
+      if (ifc.wireless) f.signal = fig(net.figs, "Signal", "The Wi-Fi signal, from −90 dBm to −30 dBm");
+      const hist = document.createElement("canvas");
+      const span = el("span", {}, "");
+      hists.append(el("div", { class: "hist" }, el("div", { class: "lcd" }, hist),
+        el("div", { class: "axis" }, span, el("span", {}, "Received above the line, sent below · Now"))));
+      net.ifs.push({ ifc, f, hist, span });
+    }
+    net.sec.append(hists);
+    view.append(net.sec);
+    V.net = net;
+  }
   layout();
 }
 
 function sizeFigs(figs) {
-  for (const row of figs.querySelectorAll(".fig")) {
-    const cv = row.querySelector("canvas"), wrap = cv.parentElement;
-    size(cv, artW(wrap.clientWidth), 5);
-  }
+  for (const cv of figs.querySelectorAll(".fig canvas")) size(cv, artW(cv.parentElement.clientWidth), 5);
 }
 
 function layout() {
@@ -560,8 +792,9 @@ function layout() {
   V.cpu.L = L;
   size(V.cpu.art, L.aw, L.ah);
   // the pictures share one column, so the figures line up down the window
-  const left = Math.max(cssOf(L.aw), V.cards.length ? cssOf(CARD_W) : 0);
-  for (const s of [V.cpu, ...V.cards]) {
+  if (V.net) V.net.aw = panelW(V.net.ifs.length);
+  const left = Math.max(cssOf(L.aw), V.cards.length ? cssOf(CARD_W) : 0, V.net ? cssOf(V.net.aw) : 0);
+  for (const s of [V.cpu, ...V.cards, ...(V.net ? [V.net] : [])]) {
     s.row.classList.toggle("stack", !two);
     s.row.firstChild.style.width = two ? left + "px" : "";
   }
@@ -579,6 +812,14 @@ function layout() {
   for (const s of [V.cpu, ...V.cards]) s.span.textContent = span >= 1 ? `${span} min ago` : "";
   sizeFigs(V.cpu.figs);
   for (const k of V.cards) sizeFigs(k.figs);
+  if (V.net) {
+    size(V.net.art, V.net.aw, PANEL_H);
+    for (const n of V.net.ifs) {
+      size(n.hist, hw, 20);
+      n.span.textContent = `${n.ifc.name}${span >= 1 ? `, ${span} min ago` : ""}`;
+    }
+    sizeFigs(V.net.figs);
+  }
   render();
   sbEnds();
 }
@@ -633,7 +874,115 @@ function render() {
     drawCard(k, c, s);
     drawHist(k);
   }
+  if (V.net) renderNet(s);
   animate();
+}
+
+// ---- the network --------------------------------------------------------------
+// The machine's back panel: a jack for each wired port and an antenna for
+// Wi-Fi. A port whose link is up has a cable plugged in, its link lamp lit
+// (green at a gigabit or more, amber under) and its activity lamp
+// blinking with the traffic; an antenna's waves light by the signal.
+const SLOT = 26, PANEL_IN = 30, PANEL_H = 40;
+const panelW = n => 6 + n * SLOT;
+
+function renderNet(s) {
+  const net = V.net;
+  let total = 0, any = false, up = 0;
+  net.ifs.forEach((n, i) => {
+    const x = s && s.nets ? s.nets[i] : null;
+    n.f.link.textContent = s ? linkWords(n.ifc, x) : "—";
+    if (x && x.up) up++;
+    setFig(n.f.in, x ? rateFrac(x.in, n.ifc) : null, x ? bps(x.in) : "—");
+    setFig(n.f.out, x ? rateFrac(x.out, n.ifc) : null, x ? bps(x.out) : "—");
+    if (n.f.signal) setFig(n.f.signal, x && x.signal != null ? (x.signal + 90) / 60 : null, x && x.signal != null ? `${Math.round(x.signal)} dBm` : "—");
+    if (x && x.in != null) { total += x.in + (x.out || 0); any = true; }
+    drawNetHist(n, i);
+  });
+  net.big.textContent = any ? bps(total) : "—";
+  net.sub.textContent = `${plural(net.ifs.length, "interface", "interfaces")}, ${up} connected`;
+  drawPanel(s);
+}
+
+function drawPanel(s) {
+  const net = V.net, c = net.art.getContext("2d"), W = net.aw;
+  c.clearRect(0, 0, W, PANEL_H);
+  // the plate, its bevel and four screws
+  box(c, 0, 0, W, PANEL_IN, "#000", "#c8c3b8");
+  R(c, 1, 1, W - 2, 1, "#edeae2"); R(c, 1, 1, 1, PANEL_IN - 2, "#edeae2");
+  R(c, 1, PANEL_IN - 2, W - 2, 1, "#8b867b"); R(c, W - 2, 1, 1, PANEL_IN - 2, "#8b867b");
+  for (const [x, y] of [[3, 3], [W - 5, 3], [3, PANEL_IN - 5], [W - 5, PANEL_IN - 5]]) {
+    R(c, x, y, 2, 2, "#6e6a61"); R(c, x, y, 1, 1, "#fff");
+  }
+  net.ifs.forEach((n, i) => {
+    const x = s && s.nets ? s.nets[i] : null, on = !!(x && x.up);
+    const x0 = 3 + i * SLOT;
+    const rate = x ? (x.in || 0) + (x.out || 0) : 0;
+    const busy = on && rate >= 200 && (REDUCED.matches || Math.random() < Math.min(0.9, 0.25 + 0.12 * Math.log10(rate / 200)));
+    if (n.ifc.wireless) drawAntenna(c, x0 + SLOT / 2, on, x && x.signal, busy, net.frame);
+    else drawJack(c, x0 + 4, 7, on, n.ifc.speed, busy);
+  });
+}
+
+function drawJack(c, x, y, on, speed, busy) {
+  // the metal shield
+  box(c, x, y, 18, 15, "#000", "#aaa");
+  R(c, x + 1, y + 1, 16, 1, "#ddd"); R(c, x + 1, y + 1, 1, 13, "#ddd");
+  R(c, x + 1, y + 13, 16, 1, "#666"); R(c, x + 16, y + 1, 1, 13, "#666");
+  // the lamps in its top corners: link, activity
+  R(c, x + 2, y + 2, 3, 2, on ? (speed && speed < 1000 ? AMBER : GREEN) : "#4b5a4b");
+  R(c, x + 13, y + 2, 3, 2, busy ? AMBER : "#5c5236");
+  // the opening, keyed at the foot, its contacts along the top
+  R(c, x + 2, y + 5, 14, 8, "#1a1a1a");
+  R(c, x + 6, y + 13, 6, 2, "#1a1a1a");
+  for (let k = 0; k < 6; k++) R(c, x + 4 + 2 * k, y + 6, 1, 2, GOLD);
+  if (!on) return;
+  // the plug and its cable, down past the plate's edge
+  R(c, x + 3, y + 8, 12, 5, "#dde8f0"); R(c, x + 3, y + 12, 12, 1, "#aabbcc");
+  box(c, x + 5, y + 13, 8, PANEL_IN - y - 13 + 2, "#000", "#3366cc");
+  R(c, x + 6, y + 14, 1, PANEL_IN - y - 13, "#6699ff");
+  box(c, x + 6, PANEL_IN + 1, 6, PANEL_H - PANEL_IN - 1, "#000", "#3366cc");
+  R(c, x + 7, PANEL_IN + 1, 1, PANEL_H - PANEL_IN - 2, "#6699ff");
+}
+
+function drawAntenna(c, cx, on, signal, busy, frame) {
+  cx = Math.floor(cx);
+  // waves either side of the tip, the nearest first; lit by the signal
+  const lit = !on ? 0 : signal == null ? 3 : signal >= -55 ? 3 : signal >= -67 ? 2 : signal >= -78 ? 1 : 0;
+  const pulse = busy ? frame % 4 : -1;
+  for (let k = 0; k < 3; k++) {
+    const r = 4 + 3 * k, col = k < lit ? (k === pulse ? "#bfefff" : "#33bbdd") : "#a39e93";
+    for (let a = -36; a <= 36; a += 6) {
+      const dx = Math.round(r * Math.cos(a * Math.PI / 180)), dy = Math.round(r * Math.sin(a * Math.PI / 180));
+      R(c, cx + dx, 9 + dy, 1, 1, col);
+      R(c, cx - 1 - dx, 9 + dy, 1, 1, col);
+    }
+  }
+  // the rod, its tip and the gold nut it screws into
+  R(c, cx - 1, 6, 2, 16, "#222"); R(c, cx - 1, 6, 1, 16, "#555");
+  R(c, cx - 2, 4, 4, 3, "#000"); R(c, cx - 1, 5, 1, 1, "#777");
+  box(c, cx - 4, 21, 8, 4, "#000", GOLD); R(c, cx - 3, 23, 6, 1, GOLD_LO);
+}
+
+// an interface's traffic over the last minutes: received rises from the
+// middle line, sent hangs from it, both on the busiest moment in view
+function drawNetHist(n, i) {
+  const cv = n.hist, c = cv.getContext("2d"), aw = cv.aw, ah = cv.ah, mid = Math.floor(ah / 2);
+  R(c, 0, 0, aw, ah, LCD);
+  R(c, 0, mid, aw, 1, "#1f1f40");
+  const cnt = Math.min(aw, st.samples.length), from = st.samples.length - cnt;
+  let top = 10000; // an idle link stays flat: the top is never under 10 KB/s
+  for (let j = from; j < st.samples.length; j++) {
+    const x = st.samples[j].nets && st.samples[j].nets[i];
+    if (x) top = Math.max(top, x.in || 0, x.out || 0);
+  }
+  for (let j = 0; j < cnt; j++) {
+    const x = st.samples[from + j].nets && st.samples[from + j].nets[i];
+    if (!x) continue;
+    const up = Math.round((x.in || 0) / top * (mid - 1)), dn = Math.round((x.out || 0) / top * (ah - mid - 2));
+    if (x.in >= 1) R(c, aw - cnt + j, mid - Math.max(1, up), 1, Math.max(1, up), GREEN);
+    if (x.out >= 1) R(c, aw - cnt + j, mid + 1, 1, Math.max(1, dn), STEADY);
+  }
 }
 
 // The CPU: a package with gold pins round it, its die tinted warmer as it
@@ -891,12 +1240,13 @@ function drawFan(c, f, angle) {
 }
 
 // ---- motion -------------------------------------------------------------------
-// Ten frames a second on a fixed clock while a card is shown: the fan turns
-// with the card's fan speed and the die's lit cells move about. It stops
+// Ten frames a second on a fixed clock while a card or a port is shown: the
+// fan turns with the card's fan speed, the die's lit cells move about, and
+// a port's activity lamp blinks with its traffic. It stops
 // while the window is hidden; with less motion one settled frame is drawn.
 let anim = 0;
 function animate() {
-  const want = V.cards.length && !REDUCED.matches && !st.paused && !document.hidden && st.state === "ok";
+  const want = (V.cards.length || V.net) && !REDUCED.matches && !st.paused && !document.hidden && st.state === "ok";
   if (want && !anim) anim = setInterval(frame, 100);
   if (!want && anim) { clearInterval(anim); anim = 0; }
 }
@@ -922,6 +1272,7 @@ function frame() {
     }
     drawCard(k, c, s);
   }
+  if (V.net) { V.net.frame++; drawPanel(s); } // the activity lamps blink, the waves pulse
 }
 REDUCED.addEventListener?.("change", () => { animate(); render(); });
 
@@ -983,6 +1334,7 @@ document.addEventListener("visibilitychange", () => {
 
 restore();
 setState("loading");
+loadIconSet();
 loadNodes();
 poll();
 </script>

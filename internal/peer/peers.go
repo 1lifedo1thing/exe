@@ -17,8 +17,9 @@ import (
 type Peer struct {
 	ID      string    `json:"id"`
 	Name    string    `json:"name"`
-	PubKey  string    `json:"pubkey"` // base64 raw ed25519
-	Addr    string    `json:"addr"`   // host:port of the peer's API listener
+	PubKey  string    `json:"pubkey"`         // base64 raw ed25519
+	Addr    string    `json:"addr"`           // host:port of the peer's API listener
+	Icon    string    `json:"icon,omitempty"` // the icon it last named for itself (Configuration → General → Icon)
 	AddedAt time.Time `json:"added_at"`
 }
 
@@ -140,6 +141,17 @@ func (s *Store) Upsert(p *Peer) error {
 	cp := *p
 	s.peers[p.ID] = &cp
 	return s.saveLocked()
+}
+
+// SetIcon keeps the icon a peer last named for itself, so a node that is
+// offline still shows it; it writes the file only when the icon changed.
+func (s *Store) SetIcon(id, icon string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if p, ok := s.peers[id]; ok && p.Icon != icon {
+		p.Icon = icon
+		s.saveLocked()
+	}
 }
 
 func (s *Store) Remove(id string) error {

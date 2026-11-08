@@ -191,7 +191,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   the chrome; the host gives the span its width. Never copy the block,
   never a bare select.
 - A pop-up whose items carry icons (Analytics' host menu, each host
-  beside its favicon): a native select cannot draw a picture in an
+  beside its favicon; Activity Monitor's node menu, each node in its icon,
+  greyed as a Mac greyed what could not be used while the node does not
+  answer): a native select cannot draw a picture in an
   option, so the shared block keeps its frame and well around a `button`
   in the select's place (the select's box said again for the button: the
   16px icon, then the name, ellipsised), and the list is a Platinum menu
@@ -658,9 +660,9 @@ restyling: `internal/server/ui/index.html` (the desktop),
   zoom between its corkboard and a note (240ms ease-in-out: the sheet grows
   from its card's rectangle and fades in, and shrinks back into it), which
   honours it too and leaves nothing transformed. Activity Monitor turns a
-  card's fan with the card's fan speed and moves its die's lit cells about,
-  ten frames a second, still under `prefers-reduced-motion` and while
-  hidden. Welcome has two: its
+  card's fan with the card's fan speed, moves its die's lit cells about and
+  blinks a network port's activity lamp with its traffic, ten frames a
+  second, still under `prefers-reduced-motion` and while hidden. Welcome has two: its
   pages slide (a feature's card comes in from the right as the first page
   leaves by the left, 220ms `cubic-bezier(.3, .7, .2, 1)`, and back the
   other way; Web Animations with no fill, so nothing stays transformed,

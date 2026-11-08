@@ -46,7 +46,7 @@ func (s *Server) handlePeersGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"self": map[string]any{
 			"id": e.SelfID(), "name": e.SelfName(), "ip": ip, "port": e.Port(),
-			"tailscale": ip != "",
+			"tailscale": ip != "", "icon": s.Config().Icon,
 		},
 		"peers": e.StatusCached(),
 	})
@@ -165,8 +165,9 @@ func (s *Server) handlePeerPing(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// the node's icon goes with its name, so a joined desk can show it
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id": e.SelfID(), "name": e.SelfName(), "time": time.Now().UnixMilli(),
+		"id": e.SelfID(), "name": e.SelfName(), "time": time.Now().UnixMilli(), "icon": s.Config().Icon,
 	})
 }
 
@@ -181,7 +182,7 @@ func (s *Server) handlePeerManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id": e.SelfID(), "name": e.SelfName(), "port": e.Port(),
+		"id": e.SelfID(), "name": e.SelfName(), "port": e.Port(), "icon": s.Config().Icon,
 		"files": e.ManifestFor(p.ID), "peers": e.PeerInfos(),
 		"max_file": e.MaxFile(),
 	})

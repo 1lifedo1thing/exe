@@ -69,3 +69,37 @@ func TestPeersMonitor(t *testing.T) {
 		t.Fatalf("a node never joined: %d", code)
 	}
 }
+
+// A joined node names its icon in its answers, and this node keeps it, so
+// the Activity Monitor's node menu shows it, grey while the node is away.
+func TestPeersCarryTheirIcon(t *testing.T) {
+	a, b := newTestNode(t), newTestNode(t)
+	cfg := *b.srv.Config()
+	cfg.Icon = "test-icon"
+	b.srv.cfg.Store(&cfg)
+	pairNodes(t, a, b)
+	resp, err := http.Get(a.ts.URL + "/v1/peers/status?force=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	resp, err = http.Get(a.ts.URL + "/v1/peers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got struct {
+		Peers []struct {
+			ID, Icon string
+			Online   bool
+		}
+	}
+	json.NewDecoder(resp.Body).Decode(&got)
+	if len(got.Peers) != 1 || got.Peers[0].Icon != "test-icon" || !got.Peers[0].Online {
+		t.Fatalf("peers: %+v", got.Peers)
+	}
+	// kept on disk: an offline node keeps its icon after a restart
+	if p := a.eng.ListPeers()[0]; p.Icon != "test-icon" {
+		t.Fatalf("stored peer: %+v", p)
+	}
+}

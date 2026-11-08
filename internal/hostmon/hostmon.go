@@ -30,9 +30,26 @@ type Sample struct {
 
 	// The detail, sent only to a reader that asks for it (ReadDetail): the
 	// Activity Monitor's, not the Control Strip's.
-	Cores []int  `json:"cores,omitempty"` // each logical CPU's percent busy, in Info.CPUs' order; -1 for one offline
-	Freq  []int  `json:"freq,omitempty"`  // each one's clock in MHz, 0 where the kernel gives none
-	Cards []Card `json:"cards,omitempty"` // each graphics card, one or more
+	Cores []int   `json:"cores,omitempty"` // each logical CPU's percent busy, in Info.CPUs' order; -1 for one offline
+	Freq  []int   `json:"freq,omitempty"`  // each one's clock in MHz, 0 where the kernel gives none
+	Cards []Card  `json:"cards,omitempty"` // each graphics card, one or more
+	Nets  []NetIf `json:"nets,omitempty"`  // each physical network interface, in Info.Ifaces' order
+}
+
+// NetIf is one network interface's moment: bytes a second each way since
+// the sample before, and its link.
+type NetIf struct {
+	In     *float64 `json:"in"`
+	Out    *float64 `json:"out"`
+	Up     bool     `json:"up"`               // the link is up
+	Signal *float64 `json:"signal,omitempty"` // dBm, a wireless link's
+}
+
+// Iface is a physical network interface: a wired port or a wireless one.
+type Iface struct {
+	Name     string `json:"name"`
+	Wireless bool   `json:"wireless"`
+	Speed    int    `json:"speed"` // Mb/s while a wired link is up; 0 where the kernel gives none
 }
 
 // GPU is one card's figures, in nvidia-smi's order (its index).
@@ -92,6 +109,7 @@ type Info struct {
 	CPUs     []CPU      `json:"cpus,omitempty"`
 	CPUKinds []string   `json:"cpu_kinds,omitempty"`
 	Cards    []CardInfo `json:"cards,omitempty"`
+	Ifaces   []Iface    `json:"ifaces,omitempty"` // the network interfaces of Net, as Nets gives them
 }
 
 // counters is one raw read of the host: running totals, from which two
@@ -103,10 +121,17 @@ type counters struct {
 	cpuTemp            *float64
 	perCPU             map[int][2]uint64 // busy, total jiffies of each logical CPU
 	freq               []int             // MHz of each, in topology order
+	links              map[string]link   // each interface's link, by name
 	memTotal, memAvail uint64
 	net, disk          map[string][2]uint64 // in/out, read/written bytes per device
 	gpu                gpuReading
 	info               Info
+}
+
+// link is an interface's state at one reading.
+type link struct {
+	up     bool
+	signal *float64
 }
 
 type gpuReading struct {
@@ -167,14 +192,14 @@ func (m *Monitor) ReadDetail(after int64, detail bool) (Info, []Sample) {
 	for _, s := range m.ring {
 		if s.T > after {
 			if !detail {
-				s.Cores, s.Freq, s.Cards = nil, nil, nil
+				s.Cores, s.Freq, s.Cards, s.Nets = nil, nil, nil, nil
 			}
 			out = append(out, s)
 		}
 	}
 	info := m.info
 	if !detail {
-		info.CPUs, info.CPUKinds, info.Cards = nil, nil, nil
+		info.CPUs, info.CPUKinds, info.Cards, info.Ifaces = nil, nil, nil, nil
 	}
 	return info, out
 }
@@ -238,6 +263,15 @@ func between(a, b *counters, interval time.Duration) (Sample, bool) {
 		s.Freq = b.freq
 	}
 	s.Cards = b.gpu.detail
+	for _, ifc := range b.info.Ifaces {
+		n := NetIf{Up: b.links[ifc.Name].up, Signal: b.links[ifc.Name].signal}
+		x, okA := a.net[ifc.Name]
+		y, okB := b.net[ifc.Name]
+		if okA && okB && y[0] >= x[0] && y[1] >= x[1] { // a counter that went back (a reset) gives no figure
+			n.In, n.Out = num(float64(y[0]-x[0])/dt), num(float64(y[1]-x[1])/dt)
+		}
+		s.Nets = append(s.Nets, n)
+	}
 	return s, true
 }
 

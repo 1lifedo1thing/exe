@@ -173,6 +173,7 @@ func (e *Engine) validKey(key string) bool {
 type Status struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
+	Icon      string `json:"icon,omitempty"` // its node icon, as it last said
 	Addr      string `json:"addr"`
 	Online    bool   `json:"online"`
 	LatencyMS int64  `json:"latency_ms"`
@@ -210,6 +211,7 @@ type PairResponse struct {
 type manifestResponse struct {
 	ID    string             `json:"id"`
 	Name  string             `json:"name"`
+	Icon  string             `json:"icon"` // its node icon; "" from an older release, exe's own
 	Port  string             `json:"port"`
 	Files map[string]Version `json:"files"`
 	Peers []PeerInfo         `json:"peers"`
@@ -1188,6 +1190,7 @@ func (e *Engine) reconcile(p *Peer) {
 		return
 	}
 	e.setStatus(p, latency, nil)
+	e.peers.SetIcon(p.ID, mr.Icon)
 	held := make(map[string]bool, len(mr.Files))
 	for key := range mr.Files {
 		held[key] = true
@@ -1308,13 +1311,19 @@ func (e *Engine) Probe(force bool) []*Status {
 				e.setStatus(p, 0, errors.New("unreachable"))
 				return
 			}
-			io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			var pong struct {
+				Icon string `json:"icon"`
+			}
+			raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 			resp.Body.Close()
 			if resp.StatusCode != http.StatusOK {
 				e.setStatus(p, 0, fmt.Errorf("HTTP %d", resp.StatusCode))
 				return
 			}
 			e.setStatus(p, time.Since(start), nil)
+			if json.Unmarshal(raw, &pong) == nil {
+				e.peers.SetIcon(p.ID, pong.Icon)
+			}
 		}(p)
 	}
 	wg.Wait()
@@ -1331,10 +1340,10 @@ func (e *Engine) statusList() []*Status {
 	for _, p := range e.peers.List() {
 		if st, ok := e.status[p.ID]; ok {
 			cp := *st
-			cp.Name, cp.Addr = p.Name, p.Addr
+			cp.Name, cp.Addr, cp.Icon = p.Name, p.Addr, p.Icon
 			out = append(out, &cp)
 		} else {
-			out = append(out, &Status{ID: p.ID, Name: p.Name, Addr: p.Addr})
+			out = append(out, &Status{ID: p.ID, Name: p.Name, Addr: p.Addr, Icon: p.Icon})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name+out[i].ID < out[j].Name+out[j].ID })

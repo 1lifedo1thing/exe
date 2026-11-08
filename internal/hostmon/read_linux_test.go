@@ -96,6 +96,48 @@ tap-vm1: 5 1 0 0 0 0 0 0 6 1 0 0 0 0 0 0
 	}
 }
 
+func TestReadLinks(t *testing.T) {
+	root := t.TempDir()
+	write := func(path, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(root+path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(root+path, []byte(body+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// spark: a 2.5 Gb/s port up, its Wi-Fi down; a port some driver leaves
+	// "unknown" with a carrier; a port down whose speed the kernel refuses
+	write("/enP7s7/operstate", "up")
+	write("/enP7s7/speed", "2500")
+	write("/wlP9s9/operstate", "up")
+	write("/wlP9s9/phy80211/name", "phy0")
+	write("/eth9/operstate", "unknown")
+	write("/eth9/carrier", "1")
+	write("/eth9/speed", "-1")
+	write("/enp1s0/operstate", "down")
+	signals := parseWireless("Inter-| sta-|   Quality        |   Discarded packets               | Missed | WE\n" +
+		" face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | 22\n" +
+		"wlP9s9: 0000   55.  -61.  -256        0      0      0      0      0        0\n")
+	if signals["wlP9s9"] != -61 {
+		t.Fatalf("signals: %v", signals)
+	}
+	ifaces, links := readLinks(root, []string{"enP7s7", "enp1s0", "eth9", "wlP9s9"}, signals)
+	if len(ifaces) != 4 || ifaces[0].Speed != 2500 || ifaces[0].Wireless || !links["enP7s7"].up {
+		t.Fatalf("the wired port: %+v %+v", ifaces, links)
+	}
+	if ifaces[1].Speed != 0 || links["enp1s0"].up {
+		t.Fatalf("a port down: %+v %+v", ifaces[1], links["enp1s0"])
+	}
+	if ifaces[2].Speed != 0 || !links["eth9"].up {
+		t.Fatalf("unknown with a carrier: %+v %+v", ifaces[2], links["eth9"])
+	}
+	if !ifaces[3].Wireless || ifaces[3].Speed != 0 || links["wlP9s9"].signal == nil || *links["wlP9s9"].signal != -61 {
+		t.Fatalf("Wi-Fi: %+v %+v", ifaces[3], links["wlP9s9"])
+	}
+}
+
 func TestParseDiskstats(t *testing.T) {
 	text := ` 259       0 nvme0n1 5000 10 80000 300 9000 20 160000 400 0 500 700 0 0 0 0 0 0
  259       1 nvme0n1p1 100 0 2000 3 0 0 0 0 0 4 3 0 0 0 0 0 0

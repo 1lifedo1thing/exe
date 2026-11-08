@@ -41,6 +41,12 @@ func readHost() counters {
 		c.net = parseNetDev(f, physical("/sys/class/net/"))
 		f.Close()
 	}
+	var signals map[string]float64
+	if b, err := os.ReadFile("/proc/net/wireless"); err == nil {
+		signals = parseWireless(string(b))
+	}
+	ifaces, links := readLinks("/sys/class/net", names(c.net), signals)
+	c.links = links
 	if f, err := os.Open("/proc/diskstats"); err == nil {
 		c.disk = parseDiskstats(f, physical("/sys/block/"))
 		f.Close()
@@ -48,7 +54,7 @@ func readHost() counters {
 	c.gpu = readGPU()
 	host, _ := os.Hostname()
 	c.info = Info{Host: host, Cores: runtime.NumCPU(), MemoryTotal: c.memTotal, GPU: c.gpu.name, GPUs: c.gpu.names, Net: names(c.net), Disks: names(c.disk),
-		CPUs: topo.cpus, CPUKinds: topo.kinds, Cards: c.gpu.detailInfo}
+		CPUs: topo.cpus, CPUKinds: topo.kinds, Cards: c.gpu.detailInfo, Ifaces: ifaces}
 	return c
 }
 
@@ -259,6 +265,60 @@ func parseNetDev(r io.Reader, keep func(string) bool) map[string][2]uint64 {
 		tx, err2 := strconv.ParseUint(f[8], 10, 64)
 		if err1 == nil && err2 == nil {
 			out[name] = [2]uint64{rx, tx}
+		}
+	}
+	return out
+}
+
+// readLinks reads each interface's link under a sysfs class/net root: a
+// wireless one has a wireless or phy80211 entry; the link is up when the
+// kernel says so (operstate "up", or "unknown" with a carrier, as some
+// drivers leave it); a wired link's speed is in Mb/s, and the kernel
+// refuses to give it while the link is down.
+func readLinks(root string, names []string, signals map[string]float64) ([]Iface, map[string]link) {
+	ifaces := make([]Iface, 0, len(names))
+	links := map[string]link{}
+	for _, name := range names {
+		dir := root + "/" + name
+		ifc := Iface{Name: name}
+		if _, err := os.Stat(dir + "/wireless"); err == nil {
+			ifc.Wireless = true
+		} else if _, err := os.Stat(dir + "/phy80211"); err == nil {
+			ifc.Wireless = true
+		}
+		state := readTrim(dir + "/operstate")
+		l := link{up: state == "up" || (state == "unknown" && readTrim(dir+"/carrier") == "1")}
+		if l.up && !ifc.Wireless {
+			if mbps, err := strconv.Atoi(readTrim(dir + "/speed")); err == nil && mbps > 0 {
+				ifc.Speed = mbps
+			}
+		}
+		if v, ok := signals[name]; ok && l.up {
+			l.signal = num(v)
+		}
+		ifaces = append(ifaces, ifc)
+		links[name] = l
+	}
+	return ifaces, links
+}
+
+// parseWireless reads /proc/net/wireless: after two lines of heading, a
+// line an associated interface, "wlan0: 0000   55.  -55.  -256 …", whose
+// fourth field is the signal level. Only a level in dBm (below zero) is
+// kept; some drivers give a relative one instead.
+func parseWireless(s string) map[string]float64 {
+	out := map[string]float64{}
+	for i, line := range strings.Split(s, "\n") {
+		if i < 2 {
+			continue
+		}
+		name, rest, ok := strings.Cut(line, ":")
+		f := strings.Fields(rest)
+		if !ok || len(f) < 3 {
+			continue
+		}
+		if v, err := strconv.ParseFloat(strings.TrimSuffix(f[2], "."), 64); err == nil && v < 0 {
+			out[strings.TrimSpace(name)] = v
 		}
 	}
 	return out

@@ -3985,8 +3985,9 @@ VMs, the configuration and the disks of the Mac OS 9 and Mac OS X apps
 (Intel included) are not synced: each stays on its own node. Joining gives the other node the sync and nothing more: not
 your VMs, your configuration or a shell. The one thing it can read beyond
 the sync is how busy this machine is, for its **Activity Monitor**: the
-load, clocks, heat and power of the CPU and the graphics cards, and their
-names.
+load, clocks, heat and power of the CPU and the graphics cards, the
+traffic and links of the network ports, and their names. Each node also
+tells the other its icon.
 
 ### Join two nodes
 
@@ -5217,12 +5218,14 @@ so a tap on it lands on the move.
 
 ## Activity Monitor
 
-**Activity Monitor** shows what a machine's CPU and graphics cards are
-doing, every two seconds, drawn as pixel art. It shows this node, or any
-node you joined to it (**Joining desks together**).
+**Activity Monitor** shows what a machine's CPU, graphics cards and
+network ports are doing, every two seconds, drawn as pixel art. It shows
+this node, or any node you joined to it (**Joining desks together**).
 
-- **Pick a node** with the **Node** pop-up at the top. The window's title
-  names the node, and the window opens on it the next time.
+- **Pick a node** with the **Node** pop-up at the top. Each node wears its
+  icon (**Configuration → General → Icon** on that node), grey while it
+  does not answer. The window's title names the node, and the window
+  opens on it the next time.
 - **The CPU** is a chip. Each tile on its die is a core, and each column
   in a tile is one of the core's threads, lit from the bottom like a level
   meter: green, then amber, then red. A slower kind of core is a smaller
@@ -5244,10 +5247,21 @@ node you joined to it (**Joining desks together**).
   limit, where it names one), the graphics clock, the fan, and the video
   encoder and decoder, each where the card gives it. Under the card, its
   load over the last ten minutes.
+- **The network** is the machine's back panel: a jack for each wired port
+  and an antenna for Wi-Fi. A port whose link is up has a cable in it, its
+  link lamp lit (green at a gigabit or more, amber under) and its activity
+  lamp blinking with the traffic. The antenna's waves light by the signal.
+- **Beside the panel**, for each interface: its link (its speed, or
+  **Not connected**), and what it received and sent a second, each on a
+  meter that counts in tens from 1 KB/s up to the link's speed. Wi-Fi has
+  its signal too. Under the panel, each interface's traffic over the last
+  ten minutes: received above the line, sent below it.
 
 The figures are the daemon's own samples, the same ones as the Control
 Strip's activity module (`GET /v1/host/monitor?detail=1`). The daemon
-reads them on Linux, and the cards through `nvidia-smi`. Another node's
+reads them on Linux, the cards through `nvidia-smi`, and only the
+physical network interfaces: not loopback, bridges, VM taps or tunnels,
+so each byte counts once. Another node's
 figures come through this node: its daemon asks the other one over Node
 Sync's signed link (`GET /v1/peers/<id>/monitor`). That node must run an
 exe of this release or later; the window says so when it does not. With
