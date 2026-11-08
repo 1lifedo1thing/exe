@@ -580,6 +580,7 @@ function layout() {
   sizeFigs(V.cpu.figs);
   for (const k of V.cards) sizeFigs(k.figs);
   render();
+  sbEnds();
 }
 
 // ---- drawing ------------------------------------------------------------------
@@ -925,11 +926,15 @@ function frame() {
 REDUCED.addEventListener?.("change", () => { animate(); render(); });
 
 // ---- the window ---------------------------------------------------------------
+// the thumb's ends merge with the line over the bar and with the arrows
+// (scrolled-y, at-y-end): said again after every layout too, since new
+// figures or a grown window move the end with no scroll event
 const pane = $("#pane");
-pane.addEventListener("scroll", () => {
+function sbEnds() {
   pane.classList.toggle("scrolled-y", pane.scrollTop >= 1);
   pane.classList.toggle("at-y-end", pane.scrollTop >= 1 && pane.scrollTop >= pane.scrollHeight - pane.clientHeight - 1);
-}, { passive: true });
+}
+pane.addEventListener("scroll", sbEnds, { passive: true });
 let lastW = 0, lastD = 0, relay = 0;
 new ResizeObserver(() => {
   if (pane.clientWidth === lastW && dpr() === lastD) return;
