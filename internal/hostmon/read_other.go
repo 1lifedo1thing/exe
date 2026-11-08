@@ -1,10 +1,10 @@
-//go:build !linux && !darwin
+//go:build !linux && !darwin && !windows
 
 package hostmon
 
 import "time"
 
-// Supported: Linux and macOS are read; elsewhere the Control Strip hides
+// Supported: Linux, macOS and Windows are read; elsewhere the Control Strip hides
 // the module.
 const Supported = false
 

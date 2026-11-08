@@ -68,8 +68,10 @@ func shortVendor(s string) string {
 
 // chipToken is a part number: capitals, digits and hyphens, with three
 // digits at least — I219-LM, AQC113, RTL8125, X710, 82574L, BCM57416 —
-// and not a speed (10GbE, 2.5G) or a standard (802.11ax).
-var chipToken = regexp.MustCompile(`^[A-Z0-9][A-Z0-9-]*$`)
+// and perhaps a small letter after (Intel's AX1650s, AX1675x); not a
+// speed (10GbE, 2.5G, 160MHz) or a standard (802.11ax).
+var chipToken = regexp.MustCompile(`^[A-Z0-9][A-Z0-9-]*[a-z]?$`)
+var unit = regexp.MustCompile(`[0-9]([KMG]Hz|[MG]b)$`)
 
 // chipName finds the chip in a device's name: "Ethernet Connection (17)
 // I219-LM" is I219-LM, "RTL8111/8168/8211/8411 PCI Express Gigabit
@@ -83,7 +85,7 @@ func chipName(s string) string {
 	}
 	for _, w := range strings.Fields(s) {
 		w, _, _ = strings.Cut(strings.TrimRight(w, "*,;:"), "/")
-		if chipToken.MatchString(w) && digits(w) >= 3 {
+		if chipToken.MatchString(w) && digits(w) >= 3 && !unit.MatchString(w) {
 			return w
 		}
 	}
@@ -122,4 +124,47 @@ func driverChip(driver string, vendor, device uint16) string {
 		}
 	}
 	return ""
+}
+
+// windowsNICModel names a Windows network adapter from its driver's
+// description ("Realtek Gaming 2.5GbE Family Controller") and its device
+// instance ID ("PCI\VEN_10EC&DEV_8125&…"): a PCI card by its vendor and
+// chip, as on Linux; anything else by the description alone.
+func windowsNICModel(desc, pnp string) string {
+	desc = cleanMarks(desc)
+	up := strings.ToUpper(pnp)
+	if strings.HasPrefix(up, `PCI\`) {
+		v, ok1 := pnpHex(up, "VEN_")
+		d, ok2 := pnpHex(up, "DEV_")
+		if ok1 && ok2 {
+			name := desc
+			if chipName(desc) == "" {
+				if c := driverChip("", v, d); c != "" {
+					name = c
+				}
+			}
+			return nicModel(v, "", name)
+		}
+	}
+	return desc
+}
+
+// pnpHex reads the four hex digits after a key in a device instance ID.
+func pnpHex(id, key string) (uint16, bool) {
+	i := strings.Index(id, key)
+	if i < 0 || len(id) < i+len(key)+4 {
+		return 0, false
+	}
+	var v uint16
+	_, err := fmt.Sscanf(id[i+len(key):i+len(key)+4], "%04X", &v)
+	return v, err == nil
+}
+
+// cleanMarks drops the registered and trademark marks a Windows driver
+// puts in its name: "Intel(R) Wi-Fi 6E AX211" → "Intel Wi-Fi 6E AX211".
+func cleanMarks(s string) string {
+	for _, m := range []string{"(R)", "(r)", "(TM)", "(tm)", "®", "™"} {
+		s = strings.ReplaceAll(s, m, "")
+	}
+	return strings.Join(strings.Fields(s), " ")
 }

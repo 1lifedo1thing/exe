@@ -24,6 +24,7 @@ func TestNICModel(t *testing.T) {
 		{0x11ab, "Marvell Technology Group Ltd.", "88E8056 PCI-E Gigabit Ethernet Controller", "Marvell 88E8056"},
 		// no part number: the name whole; a maker the table lacks, shortened
 		{0x1af4, "Red Hat, Inc.", "Virtio network device", "Red Hat Virtio network device"},
+		{0x1234, "Example Networks Inc.", "Fast 100Mb Adapter 160MHz", "Example Networks Fast 100Mb Adapter 160MHz"},
 		{0x1234, "Example Networks Inc.", "", "Example Networks"},
 		{0x1234, "", "", ""},
 	}
@@ -64,6 +65,23 @@ func TestDriverChip(t *testing.T) {
 	} {
 		if got := driverChip(c.driver, c.vendor, c.device); got != c.want {
 			t.Errorf("driverChip(%q, %#x, %#x) = %q, want %q", c.driver, c.vendor, c.device, got, c.want)
+		}
+	}
+}
+
+func TestWindowsNICModel(t *testing.T) {
+	for _, c := range [][3]string{
+		// world's two, as Windows names them
+		{"Realtek Gaming 2.5GbE Family Controller", `PCI\VEN_10EC&DEV_8125&SUBSYS_0AE71028&REV_05\01000000684CE00000`, "Realtek RTL8125"},
+		{"MediaTek Wi-Fi 6 MT7921 Wireless LAN Card", `PCI\VEN_14C3&DEV_7961&SUBSYS_E0B7105B&REV_00\6&33bb71b2&0&0048020A`, "MediaTek MT7921"},
+		{"Intel(R) Ethernet Controller I225-V", `PCI\VEN_8086&DEV_15F3&SUBSYS_00008086&REV_03\X`, "Intel I225-V"},
+		{"Killer(R) Wi-Fi 6E AX1675x 160MHz Wireless Network Adapter (211NGW)", `PCI\VEN_8086&DEV_2725&SUBSYS_16721A56&REV_1A\X`, "Intel AX1675x"},
+		{"Intel(R) Wi-Fi 6E AX211 160MHz", `PCI\VEN_8086&DEV_51F0&SUBSYS_00948086&REV_01\X`, "Intel AX211"},
+		{"Realtek USB GbE Family Controller", `USB\VID_0BDA&PID_8153\000001`, "Realtek USB GbE Family Controller"},
+		{"Some Adapter", "", "Some Adapter"},
+	} {
+		if got := windowsNICModel(c[0], c[1]); got != c[2] {
+			t.Errorf("windowsNICModel(%q) = %q, want %q", c[0], got, c[2])
 		}
 	}
 }

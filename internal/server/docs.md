@@ -500,7 +500,7 @@ CPU, memory, GPU, network and disk, a sample every two seconds.
 
 | Row | Its words |
 | --- | --- |
-| CPU | Its share of all cores, and its hottest sensor's temperature. |
+| CPU | Its share of all cores, and its hottest sensor's temperature (none on Windows, which gives it only to a driver). |
 | Memory | Memory in use: the total less what the kernel says is available. |
 | GPU | Its use, temperature and power, from `nvidia-smi`. A host with more than one card has a row for each, **GPU 1**, **GPU 2** and on, in `nvidia-smi`'s order. A host without `nvidia-smi` has no GPU row. On a Mac with an Apple chip, the chip's GPU: its use and temperature. |
 | Network | Bytes a second in and out over the physical network interfaces. |
@@ -514,7 +514,8 @@ the NIC.
 The daemon samples only while a desktop reads (`GET /v1/host/monitor`). The
 figures start when the strip opens and stop ten minutes after the last
 desktop folds it away or goes hidden, and the daemon keeps the last ten
-minutes. It reads Linux and macOS; on Windows the tile stays away.
+minutes. It reads Linux, macOS and Windows; on any other system the tile
+stays away.
 
 ### Notifications: turn them on
 
@@ -5264,11 +5265,22 @@ reads them on Linux, the cards through `nvidia-smi`, and only the
 physical network interfaces: not loopback, bridges, VM taps or tunnels,
 so each byte counts once. It names each controller from the system's
 list of PCI devices (`pci.ids`), or from its driver where the chip is
-newer than the list; a USB adapter names itself. On a Mac it reads them from macOS: each core,
-the performance cores ahead of the efficiency ones, memory as Activity
-Monitor counts it, the Apple chip's GPU and the temperatures of its CPU
-clusters and GPU. macOS keeps the clocks, the power and the Wi-Fi signal
-behind an administrator's password, so a Mac shows no figure for those.
+newer than the list; a USB adapter names itself.
+
+On a Mac it reads them from macOS: each core, the performance cores ahead
+of the efficiency ones, memory as Activity Monitor counts it, the Apple
+chip's GPU and the temperatures of its CPU clusters and GPU. macOS keeps
+the clocks, the power and the Wi-Fi signal behind an administrator's
+password, so a Mac shows no figure for those.
+
+On Windows it reads them the way Task Manager does, with no
+administrator: each core and its clock, memory, the network adapters
+that are hardware (not Hyper-V's, VMware's, the network bridge or
+Tailscale) under their names in Windows, such as **Ethernet** and
+**Wi-Fi**, the Wi-Fi signal, the physical disks (not a Storage Space,
+whose bytes are its disks'), and the NVIDIA cards through `nvidia-smi`.
+Windows gives no top clock with the boost, so the clock shows alone,
+and no CPU temperature without a driver of its own.
 Another node's
 figures come through this node: its daemon asks the other one over Node
 Sync's signed link (`GET /v1/peers/<id>/monitor`). That node must run an

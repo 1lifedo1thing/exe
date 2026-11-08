@@ -441,12 +441,6 @@ func darwinNICModel(name string) string {
 var darwinTopoOnce sync.Once
 var darwinTopo topology
 
-// topology is the machine's logical CPUs and their kinds.
-type topology struct {
-	cpus  []CPU
-	kinds []string
-}
-
 // readDarwinTopology numbers an Apple chip's cores by performance level:
 // the kernel lists the least performant level first (on the M1, CPUs 0–3
 // are its efficiency cores, 4–7 its performance cores), and each level
