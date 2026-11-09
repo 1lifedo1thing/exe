@@ -404,7 +404,6 @@ func (c *agentColumn) switchTo(name string) error {
 		return fmt.Errorf("not a %s session: %q", c.a.title, name)
 	}
 	if _, err := c.s.wakeAgentSession(c.a, name); err != nil {
-		c.refresh() // a conversation gone from the machine took its row
 		return err
 	}
 	if err := c.sh.Switch(name); err != nil {
@@ -603,7 +602,11 @@ func (c *agentColumn) resume(id string) error {
 	}
 	name := c.s.nextAgentSession(c.a)
 	if c.a.notify {
-		if err := c.s.newAgentSessionIn(c.a, name, codexThreadDir(id), "resume", id); err != nil {
+		dir, err := codexResumeDir(id)
+		if err != nil {
+			return err
+		}
+		if err := c.s.newAgentSessionIn(c.a, name, dir, "resume", id); err != nil {
 			return err
 		}
 		c.s.noteCodexThread(c.a, name, id)
@@ -625,17 +628,6 @@ func (c *agentColumn) resume(id string) error {
 func existingDir(dir string) string {
 	if st, err := os.Stat(dir); dir != "" && err == nil && st.IsDir() {
 		return dir
-	}
-	return ""
-}
-
-// codexThreadDir is the folder a thread was started in, "" when it is
-// gone (the session then opens in the project folder, as any other).
-func codexThreadDir(id string) string {
-	for _, t := range codexAppThreads(codexHome(), nil, time.Now(), 0) {
-		if t.ID == id {
-			return existingDir(t.Cwd)
-		}
 	}
 	return ""
 }

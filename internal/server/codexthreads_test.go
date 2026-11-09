@@ -1,11 +1,64 @@
 package server
 
 import (
+	"bytes"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestCodexResumeDir(t *testing.T) {
+	home, work := t.TempDir(), t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	id := "11111111-2222-4333-8444-555555555555"
+	path := writeRollout(t, home, "09", id, "codex-tui", `"cli"`, "", work, "resume me", time.Now())
+	check := func(want string, found bool) {
+		t.Helper()
+		got, err := codexResumeDir(id)
+		if got != want || (err == nil) != found {
+			t.Fatalf("resume directory = %q, %v; want %q, found %v", got, err, want, found)
+		}
+	}
+	check(work, true)    // a desktop CLI thread, deliberately absent from codexAppThreads
+	codexRolloutOf(path) // warm the metadata cache before removing the file
+	archived := filepath.Join(home, "archived_sessions", filepath.Base(path))
+	os.MkdirAll(filepath.Dir(archived), 0o755)
+	if err := os.Rename(path, archived); err != nil {
+		t.Fatal(err)
+	}
+	check(work, true)
+	os.Remove(work) // a missing working folder falls back, not a missing conversation
+	check("", true)
+	os.Remove(archived)
+	check("", false)
+	// A filename alone cannot turn a corrupt or unrelated rollout into
+	// the requested conversation, and an internal review is not resumable.
+	os.WriteFile(path, []byte("broken\n"), 0o644)
+	check("", false)
+	writeRollout(t, home, "09", id, "codex-tui", `{"subagent":"review"}`, "parent", work, "review", time.Now())
+	check("", false)
+	if _, err := codexResumeDir("../../anything"); err == nil {
+		t.Fatal("invalid id accepted")
+	}
+}
+
+func TestCodexResumeMissingAPI(t *testing.T) {
+	t.Setenv("CODEX_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir()) // no command can touch the user's tmux
+	s := &Server{StateDir: t.TempDir()}
+	for _, dir := range []string{"", t.TempDir()} {
+		body := []byte(`{"resume":"11111111-2222-4333-8444-555555555555","dir":"` + dir + `"}`)
+		r := httptest.NewRequest("POST", "/v1/agents/codex/sessions", bytes.NewReader(body))
+		r.SetPathValue("app", "codex")
+		w := httptest.NewRecorder()
+		s.handleAgentSessionCreate(w, r)
+		if w.Code != 400 || !bytes.Contains(w.Body.Bytes(), []byte("could not be found")) {
+			t.Fatalf("missing resume = %d %s", w.Code, w.Body.String())
+		}
+	}
+}
 
 // a rollout's first lines: the meta, Codex's preamble as user items, the
 // prompt — the way the CLI writes them

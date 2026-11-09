@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -230,6 +231,28 @@ func codexRolloutOf(path string) *codexRollout {
 		codexMetaCache.Store(path, r)
 	}
 	return r
+}
+
+// codexResumeDir checks the actual conversation before starting a CLI.
+// The column's external-thread list excludes CLI conversations, so it
+// cannot resolve a stopped desktop session's folder or validate its id.
+// Read the file afresh: an old cache entry is not evidence it still exists.
+// Archived conversations can be resumed too, as in Codex's own picker.
+func codexResumeDir(id string) (string, error) {
+	if home := codexHome(); home != "" && uuidTitle.MatchString(id) {
+		for _, pattern := range []string{
+			filepath.Join(home, "sessions", "*", "*", "*", "rollout-*-"+id+".jsonl"),
+			filepath.Join(home, "archived_sessions", "rollout-*-"+id+".jsonl"),
+		} {
+			paths, _ := filepath.Glob(pattern)
+			for _, path := range paths {
+				if r := readCodexRollout(path); r != nil && r.id == id && r.user {
+					return existingDir(r.cwd), nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("the saved Codex conversation %s could not be found on this machine", id)
 }
 
 // codexAppThreads lists the threads started elsewhere, latest activity

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,45 @@ import (
 	"testing"
 	"time"
 )
+
+// A stale notify id used to start a CLI which immediately exited, while
+// wakeAgentSession discarded the stopped record. A click must validate
+// before launch, leave both files intact, and still be retryable after
+// another daemon restart.
+func TestStoppedCodexMissingConversation(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	t.Setenv("PATH", t.TempDir()) // no live tmux, and a launch would fail differently
+	s := &Server{StateDir: t.TempDir()}
+	a := hostAgents["codex"]
+	name, id := "exe-codex-2", "11111111-2222-4333-8444-555555555555"
+	s.noteCodexThread(a, name, id)
+	s.agentStopped = map[string][]stoppedSession{"codex": {{
+		agentNote: agentNote{Name: name, Number: 2, Title: "Example conversation", Created: 100},
+		Thread:    id, Stopped: 200,
+	}}}
+	s.saveStoppedLocked()
+	before, _ := os.ReadFile(s.agentStoppedFile())
+	status, _ := os.ReadFile(s.agentStatusFile(a, name))
+	for attempt := 0; attempt < 2; attempt++ {
+		woke, err := s.wakeAgentSession(a, name)
+		if woke || err == nil || !strings.Contains(err.Error(), "session has been kept") {
+			t.Fatalf("missing resume = %v, %v", woke, err)
+		}
+		after, _ := os.ReadFile(s.agentStoppedFile())
+		gotStatus, _ := os.ReadFile(s.agentStatusFile(a, name))
+		if !bytes.Equal(before, after) || !bytes.Equal(status, gotStatus) {
+			t.Fatal("failed click changed the recovery files")
+		}
+		if rows := s.withStopped(a, nil); len(rows) != 1 || !rows[0].Stopped || rows[0].Title != "Example conversation" {
+			t.Fatalf("lost sidebar row: %+v", rows)
+		}
+		s = &Server{StateDir: s.StateDir}
+	}
+	if !s.forgetStopped(a, name) || len(s.stoppedSessions(a)) != 0 {
+		t.Fatal("explicit Archive should still remove the row")
+	}
+}
 
 // A host restart on a tmux server of the test's own: sessions noted while
 // the daemon runs, the server killed as the host's going down kills it,
@@ -185,7 +225,8 @@ func TestHostRestartLive(t *testing.T) {
 		t.Fatalf("rows after Archive: %+v", rows)
 	}
 
-	// a conversation gone from the machine since: the switch fails and the row goes
+	// a conversation gone from the machine since: the switch fails but
+	// leaves the row and its recovery record available for another try
 	status, _ := json.Marshal(map[string]string{"session_id": id4})
 	os.WriteFile(s.agentStatusFile(a, "exe-fake-4"), status, 0o644)
 	note, _ := json.Marshal(agentLiveNote{Boot: "boot-3", Sessions: map[string][]agentNote{"fake": {{Name: "exe-fake-4", Number: 4, Created: 1}}}})
@@ -195,8 +236,8 @@ func TestHostRestartLive(t *testing.T) {
 	if woke, err := s.wakeAgentSession(a, "exe-fake-4"); woke || err == nil {
 		t.Fatalf("woke a conversation that is gone: %v %v", woke, err)
 	}
-	if st := s.stoppedSessions(a); len(st) != 0 {
-		t.Fatalf("a gone conversation kept its row: %+v", st)
+	if st := s.stoppedSessions(a); len(st) != 1 || st[0].Thread != id4 {
+		t.Fatalf("a failed resume lost its recovery record: %+v", st)
 	}
 }
 

@@ -10238,8 +10238,9 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     }
   }
   function switchSession(name) {
-    current = name;
-    renderSessions();
+    // The daemon's next session frame confirms the move. A stopped
+    // conversation can fail to resume; keep highlighting the terminal
+    // actually on screen, including when no changed frame follows.
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ switch: name }));
   }
   // a notification's tap asks for a session (showTarget): the switch waits

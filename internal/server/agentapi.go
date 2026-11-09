@@ -186,8 +186,15 @@ func (s *Server) handleAgentSessionCreate(w http.ResponseWriter, r *http.Request
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	if dir == "" && a.notify && req.Resume != "" {
-		dir = codexThreadDir(req.Resume)
+	if a.notify && req.Resume != "" {
+		resumeDir, err := codexResumeDir(req.Resume)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if dir == "" {
+			dir = resumeDir
+		}
 	}
 	if err := s.newAgentTaskSession(a, name, dir, req.Prompt, extra...); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)

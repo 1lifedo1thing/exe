@@ -325,8 +325,9 @@ func (s *Server) withStopped(a hostAgent, live []agentSession) []agentSession {
 // was started in, Codex in its thread's — in a new tmux session, marked
 // with the conversation at once as the column's resume marks one
 // (noteClaudeSession, noteCodexThread). false, with no error, for a name
-// that is not stopped, or that a live session holds again. A conversation
-// gone from this machine since takes its row with it.
+// that is not stopped, or that a live session holds again. A missing
+// conversation keeps its row so a failed click never discards recovery
+// information; Archive is the explicit way to let it go.
 func (s *Server) wakeAgentSession(a hostAgent, name string) (bool, error) {
 	s.agentStoppedMu.Lock()
 	defer s.agentStoppedMu.Unlock()
@@ -345,15 +346,18 @@ func (s *Server) wakeAgentSession(a hostAgent, name string) (bool, error) {
 		return false, nil
 	}
 	if a.notify {
-		if err := s.newAgentSessionIn(a, name, codexThreadDir(st.Thread), "resume", st.Thread); err != nil {
+		dir, err := codexResumeDir(st.Thread)
+		if err != nil {
+			return false, fmt.Errorf("%w; the session has been kept", err)
+		}
+		if err := s.newAgentSessionIn(a, name, dir, "resume", st.Thread); err != nil {
 			return false, err
 		}
 		s.noteCodexThread(a, name, st.Thread)
 	} else {
 		t := claudeSessionByID(claudeHome(), st.Thread)
 		if t == nil {
-			drop()
-			return false, fmt.Errorf("the conversation of %s is no longer on this machine", name)
+			return false, fmt.Errorf("the conversation of %s could not be found on this machine; the session has been kept", name)
 		}
 		if err := s.newAgentSessionIn(a, name, existingDir(t.cwd), "--resume", st.Thread); err != nil {
 			return false, err

@@ -1091,6 +1091,10 @@ with the hollow dot of a conversation that is not here.
 - Click a stopped row to continue it. Claude Code or Codex starts again
   on that conversation, in the folder it was started in, under the same
   session name. **Continue Here** on the row's menu does the same.
+- If the saved conversation cannot be found, the row stays available
+  and an error explains why it could not open. The selected row stays
+  on the conversation actually shown in the terminal. **Archive…** is
+  still available to remove the stopped row.
 - The window opened after the restart lands on the session it showed last,
   continued for you. The other stopped rows wait until you click them, so
   sessions you no longer need do not take memory.
