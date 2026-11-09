@@ -9694,8 +9694,8 @@ function newTerm() {
     linkHandler: { activate: (e, uri) => openTermLink(uri) },
   });
   term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => openTermLink(uri)));
-  // OSC 52 is a program setting the clipboard. Claude Code copies its own
-  // selection that way as a drag ends — it draws that highlight itself,
+  // OSC 52 is a program setting the clipboard. Claude Code and fullscreen
+  // Codex copy their own selection that way as a drag ends — they draw the highlight,
   // so xterm holds no selection of its own — and under tmux it goes
   // through load-buffer -w, which tmux hands on to its client, this
   // terminal. The text goes onto the computer's clipboard as it would
@@ -9788,18 +9788,19 @@ $("#term-open").onclick = () => {
 let termSeq = 0;
 
 // ---- terminal contextual menu: Copy / Paste / Select All ----
-// Claude Code turns on any-event mouse tracking, which hands the mouse to
+// Fullscreen CLIs turn on any-event mouse tracking, which hands the mouse to
 // the app: a plain drag is reported instead of selecting (Shift+drag /
 // Option+drag still select), and every report counts as input, which
 // clears the selection — a right press does it, and so does each hover
 // move as the pointer crosses a cell. Two capture-phase listeners, ahead of
 // xterm's own, keep a selection alive long enough to use: right presses
 // never reach xterm (they open the menu instead), and hover moves are
-// swallowed while something is selected. Clicks, keys and the wheel still
-// clear it as before, and the app sees every other event unchanged.
-// A plain drag is Claude Code's own selection, which it copies over OSC
+// swallowed while something is selected, including an app's OSC 52 copy.
+// Clicks, keys and the wheel still clear it as before, and the app sees
+// every other event unchanged.
+// A plain drag is the CLI's own selection, which it copies over OSC
 // 52 (newTerm): with nothing selected in xterm, Copy takes that text —
-// until the next press or key, which clears Claude Code's highlight too.
+// until the next press or key, which clears the CLI's highlight too.
 // The modifier drag itself: xterm keeps its press from the app but still
 // reports its release, and that report, being input, cleared the
 // selection the drag had just made. So the release of a forced drag goes
@@ -9852,7 +9853,7 @@ function wireTermMenu(w, box, termOf) {
   box.addEventListener("keydown", unclip, true);
   box.addEventListener("mousemove", e => {
     const term = termOf();
-    if (term && !e.buttons && term.hasSelection()) e.stopPropagation();
+    if (term && !e.buttons && (term.hasSelection() || term._clip)) e.stopPropagation();
   }, true);
   box.addEventListener("contextmenu", e => {
     if (!termOf()) return;

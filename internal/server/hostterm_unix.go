@@ -403,6 +403,9 @@ func loginShell() string {
 // one-off Terminal runs (startHostShell), with TMUX unset in it and
 // tmux's own status line and prefix key off (termsessions.go). The
 // window attaches with startTermClient and sizes the session to itself.
+// Keep TMUX_PANE: programs such as Codex use it to forward copies through
+// tmux to the browser even when the host's native clipboard works. TMUX
+// stays unset so running tmux still attaches without a nesting warning.
 func (s *Server) newTermSession() (termSession, error) {
 	s.termMu.Lock()
 	defer s.termMu.Unlock()
@@ -420,7 +423,7 @@ func (s *Server) newTermSession() (termSession, error) {
 	if err == nil {
 		args = append(args, "-c", home)
 	}
-	args = append(args, "exec env -u TMUX -u TMUX_PANE "+shQuote(loginShell())+" -l",
+	args = append(args, "exec env -u TMUX "+shQuote(loginShell())+" -l",
 		";", "set-option", "-t", name, "status", "off",
 		";", "set-option", "-t", name, "prefix", "None",
 		";", "set-option", "-t", name, "prefix2", "None")

@@ -11,4 +11,4 @@ before it said is kept in CHANGELOG.md.
 - **Hub** posts take emoji reactions: click the smiley to choose one, or an existing reaction to join.
 - **Solana**, a new trading chart with volume, RSI and Bollinger Bands, opens from the Solana ticker's menu.
 - **Activity Monitor**, a new app, draws each core, GPU and network port of a node, live and up to years back.
-- **Agent sessions** keep stopped rows and the current selection when a saved conversation cannot be found.
+- **Terminal** copies Codex selections to your browser's clipboard and enables right-click Copy.

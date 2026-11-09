@@ -1275,14 +1275,20 @@ On a phone, drag a finger instead of turning a wheel.
 
 To copy text, drag across it.
 
-- **In a Codex or Terminal window** the drag selects the text as in any
-  terminal. Right-click and choose **Copy**.
+- **In a shell** the drag selects the text as in any terminal. Right-click
+  and choose **Copy**.
+- **In Codex's fullscreen mode**, including Codex started inside Terminal,
+  Codex copies its own selection through to the browser's clipboard as the
+  drag ends. Right-click **Copy** can copy that text again. If the browser
+  refuses the automatic copy, use that menu item. Terminal shells created
+  before this fix need a new Terminal window for Codex to detect this route;
+  existing Codex conversations can be resumed there.
 - **In a Claude Code window**, Claude Code in its fullscreen mode draws the
   selection itself, and as the drag ends the text goes straight onto your
   computer's clipboard. Should the browser refuse the page its clipboard,
   the text waits for **Copy** in the right-click menu instead, until your
   next click or key.
-- **Shift+drag** (Option+drag on a Mac) in a Claude Code window makes the
+- **Shift+drag** (Option+drag on a Mac) in a fullscreen CLI makes the
   terminal's own selection, for **Copy** the same way.
 
 The right-click menu also has **Paste**, which puts the clipboard's text in

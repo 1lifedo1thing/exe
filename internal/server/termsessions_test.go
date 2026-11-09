@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -171,13 +172,21 @@ func TestTermSessionsLive(t *testing.T) {
 		}
 	}
 
-	// a window: its keys reach the shell, which has no TMUX of its own
+	// TMUX stays unset so another tmux can attach, but the real pane
+	// identity remains available for clipboard forwarding to the browser.
 	one := link(1)
 	waitFor("the window to attach", func() bool { return attached(1) })
-	if err := one.c.Write(ctx, websocket.MessageBinary, []byte("echo \"mark-$((6*7)) tmux=[$TMUX]\"\n")); err != nil {
+	if err := one.c.Write(ctx, websocket.MessageBinary, []byte("echo \"mark-$((6*7)) tmux=[$TMUX] pane=[$TMUX_PANE]\"\n")); err != nil {
 		t.Fatal(err)
 	}
 	waitFor("the shell to answer", func() bool { return strings.Contains(pane(1), "mark-42 tmux=[]") })
+	paneID, err := tmuxCmd("list-panes", "-t", "=exe-term-1", "-F", "#{pane_id}").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor("the shell's pane identity "+strconv.Quote(strings.TrimSpace(string(paneID))), func() bool {
+		return strings.Contains(pane(1), "mark-42 tmux=[] pane=["+strings.TrimSpace(string(paneID))+"]")
+	})
 
 	// the link goes (a reload, a closed browser): the shell stays, and so
 	// does its screen, for the next link
