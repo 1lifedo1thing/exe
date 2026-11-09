@@ -1259,7 +1259,8 @@ The mouse wheel scrolls back through the conversation in either window.
 
 - **Claude Code** takes the wheel itself and scrolls its own transcript.
 - **Codex** keeps a transcript of its own as well, since version 0.160, and
-  the wheel scrolls that, three lines at a time. While you are scrolled
+  the wheel scrolls that, three lines at a time, including when you start
+  Codex inside a Terminal window. While you are scrolled
   back Codex shows "Back to bottom" above its composer, and what you type
   goes into the composer without moving the view. Esc returns to the
   latest line.

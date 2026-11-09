@@ -304,21 +304,28 @@ func (s *unixShell) clientTTY() string {
 // over the transcript only, not over the prompt pinned to the top line
 // or the composer — and lines short of a whole report are owed to the
 // next. Scrolled back there, a typed key leaves the view where it is:
-// that is Codex's to decide. Every command names the client's tty as
-// its target: an if-shell's inner commands without one land on tmux's
+// that is Codex's to decide. A plain Terminal can run Codex too: inspect
+// the foreground command on each scroll instead of keeping the shell's
+// initial wheel policy after a program starts or exits.
+// Every command names the client's tty as its target: an if-shell's
+// inner commands without one land on tmux's
 // idea of the current session — someone else's window.
 func (s *unixShell) Scroll(lines int) error {
 	tty := s.clientTTY()
 	if tty == "" {
 		return nil // no tmux client: the browser terminal scrolls itself
 	}
-	out, err := tmuxCmd("display-message", "-p", "-t", tty, "#{alternate_on} #{pane_in_mode} #{pane_width} #{pane_height}").Output()
+	out, err := tmuxCmd("display-message", "-p", "-t", tty, "#{alternate_on} #{pane_in_mode} #{pane_width} #{pane_height} #{pane_current_command}").Output()
 	if err != nil {
 		return fmt.Errorf("tmux display-message: %w", err)
 	}
 	f := strings.Fields(string(out))
-	alt := len(f) == 4 && f[0] == "1"
-	mode := len(f) == 4 && f[1] == "1"
+	alt := len(f) >= 4 && f[0] == "1"
+	mode := len(f) >= 4 && f[1] == "1"
+	wheel := s.wheel
+	if wheel == 0 && len(f) >= 5 && f[4] == "codex" {
+		wheel = hostAgents["codex"].wheel
+	}
 	n := lines
 	if n < 0 {
 		n = -n
@@ -334,11 +341,11 @@ func (s *unixShell) Scroll(lines int) error {
 			return nil
 		}
 		cmd = tmuxCmd("send-keys", "-t", tty, "-X", "cancel")
-	case alt && !mode && s.wheel > 0:
+	case alt && !mode && wheel > 0:
 		s.mu.Lock()
 		s.owed += lines
-		reports := s.owed / s.wheel
-		s.owed -= reports * s.wheel
+		reports := s.owed / wheel
+		s.owed -= reports * wheel
 		s.mu.Unlock()
 		if reports == 0 {
 			return nil

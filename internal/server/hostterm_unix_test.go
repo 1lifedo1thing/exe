@@ -4,6 +4,7 @@ package server
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +13,83 @@ import (
 	"testing"
 	"time"
 )
+
+// A plain Terminal starts as a shell, then runs Codex, then another
+// fullscreen program. Its wheel follows the current program without
+// recalling prompts in Codex or sending Codex mouse reports to the other
+// program. A renamed cat is inert and exposes the bytes that arrive.
+func TestTerminalForegroundScrollLive(t *testing.T) {
+	cat, err := exec.LookPath("cat")
+	if err != nil {
+		t.Skip("no cat")
+	}
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux")
+	}
+	dir := t.TempDir()
+	code, err := os.ReadFile(cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := filepath.Join(dir, "codex")
+	if err := os.WriteFile(fake, code, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tmuxSocket = fmt.Sprintf("exe-test-terminal-wheel-%d", os.Getpid())
+	defer func() { tmuxCmd("kill-server").Run(); tmuxSocket = "" }()
+	t.Setenv("HOME", dir)
+	t.Setenv("SHELL", "/bin/sh")
+	s := &Server{StateDir: t.TempDir()}
+	ts, err := s.newTermSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, err := startTermClient(ts.Name, 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer host.Close()
+	go io.Copy(io.Discard, host)
+	sh := host.(*unixShell)
+	pane := func(format string) string {
+		out, _ := tmuxCmd("display-message", "-p", "-t", ts.Name, format).Output()
+		return strings.TrimSpace(string(out))
+	}
+	wait := func(what string, ok func() bool) {
+		t.Helper()
+		for i := 0; i < 100; i++ {
+			if ok() {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Fatal("timed out waiting for " + what)
+	}
+	wait("the Terminal client", func() bool { return sh.clientTTY() != "" })
+	for _, tc := range []struct{ command, name, want string }{
+		{shQuote(fake), "codex", "^[[<64;40;8M^[[<64;40;8M^[[<65;40;8M"},
+		{shQuote(cat), filepath.Base(cat), "^[[A^[[A^[[A^[[A^[[A^[[A^[[B^[[B^[[B"},
+	} {
+		sh.Write([]byte("printf '\\033[?1049h\\033[H\\033[2J'; " + tc.command + "\n"))
+		wait("foreground "+tc.name, func() bool { return pane("#{alternate_on} #{pane_current_command}") == "1 "+tc.name })
+		for _, lines := range []int{6, -3, 0} {
+			if err := sh.Scroll(lines); err != nil {
+				t.Fatal(err)
+			}
+		}
+		wait(tc.name+" wheel bytes", func() bool {
+			out, _ := tmuxCmd("capture-pane", "-p", "-J", "-t", ts.Name).Output()
+			return strings.Join(strings.Fields(string(out)), "") == tc.want
+		})
+		if got := pane("#{pane_in_mode}"); got != "0" {
+			t.Fatalf("%s entered tmux copy mode", tc.name)
+		}
+		sh.Write([]byte{3}) // end only the test's foreground cat
+		wait("the shell", func() bool { return pane("#{pane_current_command}") == "sh" })
+		sh.Write([]byte("printf '\\033[?1049l'\n"))
+		wait("the shell screen", func() bool { return pane("#{alternate_on}") == "0" })
+	}
+}
 
 // Exercise the installed CLI's help and the shell command used by tmux:
 // modern Codex opts out of the shared server, old or failed probes retain
