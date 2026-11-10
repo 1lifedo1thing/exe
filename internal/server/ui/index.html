@@ -1353,6 +1353,9 @@ a.svc:hover { text-decoration: underline; }
   border-right: 1px solid var(--black); background: var(--g300); }
 /* the seam drags the column's width: a 6px grip astride the 1px line */
 .sess-grip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px; cursor: col-resize; z-index: 2; }
+/* the list is .vflush: the column's right line is its bar's trailing line
+   and the button row's top line is its last arrow's, so the pair of arrows
+   has one line between them and one under them */
 .sess-list { flex: 1; min-height: 0; overflow-y: auto; background: #fff; }
 .sess-row { display: flex; align-items: center; gap: 5px; height: 18px; padding: 0 6px 0 8px;
   white-space: nowrap; border-bottom: 1px solid #efefef; }
@@ -9984,7 +9987,7 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     <div class="stripe"></div><button class="tbox zoom"></button><button class="tbox shade"></button></div>
     <div class="win-frame">
       <div class="win-body" style="padding:0">${column
-        ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list"></div><div class="sess-btns"><button class="ghost sess-new">${L("New…")}</button>${app === "claude" ? `<button class="ghost sess-find" aria-label="Search" title="${L`Search every ${agent.title} conversation on this machine`}">${sessFindGlyph()}<span>Search</span></button>` : ""}</div><div class="sess-grip"></div></div><div class="agent-main">${app === "claude" ? `<div class="sess-last none"><span class="t">…</span><span class="n"></span></div>` : ""}<div class="hostterm-box"></div></div></div>`
+        ? `<div class="agent-wrap"><div class="sess-col"><div class="sess-list vflush"></div><div class="sess-btns"><button class="ghost sess-new">${L("New…")}</button>${app === "claude" ? `<button class="ghost sess-find" aria-label="Search" title="${L`Search every ${agent.title} conversation on this machine`}">${sessFindGlyph()}<span>Search</span></button>` : ""}</div><div class="sess-grip"></div></div><div class="agent-main">${app === "claude" ? `<div class="sess-last none"><span class="t">…</span><span class="n"></span></div>` : ""}<div class="hostterm-box"></div></div></div>`
         : `<div class="hostterm-box${sess ? " tmux" : ""}"></div>`}</div>
       <div class="keyrow">${keyRowButtons()}</div>
       <div class="held" hidden><span class="held-text"></span><button class="ghost held-copy">Copy</button><button class="ghost held-drop">Dismiss</button><button class="ghost held-insert">Insert</button></div>

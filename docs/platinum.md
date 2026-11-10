@@ -912,7 +912,10 @@ restyling: `internal/server/ui/index.html` (the desktop),
   magnifier alone in 31px (`.sess-col.tight`), and under 122px New gives
   up width too; a phone's strip always wears the glyph. The column keeps the
   terminal's height (`contain: size`) and the list scrolls inside it; a
-  long list never grows the window. When the current session changes the
+  long list never grows the window. The list is `.vflush`: the column's
+  right line is its bar's trailing line and the button row's top line is
+  its last arrow's, so one line stands between the two arrows and one
+  under them. When the current session changes the
   list scrolls its row into view, the least distance that does it, and
   otherwise stays where it was scrolled. On a phone the column turns
   into a strip of tabs above the terminal, sliding sideways to the
