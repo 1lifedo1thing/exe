@@ -23,7 +23,8 @@ import (
 // the conversation stays open there to be taken over or continued.
 //
 //	GET    /v1/agents/{app}/sessions                 the rows of the column, with their states — "stopped" on one a restart of the
-//	                                                 host ended, which nothing runs in (agentrestart.go) — and "threads", the
+//	                                                 host ended, which nothing runs in, and "put_away" beside it on one the
+//	                                                 column's Put Away ended (agentrestart.go) — and "threads", the
 //	                                                 conversations started elsewhere (codexthreads.go, claudesessions.go):
 //	                                                 the latest ten, or with ?threads=all every one (the column's Search)
 //	POST   /v1/agents/{app}/sessions                 {prompt, resume, fork, session_id, permission_mode, model, name} → {name, number}

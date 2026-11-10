@@ -1376,8 +1376,8 @@ a.svc:hover { text-decoration: underline; }
    window or an SSH shell — follow the sessions under a rule; the hollow
    dot says the conversation is not here yet, a click continues it in a
    session of its own (the row greys while that opens). A session row
-   wears it too when a restart of the host stopped the session: a click
-   continues it under its own name */
+   wears it too when a restart of the host stopped the session, or Put
+   Away did: a click continues it under its own name */
 .sess-sep { flex: none; height: 0; border-top: 1px solid var(--black); }
 .sess-away { flex: none; width: 7px; height: 7px; display: block; }
 .sess-away svg { display: block; }
@@ -10194,10 +10194,11 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     // Codex rings for a finished turn and an approval
     const off = s.name !== current;
     const wants = off && (s.wants || s.bell), working = off && s.working && !wants;
-    // a session a restart of the host stopped wears the hollow dot of a
-    // conversation that is not here: a click continues it (agentrestart.go)
+    // a session a restart of the host stopped, or one put away, wears the
+    // hollow dot of a conversation that is not here: a click continues it
+    // (agentrestart.go)
     const stopped = off && s.stopped;
-    const why = stopped ? L("\nstopped when this host restarted\nclick to continue it")
+    const why = stopped ? (s.put_away ? L("\nput away\nclick to continue it") : L("\nstopped when this host restarted\nclick to continue it"))
       : !wants ? (working ? L("\nstill working") : "")
       : s.state === "waiting" ? L("\nwaiting for you: a permission, or a question")
       : s.state === "done" ? L("\nfinished its turn — waiting for you")
@@ -10354,7 +10355,10 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
   // and the list's own, off any row, just starts one. Archive ends the session and the CLI in it,
   // after a dialog; the conversation stays on this machine for the CLI's
   // own /resume, which is why the item shows only once one exists. The
-  // daemon moves the window to a neighbour when it was showing that one
+  // daemon moves the window to a neighbour when it was showing that one.
+  // Put Away ends the CLI too and keeps the row, with the hollow dot: a
+  // click continues the conversation. It is dimmed on the only session
+  // running — the window needs one — and absent on a row already stopped
   function sessMenu(e, s) {
     e.preventDefault(); e.stopPropagation();
     focusWin(w);
@@ -10369,7 +10373,13 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     if (s) {
       items.push("-", { label: L("Copy Title"), act: () => copyText(sessTitle(s), L("title")) });
       if (s.resumable && findBtn) items.push({ label: L("Get Info"), act: () => sessInfo(s) });
-      if (s.resumable) items.push("-", { label: L("Archive…"), act: () => archiveSession(s) });
+      if (s.resumable) {
+        items.push("-");
+        // the dialog comes only for a turn in flight, and the dots with it
+        if (!s.stopped) items.push({ label: s.working ? L("Put Away…") : L("Put Away"), act: () => putAwaySession(s),
+          dis: s.name === current && !sessions.some(x => x.name !== s.name && !x.stopped) });
+        items.push({ label: L("Archive…"), act: () => archiveSession(s) });
+      }
     }
     items.push(...wakeAllItems());
     showCtxMenu(e.clientX, e.clientY, items, () => term.focus());
@@ -10377,12 +10387,14 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
   // Continue All Stopped Sessions…, on the column's menus while a restart
   // of the host has left any: each starts its CLI again, so a dialog says
   // how many first. The window stays where it is; the rows turn live as
-  // their sessions start
+  // their sessions start. A session put away is not one of them: it was
+  // ended to get its memory back, and its own row continues it
+  const restartStopped = x => x.stopped && !x.put_away;
   function wakeAllItems() {
-    return sessions.some(x => x.stopped) ? ["-", { label: L("Continue All Stopped Sessions…"), act: wakeAll }] : [];
+    return sessions.some(restartStopped) ? ["-", { label: L("Continue All Stopped Sessions…"), act: wakeAll }] : [];
   }
   async function wakeAll() {
-    const n = sessions.filter(x => x.stopped).length;
+    const n = sessions.filter(restartStopped).length;
     const ok = await confirmDialog({
       message: L`Continue ${n.toLocaleString(UI_LOCALE)} stopped session${n === 1 ? "" : "s"}?`,
       detail: L`They stopped when this host restarted. Each starts ${agent.title} again on its conversation and holds memory while it runs; a click on a row continues that one alone.`,
@@ -10399,7 +10411,9 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     const ok = await confirmDialog({
       message: L`Archive “${sessTitle(s)}”?`,
       detail: s.stopped
-        ? L`It stopped when this host restarted, so nothing runs in it. Its row goes, and the conversation stays on this machine: ${back}`
+        ? (s.put_away
+          ? L`It was put away, so nothing runs in it. Its row goes, and the conversation stays on this machine: ${back}`
+          : L`It stopped when this host restarted, so nothing runs in it. Its row goes, and the conversation stays on this machine: ${back}`)
         : L`The session ends, and ${agent.title} with it. The conversation stays on this machine: ${findBtn ? L("Search finds it again, and so does /resume in any ") : L("/resume in any ")}${agent.title}${findBtn ? L(" session.") : L(" session brings it back.")}${s.working ? L(" It is still working — the turn in flight is lost.") : ""}${s.name === current ? L(" The window moves to another session, or ends with the last one.") : ""}`,
       action: L("Archive"),
     });
@@ -10417,10 +10431,36 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
   function archivedToast(msg) {
     const title = archivedTitles.get(msg.archived) || msg.archived;
     archivedTitles.delete(msg.archived);
-    let t = L`Archived “${title}”`;
+    toast(L`Archived “${title}”` + gaveBack(msg), 6000);
+  }
+  // the rest of that line, which Put Away's toast ends on too
+  function gaveBack(msg) {
+    let t = "";
     if (msg.measured) t += L`: ${fmtBytes(msg.freed || 0)} freed` + (msg.swap ? L` and ${fmtBytes(msg.swap)} of swap` : "");
     if (msg.available) t += `. ${fmtBytes(msg.available)} available now`;
-    toast(t + ".", 6000);
+    return t + ".";
+  }
+  // Put Away: the session ends as Archive ends it, and its row stays
+  // with the hollow dot, to be continued by a click. Nothing is lost at a
+  // prompt, so there is no dialog then; a turn in flight is asked about
+  const putAwayTitles = new Map();
+  async function putAwaySession(s) {
+    const ok = !s.working || await confirmDialog({
+      message: L`Put away “${sessTitle(s)}”?`,
+      detail: L`It is still working — the turn in flight is lost. The session ends, and ${agent.title} with it; its row stays, and a click on it continues the conversation.`,
+      action: L("Put Away"),
+    });
+    if (ok && ws && ws.readyState === 1) {
+      putAwayTitles.set(s.name, sessTitle(s));
+      ws.send(JSON.stringify({ put_away: s.name }));
+    }
+    term.focus();
+  }
+  // what the session gave back, {"put_away":name,…}: Archive's figures
+  function putAwayToast(msg) {
+    const title = putAwayTitles.get(msg.put_away) || msg.put_away;
+    putAwayTitles.delete(msg.put_away);
+    toast(L`Put away “${title}”` + gaveBack(msg), 6000);
   }
   // Get Info, on a row's menu in the Claude Code window: a dialog over
   // the window, like Search, with what the daemon reads out of the
@@ -10684,7 +10724,7 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
         const off = s.name !== current, wants = off && (s.wants || s.bell);
         if (wants) m.append(sessBell());
         else if (off && s.working) m.append(el("span", { class: "sess-live" }));
-        else if (off && s.stopped) m.append(sessAway()); // a host restart stopped it: opening it continues it
+        else if (off && s.stopped) m.append(sessAway()); // a host restart stopped it, or Put Away did: opening it continues it
       } else m.append(t.working || t.open ? el("span", { class: "sess-live" }) : sessAway());
       // the small text: a session's name and its day, a conversation's
       // folder and its day
@@ -11095,13 +11135,15 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     // with the ChatGPT subscription's for Codex — or the session column's
     // list, {"sessions":[…],"current":…,"tmux":…}, or an {"error":…} for a switch
     // or New that failed, {"archived":…} with what an archived session
-    // gave back, or the {"pong":…} to a beat above
+    // gave back, {"put_away":…} with what one put away did, or the
+    // {"pong":…} to a beat above
     ws.onmessage = e => {
       if (typeof e.data !== "string") { term.write(new Uint8Array(e.data)); return; }
       let msg;
       try { msg = JSON.parse(e.data); } catch (err) { return; }
       if ("pong" in msg) { pinged = 0; clearTimeout(probe); probe = 0; }
       if (msg.archived) archivedToast(msg);
+      if (msg.put_away) putAwayToast(msg);
       if ("status" in msg) { if (msg.status) showAgentUsage(usage, msg.status); else usage.hidden = true; }
       if ("usage" in msg) showOpenAIUsage(usage, msg.usage);
       if (lastBar && msg.prompt) showLastPrompt(msg.prompt);

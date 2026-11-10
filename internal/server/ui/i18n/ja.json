@@ -1017,5 +1017,12 @@
 "No recent folders.": "最近のフォルダはありません。",
 "A folder on this machine": "このマシン上のフォルダ",
 "Folder:": "フォルダ：",
-"Couldn't list the folders: {0}": "フォルダを一覧できません：{0}"
+"Couldn't list the folders: {0}": "フォルダを一覧できません：{0}",
+"\nput away\nclick to continue it": "\nしまってあります\nクリックで続けます",
+"Put Away": "しまう",
+"Put Away…": "しまう…",
+"Put away “{0}”?": "「{0}」をしまいますか？",
+"Put away “{0}”": "「{0}」をしまいました",
+"It is still working — the turn in flight is lost. The session ends, and {0} with it; its row stays, and a click on it continues the conversation.": "まだ作業中です — 進行中のターンは失われます。セッションは終了し、{0} も終了します。行は残り、クリックすると会話を続けます。",
+"It was put away, so nothing runs in it. Its row goes, and the conversation stays on this machine: {0}": "しまってあるため、中では何も動いていません。行はなくなり、会話はこのマシンに残ります：{0}"
 }

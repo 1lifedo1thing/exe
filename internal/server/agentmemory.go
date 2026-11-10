@@ -22,7 +22,9 @@ import (
 // own figure for what can be allocated without swapping. The window
 // toasts both (archiveFigures); DELETE on the session answers with them.
 // Where /proc does not tell (macOS, Windows) the processes are not
-// measured and only what is available is said.
+// measured and only what is available is said. Put Away, which ends a
+// session the same way and keeps its row (agentrestart.go), measures and
+// tells the same.
 
 // archiveFigures is what an archived session gave back.
 type archiveFigures struct {

@@ -1046,6 +1046,7 @@ that session stands:
 | --- | --- |
 | A pulsing green dot | Is still working. |
 | A black dot | Waits for you: its turn has finished, or a permission or a question is pending. |
+| A hollow dot | Is not running: you put it away, or a restart of the host stopped it. Click the row to continue it. |
 
 Hover a row for which of these it is. The session on screen has no mark,
 since the terminal shows how it stands. A turn you stopped with Escape
@@ -1074,6 +1075,7 @@ Right-click a row for its menu:
 | **New Session…** | Starts a new session, as **New…** does. |
 | **Copy Title** | Copies the row's title. |
 | **Get Info** | Claude Code: a dialog about the conversation — its summary, turns, tokens and more (below). |
+| **Put Away** | Ends the session's process and keeps the row (below). |
 | **Archive…** | Ends the session and its process, after a dialog. |
 
 An archived conversation stays on this machine. In the Claude Code window,
@@ -1094,6 +1096,28 @@ says otherwise.
   session leaves the window with none, and it stops as it does whenever the
   last session ends.
 
+### Put a session away
+
+A session that waits at its prompt still holds a few hundred megabytes.
+**Put Away** on the row's menu gives that memory back and keeps the row.
+
+- The session's process ends, as it does with **Archive…**. The row stays
+  in its place, with its title, under a hollow dot.
+- Click the row to continue it. Claude Code or Codex starts again on that
+  conversation, in the folder it was started in, under the same session
+  name. **Continue Here** on the row's menu does the same.
+- A note at the foot of the screen says what the session gave back, as it
+  does after **Archive…**.
+- There is no dialog for a session at its prompt, since nothing is lost. For
+  a session that is still working the item reads **Put Away…** and asks
+  first: the turn in flight is lost.
+- When the window was showing that session, it moves to a neighbour that is
+  running. The only running session cannot be put away, because the window
+  needs one, so the item is dimmed there.
+- **Put Away** shows only once the conversation exists.
+- A row you put away stays put away across a restart of the daemon or the
+  host, until you click it. **Archive…** removes it.
+
 ### After the host restarts
 
 A restart of the daemon leaves the sessions running. A restart of the
@@ -1112,7 +1136,8 @@ with the hollow dot of a conversation that is not here.
   continued for you. The other stopped rows wait until you click them, so
   sessions you no longer need do not take memory.
 - **Continue All Stopped Sessions…**, on the column's menus, continues
-  every stopped row at once, after a dialog. The window stays where it is.
+  every row the restart stopped at once, after a dialog. The window stays
+  where it is. Rows you put away are left as they are.
 - **Archive…** on a stopped row removes the row. Nothing was running, so
   nothing is freed. The conversation stays on this machine, as it does for
   any archived session.
@@ -1379,7 +1404,7 @@ is set.
 
 | Request | What it does |
 | --- | --- |
-| `GET /v1/agents/claude/sessions` | Lists the rows with their states and, as `threads`, the conversations started elsewhere: the latest ten, or every one with `?threads=all`. |
+| `GET /v1/agents/claude/sessions` | Lists the rows with their states (`stopped` on a row that is not running, and `put_away` beside it when **Put Away** ended it) and, as `threads`, the conversations started elsewhere: the latest ten, or every one with `?threads=all`. |
 | `POST /v1/agents/claude/sessions` | Opens a numbered session and answers with its `name` and `number`. |
 | `POST /v1/agents/claude/sessions/<name>/prompt` | Types a message into a session. |
 | `DELETE /v1/agents/claude/sessions/<name>` | Ends the session, as **Archive…** does, and answers once its processes are gone with what it gave back: `freed` and `swap`, the bytes they held (`measured` says whether they could be read), and `available`, the machine's memory now. |

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -38,6 +39,12 @@ import (
 // has looked at in weeks. A window opened while none of its agent's
 // sessions runs lands where it was, as it would have before the restart:
 // its last session is continued for it (wakeLastStopped).
+//
+// Put Away, on a row's menu, makes a stopped session of a live one by
+// hand (putAwayAgentSession): the CLI ends and gives its memory back, as
+// Archive's does, and the row stays with its hollow dot, to be continued
+// by a click. Nobody is owed the return of a session they put away, so
+// Continue All Stopped Sessions leaves those where they are.
 
 // agentNote is one live session as the note keeps it: enough to show its
 // row again.
@@ -56,13 +63,14 @@ type agentLiveNote struct {
 	Sessions map[string][]agentNote `json:"sessions"`
 }
 
-// stoppedSession is one session a host restart ended: its note, the
-// conversation it carried — a Claude Code session id, a Codex thread id —
-// and when the daemon found it gone.
+// stoppedSession is one session a host restart ended, or Put Away did:
+// its note, the conversation it carried — a Claude Code session id, a
+// Codex thread id — and when the daemon found it gone, or ended it.
 type stoppedSession struct {
 	agentNote
 	Thread  string `json:"thread"`
 	Stopped int64  `json:"stopped"`
+	PutAway bool   `json:"put_away,omitempty"` // by hand, not by a restart
 }
 
 // agentNotesEvery is how often RunAgentNotes looks at the sessions; one
@@ -237,6 +245,11 @@ func (s *Server) agentConversation(a hostAgent, name string) string {
 func (s *Server) unnoteAgentSession(a hostAgent, name string) {
 	s.agentStoppedMu.Lock()
 	defer s.agentStoppedMu.Unlock()
+	s.unnoteAgentSessionLocked(a, name)
+}
+
+// unnoteAgentSessionLocked is unnoteAgentSession with agentStoppedMu held.
+func (s *Server) unnoteAgentSessionLocked(a hostAgent, name string) {
 	b, err := os.ReadFile(s.agentLiveFile())
 	if err != nil {
 		return
@@ -313,7 +326,7 @@ func (s *Server) withStopped(a hostAgent, live []agentSession) []agentSession {
 	for _, st := range stopped {
 		if !taken[st.Name] {
 			list = append(list, agentSession{Name: st.Name, Number: st.Number, Title: st.Title, Created: st.Created,
-				Stopped: true, Resumable: true, lastAttached: st.LastAttached})
+				Stopped: true, PutAway: st.PutAway, Resumable: true, lastAttached: st.LastAttached})
 		}
 	}
 	sortAgentSessions(list)
@@ -397,13 +410,18 @@ func (s *Server) wakeLastStopped(a hostAgent) string {
 	return best.Name
 }
 
-// wakeAllStopped continues every stopped session of the agent's, the
-// latest first; the first failure is the answer, the rest still start.
+// wakeAllStopped continues every session of the agent's that a host
+// restart stopped, the latest first; the first failure is the answer, the
+// rest still start. One put away by hand stays put away: it was ended to
+// get its memory back, and a click on its row is the way to continue it.
 func (s *Server) wakeAllStopped(a hostAgent, each func()) error {
 	list := s.stoppedSessions(a)
 	sort.Slice(list, func(i, j int) bool { return list[i].Created > list[j].Created })
 	var first error
 	for _, st := range list {
+		if st.PutAway {
+			continue
+		}
 		if _, err := s.wakeAgentSession(a, st.Name); err != nil && first == nil {
 			first = err
 		}
@@ -412,6 +430,50 @@ func (s *Server) wakeAllStopped(a hostAgent, each func()) error {
 		}
 	}
 	return first
+}
+
+// putAwayAgentSession ends a live session and keeps its row: the tmux
+// session and the CLI in it go, as Archive's do, and the session joins
+// the stopped ones under its name, number, title and day, with the
+// conversation it carried, so a click continues it (wakeAgentSession).
+// Its status files stay, as a stopped session's do: they name the
+// conversation for Get Info and keep it out of the list of those started
+// elsewhere. A session with no conversation yet is refused — there would
+// be nothing to continue, and Archive is the way to end it. The measure,
+// taken before the kill, is what the session gives back once it is
+// settled (agentmemory.go).
+func (s *Server) putAwayAgentSession(a hostAgent, name string) (archiveMeasure, error) {
+	var none archiveMeasure
+	live := s.agentSessions(a)
+	i := slices.IndexFunc(live, func(l agentSession) bool { return l.Name == name })
+	if i < 0 {
+		return none, fmt.Errorf("no %s session %q is running", a.title, name)
+	}
+	id := s.agentConversation(a, name)
+	if id == "" {
+		return none, fmt.Errorf("%s has no conversation yet, so there is nothing to continue later", name)
+	}
+	cmd := tmuxCmd("kill-session", "-t", "="+name)
+	if cmd == nil {
+		return none, errors.New("sessions need tmux on this host")
+	}
+	s.agentStoppedMu.Lock()
+	defer s.agentStoppedMu.Unlock()
+	s.loadStoppedLocked()
+	m := measureSession(name)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return none, fmt.Errorf("tmux kill-session: %s", strings.TrimSpace(string(out)))
+	}
+	l := live[i]
+	list := slices.DeleteFunc(s.agentStopped[a.app], func(st stoppedSession) bool { return st.Name == name })
+	s.agentStopped[a.app] = append(list, stoppedSession{
+		agentNote: agentNote{Name: l.Name, Number: l.Number, Title: l.Title, Created: l.Created, LastAttached: l.lastAttached},
+		Thread:    id, Stopped: time.Now().Unix(), PutAway: true})
+	s.saveStoppedLocked()
+	// out of the note of live sessions at once: a host restart inside the
+	// next few seconds would otherwise stop it again as its own
+	s.unnoteAgentSessionLocked(a, name)
+	return m, nil
 }
 
 // forgetStopped lets a stopped session go — Archive on its row: the row

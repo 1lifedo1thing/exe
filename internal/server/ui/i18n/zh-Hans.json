@@ -1017,5 +1017,12 @@
 "No recent folders.": "没有最近的文件夹。",
 "A folder on this machine": "这台机器上的一个文件夹",
 "Folder:": "文件夹：",
-"Couldn't list the folders: {0}": "无法列出文件夹：{0}"
+"Couldn't list the folders: {0}": "无法列出文件夹：{0}",
+"\nput away\nclick to continue it": "\n已收起\n点击即可继续",
+"Put Away": "收起",
+"Put Away…": "收起…",
+"Put away “{0}”?": "收起“{0}”？",
+"Put away “{0}”": "已收起“{0}”",
+"It is still working — the turn in flight is lost. The session ends, and {0} with it; its row stays, and a click on it continues the conversation.": "它仍在工作 — 进行中的这一轮会丢失。会话结束，{0} 也随之结束；这一行会保留，点击它即可继续对话。",
+"It was put away, so nothing runs in it. Its row goes, and the conversation stays on this machine: {0}": "它已被收起，里面没有在运行的东西。这一行会移除，对话保留在这台机器上：{0}"
 }

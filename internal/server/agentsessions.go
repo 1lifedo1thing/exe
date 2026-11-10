@@ -65,6 +65,8 @@ type agentSession struct {
 	// a restart of the host ended the session: no tmux session holds it,
 	// and a switch to it continues its conversation (agentrestart.go)
 	Stopped bool `json:"stopped,omitempty"`
+	// with Stopped: Put Away ended it, not a restart (putAwayAgentSession)
+	PutAway bool `json:"put_away,omitempty"`
 	// the pane title carried a spinner: a turn is in flight, whatever an
 	// older word in the state file says (markAgentStates)
 	spinner bool
@@ -295,7 +297,7 @@ type agentColumn struct {
 	mu       sync.Mutex
 	cur      string
 	kick     chan struct{}
-	settling sync.WaitGroup // archives whose figures are still to be sent
+	settling sync.WaitGroup // archives, and sessions put away, whose figures are still to be sent
 }
 
 // waitArchived returns once every archive in flight has sent what the
@@ -440,20 +442,7 @@ func (c *agentColumn) archive(name string) error {
 		return nil
 	}
 	if name == c.current() {
-		// the neighbours by number, whatever order the list is in
-		var prev, next string
-		var pn, nn int
-		for _, s := range c.s.agentSessions(c.a) {
-			if s.Number < n && s.Number > pn {
-				prev, pn = s.Name, s.Number
-			} else if s.Number > n && (nn == 0 || s.Number < nn) {
-				next, nn = s.Name, s.Number
-			}
-		}
-		if other := prev; other != "" || next != "" {
-			if other == "" {
-				other = next
-			}
+		if other := c.neighbour(n); other != "" {
 			if err := c.switchTo(other); err != nil {
 				return err
 			}
@@ -480,6 +469,72 @@ func (c *agentColumn) archive(name string) error {
 		f := m.settle()
 		msg, _ := json.Marshal(struct {
 			Archived string `json:"archived"`
+			archiveFigures
+		}{name, f})
+		if c.out != nil {
+			c.out.WriteText(msg)
+		}
+	}()
+	return nil
+}
+
+// neighbour is the running session a window leaves session n for: the
+// one before it by number, else the one after, whatever order the list
+// is in; "" when no other session runs.
+func (c *agentColumn) neighbour(n int) string {
+	var prev, next string
+	var pn, nn int
+	for _, s := range c.s.agentSessions(c.a) {
+		if s.Number < n && s.Number > pn {
+			prev, pn = s.Name, s.Number
+		} else if s.Number > n && (nn == 0 || s.Number < nn) {
+			next, nn = s.Name, s.Number
+		}
+	}
+	if prev != "" {
+		return prev
+	}
+	return next
+}
+
+// putAway ends one of the agent's sessions and keeps its row, stopped,
+// for a click to continue (putAwayAgentSession): Archive's way of getting
+// memory back, without losing the row. When it is the session the window
+// shows, the window moves to a neighbour first, as Archive's does; the
+// only running session is refused, since the window would end with it
+// and open again on the very session put away (wakeLastStopped). What
+// the session gave back follows as {"put_away":name,…}, as Archive's
+// {"archived":…} does.
+func (c *agentColumn) putAway(name string) error {
+	n := agentSessionNumber(c.a, name)
+	if n == 0 {
+		return fmt.Errorf("not a %s session: %q", c.a.title, name)
+	}
+	if name == c.current() {
+		other := c.neighbour(n)
+		if other == "" {
+			return fmt.Errorf("%s is the only session running, and the window needs one", name)
+		}
+		// asked before the window moves: a refusal leaves it where it was
+		if c.s.agentConversation(c.a, name) == "" {
+			return fmt.Errorf("%s has no conversation yet, so there is nothing to continue later", name)
+		}
+		if err := c.switchTo(other); err != nil {
+			return err
+		}
+	}
+	c.settling.Add(1)
+	m, err := c.s.putAwayAgentSession(c.a, name)
+	if err != nil {
+		c.settling.Done()
+		return err
+	}
+	c.refresh()
+	go func() {
+		defer c.settling.Done()
+		f := m.settle()
+		msg, _ := json.Marshal(struct {
+			PutAway string `json:"put_away"`
 			archiveFigures
 		}{name, f})
 		if c.out != nil {
@@ -578,8 +633,8 @@ func (s *Server) nextAgentSession(a hostAgent) string {
 	return agentSessionName(a, n)
 }
 
-// wakeAll continues every session a host restart stopped, the window
-// staying where it is: the rows turn live as they start, and a failure
+// wakeAll continues every session a host restart stopped — not those put
+// away by hand (wakeAllStopped) — the window staying where it is: the rows turn live as they start, and a failure
 // comes back as {"error":…}.
 func (c *agentColumn) wakeAll() {
 	go func() {

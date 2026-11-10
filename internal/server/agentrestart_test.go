@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -257,5 +258,206 @@ func TestUnnoteAgentSession(t *testing.T) {
 	json.Unmarshal(b, &n)
 	if len(n.Sessions["claude"]) != 1 || n.Sessions["claude"][0].Name != "exe-claude-3" || len(n.Sessions["codex"]) != 1 || n.Boot != "b" {
 		t.Fatalf("note after unnote = %+v", n)
+	}
+}
+
+// movingShell is a window's pty whose tmux client goes where it is sent.
+type movingShell struct{ fakeAgentShell }
+
+func (m *movingShell) Switch(session string) error { m.cur = session; return nil }
+
+// Put Away on a tmux server of the test's own: the session ends and its
+// row stays, stopped, with what it gave back told to the window; a click
+// continues it, and Continue All Stopped Sessions leaves it put away.
+func TestPutAwayLive(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux on this host")
+	}
+	tmuxSocket = fmt.Sprintf("exe-test-putaway-%d", os.Getpid())
+	killServer := func() {
+		if c := tmuxCmd("kill-server"); c != nil {
+			c.Run()
+		}
+	}
+	defer func() { killServer(); tmuxSocket = "" }()
+
+	home := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", home)
+	work := t.TempDir()
+	bin := t.TempDir()
+	launches := filepath.Join(bin, "launches")
+	cli := filepath.Join(bin, "fakecli")
+	script := "#!/bin/sh\nprintf '%s|%s\\n' \"$(pwd)\" \"$*\" >> " + shQuote(launches) + "\nexec sleep 600\n"
+	if err := os.WriteFile(cli, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := hostAgent{app: "fake", bin: cli, title: "Fake", session: "exe-fake"}
+	agents := []hostAgent{a}
+	s := &Server{StateDir: t.TempDir()}
+	os.MkdirAll(filepath.Join(s.StateDir, "agents"), 0o755)
+
+	const (
+		id2 = "11111111-2222-4333-8444-555555555555"
+		id3 = "22222222-3333-4444-8555-666666666666"
+		id4 = "33333333-4444-4555-8666-777777777777"
+	)
+	converse := func(name, id string) {
+		dir := filepath.Join(home, "projects", "-work")
+		os.MkdirAll(dir, 0o755)
+		path := filepath.Join(dir, id+".jsonl")
+		line, _ := json.Marshal(map[string]any{"type": "user", "cwd": work, "sessionId": id, "timestamp": "2026-11-10T01:00:00Z",
+			"message": map[string]any{"role": "user", "content": "carry on"}})
+		if err := os.WriteFile(path, append(line, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		b, _ := json.Marshal(map[string]string{"session_id": id, "transcript_path": path})
+		os.WriteFile(s.agentStatusFile(a, name), b, 0o644)
+	}
+	for _, name := range []string{"exe-fake-2", "exe-fake-3", "exe-fake-4"} {
+		if err := s.newAgentSession(a, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	converse("exe-fake-2", id2)
+	converse("exe-fake-3", id3) // session 4 has no conversation yet
+	os.WriteFile(s.agentStateFile(a, "exe-fake-2"), []byte(agentStateDone), 0o644)
+	s.noteAgentSessions(agents, "boot-1", nil)
+	has := func(name string) bool { return tmuxCmd("has-session", "-t", "="+name).Run() == nil }
+	row := func(name string) agentSession {
+		t.Helper()
+		list := s.agentSessions(a)
+		s.markAgentStates(a, list)
+		for _, r := range s.withStopped(a, list) {
+			if r.Name == name {
+				return r
+			}
+		}
+		t.Fatalf("no row %s", name)
+		return agentSession{}
+	}
+	if r := row("exe-fake-2"); !r.Wants || r.Stopped {
+		t.Fatalf("session 2 before: %+v, want it waiting", r)
+	}
+
+	frames := &frameRecorder{}
+	sh := &movingShell{fakeAgentShell{cur: "exe-fake-3"}}
+	col := newAgentColumn(s, a, sh, "exe-fake-3", frames)
+
+	// refused: a stranger's session, one that does not run, one with no conversation
+	for _, name := range []string{"other", "exe-fake-9", "exe-fake-4"} {
+		if err := col.putAway(name); err == nil {
+			t.Fatalf("putAway(%q) should fail", name)
+		}
+	}
+	if !has("exe-fake-4") || len(s.stoppedSessions(a)) != 0 {
+		t.Fatal("a refused Put Away changed something")
+	}
+
+	// a session the window is not showing
+	if err := col.putAway("exe-fake-2"); err != nil {
+		t.Fatal(err)
+	}
+	if has("exe-fake-2") {
+		t.Fatal("session 2 still runs after Put Away")
+	}
+	if sh.cur != "exe-fake-3" {
+		t.Fatalf("the window moved to %q", sh.cur)
+	}
+	r := row("exe-fake-2")
+	if !r.Stopped || !r.PutAway || !r.Resumable || r.Wants || r.Number != 2 || r.Created == 0 {
+		t.Fatalf("session 2 put away: %+v", r)
+	}
+	if id := readAgentThreadID(s.agentStatusFile(a, "exe-fake-2")); id != id2 {
+		t.Fatalf("the status file of the session put away names %q", id)
+	}
+	var note agentLiveNote
+	b, _ := os.ReadFile(s.agentLiveFile())
+	json.Unmarshal(b, &note)
+	for _, n := range note.Sessions["fake"] {
+		if n.Name == "exe-fake-2" {
+			t.Fatal("the session put away is still in the note of live ones")
+		}
+	}
+	var told struct {
+		PutAway string `json:"put_away"`
+		archiveFigures
+	}
+	for deadline := time.Now().Add(archiveSettle + 2*time.Second); told.PutAway == "" && time.Now().Before(deadline); {
+		time.Sleep(50 * time.Millisecond)
+		for _, f := range frames.all() {
+			var m struct {
+				PutAway string `json:"put_away"`
+				archiveFigures
+			}
+			if json.Unmarshal(f, &m) == nil && m.PutAway == "exe-fake-2" {
+				told = m
+			}
+		}
+	}
+	if told.PutAway == "" || told.Available == 0 {
+		t.Fatalf("no put_away frame with the machine's memory: %+v", told)
+	}
+	if runtime.GOOS == "linux" && (!told.Measured || told.Freed == 0) {
+		t.Fatalf("put_away frame without the session's memory: %+v", told)
+	}
+	if got := s.nextAgentSession(a); got != "exe-fake-5" {
+		t.Fatalf("next session %q, want 5", got)
+	}
+
+	// Continue All Stopped Sessions is for those a restart stopped
+	before, _ := os.ReadFile(launches)
+	if err := s.wakeAllStopped(a, nil); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.ReadFile(launches); !bytes.Equal(before, after) || has("exe-fake-2") {
+		t.Fatal("Continue All woke a session put away by hand")
+	}
+
+	// the session on screen: the window moves to a neighbour first
+	if err := col.putAway("exe-fake-3"); err != nil {
+		t.Fatal(err)
+	}
+	if sh.cur != "exe-fake-4" || col.current() != "exe-fake-4" || has("exe-fake-3") {
+		t.Fatalf("after Put Away of the session on screen: window on %q, session 3 runs: %v", sh.cur, has("exe-fake-3"))
+	}
+	// the only one running stays: the window would end with it
+	converse("exe-fake-4", id4)
+	if err := col.putAway("exe-fake-4"); err == nil || !strings.Contains(err.Error(), "only session running") {
+		t.Fatalf("Put Away of the only running session: %v", err)
+	}
+	if !has("exe-fake-4") {
+		t.Fatal("the only running session was ended")
+	}
+
+	// a daemon started later reads the same rows, and a click continues one
+	s = &Server{StateDir: s.StateDir}
+	col = newAgentColumn(s, a, sh, "exe-fake-4", frames)
+	if st := s.stoppedSessions(a); len(st) != 2 || !st[0].PutAway || !st[1].PutAway {
+		t.Fatalf("stopped.json after a daemon restart: %+v", st)
+	}
+	if err := col.switchTo("exe-fake-2"); err != nil {
+		t.Fatal(err)
+	}
+	var got string
+	for i := 0; i < 100 && !strings.Contains(got, id2); i++ {
+		time.Sleep(50 * time.Millisecond)
+		b, _ := os.ReadFile(launches)
+		got = string(b)
+	}
+	if want := work + "|--resume " + id2; !strings.Contains(got, want) {
+		t.Fatalf("launches %q, want %q", got, want)
+	}
+	if r := row("exe-fake-2"); r.Stopped || r.PutAway || sh.cur != "exe-fake-2" {
+		t.Fatalf("session 2 after the click: %+v, window on %q", r, sh.cur)
+	}
+	if st := s.stoppedSessions(a); len(st) != 1 || st[0].Name != "exe-fake-3" {
+		t.Fatalf("still stopped: %+v", st)
+	}
+	// Archive lets a session put away go, as it does one a restart stopped
+	if !s.forgetStopped(a, "exe-fake-3") {
+		t.Fatal("Archive did not take the session put away")
+	}
+	if _, err := os.Stat(s.agentStoppedFile()); !os.IsNotExist(err) {
+		t.Fatalf("stopped.json outlived the last stopped session: %v", err)
 	}
 }

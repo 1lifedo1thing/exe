@@ -223,11 +223,12 @@ func termQuerySize(r *http.Request) (int, int) {
 // window shows — the session it showed last, whichever browser that was
 // (lastAgentSession). The window sends {"switch":"exe-claude-2"} to move to
 // another, {"new":true} to start one, {"archive":"exe-claude-2"} to
-// end one and, for Codex, {"resume":"<thread id>"} to continue a thread
+// end one, {"put_away":"exe-claude-2"} to end one and keep its row,
+// stopped, for a click to continue (agentColumn.putAway) and, for Codex, {"resume":"<thread id>"} to continue a thread
 // started elsewhere in a session of its own (the frames also carry
 // "threads", those threads — codexthreads.go). A row "stopped" is a
 // session a restart of the host ended: a switch to it continues it, and
-// {"wake_all":true} continues every one (agentrestart.go). What goes
+// {"wake_all":true} continues every one a restart ended (agentrestart.go). What goes
 // wrong comes back as {"error":…}. {"scroll":n} is
 // the window's wheel: the daemon scrolls the pane's tmux history
 // (unixShell.Scroll) — the browser terminal cannot, as tmux draws in
@@ -393,6 +394,7 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 				Dir     string          `json:"dir"`    // with new: the folder the session opens in (agentColumn.openIn)
 				Prompt  string          `json:"prompt"` // with new: the initial task, passed as one CLI argument
 				Archive string          `json:"archive"`
+				PutAway string          `json:"put_away"`
 				Resume  string          `json:"resume"`
 				WakeAll bool            `json:"wake_all"`
 				Scroll  *int            `json:"scroll"` // 0 means back to the live screen, so nil tells absent
@@ -414,7 +416,7 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 				// notch; the window simply stays where it is
 				sc.Scroll(*msg.Scroll)
 			}
-			if col == nil || (msg.Switch == "" && !msg.New && msg.Archive == "" && msg.Resume == "" && !msg.WakeAll) {
+			if col == nil || (msg.Switch == "" && !msg.New && msg.Archive == "" && msg.PutAway == "" && msg.Resume == "" && !msg.WakeAll) {
 				continue
 			}
 			if msg.WakeAll {
@@ -427,6 +429,8 @@ func (s *Server) handleHostTerminal(w http.ResponseWriter, r *http.Request) {
 				err = col.switchTo(msg.Switch)
 			case msg.Archive != "":
 				err = col.archive(msg.Archive)
+			case msg.PutAway != "":
+				err = col.putAway(msg.PutAway)
 			case msg.Resume != "":
 				err = col.resume(msg.Resume)
 			default:
