@@ -958,6 +958,13 @@ sessions, one row for each tmux session. Each is a conversation of its own.
   the agent keeps its usual sign-in, trust and permission prompts.
   [Apps](https://exe.v2core.com/docs/using/apps) says how the agent's plan
   and report come back to the issue.
+- **Start one from a note.** In Notes, with a note open, press the button
+  with the arrow leaving a tray, left of **Delete**, and choose **Send to
+  Claude Code** or **Send to Codex**. The agent's window opens, or comes
+  forward, and asks where to start, as **New…** does. **Start** begins a
+  session there with the note's text as its first message. **Cancel**
+  sends nothing. The button is there only when exe has found one of the
+  agents on this machine.
 - **Resize the column.** Drag the line between the list and the terminal.
   The width is kept with the window's layout.
 

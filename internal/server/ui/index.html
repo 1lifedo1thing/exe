@@ -6674,18 +6674,23 @@ window.addEventListener("message", async e => {
     const act = app && app.system_icon && BRIDGE_ACTS.has(e.data.act) && DESK_ACTS[e.data.act];
     const args = Array.isArray(e.data.args) ? e.data.args.filter(a => typeof a === "string").slice(0, 2) : [];
     if (act && !(act.dis && act.dis(...args))) act.run(...args);
-  } else if (e.data.exe === "agent" && AGENT_APPS[e.data.app] && typeof e.data.dir === "string") {
+  } else if (e.data.exe === "agent" && AGENT_APPS[e.data.app] && (typeof e.data.dir === "string" || typeof e.data.prompt === "string")) {
     // Projects can open just the folder or supply an issue as the first
-    // prompt. Refresh the registry so a CLI installed since the desktop
-    // opened is available here too. The daemon checks the folder and task.
-    const app = e.data.app, dir = e.data.dir.trim().slice(0, 1024);
+    // prompt. A first prompt that comes with no folder (Notes' Send to
+    // Claude Code: a note has none) is asked where it starts, in the
+    // window's New Session dialog. Refresh the registry so a CLI
+    // installed since the desktop opened is available here too. The
+    // daemon checks the folder and task.
+    const app = e.data.app, dir = typeof e.data.dir === "string" ? e.data.dir.trim().slice(0, 1024) : "";
     const prompt = typeof e.data.prompt === "string" ? e.data.prompt : "";
-    if (!dir.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(dir)) return;
+    if (dir ? !dir.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(dir) : !prompt.trim()) return;
     try { await loadHostAgents(); }
     catch (_) { toast(L("Could not check agents on this host")); return; }
     if (!hostAgents[app]) { toast(L`${AGENT_APPS[app].title} is not installed on this host`); return; }
     const aw = openHostTermWin(app);
-    if (aw && aw._openIn) aw._openIn(dir, prompt);
+    if (!aw) return;
+    if (dir) { if (aw._openIn) aw._openIn(dir, prompt); }
+    else if (aw._newWith) aw._newWith(prompt);
   } else if (e.data.exe === "view-page" && isWebURL(e.data.url || "")) {
     // a page (an admin's HTML embed on the hub) opens the same way, in a
     // desktop page window, sandboxed like a Workspace page
@@ -10319,6 +10324,13 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     openTasks.push({ dir, prompt });
     flushNewIn();
   };
+  // a first prompt with no folder of its own (Notes' Send to Claude
+  // Code): the New Session dialog asks where, and Start sends the prompt
+  // with the folder chosen. Cancel drops it
+  w._newWith = prompt => {
+    if (!list || !newDlg) { toast(L("A session in a folder needs tmux on this host")); return; }
+    newDlg(prompt);
+  };
   // a row's contextual menu: when the session started, then what it can
   // have done to it beyond a click (a click switches, so no Switch To) —
   // and the list's own, off any row, just starts one. Archive ends the session and the CLI in it,
@@ -10762,7 +10774,10 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
   if (newBtn) {
     let veil = null, q, box, tally, startBtn, cancelBtn;
     let dirs = null, failed = "", sel = -1, asked = 0, typed = false, busy = false;
-    const close = () => { veil.hidden = true; asked++; busy = false; term.focus(); };
+    // the first message the session asked for starts with (_newWith), ""
+    // for New…'s own: it goes with Start and is dropped with the dialog
+    let first = "";
+    const close = () => { veil.hidden = true; asked++; busy = false; first = ""; term.focus(); };
     const say = (text, bad) => { tally.textContent = text; tally.classList.toggle("bad", !!bad); };
     const sayCount = () => say(dirs && dirs.length ? count(dirs.length, L("recent folder"), L("recent folders")) : "");
     const ready = () => { startBtn.disabled = busy || !q.value.trim(); };
@@ -10802,8 +10817,9 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
         return;
       }
       if (mine !== asked) return;
+      const prompt = first;
       close();
-      w._openIn(r.path);
+      w._openIn(r.path, prompt);
     };
     const rowOf = (d, i) => {
       const r = el("div", { class: "sf-row", title: d.path + (d.at ? L`\nlast used ${new Date(d.at * 1000).toLocaleString(UI_LOCALE)}` : L("\nwhere a new session starts unless you choose another")) });
@@ -10861,9 +10877,12 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
         }
       });
     };
-    newDlg = () => {
+    newDlg = (prompt = "") => {
       if (!veil) build();
-      if (!veil.hidden) return;
+      // a dialog that is already up takes the message sent to it and
+      // keeps what was typed there
+      if (!veil.hidden) { if (prompt) first = prompt; return; }
+      first = prompt;
       const mine = ++asked;
       dirs = null; failed = ""; sel = -1; typed = false; busy = false; q.value = "";
       say("");

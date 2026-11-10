@@ -451,7 +451,16 @@ restyling: `internal/server/ui/index.html` (the desktop),
   Serif segment (joined push buttons, the chosen one pressed; the serif
   Charter, then Georgia), and gives way a step at a time where the words
   will not fit: "Aa" samples for the faces, Corkboard as its pushpin, then
-  tighter sides and gaps.
+  tighter sides and gaps, then Delete and New Note as glyphs (a trash can,
+  a sheet with a plus). A glyph on a push button is 12px of pixel art in
+  the button's own ink (`currentColor`, so dimmed, pressed and armed
+  follow the words' colours), centred in a 30px button, the same shapes
+  drawn smooth between 1x and 2x. Send, left of Delete, is only ever its
+  glyph (a tray with an arrow leaving it) and is there only when exe has
+  found Claude Code or Codex: it opens the contextual menu block 2px
+  under itself at its left edge, kept 4px inside the window, and stays
+  pressed in while the menu is up; a press on it, a press elsewhere or
+  Escape puts the menu away.
 - Scrollbars: the pixel-sampled 15px block (track `#777 #888 #aaa #bbb
   #ccc`, thumb `#ccccff #9999ff #6666cc` with the ridged grip, 16px buttons
   with 8x4 arrows, only the trailing pair, the `scrolled-y` and `at-y-end`

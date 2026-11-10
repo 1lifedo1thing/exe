@@ -23,6 +23,15 @@ An item is dimmed for a project without a working directory, for one
 whose folder is not on this machine, and where there is no tmux for a
 second session.
 
+Notes has the same two items for the open note, on a menu under its
+toolbar's Send button. A note has no folder, so Notes posts `{exe:
+"agent", app, prompt}` with no `dir`, and the desktop opens the agent
+window's New Session dialog with the note held: **Start** sends
+`{new: true, dir, prompt}` with the folder chosen, and **Cancel** drops
+the note. An entry that says `"ask": true` has a desktop that does this.
+Where it does not, Notes sends the entry's own `dir` with the note, and
+the session starts there at once.
+
 ## How the message travels
 
 Projects reads the issue (`GET /issues/{address}`), drops its `excerpt`,

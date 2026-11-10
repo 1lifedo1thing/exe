@@ -1089,7 +1089,10 @@ func TailscaleIP() string { return config.TailscaleIP() }
 // an agent's icon only then) and the project dir their sessions open in;
 // "sessions" says tmux is here for a second one, and "tasks" that the
 // desk's agent bridge takes a first message with the folder (Projects'
-// Send to Claude Code — an older desk would open the session without it).
+// Send to Claude Code — an older desk would open the session without it),
+// and "ask" that a first message sent with no folder opens the window's
+// New Session dialog, which asks where (Notes' Send to Claude Code — an
+// older desk takes no message without a folder).
 // The desktop polls it while the window is open, so nothing here may be
 // slow: the memory and disk reads are a syscall or a /proc read on Linux
 // and Windows and two short commands on macOS.
@@ -1103,7 +1106,7 @@ func (s *Server) handleHostInfo(w http.ResponseWriter, r *http.Request) {
 	agents := map[string]any{}
 	for app, a := range hostAgents {
 		if agentPath(a) != "" {
-			agents[app] = map[string]any{"dir": s.agentProjectDir(), "sessions": tmuxCmd("-V") != nil, "tasks": true}
+			agents[app] = map[string]any{"dir": s.agentProjectDir(), "sessions": tmuxCmd("-V") != nil, "tasks": true, "ask": true}
 		}
 	}
 	mem, disk, build := hostinfo.Mem(), hostinfo.DiskUsage(s.StateDir), hostinfo.BuildInfo()
