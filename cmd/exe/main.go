@@ -277,6 +277,10 @@ func cmdServe() error {
 	srv.NoteHostRestart()
 	go srv.RunAgentNotes(context.Background())
 
+	// A session nobody has touched for put_away_days is put away: its
+	// process ends, its row stays to be continued with a click.
+	go srv.RunAgentIdle(context.Background())
+
 	apiHandler := srv.Handler()
 	// Every API request, each listener, goes to access.log beside
 	// daemon.log: who reached the API, what they asked, what they got.

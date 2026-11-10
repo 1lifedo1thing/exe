@@ -1118,6 +1118,20 @@ A session that waits at its prompt still holds a few hundred megabytes.
 - A row you put away stays put away across a restart of the daemon or the
   host, until you click it. **Archive…** removes it.
 
+The desktop also puts a session away for you when nobody has touched it
+for seven days. It looks once an hour.
+
+- Touched means any of these: a key typed into the session, a window
+  showing it, or a write to its conversation, such as a prompt sent by a
+  tool or a background task that finished.
+- It leaves a session alone while a window shows it, while it works, and
+  while it waits on a permission or a question, however old it is.
+- The Newsfeed says which sessions it put away and how much memory came
+  back.
+- `put_away_days` in `~/.exe/config.json` sets the number of days. `0`
+  turns this off. The key has no field in the Configuration window: edit
+  the file and restart the daemon.
+
 ### After the host restarts
 
 A restart of the daemon leaves the sessions running. A restart of the
@@ -5540,10 +5554,12 @@ want and press **Save**.
   Wizard set, and its **Set Up…** or **Change…** button opens the wizard.
   See [Publishing to the web](https://exe.v2core.com/docs/using/publishing-to-the-web).
 
-A few keys have no field in the window; `vm_dir`, the folder that holds the
-VMs' disks, is one. Edit the file for those and restart the daemon, which
-reads the file when it starts. [Configuration](/docs/config), on the
-website, has a longer table of the keys, `vm_dir` among them.
+A few keys have no field in the window. `vm_dir`, the folder that holds the
+VMs' disks, is one, and `put_away_days`, how long a Claude Code or Codex
+session may be left alone before it is put away, is another. Edit the file
+for those and restart the daemon, which reads the file when it starts.
+[Configuration](/docs/config), on the website, has a longer table of the
+keys, with both among them.
 
 ### The language of the desk
 

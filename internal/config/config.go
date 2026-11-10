@@ -128,6 +128,13 @@ type Config struct {
 	// Read at start; moving VMs that exist means moving the two folders.
 	VMDir string `json:"vm_dir,omitempty"`
 
+	// PutAwayDays is how many days a Claude Code or Codex session may be
+	// left alone before the daemon puts it away: its process ends and
+	// gives its memory back, and its row stays in the window's column to
+	// be continued with a click (Put Away, on the row's menu, done for
+	// you). Seven unless the file says otherwise; 0 is never.
+	PutAwayDays int `json:"put_away_days"`
+
 	// AppsDirs lists extra folders scanned for desktop app bundles in
 	// addition to ~/.exe/apps — e.g. a separate git repo of experimental
 	// apps. A leading ~ expands to the daemon user's home.
@@ -212,6 +219,7 @@ func Default() *Config {
 		DefaultCPUs:     2,
 		DefaultMemoryMB: 2048,
 		DefaultDiskGB:   20,
+		PutAwayDays:     7,
 		Ollama: OllamaConfig{
 			BaseURL: "https://ollama.com",
 			Model:   "glm-5.2",
@@ -336,6 +344,9 @@ func (c *Config) Normalize() {
 	c.SSHListen = NormalizeListen(c.SSHListen)
 	c.AdvertiseHost = strings.TrimSpace(c.AdvertiseHost)
 	c.VMDir = strings.TrimSpace(c.VMDir)
+	if c.PutAwayDays < 0 {
+		c.PutAwayDays = 0
+	}
 	c.ChatProvider = strings.ToLower(strings.TrimSpace(c.ChatProvider))
 	c.Ollama.Effort = strings.ToLower(strings.TrimSpace(c.Ollama.Effort))
 	c.OpenAI.Model = strings.TrimSpace(c.OpenAI.Model)

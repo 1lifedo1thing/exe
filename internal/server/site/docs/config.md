@@ -13,6 +13,7 @@ need a restart.
 | `advertise_host` | this Mac as reachable **from the cloudflared host** — LAN IP (e.g. `192.168.1.131`) or Tailscale IP (pre-filled with the Tailscale IP when detected) |
 | `api_token` | if set, every API call needs `Authorization: Bearer <token>`. Set it before binding beyond localhost. The desktop asks for it once in each browser; `exe token` prints it |
 | `vm_dir` | where the VMs' disks and the base images are kept: its `vms` and `images` folders. Empty (the default) is the state folder, `~/.exe`. Set it to put the one large part of exe on another drive: `/data/exe`, or on Windows `G:\\exe` (the backslash doubled, as JSON wants). Read at start; to move VMs that exist, stop exe and move the two folders there |
+| `put_away_days` | how many days a Claude Code or Codex session may be left alone before the daemon puts it away: its process ends and gives its memory back, and its row stays in the window to be continued with a click. Default `7`; `0` is never. No field in the Configuration window: edit the file and restart the daemon |
 | `ssh_user` | user created in each VM (default `dev`, passwordless sudo) |
 | `image_url` | base image; macOS accepts raw cloud images, while Linux accepts a raw ext4 filesystem or a GPT image containing an ext4 root partition |
 | `firecracker.binary` | Linux Firecracker executable (default `firecracker` from `PATH`) |

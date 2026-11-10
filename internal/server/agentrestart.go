@@ -44,7 +44,9 @@ import (
 // hand (putAwayAgentSession): the CLI ends and gives its memory back, as
 // Archive's does, and the row stays with its hollow dot, to be continued
 // by a click. Nobody is owed the return of a session they put away, so
-// Continue All Stopped Sessions leaves those where they are.
+// Continue All Stopped Sessions leaves those where they are. The daemon
+// does the same by itself for a session left alone for a week
+// (agentidle.go).
 
 // agentNote is one live session as the note keeps it: enough to show its
 // row again.
