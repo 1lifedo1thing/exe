@@ -130,7 +130,7 @@ func recordField(key string) string {
 		return "items"
 	}
 	switch key {
-	case clocksKey, placesKey:
+	case clocksKey, placesKey, boardsKey:
 		return "items"
 	case draftsKey:
 		return "drafts"

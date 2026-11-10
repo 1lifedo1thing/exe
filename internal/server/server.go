@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"database/sql"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1234,15 +1235,24 @@ func (s *Server) handleRouteDelete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
+// comboCSS is the Platinum combo button's block, served at
+// /platinum/combo.css.
+//
+//go:embed platinum/combo.css
+var comboCSS string
+
 // handlePlatinum serves a shared Platinum block (docs/platinum.md): the
-// pop-up menu button, which the Weather app and Blue Pencil link, and
-// the chrome, out of github.com/livid/exe-stats, so one fix to a block
-// reaches every page that wears it.
+// pop-up menu button, which the Weather app and Blue Pencil link, and the
+// chrome, out of github.com/livid/exe-stats, and the combo button, which
+// Notes links, out of this package, so one fix to a block reaches every
+// page that wears it.
 func handlePlatinum(w http.ResponseWriter, r *http.Request) {
 	var css string
 	switch r.PathValue("file") {
 	case "popup.css":
 		css = stats.PopupCSS()
+	case "combo.css":
+		css = comboCSS
 	case "chrome.css":
 		css = stats.ChromeCSS()
 	default:

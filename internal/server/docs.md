@@ -969,7 +969,8 @@ sessions, one row for each tmux session. Each is a conversation of its own.
   forward, and asks where to start, as **New…** does. **Start** begins a
   session there with the note's text as its first message. **Cancel**
   sends nothing. The button is there only when exe has found one of the
-  agents on this machine.
+  agents on this machine. On the corkboard, right-click a note's sheet
+  for the same two commands, without opening the note.
 - **Resize the column.** Drag the line between the list and the terminal.
   The width is kept with the window's layout.
 
@@ -3477,6 +3478,16 @@ For you:
   collapse it, and press the box at its left end to put the note back in
   Notes alone. Each is a page of Notes, so what you type there is in
   Notes too.
+- **More than one corkboard.** Notes pins every note to a corkboard, and
+  you can make more boards than the first. Press the arrow at the right
+  end of the **Corkboard** button for the boards' menu: choose a board to
+  switch to it, or choose **New Board…**, **Rename Board…** or **Delete
+  Board…**. The button's name is the board that is up, and a new note is
+  pinned to that board. To move a note, right-click its sheet on the
+  board and choose **Move to** and the board's name; **Delete** is in the
+  same menu, and on a phone a press held on the sheet shows it. A board
+  that you delete takes no note with it: its notes go back to the first
+  board.
 - **Data that stays yours.** Each app keeps its data in private storage
   on this machine, and joined desks sync it.
 - **Windows that keep up.** When an app's files change, its open windows

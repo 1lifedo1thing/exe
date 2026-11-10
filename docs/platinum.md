@@ -214,6 +214,34 @@ restyling: `internal/server/ui/index.html` (the desktop),
   picture arrives. Pictures scale smoothly (a 180px touch icon at 16);
   glyphs of our own are pixels at whole scales and `geometricPrecision`
   between 1x and 2x.
+- Combo button (Notes' Corkboard): a push button whose right end is an
+  arrow part. A click on the body does the button's own function; a press
+  on the arrow part shows a menu of more functions. Mac OS 9 has no such
+  control (its bevel button with a menu shows the menu wherever it is
+  pressed), so this one was drawn for exe, and Livid chose its seam and
+  its press from live mockups (hub thread ae88c75a). One shared block,
+  `internal/server/platinum/combo.css`, served at `/platinum/combo.css`
+  and linked like the pop-up's, never copied; the markup is `<span
+  class="combo"><button class="cb-body">Name</button><button
+  class="cb-arrow" aria-haspopup="menu"></button></span>`. One 20px
+  push-button face with the bevel round the whole of it. The separator
+  runs from the top border to the bottom border: a 1px `#888` line (the
+  arrow part's left border) with a 1px white line at its right. The body
+  is bold 12px, 13px in from the left and 10px short of the separator;
+  the arrow part is 19px (31px under a finger), its 7 by 4 triangle 4px
+  from the white line and 4px from the bevel. Each part goes down by
+  itself and only as far as the separator, and nothing stands between a
+  pressed colour and the separator: the body's `#666` ends at the `#888`
+  line, which does not change; the arrow part's starts at the line, the
+  white line goes, and the line takes `#444`. `.open` keeps a part
+  pressed (the arrow part while its menu is up; a body that is a switch,
+  as Corkboard is, while it is on), `.default` is the Return ring round
+  both parts, `.dis` the flat grey state. The menu is the Platinum
+  contextual block, 2px under the button from its left edge and at least
+  as wide; a press shows it at once, so a drag to an item and a release
+  choose it, and a click leaves it up. A label's width is a fraction of
+  a pixel: the host gives the body whole pixels so the separator stands
+  on one.
 - A field with autocomplete (Dict): the Platinum menu block, 2px below
   the field, at least 170px wide and clamped inside the app's safe area.
   Two to eight candidates appear after 600ms without input; a lone match

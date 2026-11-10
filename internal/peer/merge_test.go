@@ -388,3 +388,55 @@ func TestMergeNotesPlaceByItsOwnStamp(t *testing.T) {
 		t.Fatalf("a tombstone carries no place: %s", merged)
 	}
 }
+
+// Notes' corkboards: boards.json merges board by board, and a note keeps
+// the board it hangs on through a merge with a copy that lost the field.
+func TestMergeBoardsAndANotesBoard(t *testing.T) {
+	gone := fmt.Sprint(time.Now().UnixMilli())
+	a := []byte(`{"version":1,"items":[` +
+		`{"id":"b1","name":"Recipes","created":1,"updated":1},` +
+		`{"id":"b2","name":"Work","created":2,"updated":2}]}`)
+	// the other node renamed Recipes, deleted Work and made Travel
+	b := []byte(`{"version":1,"items":[` +
+		`{"id":"b1","name":"Cooking","created":1,"updated":5},` +
+		`{"id":"b2","created":2,"updated":` + gone + `,"deleted":` + gone + `},` +
+		`{"id":"b3","name":"Travel","created":3,"updated":3}]}`)
+	if !Mergeable("Notes/boards.json") || Mergeable("Todo/boards.json") {
+		t.Fatal("only Notes' boards.json carries the schema")
+	}
+	merged, ok := MergeFile("Notes/boards.json", a, b)
+	if !ok {
+		t.Fatal("merge not ok")
+	}
+	var d boardDoc
+	if err := json.Unmarshal(merged, &d); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Items) != 3 || d.Items[0].Name != "Cooking" || d.Items[1].Deleted == 0 || d.Items[1].Name != "" || d.Items[2].Name != "Travel" {
+		t.Fatalf("boards not merged one by one, in the order made: %s", merged)
+	}
+	rev, ok := MergeFile("Notes/boards.json", b, a)
+	if !ok || !bytes.Equal(merged, rev) {
+		t.Fatalf("merge not commutative:\n%s\n%s", merged, rev)
+	}
+	if recordField("Notes/boards.json") != "items" {
+		t.Fatal("the write guard does not know boards.json")
+	}
+
+	// a note on a board, and the same note as a daemon from before boards
+	// wrote it back: the same stamp, no board
+	on := []byte(`{"notes":[{"id":"n1","text":"soup","board":"b1","created":1,"updated":7}]}`)
+	stripped := []byte(`{"notes":[{"id":"n1","text":"soup","created":1,"updated":7}]}`)
+	for _, pair := range [][2][]byte{{on, stripped}, {stripped, on}} {
+		m, ok := MergeFile("Notes/notes.json", pair[0], pair[1])
+		if !ok || !bytes.Contains(m, []byte(`"board": "b1"`)) {
+			t.Fatalf("the note lost its board: %s", m)
+		}
+	}
+	// moved back to the first board later: the newer stamp, no board, wins
+	back := []byte(`{"notes":[{"id":"n1","text":"soup","created":1,"updated":9}]}`)
+	m, ok := MergeFile("Notes/notes.json", on, back)
+	if !ok || bytes.Contains(m, []byte(`"board"`)) {
+		t.Fatalf("a move back to the first board did not win: %s", m)
+	}
+}

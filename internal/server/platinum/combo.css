@@ -1,0 +1,56 @@
+/* The combo button, one block for every Platinum page: a push button
+   whose right end is an arrow part. A click on the body does the button's
+   own function, and a press on the arrow part shows a menu of more
+   functions, which the host draws (the Platinum menu, hung 2px under the
+   button from its left edge). Mac OS 9 has no such control; this one was
+   drawn for exe (the Notes app's Corkboard button is the first).
+
+   One push-button face, 20px high, with the bevel round the whole of it.
+   The separator runs from the top border to the bottom border: a 1px #888
+   line, the arrow part's left border, and a white line at its right, an
+   inset shadow as the bevel's own highlight is. Each part goes down by
+   itself, only as far as the separator: the body's pressed colour ends at
+   the #888 line, which does not change; the arrow part's starts at the
+   line, the white line goes, and the line takes the #444 of a pressed
+   button's top edge. Nothing stands between a pressed colour and the
+   separator. The triangle is 7 by 4, pixels at whole scales and geometry
+   between them, in the part's own ink. Markup:
+     <span class="combo"><button class="cb-body">Name</button><button class="cb-arrow" aria-haspopup="menu" aria-label="…"></button></span>
+   .open on a part keeps it pressed (the arrow part while its menu is up, a
+   body that is a switch while it is on); .default is the Return default's
+   ring, round both parts; .dis beside the buttons' own disabled is the
+   flat, grey state. The host may set --g300 and --font; the body takes
+   whole pixels from the host when its label's width is a fraction, so the
+   separator is on one. The exe daemon serves it at /platinum/combo.css,
+   as it does the pop-up: it is linked, never copied. (The pop-up's block
+   lives in exe-stats, which the hub embeds too; this one is the daemon's
+   own until a hub page wants it.) */
+.combo { position: relative; display: inline-flex; flex: none; vertical-align: top; box-sizing: border-box; height: 20px;
+  border: 1px solid #262626; border-radius: 3px; background: var(--g300, #ddd);
+  box-shadow: inset 1px 1px 0 var(--g300, #ddd), inset -1px -1px 0 #777, inset 2px 2px 0 #fff, inset -2px -2px 0 #aaa; }
+.combo > button { appearance: none; -webkit-appearance: none; box-sizing: border-box; margin: 0; border: 0; height: 18px;
+  background: transparent; color: #262626; box-shadow: none; cursor: default; white-space: nowrap;
+  font: bold 12px/14px var(--font, "Charcoal", "Chicago", "Geneva", "Lucida Grande", "Lucida Sans", Verdana, sans-serif);
+  touch-action: manipulation; }
+.combo > button:focus { outline: none; }
+.combo .cb-body { padding: 2px 10px 2px 13px; border-radius: 2px 0 0 2px; }
+.combo .cb-arrow { display: flex; align-items: center; justify-content: center; width: 19px; padding: 0 2px 0 1px;
+  border-left: 1px solid #888; border-radius: 0 2px 2px 0; box-shadow: inset 1px 0 0 #fff; touch-action: none; }
+.combo .cb-arrow::before { content: ""; box-sizing: border-box; flex: none; width: 7px; height: 4px; background: currentColor;
+  -webkit-mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="7" height="4" shape-rendering="crispEdges"><path d="M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z"/></svg>') 0 0 / 7px 4px no-repeat;
+  mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="7" height="4" shape-rendering="crispEdges"><path d="M0 0h7v1H0zM1 1h5v1H1zM2 2h3v1H2zM3 3h1v1H3z"/></svg>') 0 0 / 7px 4px no-repeat; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) {
+  .combo .cb-arrow::before {
+    -webkit-mask-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="7" height="4"><path d="M0 0h7L3.5 4z"/></svg>');
+    mask-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="7" height="4"><path d="M0 0h7L3.5 4z"/></svg>'); }
+}
+.combo .cb-body:active:not(:disabled), .combo .cb-body.open { background: #666; color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset 0 -1px 0 #888, inset 2px 2px 0 #555, inset 0 -2px 0 #777; }
+.combo .cb-arrow:active:not(:disabled), .combo .cb-arrow.open { background: #666; color: #fff; border-left-color: #444;
+  box-shadow: inset -1px -1px 0 #888, inset -2px -2px 0 #777, inset 0 1px 0 #444, inset 0 2px 0 #555; }
+.combo.default { outline: 2px solid #262626; outline-offset: 1px; border-radius: 4px; }
+.combo.dis { border-color: #888; box-shadow: none; }
+.combo.dis > button { color: #777; background: transparent; box-shadow: none; }
+.combo.dis .cb-arrow { border-left-color: #aaa; }
+/* a finger needs more than 19px */
+@media (pointer: coarse) { .combo .cb-arrow { width: 31px; } }

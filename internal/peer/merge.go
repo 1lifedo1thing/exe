@@ -15,8 +15,11 @@ import (
 // The schemas mirror what the apps write (exe-apps Todo, Notes, World Clock):
 //
 //	todos.json   {"version":2,"items":[{id,text,done,created,updated,order?,deleted?}]}
-//	notes.json   {"notes":[{id,text,color?,created,updated,deleted?,place?,placed?}]}
-//	             (color is the sheet's Stickies colour name: yellow, blue…)
+//	notes.json   {"notes":[{id,text,color?,board?,created,updated,deleted?,place?,placed?}]}
+//	             (color is the sheet's Stickies colour name: yellow, blue…;
+//	             board is the id of the corkboard it hangs on, none the first)
+//	boards.json  {"version":1,"items":[{id,name,created,updated,deleted?}]}
+//	             (Notes only — the corkboards a viewer made beside the first)
 //	clocks.json  {"version":1,"items":[{id,name,region,tz,created,updated,deleted?}]}
 //	             (World Clock only — the City app has a cities.json of its own shape)
 //	drafts.json  {"version":2,"drafts":[{id,text,checked,created,updated,deleted?}]}
@@ -42,7 +45,7 @@ func Mergeable(key string) bool {
 	case "todos.json", "notes.json":
 		return true
 	}
-	return key == clocksKey || key == draftsKey || key == placesKey
+	return key == clocksKey || key == draftsKey || key == placesKey || key == boardsKey
 }
 
 // clocksKey is the World Clock's city list; matched by full key since the
@@ -61,6 +64,9 @@ func MergeFile(key string, local, remote []byte) (merged []byte, ok bool) {
 	}
 	if key == clocksKey {
 		return mergeClocks(local, remote)
+	}
+	if key == boardsKey {
+		return mergeBoards(local, remote)
 	}
 	if key == draftsKey {
 		return mergeDrafts(local, remote)
@@ -170,9 +176,13 @@ func mergeTodos(local, remote []byte) ([]byte, bool) {
 }
 
 type noteItem struct {
-	ID      string `json:"id"`
-	Text    string `json:"text"`
-	Color   string `json:"color,omitempty"`
+	ID    string `json:"id"`
+	Text  string `json:"text"`
+	Color string `json:"color,omitempty"`
+	// The corkboard the note hangs on: a board's id in Notes/boards.json.
+	// None is the first board, and so is an id no live board has. A move
+	// is an edit: it bumps `updated`.
+	Board   string `json:"board,omitempty"`
 	Created int64  `json:"created"`
 	Updated int64  `json:"updated"`
 	Deleted int64  `json:"deleted,omitempty"`
@@ -235,6 +245,12 @@ func mergeNotes(local, remote []byte) ([]byte, bool) {
 		pick, other := old, n
 		if wins(n.Updated, n.Deleted != 0, old.Updated, old.Deleted != 0, n, old) {
 			pick, other = n, old
+		}
+		// A daemon from before boards writes a note back without its board,
+		// at the stamp it had. A move bumps the stamp, so at one stamp a
+		// missing board was dropped, not chosen: the other side's stands.
+		if pick.Board == "" && other.Board != "" && pick.Updated == other.Updated && pick.Deleted == 0 {
+			pick.Board = other.Board
 		}
 		// the place goes by its own stamp, whichever side the text came from
 		if other.Placed > pick.Placed {
@@ -333,6 +349,80 @@ func mergeClocks(local, remote []byte) ([]byte, bool) {
 		return items[i].ID < items[j].ID
 	})
 	out, err := json.MarshalIndent(clockDoc{Version: 1, Items: items}, "", "  ")
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// ---- Notes' corkboards ----
+
+// boardsKey is the Notes app's list of corkboards; matched by full key
+// since the file name alone is too generic to claim. The first board has
+// no record: it is the one a note with no `board` hangs on.
+const boardsKey = "Notes/boards.json"
+
+type boardItem struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Created int64  `json:"created"`
+	Updated int64  `json:"updated"`
+	Deleted int64  `json:"deleted,omitempty"`
+}
+
+type boardDoc struct {
+	Version int         `json:"version"`
+	Items   []boardItem `json:"items"`
+}
+
+func parseBoards(b []byte) (*boardDoc, bool) {
+	var d boardDoc
+	if json.Unmarshal(b, &d) != nil || d.Version != 1 || d.Items == nil {
+		return nil, false
+	}
+	for _, it := range d.Items {
+		if it.ID == "" {
+			return nil, false
+		}
+	}
+	return &d, true
+}
+
+func mergeBoards(local, remote []byte) ([]byte, bool) {
+	a, ok := parseBoards(local)
+	if !ok {
+		return nil, false
+	}
+	b, ok := parseBoards(remote)
+	if !ok {
+		return nil, false
+	}
+	m := map[string]boardItem{}
+	for _, it := range a.Items {
+		m[it.ID] = it
+	}
+	for _, it := range b.Items {
+		old, seen := m[it.ID]
+		if !seen || wins(it.Updated, it.Deleted != 0, old.Updated, old.Deleted != 0, it, old) {
+			m[it.ID] = it
+		}
+	}
+	now := time.Now().UnixMilli()
+	items := make([]boardItem, 0, len(m))
+	for _, it := range m {
+		if it.Deleted != 0 && now-it.Deleted > tombstoneTTL.Milliseconds() {
+			continue
+		}
+		items = append(items, it)
+	}
+	// the order the boards were made in: the menu's order on every node
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Created != items[j].Created {
+			return items[i].Created < items[j].Created
+		}
+		return items[i].ID < items[j].ID
+	})
+	out, err := json.MarshalIndent(boardDoc{Version: 1, Items: items}, "", "  ")
 	if err != nil {
 		return nil, false
 	}

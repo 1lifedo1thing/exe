@@ -11,4 +11,4 @@ before it said is kept in CHANGELOG.md.
 - **Hub** posts take emoji reactions: click the smiley to choose one, or an existing reaction to join.
 - **Solana**, a new trading chart with volume, RSI and Bollinger Bands, opens from the Solana ticker's menu.
 - **Activity Monitor**, a new app, draws each core, GPU and network port of a node, live and up to years back.
-- **Notes** sends a note to Claude Code or Codex as a new session's first message, from its toolbar.
+- **Notes** has corkboards that you make and name, and sends a note to Claude Code or Codex.
