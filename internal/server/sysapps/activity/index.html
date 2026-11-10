@@ -96,6 +96,8 @@ canvas { display: block; image-rendering: pixelated; }
 .fig.nm .md, .fig.nm .v { color: #555; }
 .fig.nm .md { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .figs .fig.nm:not(:first-child) { margin-top: 6px; }
+/* a figure that is words alone, with no meter: how long the machine has run */
+.fig.words { grid-template-columns: 74px minmax(0, 1fr); }
 /* a dark display sunk into the window: the Control Strip's well, #808080
    top and left, white bottom and right, each a border */
 .lcd { background: var(--lcd); line-height: 0; overflow: hidden;
@@ -289,6 +291,17 @@ const ofGB = (u, t) => u == null ? "—" : t ? `${gb(u)} of ${gb(t)} GB` : `${gb
 const deg = v => v == null ? "—" : Math.round(v) + "°C";
 const ghz = m => (m / 1000).toFixed(1);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+// a load average as uptime writes it, in two decimals while it has room: 0.42, 12.4, 104
+const avg = v => v < 9.995 ? v.toFixed(2) : v < 99.95 ? v.toFixed(1) : String(Math.round(v));
+// how long a machine has run, in its two largest units
+function upWords(sec) {
+  if (!(sec >= 0)) return "—";
+  const m = Math.floor(sec / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
+  if (m < 1) return "Under a minute";
+  if (h < 1) return plural(m, "minute", "minutes");
+  if (d < 1) return `${plural(h, "hour", "hours")}, ${plural(m % 60, "minute", "minutes")}`;
+  return `${plural(d, "day", "days")}, ${plural(h % 24, "hour", "hours")}`;
+}
 // bytes a second in decimal units, as the Control Strip writes them: 812
 // B/s, 4.2 KB/s, 38 KB/s, 1.2 MB/s
 function bps(n) {
@@ -607,7 +620,7 @@ function restore() {
   else { V.cpu = null; V.cards = []; V.net = null; $("#view").textContent = ""; }
 }
 const layoutKey = info => JSON.stringify([info.cpus, info.cpu_kinds, info.cards, info.cores,
-  (info.ifaces || []).map(i => [i.name, i.wireless, i.model || ""])]);
+  (info.ifaces || []).map(i => [i.name, i.wireless, i.model || ""]), !!info.loadavg, !!info.boot]);
 
 // ---- polling ------------------------------------------------------------------
 async function poll() {
@@ -821,13 +834,23 @@ function build() {
   cpu.figs = el("div", { class: "figs" });
   cpu.row = el("div", { class: "row" }, el("div", { class: "art" }, cpu.art), cpu.figs);
   cpu.sec.append(cpu.row);
+  // the rows a node gives: one on Windows keeps no load average, and one
+  // on an older exe names neither that nor when it started
   cpu.f = {
     load: fig(cpu.figs, "Load", "All the cores together"),
     busy: fig(cpu.figs, "Busiest", "The busiest core's thread"),
-    clock: Object.assign(fig(cpu.figs, "Clock", "The cores' average clock, of their top"), { steady: STEADY }),
-    temp: fig(cpu.figs, "Temperature", "The hottest of the CPU's sensors"),
-    mem: fig(cpu.figs, "Memory", "Memory in use, of all there is"),
   };
+  if (info.loadavg) cpu.f.avg = fig(cpu.figs, "Load average",
+    `The load average of the last 1, 5 and 15 minutes. The meter is the last minute's, of the ${n} ${cores === n ? "cores" : "threads"}`);
+  cpu.f.clock = Object.assign(fig(cpu.figs, "Clock", "The cores' average clock, of their top"), { steady: STEADY });
+  cpu.f.temp = fig(cpu.figs, "Temperature", "The hottest of the CPU's sensors");
+  cpu.f.mem = fig(cpu.figs, "Memory", "Memory in use, of all there is");
+  cpu.up = null;
+  if (info.boot) {
+    cpu.up = el("span", { class: "v" }, "—");
+    cpu.upRow = el("div", { class: "fig words" }, el("span", { class: "k" }, "Uptime"), cpu.up);
+    cpu.figs.append(cpu.upRow);
+  }
   cpu.heat = document.createElement("canvas");
   cpu.span = el("span", {}, "");
   cpu.sec.append(el("div", { class: "hist" }, el("div", { class: "lcd" }, cpu.heat),
@@ -980,6 +1003,16 @@ function render() {
   } else setFig(V.cpu.f.clock, null, "—");
   setFig(V.cpu.f.temp, s && s.cpu_temp != null ? (s.cpu_temp - 20) / 80 : null, s ? deg(s.cpu_temp) : "—");
   setFig(V.cpu.f.mem, s && info.memory_total ? s.mem_used / info.memory_total : null, s ? ofGB(s.mem_used, info.memory_total) : "—");
+  if (V.cpu.f.avg) {
+    const l = s && s.load && s.load.length === 3 ? s.load : null;
+    setFig(V.cpu.f.avg, l ? l[0] / info.cpus.length : null, l ? l.map(avg).join(" ") : "—");
+  }
+  if (V.cpu.up) {
+    // by the node's own clock: the sample's time, less when it started
+    V.cpu.up.textContent = s && info.boot ? upWords(s.t / 1000 - info.boot) : "—";
+    const tip = info.boot ? "Running since " + new Date(info.boot * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
+    if (V.cpu.upRow.title !== tip) V.cpu.upRow.title = tip;
+  }
   drawHeat();
   // cards
   for (const k of V.cards) {

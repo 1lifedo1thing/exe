@@ -66,8 +66,10 @@ func readHost() counters {
 	c.disk = readDisks()
 	c.gpu = readGPU()
 	host, _ := os.Hostname()
+	// When Windows started, from its tick count; it keeps no load average.
+	boot := c.at.Add(-windows.DurationSinceBoot()).Unix()
 	c.info = Info{Host: host, Cores: runtime.NumCPU(), MemoryTotal: c.memTotal, GPU: c.gpu.name, GPUs: c.gpu.names, Net: names(c.net), Disks: names(c.disk),
-		CPUs: winTopo.cpus, CPUKinds: winTopo.kinds, Cards: c.gpu.detailInfo, Ifaces: ifaces}
+		Boot: boot, CPUs: winTopo.cpus, CPUKinds: winTopo.kinds, Cards: c.gpu.detailInfo, Ifaces: ifaces}
 	return c
 }
 

@@ -4004,7 +4004,8 @@ VMs, the configuration and the disks of the Mac OS 9 and Mac OS X apps
 your VMs, your configuration or a shell. The one thing it can read beyond
 the sync is how busy this machine is, for its **Activity Monitor**: the
 load, clocks, heat and power of the CPU and the graphics cards, the
-traffic and links of the network ports, and their names. Each node also
+traffic and links of the network ports, their names, and when the
+machine started. Each node also
 tells the other its icon.
 
 ### Join two nodes
@@ -5252,6 +5253,10 @@ this node, or any node you joined to it (**Joining desks together**).
   read its threads' load and its clock.
 - **Beside the chip**: the load of all the cores, the busiest thread, the
   average clock of its top, the hottest sensor, and memory in use.
+  **Load average** is the system's own, over the last 1, 5 and 15
+  minutes; its meter is the last minute's against the number of threads.
+  **Uptime** is how long the machine has run since it started. Rest the
+  pointer on it to read when that was.
 - **Under the chip**: each thread's load over the last minutes, a row
   each, the newest at the right. A row is dark when idle and goes through
   blue and green to red at full load.
@@ -5318,7 +5323,8 @@ Tailscale) under their names in Windows, such as **Ethernet** and
 **Wi-Fi**, the Wi-Fi signal, the physical disks (not a Storage Space,
 whose bytes are its disks'), and the NVIDIA cards through `nvidia-smi`.
 Windows gives no top clock with the boost, so the clock shows alone,
-and no CPU temperature without a driver of its own.
+and no CPU temperature without a driver of its own. It keeps no load
+average, so a Windows node has no **Load average** row.
 Another node's
 figures come through this node: its daemon asks the other one over Node
 Sync's signed link (`GET /v1/peers/<id>/monitor`). That node must run an

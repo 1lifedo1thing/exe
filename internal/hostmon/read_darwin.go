@@ -404,8 +404,17 @@ func readHost() counters {
 	}
 	host, _ := os.Hostname()
 	host = strings.TrimSuffix(host, ".local")
+	// the load average, and when the machine started
+	var load [3]C.double
+	if C.getloadavg(&load[0], 3) == 3 {
+		c.load = []float64{float64(load[0]), float64(load[1]), float64(load[2])}
+	}
+	var boot int64
+	if tv, err := unix.SysctlTimeval("kern.boottime"); err == nil {
+		boot = int64(tv.Sec)
+	}
 	c.info = Info{Host: host, Cores: runtime.NumCPU(), MemoryTotal: c.memTotal, GPU: c.gpu.name, Net: names(c.net), Disks: names(c.disk),
-		CPUs: darwinTopo.cpus, CPUKinds: darwinTopo.kinds, Cards: c.gpu.detailInfo, Ifaces: ifaces}
+		Boot: boot, CPUs: darwinTopo.cpus, CPUKinds: darwinTopo.kinds, Cards: c.gpu.detailInfo, Ifaces: ifaces, LoadAvg: c.load != nil}
 	return c
 }
 

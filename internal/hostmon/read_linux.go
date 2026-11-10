@@ -4,6 +4,7 @@ package hostmon
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -25,9 +26,13 @@ const Supported = true
 
 func readHost() counters {
 	c := counters{at: time.Now()}
-	if f, err := os.Open("/proc/stat"); err == nil {
-		c.cpuBusy, c.cpuTotal, c.cpuOK, c.perCPU = parseStat(f)
-		f.Close()
+	var boot int64
+	if b, err := os.ReadFile("/proc/stat"); err == nil {
+		c.cpuBusy, c.cpuTotal, c.cpuOK, c.perCPU = parseStat(bytes.NewReader(b))
+		boot = parseBtime(b)
+	}
+	if b, err := os.ReadFile("/proc/loadavg"); err == nil {
+		c.load = parseLoadavg(string(b))
 	}
 	topoOnce.Do(func() { topo = readTopology("/sys/devices/system/cpu", "/proc/cpuinfo") })
 	c.freq = readFreqs("/sys/devices/system/cpu", len(topo.cpus))
@@ -51,8 +56,39 @@ func readHost() counters {
 	c.gpu = readGPU()
 	host, _ := os.Hostname()
 	c.info = Info{Host: host, Cores: runtime.NumCPU(), MemoryTotal: c.memTotal, GPU: c.gpu.name, GPUs: c.gpu.names, Net: names(c.net), Disks: names(c.disk),
-		CPUs: topo.cpus, CPUKinds: topo.kinds, Cards: c.gpu.detailInfo, Ifaces: ifaces}
+		Boot: boot, CPUs: topo.cpus, CPUKinds: topo.kinds, Cards: c.gpu.detailInfo, Ifaces: ifaces, LoadAvg: c.load != nil}
 	return c
+}
+
+// parseBtime reads /proc/stat's "btime" line: when the machine started, in
+// unix seconds. The kernel works it out from the clock at each read, so a
+// clock set right after the start moves it too.
+func parseBtime(stat []byte) int64 {
+	for line := range bytes.Lines(stat) {
+		if rest, ok := bytes.CutPrefix(line, []byte("btime ")); ok {
+			n, _ := strconv.ParseInt(string(bytes.TrimSpace(rest)), 10, 64)
+			return n
+		}
+	}
+	return 0
+}
+
+// parseLoadavg reads /proc/loadavg's first three fields: the load average
+// over the last 1, 5 and 15 minutes.
+func parseLoadavg(s string) []float64 {
+	f := strings.Fields(s)
+	if len(f) < 3 {
+		return nil
+	}
+	out := make([]float64, 3)
+	for i := range out {
+		v, err := strconv.ParseFloat(f[i], 64)
+		if err != nil {
+			return nil
+		}
+		out[i] = v
+	}
+	return out
 }
 
 // physical keeps the devices backed by hardware — a NIC or a disk has a

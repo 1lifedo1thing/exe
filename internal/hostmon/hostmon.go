@@ -35,6 +35,9 @@ type Sample struct {
 	Freq  []int   `json:"freq,omitempty"`  // each one's clock in MHz, 0 where the kernel gives none
 	Cards []Card  `json:"cards,omitempty"` // each graphics card, one or more
 	Nets  []NetIf `json:"nets,omitempty"`  // each physical network interface, in Info.Ifaces' order
+	// The load average over the last 1, 5 and 15 minutes, on a host that
+	// keeps one (Info.LoadAvg).
+	Load []float64 `json:"load,omitempty"`
 
 	// A history row (ReadHistory) is a slot's averages: N is how many
 	// samples it holds, Peak their highest figures, laid out the same.
@@ -110,13 +113,15 @@ type Info struct {
 	GPUs        []string `json:"gpus,omitempty"` // each card's name, on a host with more than one
 	Net         []string `json:"net"`
 	Disks       []string `json:"disks"`
+	Boot        int64    `json:"boot,omitempty"` // when the machine started, unix seconds; 0 where the system names none
 
 	// The detail (ReadDetail): each logical CPU, the kinds of core they
 	// are ("Cortex-X925", "Intel Xeon w9-3475X"), and each graphics card.
 	CPUs     []CPU      `json:"cpus,omitempty"`
 	CPUKinds []string   `json:"cpu_kinds,omitempty"`
 	Cards    []CardInfo `json:"cards,omitempty"`
-	Ifaces   []Iface    `json:"ifaces,omitempty"` // the network interfaces of Net, as Nets gives them
+	Ifaces   []Iface    `json:"ifaces,omitempty"`  // the network interfaces of Net, as Nets gives them
+	LoadAvg  bool       `json:"loadavg,omitempty"` // the samples carry a load average (Windows keeps none)
 }
 
 // counters is one raw read of the host: running totals, from which two
@@ -128,6 +133,7 @@ type counters struct {
 	cpuTemp            *float64
 	perCPU             map[int][2]uint64 // busy, total jiffies of each logical CPU
 	freq               []int             // MHz of each, in topology order
+	load               []float64         // the load average over 1, 5 and 15 minutes; nil without one
 	links              map[string]link   // each interface's link, by name
 	memTotal, memAvail uint64
 	net, disk          map[string][2]uint64 // in/out, read/written bytes per device
@@ -238,14 +244,14 @@ func (m *Monitor) ReadNewest(after int64, detail bool, limit int) (info Info, ou
 	for _, s := range ring {
 		if s.T > after {
 			if !detail {
-				s.Cores, s.Freq, s.Cards, s.Nets = nil, nil, nil, nil
+				s.Cores, s.Freq, s.Cards, s.Nets, s.Load = nil, nil, nil, nil, nil
 			}
 			out = append(out, s)
 		}
 	}
 	info = m.info
 	if !detail {
-		info.CPUs, info.CPUKinds, info.Cards, info.Ifaces = nil, nil, nil, nil
+		info.CPUs, info.CPUKinds, info.Cards, info.Ifaces, info.LoadAvg = nil, nil, nil, nil, false
 	}
 	return info, out, more
 }
@@ -317,6 +323,7 @@ func between(a, b *counters, interval time.Duration) (Sample, bool) {
 		s.Freq = b.freq
 	}
 	s.Cards = b.gpu.detail
+	s.Load = b.load
 	for _, ifc := range b.info.Ifaces {
 		n := NetIf{Up: b.links[ifc.Name].up, Signal: b.links[ifc.Name].signal}
 		x, okA := a.net[ifc.Name]

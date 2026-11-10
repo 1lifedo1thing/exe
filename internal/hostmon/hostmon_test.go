@@ -28,9 +28,10 @@ func (h *fakeHost) read() counters {
 		perCPU: map[int][2]uint64{0: {10 * n, 100 * n}, 1: {90 * n, 100 * n}},
 		freq:   []int{1000, 2000},
 		links:  map[string]link{"eth0": {up: true}},
+		load:   []float64{1.5, 1.25, 1},
 		info: Info{Cores: 4, MemoryTotal: 1000, GPU: "Test GPU", Net: []string{"eth0"}, Disks: []string{"nvme0n1"},
-			CPUs: []CPU{{}, {}}, CPUKinds: []string{"Test CPU"}, Cards: []CardInfo{{Name: "Test GPU"}},
-			Ifaces: []Iface{{Name: "eth0", Speed: 1000}}},
+			Boot: 1700000000, CPUs: []CPU{{}, {}}, CPUKinds: []string{"Test CPU"}, Cards: []CardInfo{{Name: "Test GPU"}},
+			Ifaces: []Iface{{Name: "eth0", Speed: 1000}}, LoadAvg: true},
 	}
 }
 
@@ -59,11 +60,19 @@ func TestMonitorSamplesWhileRead(t *testing.T) {
 		t.Errorf("after the newest sample: %d samples", len(newer))
 	}
 	// the Control Strip's read carries no detail; the Activity Monitor's does
-	if info, _ := m.Read(0); x.Cores != nil || x.Cards != nil || x.Nets != nil || info.CPUs != nil || info.Cards != nil || info.Ifaces != nil {
+	info, _ = m.Read(0)
+	if x.Cores != nil || x.Cards != nil || x.Nets != nil || x.Load != nil || info.CPUs != nil || info.Cards != nil || info.Ifaces != nil || info.LoadAvg {
 		t.Errorf("detail in a plain read: %v %v %+v", x.Cores, x.Cards, info)
+	}
+	// when the machine started is no detail: every reader gets it
+	if info.Boot != 1700000000 {
+		t.Errorf("boot in a plain read: %d", info.Boot)
 	}
 	info, d := m.ReadDetail(0, true)
 	y := d[len(d)-1]
+	if !info.LoadAvg || info.Boot != 1700000000 || len(y.Load) != 3 || y.Load[0] != 1.5 || y.Load[2] != 1 {
+		t.Errorf("load average and boot: %+v %v", info, y.Load)
+	}
 	if len(info.CPUs) != 2 || info.Cards[0].Name != "Test GPU" || len(y.Cores) != 2 || y.Cores[0] != 10 || y.Cores[1] != 90 ||
 		y.Freq[1] != 2000 || len(y.Cards) != 1 || *y.Cards[0].Util != 12 ||
 		len(info.Ifaces) != 1 || len(y.Nets) != 1 || !y.Nets[0].Up || *y.Nets[0].In != 100000 || *y.Nets[0].Out != 5000 {

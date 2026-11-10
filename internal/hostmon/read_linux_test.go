@@ -27,6 +27,23 @@ func TestParseStat(t *testing.T) {
 	}
 }
 
+func TestParseBtimeAndLoadavg(t *testing.T) {
+	stat := "cpu  1 2 3 4 5 6 7 8 9 10\ncpu0 1 2 3 4 5 6 7 8 9 10\nintr 1 2 3\nctxt 99\nbtime 1762500000\nprocesses 5\n"
+	if got := parseBtime([]byte(stat)); got != 1762500000 {
+		t.Errorf("btime: %d", got)
+	}
+	if got := parseBtime([]byte("cpu  1 2 3 4\n")); got != 0 {
+		t.Errorf("btime from a stat without one: %d", got)
+	}
+	l := parseLoadavg("2.41 1.98 11.75 3/1894 271828\n")
+	if len(l) != 3 || l[0] != 2.41 || l[1] != 1.98 || l[2] != 11.75 {
+		t.Errorf("loadavg: %v", l)
+	}
+	if parseLoadavg("") != nil || parseLoadavg("a b c 1/2 3") != nil {
+		t.Error("a load average from nothing")
+	}
+}
+
 func TestReadTopology(t *testing.T) {
 	write := func(root, path, body string) {
 		t.Helper()
