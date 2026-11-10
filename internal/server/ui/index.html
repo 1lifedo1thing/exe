@@ -5809,24 +5809,42 @@ function openSearchWin() {
   });
 }
 const srFirstLine = t => ((t || "").split("\n")[0] || "").trim() || "untitled";
+// What the field holds is cut at its spaces into words, and a thing is
+// found when it holds every one of them: in any order, in any case, inside
+// longer words, and anywhere in what is searched of it (a VM's name and
+// address together, a chat's title and summary) — as the manual's search
+// bar finds a chapter. So "exe-hub idea" finds a note with "exe-hub" in its
+// first line and "idea" in its fifth, not only the two words side by side.
 function searchMatches(q) {
-  const has = s => (s || "").toLowerCase().includes(q);
+  const words = [...new Set(q.split(/\s+/).filter(Boolean))];
+  const count = s => { s = (s || "").toLowerCase(); return words.filter(w => s.includes(w)).length; };
+  const has = (...parts) => count(parts.filter(Boolean).join("\n")) === words.length;
   const out = [];
-  for (const vm of searchData.vms) if (has(vm.name) || has(vm.ip)) out.push({
+  for (const vm of searchData.vms) if (has(vm.name, vm.ip)) out.push({
     icon: miniMacIcon(vm.state), title: vm.name,
     sub: vmStateText(vm.state) + (vm.ip ? " · " + vm.ip : ""),
     open: () => openVM(vm.name),
   });
-  for (const m of searchData.chats) if (has(m.title) || has(m.summary)) out.push({
+  for (const m of searchData.chats) if (has(m.title, m.summary)) out.push({
     icon: MINI_CHAT_ICON, title: m.title, sub: m.vm || "",
     open: () => { openChatWin(); selectChat(m.id); },
   });
-  for (const n of searchData.notes) if (has(n.text)) out.push({
-    icon: MINI_NOTE_ICON, title: srFirstLine(n.text),
-    // the matched body line, when the title alone doesn't say why this hit
-    sub: has(srFirstLine(n.text)) ? "" : (n.text.split("\n").find(l => has(l)) || "").trim(),
-    open: () => revealInApp("Notes", n.id),
-  });
+  for (const n of searchData.notes) if (has(n.text)) {
+    // a line of the body, when the title alone doesn't say why this hit:
+    // the one with the most of the words, the first of those that tie
+    let sub = "";
+    if (!has(srFirstLine(n.text))) {
+      let best = 0;
+      for (const l of n.text.split("\n").slice(1)) {
+        const c = count(l);
+        if (c > best) { best = c; sub = l.trim(); }
+      }
+    }
+    out.push({
+      icon: MINI_NOTE_ICON, title: srFirstLine(n.text), sub,
+      open: () => revealInApp("Notes", n.id),
+    });
+  }
   for (const t of searchData.todos) if (has(t.text)) out.push({
     icon: MINI_TODO_ICON, title: t.text, sub: t.done ? "done" : "",
     open: () => revealInApp("Todo", t.id),

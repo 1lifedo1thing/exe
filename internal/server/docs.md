@@ -230,6 +230,11 @@ The magnifier opens one box that finds VMs, chat sessions, notes and todos.
 
 - A VM is found by its name or its address, a chat by its title or summary,
   a note or a todo by its text.
+- Type more than one word to narrow the list. A thing is found when it holds
+  every word, in any order and anywhere in it: `exe-hub idea` finds a note
+  with `exe-hub` in its first line and `idea` further down.
+- Under a note found by its text, not its first line, is the line that holds
+  the most of your words.
 - Click a result, or move through them with the arrow keys and press Return.
   The box closes and the thing itself opens: the VM's window, the chat, or
   the note or todo in its app.
