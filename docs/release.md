@@ -373,6 +373,34 @@ installed it with the questions answered at a terminal, and the notes were
 read in that VM's window; the Intel build said its version under Rosetta.
 Not tried: a new install on Windows, and a passkey on a phone.
 
+The sixth, 2026.11.11, was the first since VMs keep running across a
+restart on Linux (9c01fb0), and the first that met `precision`, `world`
+and the Mac node on builds from source, which `exe update` refuses. The
+installer run over each put it back on a release and kept its
+configuration: `precision` and `world` first on a build of the same commit
+numbered 2026.11.10.90, served as the latest by a second mirror
+(`release-mirror.py --latest`), so that the update the window starts could
+then move each to the release itself. On `precision` a VM ran on through
+that update and through a plain restart after it, its boot time unchanged
+and `adopted` in the journal both times; on `world` the guest was shut
+down and came back, its journal ending in "Journal stopped". **Update
+Now** was pressed in a browser on a new VM on this machine that the real
+one-liner had put on 2026.10.28, with an API token, and the window said
+the update was done about 9 s later; the notes were read there. `lab`
+moved from 2026.10.28 by a shell's `exe update -y`; `birdie` and another
+new VM installed it with the questions answered at a terminal, `birdie`
+with a VM across a restart; the Intel build said its version under
+Rosetta. Two things the machines taught: a build from source does not
+start at a Windows sign-in, since `exe daemon start` is for a release, so
+`world` had been down since its last restart; and a user unit of the
+owner's with `Requires=exe.service` is stopped and started by systemd
+around every restart of exe, whatever exe does for its VMs: on `precision`
+one such unit stopped a VM and failed to start it again, because the
+daemon was not listening yet when systemd called it started. The Mac node
+had nobody logged in at its screen, so it got the release for its next
+login and no update was tried on a Mac. Not tried: the update from
+2026.10.28 with a VM running, and a new install on Windows.
+
 Rolling back is moving GitHub's "latest" mark to the release before
 (`gh release edit <older> --latest`); whether that is allowed with
 immutable releases on has not been tried — publishing the next version is
