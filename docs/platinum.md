@@ -931,6 +931,20 @@ restyling: `internal/server/ui/index.html` (the desktop),
   non-passive `touchmove` on the list calls `preventDefault` so the
   browser does not take the pan. Moving sooner is a scroll (the browser
   sends `pointercancel`), a quick lift a tap.
+- A terminal's type is one stack for every terminal (`TERM_FONT`,
+  `newTerm`): MesloLGS NF where it is installed, then the Mac's faces and
+  the browser's monospace, 12px. Its last name is the desk's own symbols
+  face, "exe Terminal Symbols": the seven transport symbols ⏴⏵⏶⏷⏸⏹⏺
+  (U+23F4–23FA) that Claude Code's mode row is drawn with ("⏵⏵ auto mode
+  on", "⏸ plan mode on") and that few monospace faces hold. Without it a
+  browser draws a box for each, or a colour emoji that ignores the row's
+  colour. `docs/term-symbols.py` draws the face on Meslo's metrics and
+  writes it into the page's `@font-face` rule as a data URI (480 bytes),
+  so it needs no request and works offline. A symbol that shows as a box
+  in a terminal gets its shape there. The face joins a terminal's stack
+  only once the browser has it: xterm keeps the width it first measured
+  for a character, and a changed `fontFamily` is what makes it measure
+  again.
 - A drop target's ring is a 2px `--hl` inset shadow: on the Finder's icon
   area, the desktop, and over a terminal's screen as an `::after` overlay
   (an inset shadow on the box itself hides under xterm's canvases). A

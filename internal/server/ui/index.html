@@ -1519,6 +1519,18 @@ a.svc:hover { text-decoration: underline; }
 .sn-bar .sn-label { flex: none; }
 .sn-bar input { flex: 1; min-width: 0; width: auto; }
 .sf-count.bad { color: #7a1010; }
+/* The terminal's symbols face (docs/term-symbols.py draws it and writes it
+   here): the transport symbols ⏴⏵⏶⏷⏸⏹⏺ of Claude Code's mode row ("⏵⏵ auto
+   mode on", "⏸ plan mode on") and of its bullet on a Mac. Few monospace
+   faces hold them, and a browser with no font that does draws a box for
+   each, or a colour emoji that ignores the row's colour. It is the last
+   name of the terminal's stack (TERM_FONT), so an installed face that has
+   a symbol still draws it. One weight for all: a bold row keeps the same
+   shapes and none is smeared into a false bold */
+@font-face {
+  font-family: "exe Terminal Symbols"; font-weight: 100 900; unicode-range: U+23F4-23FA;
+  /* term-symbols */ src: url(data:font/woff2;base64,d09GMgABAAAAAAHgAAoAAAAAA8gAAAGVAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAANAqBcIE2ATYCJAMSCxIABCAFgQcHahvGAgAuCmxj0ug03kLYlI3U6CC6Tnz30sbD8/ujzv3/DdHoPElYyHG3AYhptq0zgFCEg3PdssBGo2ocaPP6O0D2T6/0Cfx1HIz9fzCCcOqm/sT/Ig0wtbUoHNsKvATCjPb55IjSDLKbJVk6H8gea3vPF8jTvfghJMpOARx7OR1f/7vt/yaK9sYHgLS94BFaQYYc9XKBekkrkiTo+A0dX3lZAQGgGFSjGL1YCkAChIiZcHMCabz66OtdU4fXvZ9v5VGEFYUVUcHumsKjV8tHcKp4yH7XPq5O10/S7X5w/S0qcx7UF4dmbDM16LM3sNoLB6VYmBs26xhoZ79+9erdScn9O7ULqj0HEAi2LvjrScPfhhWDL+XOKb42g5/m51+Ry0Bwh0G6twN8BiCcG92QawZmM99GUKxaBktOmgwJwPVQkil6i1YqEXo11J1Mpak9j+GrvjmRy5xl9VMweBioVhucbC3tNDZUqzxttfY2zjKDydVG43S43uDuFxNZ5JGiIAqjKIqL9u9but6sn9OAhjSiMU28FAAA) format("woff2");
+}
 /* Text inset lives on .xterm, not the box: FitAddon subtracts element padding
    when sizing rows, but the absolutely-positioned viewport anchors to the
    padding box — so the scrollbar runs flush to the frame, OS 9 style. */
@@ -9700,6 +9712,19 @@ function termSpacerFix(box, t) {
   const h = Math.floor(vp.getBoundingClientRect().height) + "px";
   if (sa.style.height !== h) sa.style.height = h;
 }
+// The terminal's faces. The symbols face is in this page (@font-face "exe
+// Terminal Symbols") and is the last name of the stack once the browser
+// has it, so every face before it — the generic one too — draws what it
+// can first. xterm measures a character once and keeps its width: a
+// terminal that drew ⏵ before the face arrived would keep the width of
+// the box it drew then. So a terminal made before then starts on the
+// short stack and takes the long one when the face is there — a changed
+// fontFamily is what makes xterm measure again.
+const TERM_FONT = '"MesloLGS NF", "Monaco", ui-monospace, SFMono-Regular, Menlo, monospace';
+const TERM_SYMBOLS = ', "exe Terminal Symbols"';
+let termSymbols = false;
+const termSymbolsReady = (document.fonts ? document.fonts.load('12px "exe Terminal Symbols"', "\u23f5") : Promise.resolve([]))
+  .then(faces => { termSymbols = faces.length > 0; }, () => {});
 // ---- every terminal (VM console, Terminal and agent windows) comes
 // from here so they look and behave alike. Links: an http(s) URL in the
 // text — across wrapped lines too — underlines under the pointer and a
@@ -9711,13 +9736,16 @@ function termSpacerFix(box, t) {
 function newTerm() {
   const term = new Terminal({
     fontSize: 12, cursorBlink: true,
-    fontFamily: '"MesloLGS NF", "Monaco", ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontFamily: termSymbols ? TERM_FONT + TERM_SYMBOLS : TERM_FONT,
     theme: { background: "#000000" },
     // while an app tracks the mouse (Claude Code does) xterm only selects
     // with a modifier: Shift+drag on Windows/Linux, and on the Mac only
     // Option+drag — and only with this flag set
     macOptionClickForcesSelection: true,
     linkHandler: { activate: (e, uri) => openTermLink(uri) },
+  });
+  if (!termSymbols) termSymbolsReady.then(() => {
+    if (termSymbols) try { term.options.fontFamily = TERM_FONT + TERM_SYMBOLS; } catch (e) {} // a terminal already closed
   });
   term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => openTermLink(uri)));
   // OSC 52 is a program setting the clipboard. Claude Code and fullscreen
