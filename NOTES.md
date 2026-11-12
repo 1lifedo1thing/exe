@@ -6,3 +6,4 @@ before it said is kept in CHANGELOG.md.
 -->
 
 - **Claude Code** window: the two arrows before "auto mode on" are drawn in every browser, not as boxes.
+- **Terminal** window: its title bar shows the title a program sets, such as Claude Code's task.

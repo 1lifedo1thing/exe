@@ -924,6 +924,15 @@ restyling: `internal/server/ui/index.html` (the desktop),
   cell travelled, that take the wheel's own road (tmux copy mode, or the
   CLI's mouse reports); a flick glides on with a per-ms decay of 0.995.
   The box carries `touch-action: none` so the page never pans instead.
+- A terminal window that is not an agent's takes the title its program
+  sets (OSC 0 or 2) after its own name, as an app's window takes its
+  subtitle: "Terminal 2 — ✳ Fix the build", at most 80 characters, and an
+  empty title is the name alone. On tmux the session hands its pane's
+  title on (`set-titles`, `termTitleFormat`), the host's name, tmux's
+  default, as none. tmux reads an APC string as a title, and Claude Code
+  sends a Kitty graphics query in one just after its own: the window
+  ignores it (`openHostTermWin`). `~/tools/playwright/exe-term-title-test.js`
+  checks it on a scratch daemon.
 - A list whose rows drag to reorder (Todo, Weather) is the opposite case:
   a finger must still scroll it, so the rows keep the default
   `touch-action`. A mouse picks a row up after 4px; a touch only after

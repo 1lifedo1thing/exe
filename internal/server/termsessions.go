@@ -24,8 +24,9 @@ import (
 // own), no prefix key (every key reaches the shell, C-b included), and
 // TMUX unset in the shell, so tmux run inside it attaches as it would in
 // any terminal. TMUX_PANE stays available for clipboard forwarding to
-// the browser. Without tmux a Terminal is a one-off shell, as it always
-// was (startHostShell).
+// the browser. The one thing tmux passes on is the pane's title, which
+// the window wears after its own name (startTermClient). Without tmux a
+// Terminal is a one-off shell, as it always was (startHostShell).
 //
 // A window's link to a session ends with a reason the window acts on
 // (termEndReason): "detached" — the session lives on without this

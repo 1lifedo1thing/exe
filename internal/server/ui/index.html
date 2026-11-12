@@ -10046,8 +10046,9 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
       ${GROW_TILE}
     </div>`;
   l10nDom(w);
-  w.querySelector(".title").textContent = vm ? vm + " — " + tool : agent ? agent.title
+  const winName = vm ? vm + " — " + tool : agent ? agent.title
     : tool || (n === 1 ? L("Terminal") : L`Terminal ${n}`);
+  w.querySelector(".title").textContent = winName;
   const box = w.querySelector(".hostterm-box"), status = w.querySelector(".term-status"),
     usage = w.querySelector(".term-usage");
   // saved height goes on before fit() so the terminal opens at the right rows
@@ -10065,6 +10066,23 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
   openWin(w);
 
   const term = newTerm();
+  // a program names its window, as in any terminal (OSC 0 and 2): Claude
+  // Code keeps its title on the task at hand, a shell's prompt may say
+  // where it is. The title bar says it after the window's own name —
+  // "Terminal 2 — ✳ Fix the build" — as an app's does (appWinTitle), so
+  // the Window menu and Show All Windows say it too, and an empty title
+  // is the window's name alone again. A Terminal on a tmux session hears
+  // its pane's title from tmux (startTermClient, hostterm_unix.go), on
+  // every desk and again with each link. tmux takes an APC string for a
+  // title, and Claude Code, a moment after it has set its own, asks the
+  // terminal about Kitty's pictures in one ("Gi=31,s=1,…;AAAA"): that is
+  // no title, and the one the window has stays. An agent window's
+  // sessions are named in its column instead
+  if (!agent) term.onTitleChange(t => {
+    if (/^G[a-zA-Z]=[^,;]*(,[a-zA-Z]=[^,;]*)*(;|$)/.test(t)) return;
+    w._sub = Array.from(t.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").trim()).slice(0, 80).join("");
+    appWinTitle(w, winName);
+  });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(box);
@@ -11389,7 +11407,7 @@ function openHostTermWin(app, cmd, vm, termSess, name) {
     // the next load — the toast says so
     delete termGeom[w.id];
     if (!w._dead) api("/v1/host/terminals/" + sess, { method: "DELETE" }).catch(e => {
-      if (!e.message.startsWith("no Terminal session")) toast(L`Couldn't end ${w.querySelector(".title").textContent}: ${e.message} — its shell runs on`);
+      if (!e.message.startsWith("no Terminal session")) toast(L`Couldn't end ${winName}: ${e.message} — its shell runs on`);
     });
   };
   return w;

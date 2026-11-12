@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -246,4 +247,94 @@ func TestTermSessionsLive(t *testing.T) {
 		t.Fatalf("after the exit: %+v, want exe-term-2 alone", list)
 	}
 	create(1)
+}
+
+// TestTermTitleLive: a Terminal's window hears the title of the program in
+// it, on a tmux server of the test's own. The session is one a daemon
+// before this change started, so it never asked tmux for titles: the
+// window's attach does. tmux's own default, the host's name, reaches the
+// window as no title; a title set in the shell arrives as it is, percent
+// sign and all; a second window of the session hears it as it attaches;
+// and a title cleared — Claude Code's on its way out — clears in both.
+func TestTermTitleLive(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux on this host")
+	}
+	tmuxSocket = fmt.Sprintf("exe-test-title-%d", os.Getpid())
+	defer func() {
+		if c := tmuxCmd("kill-server"); c != nil {
+			c.Run()
+		}
+		tmuxSocket = ""
+	}()
+	t.Setenv("SHELL", "/bin/sh")
+	t.Setenv("HOME", t.TempDir()) // no profile of the user's runs in the test's shell
+	s := &Server{StateDir: t.TempDir()}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/host/terminal", s.handleHostTerminal)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if _, err := s.newTermSession(); err != nil {
+		t.Fatal(err)
+	}
+	if out, _ := tmuxCmd("show-options", "-v", "-t", "exe-term-1", "set-titles").Output(); strings.TrimSpace(string(out)) != "" {
+		t.Fatalf("a new session's set-titles = %q: the attach is to set it", out)
+	}
+	// a window: the titles its terminal is handed, in order (OSC 0 or 2,
+	// ended by BEL — what tmux writes for an xterm)
+	osc := regexp.MustCompile(`\x1b\][02];([^\x07\x1b]*)\x07`)
+	window := func() (*websocket.Conn, chan string) {
+		c, _, err := websocket.Dial(ctx, fmt.Sprintf("ws%s/v1/host/terminal?term=1", strings.TrimPrefix(srv.URL, "http")), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		titles := make(chan string, 64)
+		go func() {
+			var buf []byte
+			for {
+				typ, data, err := c.Read(ctx)
+				if err != nil {
+					return
+				}
+				if typ != websocket.MessageBinary {
+					continue
+				}
+				buf = append(buf, data...)
+				for m := osc.FindSubmatchIndex(buf); m != nil; m = osc.FindSubmatchIndex(buf) {
+					titles <- string(buf[m[2]:m[3]])
+					buf = buf[m[1]:]
+				}
+			}
+		}()
+		return c, titles
+	}
+	hears := func(who string, titles chan string, want string) {
+		t.Helper()
+		select {
+		case got := <-titles:
+			if got != want {
+				t.Fatalf("%s heard the title %q, want %q", who, got, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s heard no title, want %q", who, want)
+		}
+	}
+	one, titles := window()
+	defer one.Close(websocket.StatusGoingAway, "")
+	hears("the window", titles, "") // the host's name, tmux's default: none
+	if err := one.Write(ctx, websocket.MessageBinary, []byte("printf '\\033]0;Fix the build 100%%\\007'\n")); err != nil {
+		t.Fatal(err)
+	}
+	hears("the window", titles, "Fix the build 100%")
+	two, titles2 := window()
+	defer two.Close(websocket.StatusGoingAway, "")
+	hears("a second window", titles2, "Fix the build 100%")
+	if err := one.Write(ctx, websocket.MessageBinary, []byte("printf '\\033]2;\\007'\n")); err != nil {
+		t.Fatal(err)
+	}
+	hears("the window", titles, "")
+	hears("a second window", titles2, "")
 }

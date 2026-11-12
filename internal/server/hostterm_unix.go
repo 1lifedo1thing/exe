@@ -447,10 +447,22 @@ func (s *Server) newTermSession() (termSession, error) {
 	return termSession{Name: name, Number: n, Created: time.Now().Unix()}, nil
 }
 
+// termTitleFormat is the title tmux hands a Terminal's window
+// (set-titles-string): the pane's, as the program in it set it — Claude
+// Code keeps its on the task at hand — and nothing while no program has,
+// when tmux has the host's name there.
+const termTitleFormat = "#{?#{==:#{pane_title},#{host}},,#{pane_title}}"
+
 // startTermClient attaches a window's tmux client to a Terminal session.
-// Closing it (unixShell.Close) only detaches: the shell lives on.
+// Closing it (unixShell.Close) only detaches: the shell lives on. The
+// session passes its pane's title on to the window from here (set-titles),
+// which names itself after it: set at every attach, so a session started
+// by a daemon that did not ask for titles sends them too.
 func startTermClient(name string, cols, rows int) (hostShell, error) {
-	cmd := tmuxCmd("attach-session", "-t", "="+name)
+	sess := "=" + name + ":" // an option's target is a pane: the colon makes the name a session's
+	cmd := tmuxCmd("set-option", "-t", sess, "set-titles", "on",
+		";", "set-option", "-t", sess, "set-titles-string", termTitleFormat,
+		";", "attach-session", "-t", "="+name)
 	if cmd == nil {
 		return nil, errNoTmux
 	}

@@ -887,6 +887,11 @@ machine; hover it for the folder its sessions start in.
 - Every double-click on **Terminal** opens another window: **Terminal**,
   **Terminal 2** and so on. The window opens on every screen that has the
   desk open, and on one that opens the desk later.
+- A program can name its Terminal window, as it does in any terminal. Run
+  Claude Code in one and the title bar says **Terminal — ✳** and the task it
+  is on. The Apple menu's list of open windows says it too. When the program
+  clears its title, as Claude Code does when it quits, the window is
+  **Terminal** again.
 
 The desktop menu can open all three too, and can run one command in a
 terminal window of its own.
